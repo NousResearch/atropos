@@ -74,7 +74,7 @@ https://huggingface.co/NousResearch/DeepHermes-ToolCalling-Specialist-Atropos
 
 
 Environment Used:
-https://github.com/NousResearch/Atropos/environments/tool_calling_server.py
+https://github.com/NousResearch/atropos/blob/main/environments/tool_calling_server.py
 
 ---
 
@@ -92,7 +92,7 @@ Model Artifact:
 https://huggingface.co/NousResearch/DeepHermes-Financial-Fundamentals-Prediction-Specialist-Atropos
 
 Environment Used:
-https://github.com/NousResearch/Atropos/environments/fundamental_prediction_environment.py
+https://github.com/NousResearch/Atropos/blob/main/environments/fundamental_prediction_environment.py
 
 ---
 
@@ -125,7 +125,7 @@ Key Documents:
 - [Example Trainer](example_trainer/README.md) - Getting started with training
 - [Slurm Guide](SLURM.md) - Guide for using Atropos with Slurm for distributed inference
 - [Contributing Guide](CONTRIBUTING.md) - Guidelines for contributors
-- [License](LICENSE.md) - Apache 2.0 license details
+- [License](LICENSE) - Apache 2.0 license details
 
 ---
 
@@ -221,4 +221,4 @@ Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 ---
 
 ## License
-Atropos is licensed as Apache 2.0, see the [LICENSE](LICENSE.md) file here for more information
+Atropos is licensed as Apache 2.0, see the [LICENSE](LICENSE) file here for more information
