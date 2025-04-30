@@ -25,21 +25,31 @@ def _extract_final_answer(text: str) -> str:
     Handles formats like:
     - "#### 42" (GSM8K style)
     - "The answer is 42"
-    - "\\boxed{42}"
+    - "\boxed{42}"
 
     Returns the extracted answer or the original text if no pattern is found.
     """
     # Check for GSM8K style answers (#### 42)
-    if "####" in text:
-        match = re.search(r"####\s*(.*?)(?:\s*$|\n)", text)
-        if match:
-            return match.group(1).strip()
+    idx = text.find("####")
+    if idx != -1:
+        # grab content after "####" up to newline or end
+        start = idx + 4  # len("####")
+        # skip spaces
+        while start < len(text) and text[start] == " ":
+            start += 1
+        end = text.find("\n", start)
+        if end == -1:
+            end = len(text)
+        return text[start:end].strip()
 
     # Check for boxed answers
-    if "\\boxed{" in text:
-        match = re.search(r"\\boxed\{([^}]+)\}", text)
-        if match:
-            return match.group(1).strip()
+    idx = text.find("\\boxed{")
+    if idx != -1:
+        # faster than regex for well-formed input
+        start = idx + 7  # len("\\boxed{")
+        end = text.find("}", start)
+        if end != -1:
+            return text[start:end].strip()
 
     # If no special format is found, return the original text
     return text
