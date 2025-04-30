@@ -44,9 +44,10 @@ class CrosswordFormatReward(RewardFunction):
         super().__init__(weight=weight, **kwargs)
         self.reward_value = reward_value
         self.penalize_invalid_chars = penalize_invalid_chars
-        self.valid_chars = valid_chars.upper()
+        # Use set for O(1) membership checks
+        self.valid_chars_set = set(valid_chars.upper())
 
-        # Default patterns if none provided
+        # Default patterns if none provided (already precompiled)
         self.format_patterns = format_patterns or [
             re.compile(
                 r"\d+-(?:Across|Down):\s+[A-Z\s]+", re.IGNORECASE
@@ -55,6 +56,11 @@ class CrosswordFormatReward(RewardFunction):
                 r"^(?:\d+-(?:Across|Down):\s+[A-Z\s]+[\s,]*)+$", re.IGNORECASE
             ),  # Full response format
         ]
+
+        # Precompile the extraction regex for answers
+        self._answer_pattern = re.compile(
+            r"(?:Across|Down):\s+([A-Za-z]+)", re.IGNORECASE
+        )
 
     def compute(self, completions: List[Any], **kwargs) -> List[float]:
         """
@@ -67,40 +73,46 @@ class CrosswordFormatReward(RewardFunction):
         Returns:
             List of rewards (reward_value for correct format, 0.0 otherwise)
         """
-        # Extract content from different possible formats
-        completion_contents = [
-            self.get_content(completion) for completion in completions
-        ]
-
         rewards = []
-        for content in completion_contents:
-            try:
-                # Check for format patterns
-                format_match = any(
-                    pattern.search(content) for pattern in self.format_patterns
-                )
+        append_reward = rewards.append  # Local alias for minor perf boost
 
-                # Look for answers and check for invalid characters
-                valid_chars = True
+        for completion in completions:
+            try:
+                content = self.get_content(completion)
+                # Check for format patterns (use any over the patterns)
+                format_match = False
+                for pattern in self.format_patterns:
+                    if pattern.search(content):
+                        format_match = True
+                        break
+
                 if self.penalize_invalid_chars:
+                    valid_chars = True
                     # Extract answers (text after "Across:" or "Down:")
-                    answers = re.findall(
-                        r"(?:Across|Down):\s+([A-Za-z]+)", content, re.IGNORECASE
-                    )
-                    for answer in answers:
-                        # Check if answer contains only valid characters
-                        if not all(c.upper() in self.valid_chars for c in answer):
-                            valid_chars = False
+                    # Use precompiled pattern
+                    for answer in self._answer_pattern.findall(content):
+                        # Instead of all(), use fastest membership scan
+                        upper_answer = answer.upper()
+                        for c in upper_answer:
+                            if c not in self.valid_chars_set:
+                                valid_chars = False
+                                break
+                        if not valid_chars:
                             break
+                else:
+                    valid_chars = True
 
                 # Both format and valid chars must be correct for full reward
-                correct_format = format_match and valid_chars
-                rewards.append(self.reward_value if correct_format else 0.0)
+                if format_match and valid_chars:
+                    append_reward(self.reward_value)
+                else:
+                    append_reward(0.0)
 
             except Exception as e:
+                # Preserve error handling as before
                 logger.error(f"Error in crossword format reward calculation: {e}")
                 logger.exception(e)
-                rewards.append(0.0)
+                append_reward(0.0)
 
         return rewards
 
