@@ -31,6 +31,7 @@ run-api = "atroposlib.cli.run_api:main"
 inference-node-wandb-watcher = "atroposlib.cli.inference_node_wandb_watcher:main"
 view-run = "atroposlib.cli.view_run:main"
 atropos-sft-gen = "atroposlib.cli.sft:main"
+atropos-dpo-gen = "atroposlib.cli.dpo:main"
 
 [project.optional-dependencies]
 all = [
