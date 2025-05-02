@@ -31,3 +31,4 @@ format_tool_weight: 0.5
 server_configs:
   - model_name: "gpt-4.1-nano"
     num_requests_for_eval: 1
+    base_url: "https://api.openai.com/v1/"

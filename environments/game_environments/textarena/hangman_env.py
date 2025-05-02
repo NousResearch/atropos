@@ -407,6 +407,9 @@ class HangmanOnlineEnv(BaseEnv):
             modified = modified + "\n" + ascii_art_board
 
         return modified
+    
+    async def setup(self):
+        pass
 
     def _parse_tool_call(self, response: str) -> str:
         tool_name, arguments, is_error = parse_tool_call(
@@ -624,6 +627,10 @@ class HangmanOnlineEnv(BaseEnv):
                 temp_env_for_replay.env.step(past_action)
 
         state_after_history = copy.deepcopy(temp_env_for_replay.state)
+        # Store the chosen_word from the environment
+        chosen_word = temp_env_for_replay.env.chosen_word
+        # Also store the guessed_letters from the environment
+        guessed_letters = temp_env_for_replay.env.guessed_letters
         del temp_env_for_replay
 
         for action_idx, action in enumerate(actions):
@@ -639,8 +646,10 @@ class HangmanOnlineEnv(BaseEnv):
                 "tries_left"
             ]
             sim_env.state = pre_state
-            sim_env.chosen_word = state_after_history.chosen_word
-            sim_env.guessed_letters = state_after_history.guessed_letters
+            # Set the chosen_word from our stored value, not from the state
+            sim_env.chosen_word = chosen_word
+            # Set the guessed_letters from our stored value
+            sim_env.guessed_letters = guessed_letters
 
             sim_env_wrapped = ta.wrappers.LLMObservationWrapper(sim_env)
             done, info = sim_env_wrapped.step(action)
@@ -1320,27 +1329,26 @@ class HangmanOnlineEnv(BaseEnv):
             server_confs = []
 
             for sc in raw.get("server_configs", []):
-                api_key = sc.get("api_key", os.getenv("OPENAI_API_KEY", ""))
-                base_url = sc.get("base_url", os.getenv("OPENAI_API_BASE", None))
+                api_key = sc.get("api_key", os.getenv("OPENAI_API_KEY", "x"))
+                base_url = sc.get("base_url", os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"))
                 openai_config_args = {
                     "model_name": sc.get(
-                        "model_name", os.getenv("OPENAI_MODEL", "gpt-4.1-nano")
+                        "model_name", os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview")
                     ),
                     "api_key": api_key,
-                    "num_requests_for_eval": sc.get("num_requests_for_eval", 1),
+                    "num_requests_for_eval": sc.get("num_requests_for_eval", 256),
+                    "base_url": base_url,
                 }
-                if base_url is not None:
-                    openai_config_args["base_url"] = base_url
 
                 server_confs.append(OpenaiConfig(**openai_config_args))
 
             if not server_confs:
                 server_confs = [
                     OpenaiConfig(
-                        model_name=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
-                        base_url=os.getenv("OPENAI_API_BASE"),
-                        api_key=os.getenv("OPENAI_API_KEY", ""),
-                        num_requests_for_eval=1,
+                        model_name=os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"),
+                        base_url=os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
+                        api_key=os.getenv("OPENAI_API_KEY", "x"),
+                        num_requests_for_eval=256,
                     )
                 ]
 
