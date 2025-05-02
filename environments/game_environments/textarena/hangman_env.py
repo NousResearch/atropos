@@ -914,7 +914,69 @@ class HangmanOnlineEnv(BaseEnv):
                 )
 
             logger.info(f"collect_trajectory: Stepping best action: {best_action}")
+            
+            # Save pre-step state variables
+            pre_board = copy.deepcopy(episode.current_board_state)
+            pre_tries = episode.tries_left
+            
+            # Execute the step
             done, info = episode.env.step(best_action)
+            
+            # Get the post-step state
+            best_action_idx = actions.index(best_action)
+            response_text = messages_list[best_action_idx][-1]["content"]
+            
+            # Update current state variables
+            episode.current_board_state = episode.env.state.game_state["board"]
+            episode.tries_left = episode.env.state.game_state["tries_left"]
+            
+            # Manual score tracking instead of creating new State objects
+            env_reward = 0.0
+            format_reward = 0.0
+            
+            # Basic scoring: +1 for revealing letters, -0.2 for incorrect guesses
+            if best_action != "-ERROR-":
+                if done and "Congratulations" in info.get("reason", "").lower():
+                    env_reward += 6.0
+                    episode.games_won += 1
+                elif done and "lost" in info.get("reason", "").lower():
+                    env_reward -= 1.5
+                else:
+                    # Check if letters were revealed
+                    newly_revealed = 0
+                    for i in range(len(pre_board)):
+                        if pre_board[i] == "_" and episode.current_board_state[i] != "_":
+                            newly_revealed += 1
+                    
+                    if newly_revealed > 0:
+                        env_reward += newly_revealed * 1.0
+                    elif pre_tries > episode.tries_left:
+                        env_reward -= 0.2
+            
+                # Format reward (if configured)
+                if self.reward_function:
+                    format_completions = [[{"role": "assistant", "content": response_text}]]
+                    try:
+                        format_rewards = self.reward_function(format_completions)
+                        if format_rewards and len(format_rewards) > 0:
+                            format_reward = format_rewards[0]
+                    except Exception as e:
+                        logger.error(f"Error calculating format reward: {e}")
+                
+                # Combined reward calculation
+                env_weight = getattr(self.config, "environment_reward_weight", 0.7)
+                format_weight = getattr(self.config, "format_reward_weight", 0.3)
+                combined_reward = (env_weight * env_reward) + (format_weight * format_reward)
+                
+                # Update episode totals
+                episode.total_env_reward += env_reward
+                episode.total_format_reward += format_reward
+                episode.total_combined_reward += combined_reward
+                episode.num_total_actions += 1
+                episode.step_rewards.append(combined_reward)
+                if best_action != "-ERROR-":
+                    episode.num_correct_actions += 1
+            
             player_id_after_step, actual_next_observation_string = (
                 episode.env.get_observation()
             )
@@ -926,9 +988,6 @@ class HangmanOnlineEnv(BaseEnv):
             logger.debug(
                 f"[STEP {i+1} After] Using Observation String: {actual_next_observation_raw_for_log[:100]}..."
             )
-
-            episode.current_board_state = episode.env.state.game_state["board"]
-            episode.tries_left = episode.env.state.game_state["tries_left"]
 
             if self.debug_mode:
                 step_info = f" - Step {i+1} (After Action: {best_action})"

@@ -74,12 +74,13 @@ async def main():
         config=env_config,
         server_configs=server_configs,
         slurm=False,
-        debug_mode=args.debug,  # Pass debug flag to environment
+        debug_mode=True
     )
 
     logger.info("Running a single trajectory directly")
     await env.setup()
-    seed = random.randint(0, 1000000)
+    # seed = random.randint(0, 1000000)
+    seed = 376349 # The word is "end", nice and easy
     logger.info(f"Using seed: {seed}")
     logger.info("-" * 80)
     result = await env.collect_trajectory(seed)
