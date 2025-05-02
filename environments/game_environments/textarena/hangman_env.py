@@ -2,10 +2,13 @@ import copy
 import json
 import logging
 import re
+import random
+import asyncio
 from typing import Any, Dict, List, Optional, Tuple
-
+import os
 import textarena as ta
 from typing_extensions import TypedDict
+import yaml
 
 from atroposlib.envs.base import BaseEnv, BaseEnvConfig, OpenaiConfig, ScoredDataGroup
 from atroposlib.envs.reward_fns import registry
@@ -1265,3 +1268,95 @@ class HangmanOnlineEnv(BaseEnv):
             )
 
         return scored_groups
+
+    async def get_next_item(self, i: int) -> Tuple[int, int]:
+        """Returns the next seed to be used for trajectory collection.
+        
+        Args:
+            i: The current index
+            
+        Returns:
+            A tuple of (seed, i) where seed is the random seed to use
+        """
+        # Use i as the seed directly for reproducibility
+        # Adding an offset to prevent collisions with other seeds
+        seed = i + 10000
+        return (seed, i)
+    
+    async def evaluate(self):
+        eval_seeds = [random.randint(0, 1000000) for _ in range(10)]
+        eval_tasks = [self.collect_trajectory(seed) for seed in eval_seeds]
+        results = await asyncio.gather(*eval_tasks)
+        wins_count = sum(
+            1
+            for result in results
+            if isinstance(result, tuple)
+            and any("Congratulations" in step["next_observation"] for step in result[0])
+        )
+        logger.info(f"Eval win rate: {wins_count / 10}")
+
+    @classmethod
+    def config_init(
+        cls, config_name: Optional[str] = None
+    ) -> Tuple[HangmanEnvConfig, List[OpenaiConfig]]:
+        """Load settings from the local configs directory."""
+        # Path to current directory's configs/config_name.yaml
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        config_file = config_name or "hangman_default.yaml"
+        cfg_path = os.path.join(current_dir, "configs", config_file)
+
+        try:
+            if os.path.exists(cfg_path):
+                with open(cfg_path) as f:
+                    raw = yaml.safe_load(f) or {}
+                logger.info(f"Loaded config from {cfg_path}")
+            else:
+                logger.warning(
+                    f"Config file not found at {cfg_path}, using empty defaults"
+                )
+                raw = {}
+
+            env_conf = HangmanEnvConfig(**raw)
+            server_confs = []
+
+            for sc in raw.get("server_configs", []):
+                api_key = sc.get("api_key", os.getenv("OPENAI_API_KEY", ""))
+                base_url = sc.get("base_url", os.getenv("OPENAI_API_BASE", None))
+                openai_config_args = {
+                    "model_name": sc.get(
+                        "model_name", os.getenv("OPENAI_MODEL", "gpt-4.1-nano")
+                    ),
+                    "api_key": api_key,
+                    "num_requests_for_eval": sc.get("num_requests_for_eval", 1),
+                }
+                if base_url is not None:
+                    openai_config_args["base_url"] = base_url
+
+                server_confs.append(OpenaiConfig(**openai_config_args))
+
+            if not server_confs:
+                server_confs = [
+                    OpenaiConfig(
+                        model_name=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
+                        base_url=os.getenv("OPENAI_API_BASE"),
+                        api_key=os.getenv("OPENAI_API_KEY", ""),
+                        num_requests_for_eval=1,
+                    )
+                ]
+
+            return env_conf, server_confs
+
+        except Exception as e:
+            logger.error(f"Error loading config: {e}")
+            # Fall back to empty configs
+            return HangmanEnvConfig(), [
+                OpenaiConfig(
+                    model_name=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
+                    base_url=os.getenv("OPENAI_API_BASE"),
+                    api_key=os.getenv("OPENAI_API_KEY", ""),
+                    num_requests_for_eval=1,
+                )
+            ]
+
+if __name__ == "__main__":
+    HangmanOnlineEnv.cli()

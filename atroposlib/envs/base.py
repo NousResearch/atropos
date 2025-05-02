@@ -187,10 +187,16 @@ class BaseEnv(ABC):
 
     @classmethod
     def config_init(
-        cls,
+        cls, config_name: Optional[str] = None
     ) -> Tuple[BaseEnvConfig, Union[ServerBaseline, List[OpenaiConfig]]]:
         """
-        Initialize the config
+        Initialize the config. Can optionally specify a config file name.
+
+        Args:
+            config_name: Optional name of config file to load (without extension)
+
+        Returns:
+            Tuple of (env_config, server_configs)
         """
         return cls.env_config_cls(), ServerBaseline()
 
