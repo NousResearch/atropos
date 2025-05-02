@@ -48,7 +48,8 @@ dev = [
     'rich',
 ]
 examples = [
-    "gradio"
+    "gradio",
+    "textarena"
 ]
 
 [build-system]

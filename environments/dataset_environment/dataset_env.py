@@ -1,11 +1,13 @@
 import asyncio
 import logging
+import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import yaml
 from datasets import load_dataset
 from pydantic import Field
 
-from atroposlib.envs.base import BaseEnv, BaseEnvConfig, ScoredDataGroup
+from atroposlib.envs.base import BaseEnv, BaseEnvConfig, OpenaiConfig, ScoredDataGroup
 from atroposlib.envs.reward_fns import registry
 from atroposlib.envs.reward_fns.combined_reward import CombinedReward
 from atroposlib.type_definitions import Item
@@ -32,7 +34,9 @@ class DatasetEnvConfig(BaseEnvConfig):
         None, description="Field in dataset containing canonical correct answer"
     )
     system_prompt: Optional[str] = Field(None, description="System prompt to use")
-    prefill: Optional[str] = Field(None, description="Text to prefill the completion with (e.g. '<think>')")
+    prefill: Optional[str] = Field(
+        None, description="Text to prefill the completion with (e.g. '<think>')"
+    )
     shuffle_dataset: bool = Field(True, description="Whether to shuffle the dataset")
     max_generations_per_prompt: int = Field(
         1, description="Number of generations per prompt for collection"
@@ -49,7 +53,6 @@ class DatasetEnvConfig(BaseEnvConfig):
         description="List of reward functions to apply (string names or full configs)",
     )
 
-    # Completion parameters
     temperature: float = Field(0.7, description="Temperature for generation")
     top_p: float = Field(0.9, description="Top-p for generation")
     max_tokens: int = Field(4096, description="Maximum tokens for generation")
@@ -134,25 +137,20 @@ class DatasetEnv(BaseEnv):
         return (prompt, answer, ground_truth)
 
     async def collect_trajectory(self, item: Item) -> Tuple[List, List]:
-        # Extract user prompt and answer from item
         user_content = dict(item[0][0])["content"]
         answer = item[1] if len(item) > 1 else None
-        
-        # Create messages list
+
         messages = []
         if self.config.system_prompt:
             messages.append({"role": "system", "content": self.config.system_prompt})
-        
+
         messages.append({"role": "user", "content": user_content})
-        
-        # Add prefill as assistant message if configured
+
         if self.config.prefill:
             messages.append({"role": "assistant", "content": self.config.prefill})
-        
-        # Convert messages to a prompt string using the tokenizer
+
         prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
-        
-        # Calculate max tokens for generation (with optional warmup)
+
         max_tokens = self.config.max_tokens
         if self.config.length_warmup_steps > 0:
             warmup_progress = min(1.0, self.curr_step / self.config.length_warmup_steps)
@@ -160,8 +158,7 @@ class DatasetEnv(BaseEnv):
                 self.config.min_tokens
                 + warmup_progress * (self.config.max_tokens - self.config.min_tokens)
             )
-        
-        # Generate completion using completions API
+
         completions = await self.server.completion(
             prompt=prompt,
             n=self.config.max_generations_per_prompt,
@@ -169,34 +166,33 @@ class DatasetEnv(BaseEnv):
             temperature=self.config.temperature,
             top_p=self.config.top_p,
         )
-        
+
         to_score = []
         to_backlog = []
-        
-        # Process completions
+
         for completion in completions.choices:
-            # Get the completion text
-            completion_text = completion.text if hasattr(completion, "text") else completion.message.content
-            
-            # Build full message sequence for scoring
+            completion_text = (
+                completion.text
+                if hasattr(completion, "text")
+                else completion.message.content
+            )
+
             full_messages = []
             if self.config.system_prompt:
-                full_messages.append({"role": "system", "content": self.config.system_prompt})
-            
+                full_messages.append(
+                    {"role": "system", "content": self.config.system_prompt}
+                )
+
             full_messages.append({"role": "user", "content": user_content})
-            
-            # Combine prefill with completion if prefill was used
+
             response_content = completion_text
             if self.config.prefill:
                 response_content = self.config.prefill + completion_text
-            
+
             full_messages.append({"role": "assistant", "content": response_content})
-            
-            # Add to scoring list with answer and ground truth
-            to_score.append(
-                (full_messages, answer, item[2] if len(item) > 2 else None)
-            )
-        
+
+            to_score.append((full_messages, answer, item[2] if len(item) > 2 else None))
+
         return to_score, to_backlog
 
     async def postprocess_histories(self, trajectories: List) -> Tuple[List, List]:
@@ -204,28 +200,22 @@ class DatasetEnv(BaseEnv):
 
     async def collect_trajectories(self, item: Item) -> Tuple[List, List]:
         self.current_item = item
-        
-        # Extract user prompt from item
+
         user_content = dict(item[0][0])["content"]
-        
-        # Create messages list
+
         messages = []
         if self.config.system_prompt:
             messages.append({"role": "system", "content": self.config.system_prompt})
-        
+
         messages.append({"role": "user", "content": user_content})
-        
-        # Add prefill as assistant message if configured
+
         if self.config.prefill:
             messages.append({"role": "assistant", "content": self.config.prefill})
-        
-        # Convert messages to a prompt string using the tokenizer
+
         prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
-        
-        # Calculate max tokens for generation (with optional warmup)
+
         max_tokens = self.config.max_tokens
-        
-        # Generate completions
+
         completions = await self.server.completion(
             prompt=prompt,
             n=self.config.group_size,
@@ -233,30 +223,32 @@ class DatasetEnv(BaseEnv):
             temperature=self.config.temperature,
             top_p=self.config.top_p,
         )
-        
+
         print(f"Completions: {completions}")
-        # Process completions
         trajectories = []
         for completion in completions.choices:
-            # Get the completion text
-            completion_text = completion.text if hasattr(completion, "text") else completion.message.content
-            
-            # Build complete message sequence
+            completion_text = (
+                completion.text
+                if hasattr(completion, "text")
+                else completion.message.content
+            )
+
             full_messages = []
             if self.config.system_prompt:
-                full_messages.append({"role": "system", "content": self.config.system_prompt})
-            
+                full_messages.append(
+                    {"role": "system", "content": self.config.system_prompt}
+                )
+
             full_messages.append({"role": "user", "content": user_content})
-            
-            # Combine prefill with completion if prefill was used
+
             response_content = completion_text
             if self.config.prefill:
                 response_content = self.config.prefill + completion_text
-            
+
             full_messages.append({"role": "assistant", "content": response_content})
-            
+
             trajectories.append(full_messages)
-        
+
         return trajectories, []
 
     async def score(self, rollout_group_data: List) -> Optional[ScoredDataGroup]:
@@ -402,6 +394,65 @@ class DatasetEnv(BaseEnv):
 
         await super().wandb_log(metrics)
 
+    @classmethod
+    def config_init(
+        cls, config_name: Optional[str] = None
+    ) -> Tuple[DatasetEnvConfig, List[OpenaiConfig]]:
+        """Load settings from the local configs directory."""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        config_file = config_name or "dataset_default.yaml"
+        cfg_path = os.path.join(current_dir, "configs", config_file)
+
+        try:
+            if os.path.exists(cfg_path):
+                with open(cfg_path) as f:
+                    raw = yaml.safe_load(f) or {}
+                logger.info(f"Loaded config from {cfg_path}")
+            else:
+                logger.warning(
+                    f"Config file not found at {cfg_path}, using empty defaults"
+                )
+                raw = {}
+
+            env_conf = DatasetEnvConfig(**raw)
+            server_confs = []
+
+            for sc in raw.get("server_configs", []):
+                api_key = sc.get("api_key", os.getenv("OPENAI_API_KEY", "x"))
+                server_confs.append(
+                    OpenaiConfig(
+                        model_name=sc.get(
+                            "model_name", os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview")
+                        ),
+                        base_url=sc.get("base_url", os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1")),
+                        api_key=api_key,
+                        num_requests_for_eval=sc.get("num_requests_for_eval", 256),
+                    )
+                )
+
+            if not server_confs:
+                server_confs = [
+                    OpenaiConfig(
+                        model_name=os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"),
+                        base_url=os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
+                        api_key=os.getenv("OPENAI_API_KEY", "x"),
+                        num_requests_for_eval=256,
+                    )
+                ]
+
+            return env_conf, server_confs
+
+        except Exception as e:
+            logger.error(f"Error loading config: {e}")
+            return DatasetEnvConfig(), [
+                OpenaiConfig(
+                    model_name=os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"),
+                    base_url=os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
+                    api_key=os.getenv("OPENAI_API_KEY", "x"),
+                    num_requests_for_eval=256,
+                )
+            ]
+
+
 if __name__ == "__main__":
-    # Launch the DatasetEnv via the BaseEnv CLI (serve or process)
     DatasetEnv.cli()

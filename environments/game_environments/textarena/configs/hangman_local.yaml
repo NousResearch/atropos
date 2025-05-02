@@ -1,0 +1,33 @@
+# Hangman Environment Configuration for Local Testing
+
+# Base environment parameters
+tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+group_size: 1  # Single path testing - no multiple trajectories
+use_wandb: false
+max_num_workers: 1
+rollout_server_url: "http://localhost:8000"
+total_steps: 1
+batch_size: 1
+steps_per_eval: 20
+max_token_length: 15360  # 1024 * 15
+wandb_name: "hangman_local_test"
+ensure_scores_are_not_same: false  # Not needed with group_size=1
+
+# Hangman specific configuration
+temperature: 0.7
+top_p: 0.9
+max_turns: 10
+thinking_active: true
+single_step_only: false
+
+# Reward function configuration
+reward_functions: ["format"]  # Simplified reward setup
+format_reward_weight: 0.3
+environment_reward_weight: 0.7
+format_thinking_weight: 0.5
+format_tool_weight: 0.5
+
+# Server configuration - direct values for local testing
+server_configs:
+  - model_name: "gpt-4.1-nano"
+    num_requests_for_eval: 1

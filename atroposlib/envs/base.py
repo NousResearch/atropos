@@ -534,44 +534,63 @@ class BaseEnv(ABC):
             scored_data: List of scored items to send
             item: Optional item for context
         """
-        group_size = scored_data.get("group_overrides", {}).get(
-            "group_size", self.config.group_size
-        )
-        if (
-            (scored_data is not None)
-            and (None not in scored_data)
-            and (len(scored_data["tokens"]) == group_size)
-        ):
-            if self.config.ensure_scores_are_not_same:
-                if len(set(scored_data["scores"])) == 1:
-                    # Scores are the same, don't send to API
-                    return
-            await self.add_rollouts_for_wandb(scored_data, item)
-            # Check for ref_logprobs
-            if "ref_logprobs" not in scored_data:
-                # Strongly typed dict, so we need to add it
-                scored_data["ref_logprobs"] = None
-            if "overrides" not in scored_data:
-                scored_data["overrides"] = None
-            if "group_overrides" not in scored_data:
-                scored_data["group_overrides"] = None
+        # Unify single and batch handling by wrapping single inputs into a list
+        if scored_data is None:
+            return
+        batches = scored_data if isinstance(scored_data, list) else [scored_data]
+        valid_batches = []
+        for batch in batches:
+            if batch is None:
+                continue
 
-            # Track completion lengths
-            for mask in scored_data["masks"]:
+            # Determine group_size for this specific batch, falling back to config default
+            batch_group_size = batch.get("group_overrides", {}).get(
+                "group_size", self.config.group_size
+            )
+
+            # Ensure correct group size
+            if len(batch.get("tokens", [])) != batch_group_size:
+                logger.warning(
+                    f"Skipping batch due to group size mismatch. "
+                    f"Expected {batch_group_size}, got {len(batch.get('tokens', []))}"
+                )
+                continue
+
+            # Skip identical scores if configured
+            if (
+                self.config.ensure_scores_are_not_same
+                and len(set(batch.get("scores", []))) == 1
+                and len(batch.get("scores", []))
+                > 0  # Avoid triggering for empty scores list
+            ):
+                logger.warning("Skipping batch due to identical scores.")
+                continue
+
+            # Ensure optional keys exist (using setdefault is cleaner)
+            batch.setdefault("ref_logprobs", None)
+            batch.setdefault("overrides", None)
+            batch.setdefault("group_overrides", None)
+            valid_batches.append(batch)
+
+        if not valid_batches:
+            return
+
+        # Record rollouts, token lengths, and save to JSONL for each valid batch
+        for batch in valid_batches:
+            await self.add_rollouts_for_wandb(batch, item)
+            for mask in batch.get("masks", []):
                 self.completion_lengths.append(len(mask))
-            # Add the scores to the queue
-            if any([len(x) >= self.max_token_len for x in scored_data["tokens"]]):
-                # Don't send to API if the token length is too long
-                return
-            # Save data, if applicable:
-            if self.jsonl_writer is not None:
-                self.jsonl_writer.write(scored_data)
-            # Send data with retries and error handling
-            try:
-                self.items_sent_this_step += 1
-                await self._send_scored_data_to_api(scored_data)
-            except (Exception, TimeoutError) as e:
-                print(f"Failed to send scored data after retries: {e}")
+            if self.jsonl_writer:
+                self.jsonl_writer.write(batch)
+
+        # Send to API (list if multiple batches, single dict if one)
+        try:
+            self.items_sent_this_step += len(valid_batches)
+            payload = valid_batches if len(valid_batches) > 1 else valid_batches[0]
+            await self._send_scored_data_to_api(payload)
+        except (Exception, TimeoutError) as e:
+            print(f"Failed to send scored data after retries: {e}")
+        return
 
     async def handle_env(
         self, item_uuid: str
