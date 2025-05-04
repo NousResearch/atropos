@@ -11,7 +11,7 @@ from environments.game_environments.textarena.hangman_env import HangmanOnlineEn
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 """Local debugging script example - useful to test the environment locally"""

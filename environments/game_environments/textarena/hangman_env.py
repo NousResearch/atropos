@@ -6,6 +6,7 @@ import random
 import asyncio
 from typing import Any, Dict, List, Optional, Tuple
 import os
+
 import textarena as ta
 from typing_extensions import TypedDict
 import yaml
@@ -361,12 +362,62 @@ class HangmanOnlineEnv(BaseEnv):
 
         return None
 
+    def _get_deterministic_word(self, seed: int, word_list: List[str]) -> str:
+        """
+        Deterministically selects a word from the provided word list based on the seed.
+        Note: This is a hack to ensure the word is always the same for the given seed.
+        It will be removed in the future after the environment is updated
+        Args:
+            seed: The seed for the random number generator.
+            word_list: The list of words to choose from.
+
+        Returns:
+            The chosen word in uppercase.
+        """
+        if not word_list:
+             logger.warning("Provided word list is empty, returning default word 'AGENT'.")
+             return "AGENT"
+        try:
+            # Use a Random instance seeded locally to avoid affecting global state
+            seeded_rng = random.Random(seed)
+            chosen_word = seeded_rng.choice(word_list).upper()
+            # Filter out words with non-alphabetic characters if any exist in the list
+            while not chosen_word.isalpha():
+                 logger.debug(f"Word '{chosen_word}' contains non-alpha chars, re-sampling.")
+                 chosen_word = seeded_rng.choice(word_list).upper()
+            logger.debug(f"Deterministic word for seed {seed}: {chosen_word}")
+            return chosen_word
+        except IndexError:
+             logger.warning(f"Word list seems empty or invalid after filtering for seed {seed}. Returning 'AGENT'.")
+             return "AGENT"
+        except Exception as e:
+            logger.error(f"Error generating deterministic word for seed {seed}: {e}. Returning 'AGENT'.")
+            return "AGENT"
+
     def _get_or_create_episode(self, seed: int) -> EpisodeState:
+        print("seed", seed)
         if seed not in self.episodes:
             self.episodes[seed] = EpisodeState(seed)
             self.episodes[seed].env.reset(seed=seed, num_players=1)
+            env = self.episodes[seed].env
+            chosen_word = self._get_deterministic_word(seed, env.word_list)
 
-            self.episodes[seed].current_board_state = []
+            # Manually set the chosen word and related state
+            env.chosen_word = chosen_word
+            print("chosen_word", chosen_word)
+            env.game_board = list(chosen_word)
+            env.state.game_state["board"] = ['_'] * len(chosen_word)
+            env.guessed_letters = set() # Ensure guessed letters are reset
+            logger.info(f"Episode {seed}: Set deterministic word to '{chosen_word}'")
+
+            self.episodes[seed].current_board_state = env.state.game_state["board"]
+            self.episodes[seed].tries_left = env.state.game_state["tries_left"]
+
+        # Always update current board state and tries left when retrieving episode
+        else:
+             self.episodes[seed].current_board_state = self.episodes[seed].env.state.game_state["board"]
+             self.episodes[seed].tries_left = self.episodes[seed].env.state.game_state["tries_left"]
+
 
         return self.episodes[seed]
 
@@ -650,6 +701,8 @@ class HangmanOnlineEnv(BaseEnv):
             sim_env.chosen_word = chosen_word
             # Set the guessed_letters from our stored value
             sim_env.guessed_letters = guessed_letters
+            # <<< ADDED: Ensure internal game_board used for win checks is consistent >>>
+            sim_env.game_board = list(chosen_word)
 
             sim_env_wrapped = ta.wrappers.LLMObservationWrapper(sim_env)
             done, info = sim_env_wrapped.step(action)
@@ -732,6 +785,7 @@ class HangmanOnlineEnv(BaseEnv):
     async def collect_trajectory(
         self, seed: int, interactive: bool = False
     ) -> List[ScoredDataGroup]:
+        print("collect_trajectory", seed)
         episode = self._get_or_create_episode(seed)
 
         episode.message_history = [{"role": "system", "content": self.system_prompt}]
