@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 
 from atroposlib.envs.base import OpenaiConfig
 from atroposlib.envs.reward_fns import registry
-from atroposlib.utils.config_handler import ConfigHandler
 from environments.dataset_environment.dataset_env import DatasetEnv, DatasetEnvConfig
 
 load_dotenv()
@@ -23,7 +22,10 @@ def parse_arguments():
         "--config",
         type=str,
         default="dataset_local",
-        help="Configuration file name (without .yaml extension) relative to environments/dataset_environment/configs/, or full path to a YAML file.",
+        help=(
+            "Configuration file name (without .yaml extension) relative to "
+            "environments/dataset_environment/configs/, or full path to a YAML file."
+        ),
     )
     return parser.parse_args()
 
@@ -35,7 +37,7 @@ async def main():
     args = parse_arguments()
 
     # Initialize config handler
-    config_handler = ConfigHandler()
+    # config_handler = ConfigHandler()
 
     # Determine config path
     if (

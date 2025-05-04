@@ -422,9 +422,16 @@ class DatasetEnv(BaseEnv):
                 server_confs.append(
                     OpenaiConfig(
                         model_name=sc.get(
-                            "model_name", os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview")
+                            "model_name",
+                            os.getenv(
+                                "OPENAI_MODEL",
+                                "NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+                            ),
                         ),
-                        base_url=sc.get("base_url", os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1")),
+                        base_url=sc.get(
+                            "base_url",
+                            os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
+                        ),
                         api_key=api_key,
                         num_requests_for_eval=sc.get("num_requests_for_eval", 256),
                     )
@@ -433,8 +440,13 @@ class DatasetEnv(BaseEnv):
             if not server_confs:
                 server_confs = [
                     OpenaiConfig(
-                        model_name=os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"),
-                        base_url=os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
+                        model_name=os.getenv(
+                            "OPENAI_MODEL",
+                            "NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+                        ),
+                        base_url=os.getenv(
+                            "OPENAI_API_BASE", "http://localhost:9004/v1"
+                        ),
                         api_key=os.getenv("OPENAI_API_KEY", "x"),
                         num_requests_for_eval=256,
                     )
@@ -446,7 +458,9 @@ class DatasetEnv(BaseEnv):
             logger.error(f"Error loading config: {e}")
             return DatasetEnvConfig(), [
                 OpenaiConfig(
-                    model_name=os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"),
+                    model_name=os.getenv(
+                        "OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+                    ),
                     base_url=os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
                     api_key=os.getenv("OPENAI_API_KEY", "x"),
                     num_requests_for_eval=256,

@@ -181,4 +181,4 @@ class ConfigHandler:
         # Add slurm flag to config if running in a Slurm environment
         config["use_slurm"] = "SLURM_JOB_ID" in os.environ
 
-        return config 
+        return config

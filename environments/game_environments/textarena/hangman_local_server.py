@@ -3,7 +3,6 @@ import argparse
 import asyncio
 import logging
 import os
-import random
 
 from dotenv import load_dotenv
 
@@ -71,16 +70,13 @@ async def main():
 
     # Create environment with the configured settings
     env = HangmanOnlineEnv(
-        config=env_config,
-        server_configs=server_configs,
-        slurm=False,
-        debug_mode=True
+        config=env_config, server_configs=server_configs, slurm=False, debug_mode=True
     )
 
     logger.info("Running a single trajectory directly")
     await env.setup()
     # seed = random.randint(0, 1000000)
-    seed = 376349 # The word is "end", nice and easy
+    seed = 376349  # The word is "end", nice and easy
     logger.info(f"Using seed: {seed}")
     logger.info("-" * 80)
     result = await env.collect_trajectory(seed)

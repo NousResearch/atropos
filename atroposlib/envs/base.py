@@ -14,12 +14,12 @@ from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
 import aiohttp
 import jsonlines
 import numpy as np
+import wandb
 from pydantic import BaseModel, Field
 from pydantic_cli import Cmd, FailedExecutionException, run_and_exit
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 from transformers import AutoTokenizer
 
-import wandb
 from atroposlib.type_definitions import UUID
 from atroposlib.utils.metrics import get_std_min_max_avg
 

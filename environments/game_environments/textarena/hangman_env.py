@@ -1,22 +1,25 @@
+import asyncio
 import copy
 import json
 import logging
-import re
-import random
-import asyncio
-from typing import Any, Dict, List, Optional, Tuple
 import os
+import random
+import re
+from typing import Any, Dict, List, Optional, Tuple
 
 import textarena as ta
-from typing_extensions import TypedDict
 import yaml
+from typing_extensions import TypedDict
 
 from atroposlib.envs.base import BaseEnv, BaseEnvConfig, OpenaiConfig, ScoredDataGroup
 from atroposlib.envs.reward_fns import registry
 from atroposlib.envs.reward_fns.combined_reward import CombinedReward
 from atroposlib.type_definitions import Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
-from atroposlib.utils.tool_call_parser import format_tool_call_for_hangman, parse_tool_call
+from atroposlib.utils.tool_call_parser import (
+    format_tool_call_for_hangman,
+    parse_tool_call,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -375,23 +378,31 @@ class HangmanOnlineEnv(BaseEnv):
             The chosen word in uppercase.
         """
         if not word_list:
-             logger.warning("Provided word list is empty, returning default word 'AGENT'.")
-             return "AGENT"
+            logger.warning(
+                "Provided word list is empty, returning default word 'AGENT'."
+            )
+            return "AGENT"
         try:
             # Use a Random instance seeded locally to avoid affecting global state
             seeded_rng = random.Random(seed)
             chosen_word = seeded_rng.choice(word_list).upper()
             # Filter out words with non-alphabetic characters if any exist in the list
             while not chosen_word.isalpha():
-                 logger.debug(f"Word '{chosen_word}' contains non-alpha chars, re-sampling.")
-                 chosen_word = seeded_rng.choice(word_list).upper()
+                logger.debug(
+                    f"Word '{chosen_word}' contains non-alpha chars, re-sampling."
+                )
+                chosen_word = seeded_rng.choice(word_list).upper()
             logger.debug(f"Deterministic word for seed {seed}: {chosen_word}")
             return chosen_word
         except IndexError:
-             logger.warning(f"Word list seems empty or invalid after filtering for seed {seed}. Returning 'AGENT'.")
-             return "AGENT"
+            logger.warning(
+                f"Word list seems empty or invalid after filtering for seed {seed}. Returning 'AGENT'."
+            )
+            return "AGENT"
         except Exception as e:
-            logger.error(f"Error generating deterministic word for seed {seed}: {e}. Returning 'AGENT'.")
+            logger.error(
+                f"Error generating deterministic word for seed {seed}: {e}. Returning 'AGENT'."
+            )
             return "AGENT"
 
     def _get_or_create_episode(self, seed: int) -> EpisodeState:
@@ -406,8 +417,8 @@ class HangmanOnlineEnv(BaseEnv):
             env.chosen_word = chosen_word
             print("chosen_word", chosen_word)
             env.game_board = list(chosen_word)
-            env.state.game_state["board"] = ['_'] * len(chosen_word)
-            env.guessed_letters = set() # Ensure guessed letters are reset
+            env.state.game_state["board"] = ["_"] * len(chosen_word)
+            env.guessed_letters = set()  # Ensure guessed letters are reset
             logger.info(f"Episode {seed}: Set deterministic word to '{chosen_word}'")
 
             self.episodes[seed].current_board_state = env.state.game_state["board"]
@@ -415,9 +426,12 @@ class HangmanOnlineEnv(BaseEnv):
 
         # Always update current board state and tries left when retrieving episode
         else:
-             self.episodes[seed].current_board_state = self.episodes[seed].env.state.game_state["board"]
-             self.episodes[seed].tries_left = self.episodes[seed].env.state.game_state["tries_left"]
-
+            self.episodes[seed].current_board_state = self.episodes[
+                seed
+            ].env.state.game_state["board"]
+            self.episodes[seed].tries_left = self.episodes[seed].env.state.game_state[
+                "tries_left"
+            ]
 
         return self.episodes[seed]
 
@@ -458,7 +472,7 @@ class HangmanOnlineEnv(BaseEnv):
             modified = modified + "\n" + ascii_art_board
 
         return modified
-    
+
     async def setup(self):
         pass
 
@@ -968,26 +982,26 @@ class HangmanOnlineEnv(BaseEnv):
                 )
 
             logger.info(f"collect_trajectory: Stepping best action: {best_action}")
-            
+
             # Save pre-step state variables
             pre_board = copy.deepcopy(episode.current_board_state)
             pre_tries = episode.tries_left
-            
+
             # Execute the step
             done, info = episode.env.step(best_action)
-            
+
             # Get the post-step state
             best_action_idx = actions.index(best_action)
             response_text = messages_list[best_action_idx][-1]["content"]
-            
+
             # Update current state variables
             episode.current_board_state = episode.env.state.game_state["board"]
             episode.tries_left = episode.env.state.game_state["tries_left"]
-            
+
             # Manual score tracking instead of creating new State objects
             env_reward = 0.0
             format_reward = 0.0
-            
+
             # Basic scoring: +1 for revealing letters, -0.2 for incorrect guesses
             if best_action != "-ERROR-":
                 if done and "Congratulations" in info.get("reason", "").lower():
@@ -999,29 +1013,36 @@ class HangmanOnlineEnv(BaseEnv):
                     # Check if letters were revealed
                     newly_revealed = 0
                     for i in range(len(pre_board)):
-                        if pre_board[i] == "_" and episode.current_board_state[i] != "_":
+                        if (
+                            pre_board[i] == "_"
+                            and episode.current_board_state[i] != "_"
+                        ):
                             newly_revealed += 1
-                    
+
                     if newly_revealed > 0:
                         env_reward += newly_revealed * 1.0
                     elif pre_tries > episode.tries_left:
                         env_reward -= 0.2
-            
+
                 # Format reward (if configured)
                 if self.reward_function:
-                    format_completions = [[{"role": "assistant", "content": response_text}]]
+                    format_completions = [
+                        [{"role": "assistant", "content": response_text}]
+                    ]
                     try:
                         format_rewards = self.reward_function(format_completions)
                         if format_rewards and len(format_rewards) > 0:
                             format_reward = format_rewards[0]
                     except Exception as e:
                         logger.error(f"Error calculating format reward: {e}")
-                
+
                 # Combined reward calculation
                 env_weight = getattr(self.config, "environment_reward_weight", 0.7)
                 format_weight = getattr(self.config, "format_reward_weight", 0.3)
-                combined_reward = (env_weight * env_reward) + (format_weight * format_reward)
-                
+                combined_reward = (env_weight * env_reward) + (
+                    format_weight * format_reward
+                )
+
                 # Update episode totals
                 episode.total_env_reward += env_reward
                 episode.total_format_reward += format_reward
@@ -1030,7 +1051,7 @@ class HangmanOnlineEnv(BaseEnv):
                 episode.step_rewards.append(combined_reward)
                 if best_action != "-ERROR-":
                     episode.num_correct_actions += 1
-            
+
             player_id_after_step, actual_next_observation_string = (
                 episode.env.get_observation()
             )
@@ -1393,10 +1414,10 @@ class HangmanOnlineEnv(BaseEnv):
 
     async def get_next_item(self, i: int) -> Tuple[int, int]:
         """Returns the next seed to be used for trajectory collection.
-        
+
         Args:
             i: The current index
-            
+
         Returns:
             A tuple of (seed, i) where seed is the random seed to use
         """
@@ -1404,7 +1425,7 @@ class HangmanOnlineEnv(BaseEnv):
         # Adding an offset to prevent collisions with other seeds
         seed = i + 10000
         return (seed, i)
-    
+
     async def evaluate(self):
         eval_seeds = [random.randint(0, 1000000) for _ in range(10)]
         eval_tasks = [self.collect_trajectory(seed) for seed in eval_seeds]
@@ -1443,10 +1464,16 @@ class HangmanOnlineEnv(BaseEnv):
 
             for sc in raw.get("server_configs", []):
                 api_key = sc.get("api_key", os.getenv("OPENAI_API_KEY", "x"))
-                base_url = sc.get("base_url", os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"))
+                base_url = sc.get(
+                    "base_url", os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1")
+                )
                 openai_config_args = {
                     "model_name": sc.get(
-                        "model_name", os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview")
+                        "model_name",
+                        os.getenv(
+                            "OPENAI_MODEL",
+                            "NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+                        ),
                     ),
                     "api_key": api_key,
                     "num_requests_for_eval": sc.get("num_requests_for_eval", 256),
@@ -1458,8 +1485,13 @@ class HangmanOnlineEnv(BaseEnv):
             if not server_confs:
                 server_confs = [
                     OpenaiConfig(
-                        model_name=os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"),
-                        base_url=os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
+                        model_name=os.getenv(
+                            "OPENAI_MODEL",
+                            "NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+                        ),
+                        base_url=os.getenv(
+                            "OPENAI_API_BASE", "http://localhost:9004/v1"
+                        ),
                         api_key=os.getenv("OPENAI_API_KEY", "x"),
                         num_requests_for_eval=256,
                     )
@@ -1478,6 +1510,7 @@ class HangmanOnlineEnv(BaseEnv):
                     num_requests_for_eval=1,
                 )
             ]
+
 
 if __name__ == "__main__":
     HangmanOnlineEnv.cli()

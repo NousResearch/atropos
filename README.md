@@ -165,7 +165,7 @@ pre-commit install
 2. **Run an Example Environment**
 
   You should edit the config_init section of the environment file you want ([For example, in GSM8K Environment](https://github.com/NousResearch/atropos/blob/main/environments/gsm8k_server.py#L53)) to point to a running VLLM or SGLang inference server as well as any other configuration changes you'd like to make, such as the group size, then:
-  
+
    ```bash
    # Start the API server and run the GSM8K environment
    run-api & python environments/gsm8k_server.py serve \

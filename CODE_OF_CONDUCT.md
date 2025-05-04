@@ -41,4 +41,4 @@ Project maintainers are obligated to respect the privacy and security of the rep
 
 This Code of Conduct is adapted from general open source community standards and GitHub's community guidelines.
 
-Remember: Respect each other, collaborate constructively, and focus on making Atropos better for everyone. 
+Remember: Respect each other, collaborate constructively, and focus on making Atropos better for everyone.
