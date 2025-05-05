@@ -69,6 +69,8 @@ class DatasetEnvConfig(BaseEnvConfig):
 
 
 class DatasetEnv(BaseEnv):
+    name = "dataset"
+
     def __init__(
         self, config: DatasetEnvConfig, server_configs, slurm=True, testing=False
     ):

@@ -228,6 +228,8 @@ class EpisodeState:
 
 
 class HangmanOnlineEnv(BaseEnv):
+    name = "hangman"
+
     def __init__(
         self,
         config: BaseEnvConfig,
