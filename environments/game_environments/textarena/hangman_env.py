@@ -1412,19 +1412,16 @@ class HangmanOnlineEnv(BaseEnv):
 
         return scored_groups
 
-    async def get_next_item(self, i: int) -> Tuple[int, int]:
+    async def get_next_item(self, i: int = None) -> int:
         """Returns the next seed to be used for trajectory collection.
 
         Args:
-            i: The current index
+            i: Optional index to use for seed generation in testing
 
         Returns:
-            A tuple of (seed, i) where seed is the random seed to use
+            The seed to be used for trajectory collection
         """
-        # Use i as the seed directly for reproducibility
-        # Adding an offset to prevent collisions with other seeds
-        seed = i + 10000
-        return (seed, i)
+        return i if i is not None else random.randint(0, 1000000)
 
     async def evaluate(self):
         eval_seeds = [random.randint(0, 1000000) for _ in range(10)]
