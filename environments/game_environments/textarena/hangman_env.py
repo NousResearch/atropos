@@ -476,7 +476,7 @@ class HangmanOnlineEnv(BaseEnv):
         return modified
 
     async def setup(self):
-        pass
+        await asyncio.sleep(5)  # Add a small delay for server initialization
 
     def _parse_tool_call(self, response: str) -> str:
         tool_name, arguments, is_error = parse_tool_call(
