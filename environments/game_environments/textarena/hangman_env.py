@@ -895,13 +895,18 @@ class HangmanOnlineEnv(BaseEnv):
             else:
                 logger.warning(f"{prompt_log_header}\n{prompt}{prompt_log_footer}")
 
-            completions = await self.server.completion(
-                prompt=prompt,
-                n=self.config.group_size,
-                max_tokens=self.config.max_token_length,
-                temperature=self.config.temperature,
-                top_p=self.config.top_p,
-            )
+            # Wrap the API call in a try-except block
+            try:
+                completions = await self.server.completion(
+                    prompt=prompt,
+                    n=self.config.group_size,
+                    max_tokens=self.config.max_token_length,
+                    temperature=self.config.temperature,
+                    top_p=self.config.top_p,
+                )
+            except Exception as api_error:
+                logger.exception(f"[collect_trajectory:{seed}] API Error during self.server.completion: {api_error}")
+                return [] # Cannot proceed if API call fails
 
             step_info = f" - Step {i+1}"
             completions_log_header = (
