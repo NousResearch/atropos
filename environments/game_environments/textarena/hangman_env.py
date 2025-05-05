@@ -30,6 +30,8 @@ class HangmanEnvConfig(BaseEnvConfig):
     max_turns: int = 10
     thinking_active: bool = True
     single_step_only: bool = False
+    inference_weight: float = 1.0
+    wandb_name: str = "hangman"
 
     reward_functions: List[str] = ["format"]
     format_reward_weight: float = 0.3

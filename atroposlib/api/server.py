@@ -2,7 +2,7 @@ import time
 import uuid
 from typing import Any, List, Optional
 
-from fastapi import FastAPI, status
+from fastapi import FastAPI, status, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
@@ -100,15 +100,17 @@ async def register(registration: Registration):
 
 @app.post("/register-env")
 async def register_env_url(register_env: RegisterEnv):
-    try:
-        isinstance(app.state.envs, list)
-    except AttributeError:
-        app.state.envs = []
-    checkpoint_dir = ""
-    try:
-        checkpoint_dir = app.state.checkpoint_dir
-    except AttributeError:
-        pass
+    # Check if essential state from /register has been initialized
+    required_attrs = ["envs", "status_dict", "checkpoint_dir", "save_checkpoint_interval", "num_steps"]
+    for attr in required_attrs:
+        if not hasattr(app.state, attr):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Server state not fully initialized. Missing '{attr}'. Please ensure the trainer has registered first."
+            )
+
+    # Original logic proceeds if state is initialized
+    checkpoint_dir = app.state.checkpoint_dir
     real_name = (
         f"{register_env.desired_name}_"
         f"{len([x for x in app.state.envs if x['desired_name'] == register_env.desired_name])}"
