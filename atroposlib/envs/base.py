@@ -336,66 +336,33 @@ class BaseEnv(ABC):
 
     async def register_env(self):
         # Now register the env...
-        max_retries = 5
-        for attempt in range(max_retries):
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        f"{self.config.rollout_server_url}/register-env",
-                        json={
-                            "max_token_length": self.config.max_token_length,
-                            "desired_name": self.config.wandb_name,
-                            "weight": self.config.inference_weight,
-                        },
-                    ) as resp:
-                        # Check for server-side errors which might indicate initialization issues
-                        if resp.status >= 500:
-                            error_text = await resp.text()
-                            logger.warning(
-                                f"Registration attempt {attempt + 1}/{max_retries} failed "
-                                f"with status {resp.status}: {error_text}. Retrying..."
-                            )
-                            # Raise the error to be caught by the outer try/except
-                            resp.raise_for_status()
-
-                        # Try to decode JSON, catching error if response is not JSON (e.g., HTML error page)
-                        data = await resp.json()
-                        self.env_id = data["env_id"]
-                        self.wandb_prepend = data["wandb_name"]
-                        self.curr_step = data["starting_step"]
-                        self.checkpoint_dir = data["checkpoint_dir"]
-                        self.checkpoint_interval = data["checkpoint_interval"]
-                        if self.config.total_steps == -1:
-                            self.config.total_steps = data["num_steps"]
-                            if self.config.total_steps == -1:
-                                raise ValueError("Total steps not set in config or server!")
-                        print(
-                            f"Initialized env with id {self.env_id}: "
-                            f"curr_step: {self.curr_step}, "
-                            f"checkpoint_dir: {self.checkpoint_dir}, "
-                            f"checkpoint_interval: {self.checkpoint_interval}"
-                        )
-                        if self.curr_step > 0:
-                            self.load_checkpoint()
-                        # Success, exit the method
-                        logger.info(f"Environment registration successful on attempt {attempt + 1}.")
-                        return
-
-            except (aiohttp.ClientError, json.JSONDecodeError) as e:
-                if attempt + 1 == max_retries:
-                    logger.error("Max retries reached for environment registration. Raising error.")
-                    raise  # Re-raise the last exception if max retries are hit
-                # Calculate exponential backoff time with jitter
-                wait_time = (1 * (2**attempt)) + random.uniform(0, 0.2)
-                logger.warning(
-                    f"Registration attempt {attempt + 1}/{max_retries} failed: {e}. "
-                    f"Waiting {wait_time:.2f}s before retrying."
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{self.config.rollout_server_url}/register-env",
+                json={
+                    "max_token_length": self.config.max_token_length,
+                    "desired_name": self.config.wandb_name,
+                    "weight": self.config.inference_weight,
+                },
+            ) as resp:
+                data = await resp.json()
+                self.env_id = data["env_id"]
+                self.wandb_prepend = data["wandb_name"]
+                self.curr_step = data["starting_step"]
+                self.checkpoint_dir = data["checkpoint_dir"]
+                self.checkpoint_interval = data["checkpoint_interval"]
+                if self.config.total_steps == -1:
+                    self.config.total_steps = data["num_steps"]
+                    if self.config.total_steps == -1:
+                        raise ValueError("Total steps not set in config or server!")
+                print(
+                    f"Initialized env with id {self.env_id}: "
+                    f"curr_step: {self.curr_step}, "
+                    f"checkpoint_dir: {self.checkpoint_dir}, "
+                    f"checkpoint_interval: {self.checkpoint_interval}"
                 )
-                await asyncio.sleep(wait_time)
-            except Exception as e:
-                # Catch any other unexpected error during registration
-                logger.error(f"Unexpected error during registration attempt {attempt + 1}: {e}")
-                raise # Re-raise unexpected errors immediately
+                if self.curr_step > 0:
+                    self.load_checkpoint()
 
     async def get_server_info(self):
         """
