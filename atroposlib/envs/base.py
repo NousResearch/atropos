@@ -394,7 +394,7 @@ class BaseEnv(ABC):
                         if self.curr_step > 0:
                             self.load_checkpoint()
                         # Success, exit the method
-                        logger.info(f"Environment registration successful on attempt {attempt + 1}.")
+                        logger.warning(f"Environment registration successful on attempt {attempt + 1}.")
                         return
 
             except (aiohttp.ClientError, json.JSONDecodeError) as e:
@@ -823,11 +823,11 @@ class BaseEnv(ABC):
             self.last_loop_time = time.time()
             await self.get_status()
             await self.env_step_checks()
-            logger.info(f"env_manager: Status dict: {self.status_dict}")
+            logger.warning(f"env_manager: Status dict: {self.status_dict}")
             # Log queue check values before the condition
             queue_items = self.status_dict["queue_size"] * self.config.group_size
             queue_capacity = self.config.max_batches_offpolicy * self.config.batch_size
-            logger.info(
+            logger.warning(
                 f"env_manager: Queue Check - Items: {queue_items} ({self.status_dict['queue_size']} groups), "
                 f"Capacity: {queue_capacity} ({self.config.max_batches_offpolicy} batches), "
                 f"Batch Size: {self.config.batch_size}"
