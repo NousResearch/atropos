@@ -973,16 +973,27 @@ class HangmanOnlineEnv(BaseEnv):
                     logger.exception(f"[ERROR] Error collecting trajectory: {e}")
                 return []
 
+            # Log lengths after processing loop
+            logger.warning(f"[collect_trajectory:{seed}] Processed lengths - Tokens: {len(tokens)}, Masks: {len(masks)}, Messages: {len(messages_list)}, Actions: {len(actions)}")
+
             best_action, scores = await self._select_best_action(
                 episode, actions, messages_list
             )
+            logger.warning(f"[collect_trajectory:{seed}] _select_best_action results: best_action='{best_action}', num_scores={len(scores)}")
+
+            # Safely get best_action_idx
+            try:
+                best_action_idx = actions.index(best_action)
+                logger.warning(f"[collect_trajectory:{seed}] Found best_action_idx: {best_action_idx}")
+            except ValueError:
+                logger.error(f"[collect_trajectory:{seed}] FATAL: best_action '{best_action}' not found in actions list: {actions}")
+                return [] # Cannot proceed without a valid index
 
             if self.debug_mode:
                 step_info = f" - Step {i+1}"
                 logger.debug(f"\n★ ACTION{step_info}: {best_action}")
-                best_idx = actions.index(best_action)
                 logger.debug(
-                    f"[SCORE] Selected best action (score: {scores[best_idx]:.4f})"
+                    f"[SCORE] Selected best action (score: {scores[best_action_idx]:.4f})"
                 )
 
             logger.info(f"collect_trajectory: Stepping best action: {best_action}")
@@ -996,7 +1007,14 @@ class HangmanOnlineEnv(BaseEnv):
 
             # Get the post-step state
             best_action_idx = actions.index(best_action)
-            response_text = messages_list[best_action_idx][-1]["content"]
+
+            # Safely access response_text
+            if best_action_idx < len(messages_list):
+                logger.warning(f"[collect_trajectory:{seed}] Accessing messages_list[{best_action_idx}] for response_text.")
+                response_text = messages_list[best_action_idx][-1]["content"]
+            else:
+                logger.error(f"[collect_trajectory:{seed}] FATAL: best_action_idx {best_action_idx} out of bounds for messages_list (len {len(messages_list)})")
+                return [] # Cannot proceed
 
             # Update current state variables
             episode.current_board_state = episode.env.state.game_state["board"]
@@ -1115,7 +1133,14 @@ class HangmanOnlineEnv(BaseEnv):
             best_action_idx = actions.index(best_action)
 
             try:
-                best_full_response = completions.choices[best_action_idx].text
+                # Safely access completions.choices
+                if best_action_idx < len(completions.choices):
+                    logger.warning(f"[collect_trajectory:{seed}] Accessing completions.choices[{best_action_idx}] for history update.")
+                    best_full_response = completions.choices[best_action_idx].text
+                else:
+                    logger.error(f"[collect_trajectory:{seed}] FATAL: best_action_idx {best_action_idx} out of bounds for completions.choices (len {len(completions.choices)})")
+                    # Re-raise or handle differently if needed, but indicates prior logic failure
+                    raise IndexError(f"best_action_idx {best_action_idx} out of bounds for completions.choices")
 
                 thinking_block = self._extract_thinking_block(best_full_response)
                 last_paragraph = self._extract_last_paragraph(thinking_block)
@@ -1144,7 +1169,7 @@ class HangmanOnlineEnv(BaseEnv):
             except Exception as history_error:
                 if self.debug_mode:
                     logger.exception(
-                        f"[ERROR] Error updating canonical history: {history_error}"
+                        f"[collect_trajectory:{seed}] Error updating canonical history: {history_error}"
                     )
                 episode.message_history.extend(
                     [
