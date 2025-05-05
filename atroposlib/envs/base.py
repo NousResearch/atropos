@@ -752,40 +752,57 @@ class BaseEnv(ABC):
 
     async def add_train_workers(self):
         if (self.eval_runner is not None) and (not self.eval_runner.done()):
+            logger.warning(f"add_train_workers: Eval runner active (done={self.eval_runner.done()}), handling={self.config.eval_handling}")
             if self.config.eval_handling == EvalHandlingEnum.STOP_TRAIN:
+                logger.warning("add_train_workers: STOP_TRAIN active, returning.")
                 return
             elif self.config.eval_handling == EvalHandlingEnum.LIMIT_TRAIN:
                 max_num_workers = int(
                     self.max_num_workers * self.config.eval_limit_ratio
                 )
+                logger.warning(f"add_train_workers: LIMIT_TRAIN active, limiting workers to {max_num_workers}.")
             else:
                 max_num_workers = self.max_num_workers
         else:
             max_num_workers = self.max_num_workers
+            logger.warning(f"add_train_workers: Eval runner not active or done, max workers: {max_num_workers}")
+
         # set max_num_workers to whatever is max off policy and num workers
-        max_num_workers = min(
-            max_num_workers,
-            (
-                self.config.max_batches_offpolicy
-                * self.config.batch_size
-                // self.config.group_size
-            )
-            - (self.status_dict["queue_size"]),
+        queue_capacity = (
+            self.config.max_batches_offpolicy
+            * self.config.batch_size
+            // self.config.group_size
         )
+        available_queue_slots = max(0, queue_capacity - self.status_dict["queue_size"])
+        original_max_workers = max_num_workers
+        max_num_workers = min(max_num_workers, available_queue_slots)
+        logger.warning(f"add_train_workers: Limiting workers based on queue. Capacity: {queue_capacity}, Available: {available_queue_slots}, Original Max: {original_max_workers}, Final Max: {max_num_workers}")
+
         if (self.curr_step == 0) and (len(self.workers) == 0):
             # We are starting up, so we should just skip the append to the list
             pass
         else:
-            self.workers_added_list.append(max_num_workers - len(self.workers))
+            # Log how many workers we *intend* to add
+            workers_to_add = max(0, max_num_workers - len(self.workers))
+            logger.warning(f"add_train_workers: Attempting to add {workers_to_add} workers (Current: {len(self.workers)}, Max: {max_num_workers})")
+            self.workers_added_list.append(workers_to_add)
+
         while len(self.workers) < max_num_workers:
             # Generate a UUID for tracking this item
             item_uuid = str(uuid.uuid4())
+            item = None # Initialize item to None
             if len(self.backlog) > 0:
                 item = self.backlog.pop()
+                logger.warning(f"add_train_workers: Got item from backlog.")
             else:
                 item = await self.get_next_item()
+                logger.warning(f"add_train_workers: Called get_next_item, result: {'Item received' if item else 'None'}.")
+
             if item is None:
-                break
+                logger.warning("add_train_workers: No item received from get_next_item or backlog, breaking loop.")
+                break # Exit loop if no item is available
+
+            logger.warning(f"add_train_workers: Adding worker {len(self.workers) + 1}/{max_num_workers} for item_uuid {item_uuid}")
             self.running_items[item_uuid] = item
             worker = asyncio.create_task(self.handle_env(item_uuid))
             self.workers.add(worker)

@@ -803,7 +803,7 @@ class HangmanOnlineEnv(BaseEnv):
     async def collect_trajectory(
         self, seed: int, interactive: bool = False
     ) -> List[ScoredDataGroup]:
-        print("collect_trajectory", seed)
+        logger.warning(f"collect_trajectory: Starting with seed {seed}")
         episode = self._get_or_create_episode(seed)
 
         episode.message_history = [{"role": "system", "content": self.system_prompt}]
@@ -818,7 +818,7 @@ class HangmanOnlineEnv(BaseEnv):
             if not isinstance(initial_observation_string, str)
             else initial_observation_string
         )
-        logger.debug(
+        logger.warning(
             f"[INIT] Using Observation String: {initial_raw_observation[:100]}..."
         )
 
@@ -829,22 +829,22 @@ class HangmanOnlineEnv(BaseEnv):
         episode.tries_left = episode.env.state.game_state["tries_left"]
 
         if self.debug_mode:
-            logger.debug(f"[INIT] Starting trajectory collection with seed {seed}")
-            logger.debug(f"[INIT] Max turns: {max_depth}")
-            logger.debug("\n" + "◆" * 40)
-            logger.debug("ENVIRONMENT OBSERVATION - Step 0:")
-            logger.debug("-" * 80)
-            logger.debug(initial_modified_observation)
-            logger.debug(
+            logger.warning(f"[INIT] Starting trajectory collection with seed {seed}")
+            logger.warning(f"[INIT] Max turns: {max_depth}")
+            logger.warning("\n" + "◆" * 40)
+            logger.warning("ENVIRONMENT OBSERVATION - Step 0:")
+            logger.warning("-" * 80)
+            logger.warning(initial_modified_observation)
+            logger.warning(
                 f"[STATE] Initial Board: {' '.join(episode.current_board_state)}"
             )
-            logger.debug(f"[STATE] Initial Tries: {episode.tries_left}")
-            logger.debug("◆" * 40)
+            logger.warning(f"[STATE] Initial Tries: {episode.tries_left}")
+            logger.warning("◆" * 40)
 
         for i in range(max_depth):
             current_turn_modified_observation = ""
             if self.debug_mode:
-                logger.debug(f"\n[STEP] Starting step {i+1}/{max_depth}")
+                logger.warning(f"\n[STEP] Starting step {i+1}/{max_depth}")
 
             player_id, current_observation_string = episode.env.get_observation()
             current_raw_observation = (
@@ -852,7 +852,7 @@ class HangmanOnlineEnv(BaseEnv):
                 if not isinstance(current_observation_string, str)
                 else current_observation_string
             )
-            logger.debug(
+            logger.warning(
                 f"[STEP {i+1}] Using Observation String: {current_raw_observation[:100]}..."
             )
 
@@ -861,10 +861,10 @@ class HangmanOnlineEnv(BaseEnv):
             )
 
             if self.debug_mode:
-                logger.debug(
+                logger.warning(
                     f"[STATE] Board state before step {i+1}: {' '.join(episode.current_board_state)}"
                 )
-                logger.debug(
+                logger.warning(
                     f"[STATE] Tries left before step {i+1}: {episode.tries_left}"
                 )
 
@@ -889,11 +889,11 @@ class HangmanOnlineEnv(BaseEnv):
             )
             prompt_log_footer = "\n" + "▼" * 40
             if len(prompt) > 2000:
-                logger.debug(
+                logger.warning(
                     f"{prompt_log_header}\n{prompt[:1000]}...[truncated]...{prompt[-1000:]}{prompt_log_footer}"
                 )
             else:
-                logger.debug(f"{prompt_log_header}\n{prompt}{prompt_log_footer}")
+                logger.warning(f"{prompt_log_header}\n{prompt}{prompt_log_footer}")
 
             completions = await self.server.completion(
                 prompt=prompt,
@@ -911,7 +911,7 @@ class HangmanOnlineEnv(BaseEnv):
             completions_text = ""
             for choice_idx, choice in enumerate(completions.choices):
                 completions_text += f"\nCHOICE {choice_idx+1}:\n{choice.text}\n{'-'*40}"
-            logger.debug(
+            logger.warning(
                 f"{completions_log_header}{completions_text}{completions_log_footer}"
             )
 
@@ -933,7 +933,7 @@ class HangmanOnlineEnv(BaseEnv):
 
                     if self.debug_mode:
                         step_info = f" - Step {i+1}"
-                        logger.debug(f"\n→ PARSED ACTION{step_info}: {action}")
+                        logger.warning(f"\n→ PARSED ACTION{step_info}: {action}")
 
                     step_messages = [
                         {
