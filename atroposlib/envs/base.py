@@ -335,7 +335,7 @@ class BaseEnv(ABC):
                     break
 
     async def register_env(self):
-        # Now register the env with retry logic...
+        # Give trainer process a chance to start with exponential backoff
         max_retries = 10
         for attempt in range(max_retries):
             wait_time = (1 * (2**attempt)) + random.uniform(0, 0.2) # For backoff
@@ -824,6 +824,14 @@ class BaseEnv(ABC):
             await self.get_status()
             await self.env_step_checks()
             logger.info(f"env_manager: Status dict: {self.status_dict}")
+            # Log queue check values before the condition
+            queue_items = self.status_dict["queue_size"] * self.config.group_size
+            queue_capacity = self.config.max_batches_offpolicy * self.config.batch_size
+            logger.info(
+                f"env_manager: Queue Check - Items: {queue_items} ({self.status_dict['queue_size']} groups), "
+                f"Capacity: {queue_capacity} ({self.config.max_batches_offpolicy} batches), "
+                f"Batch Size: {self.config.batch_size}"
+            )
             if (
                 self.status_dict["current_step"]
                 + (
@@ -837,12 +845,13 @@ class BaseEnv(ABC):
                 break
             if (
                 (
-                    self.status_dict["queue_size"] * self.config.group_size
-                    >= self.config.max_batches_offpolicy * self.config.batch_size
+                    queue_items
+                    >= queue_capacity
                 )
                 and (self.config.max_batches_offpolicy > 0)
             ) or (self.config.batch_size == -1):
                 # We have too many, lets cleanup the tasks and wait a bit
+                logger.warning("env_manager: Server queue potentially full or batch size invalid. Clearing workers and waiting.")
                 self.backlog.extend(self.running_items.values())
                 for worker in self.workers:
                     worker.cancel()
