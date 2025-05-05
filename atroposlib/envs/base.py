@@ -651,18 +651,17 @@ class BaseEnv(ABC):
         """
         Handle the rollout of an item
         """
-        logger.warning(f"handle_env: Entered for item_uuid {item_uuid}") # Log entry
         item = self.running_items.get(item_uuid)
         if item is None:
-            logger.error(f"handle_env: Item {item_uuid} not found in running_items! Returning None.") # Use error log
+            logger.error(f"handle_env: Item {item_uuid} not found in running_items! Returning None.")
             return None
         start_time = time.time()
-        logger.warning(f"handle_env: Starting rollout for item_uuid {item_uuid}") # Log before collect
+        logger.debug(f"handle_env: Starting with item: {item}")
         # do a rollout with item
         try:
             to_postprocess, to_backlog = await self.collect_trajectories(item)
         except Exception as e:
-            logger.exception(f"handle_env: Exception during collect_trajectories for {item_uuid}: {e}") # Log exception
+            logger.exception(f"handle_env: Exception during collect_trajectories for {item_uuid}: {e}")
             to_postprocess = None
             to_backlog = []
         # add the items to the queue
@@ -754,20 +753,16 @@ class BaseEnv(ABC):
 
     async def add_train_workers(self):
         if (self.eval_runner is not None) and (not self.eval_runner.done()):
-            logger.warning(f"add_train_workers: Eval runner active (done={self.eval_runner.done()}), handling={self.config.eval_handling}")
             if self.config.eval_handling == EvalHandlingEnum.STOP_TRAIN:
-                logger.warning("add_train_workers: STOP_TRAIN active, returning.")
                 return
             elif self.config.eval_handling == EvalHandlingEnum.LIMIT_TRAIN:
                 max_num_workers = int(
                     self.max_num_workers * self.config.eval_limit_ratio
                 )
-                logger.warning(f"add_train_workers: LIMIT_TRAIN active, limiting workers to {max_num_workers}.")
             else:
                 max_num_workers = self.max_num_workers
         else:
             max_num_workers = self.max_num_workers
-            logger.warning(f"add_train_workers: Eval runner not active or done, max workers: {max_num_workers}")
 
         # set max_num_workers to whatever is max off policy and num workers
         queue_capacity = (
@@ -778,7 +773,6 @@ class BaseEnv(ABC):
         available_queue_slots = max(0, queue_capacity - self.status_dict["queue_size"])
         original_max_workers = max_num_workers
         max_num_workers = min(max_num_workers, available_queue_slots)
-        logger.warning(f"add_train_workers: Limiting workers based on queue. Capacity: {queue_capacity}, Available: {available_queue_slots}, Original Max: {original_max_workers}, Final Max: {max_num_workers}")
 
         if (self.curr_step == 0) and (len(self.workers) == 0):
             # We are starting up, so we should just skip the append to the list
@@ -786,7 +780,6 @@ class BaseEnv(ABC):
         else:
             # Log how many workers we *intend* to add
             workers_to_add = max(0, max_num_workers - len(self.workers))
-            logger.warning(f"add_train_workers: Attempting to add {workers_to_add} workers (Current: {len(self.workers)}, Max: {max_num_workers})")
             self.workers_added_list.append(workers_to_add)
 
         while len(self.workers) < max_num_workers:
@@ -795,16 +788,12 @@ class BaseEnv(ABC):
             item = None # Initialize item to None
             if len(self.backlog) > 0:
                 item = self.backlog.pop()
-                logger.warning(f"add_train_workers: Got item from backlog.")
             else:
                 item = await self.get_next_item()
-                logger.warning(f"add_train_workers: Called get_next_item, result: {'Item received' if item else 'None'}.")
 
             if item is None:
-                logger.warning("add_train_workers: No item received from get_next_item or backlog, breaking loop.")
                 break # Exit loop if no item is available
 
-            logger.warning(f"add_train_workers: Adding worker {len(self.workers) + 1}/{max_num_workers} for item_uuid {item_uuid}")
             self.running_items[item_uuid] = item
             worker = asyncio.create_task(self.handle_env(item_uuid))
             self.workers.add(worker)
@@ -842,15 +831,10 @@ class BaseEnv(ABC):
             self.last_loop_time = time.time()
             await self.get_status()
             await self.env_step_checks()
-            logger.warning(f"env_manager: Status dict: {self.status_dict}")
+            logger.info(f"env_manager: Status dict: {self.status_dict}")
             # Log queue check values before the condition
             queue_items = self.status_dict["queue_size"] * self.config.group_size
             queue_capacity = self.config.max_batches_offpolicy * self.config.batch_size
-            logger.warning(
-                f"env_manager: Queue Check - Items: {queue_items} ({self.status_dict['queue_size']} groups), "
-                f"Capacity: {queue_capacity} ({self.config.max_batches_offpolicy} batches), "
-                f"Batch Size: {self.config.batch_size}"
-            )
             if (
                 self.status_dict["current_step"]
                 + (
@@ -870,7 +854,6 @@ class BaseEnv(ABC):
                 and (self.config.max_batches_offpolicy > 0)
             ) or (self.config.batch_size == -1):
                 # We have too many, lets cleanup the tasks and wait a bit
-                logger.warning("env_manager: Server queue potentially full or batch size invalid. Clearing workers and waiting.")
                 self.backlog.extend(self.running_items.values())
                 for worker in self.workers:
                     worker.cancel()
