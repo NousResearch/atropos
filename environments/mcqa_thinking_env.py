@@ -252,26 +252,26 @@ class MCQAThinkingEnv(BaseEnv):
 
         # More flexible answer patterns that handle parentheses and additional text
         answer_patterns = [
-            r"The correct answer is:?\s*(?:\*\*)?(A|B|C|D)(?:\*\*)?(?:\)|\.|:)?(?:[^A-Da-d]*.*?)?(?=$|\n|\.)",  # noqa W605
-            r"The best answer is:?\s*(?:\*\*)?(A|B|C|D)(?:\*\*)?(?:\)|\.|:)?(?:[^A-Da-d]*.*?)?(?=$|\n|\.)",  # noqa W605
-            r"The answer is:?\s*(?:\*\*)?(A|B|C|D)(?:\*\*)?(?:\)|\.|:)?(?:[^A-Da-d]*.*?)?(?=$|\n|\.)",  # noqa W605
-            r"\*\*The best answer is\s*(A|B|C|D)\*\*(?:\)|\.|:)?(?:[^A-Da-d]*.*?)?(?=$|\n|\.)",  # noqa W605
-            r"\*\*The best answer is:\s*(A|B|C|D)\*\*(?:\)|\.|:)?(?:[^A-Da-d]*.*?)?(?=$|\n|\.)",  # noqa W605
-            r"Thus, final answer:\s*(A|B|C|D)\)(?:\)|\.|:)?(?:[^A-Da-d]*.*?)?(?=$|\n|\.)",  # noqa W605
-            r"\\boxed{(A|B|C|D)}(?:\)|\.|:)?(?:[^A-Da-d]*.*?)?(?=$|\n|\.)",  # noqa W605
+            r"The correct answer is:?\s*(?:\*\*)?(A|B|C|D|E|F|G|H|I|J)(?:\*\*)?(?:\)|\.|:)?(?:[^A-Ja-j]*.*?)?(?=$|\n|\.)",  # noqa W605
+            r"The best answer is:?\s*(?:\*\*)?(A|B|C|D|E|F|G|H|I|J)(?:\*\*)?(?:\)|\.|:)?(?:[^A-Ja-j]*.*?)?(?=$|\n|\.)",  # noqa W605
+            r"The answer is:?\s*(?:\*\*)?(A|B|C|D|E|F|G|H|I|J)(?:\*\*)?(?:\)|\.|:)?(?:[^A-Ja-j]*.*?)?(?=$|\n|\.)",  # noqa W605
+            r"\*\*The best answer is\s*(A|B|C|D|E|F|G|H|I|J)\*\*(?:\)|\.|:)?(?:[^A-Ja-j]*.*?)?(?=$|\n|\.)",  # noqa W605
+            r"\*\*The best answer is:\s*(A|B|C|D|E|F|G|H|I|J)\*\*(?:\)|\.|:)?(?:[^A-Ja-j]*.*?)?(?=$|\n|\.)",  # noqa W605
+            r"Thus, final answer:\s*(A|B|C|D|E|F|G|H|I|J)\)(?:\)|\.|:)?(?:[^A-Ja-j]*.*?)?(?=$|\n|\.)",  # noqa W605
+            r"\\boxed{(A|B|C|D|E|F|G|H|I|J)}(?:\)|\.|:)?(?:[^A-Ja-j]*.*?)?(?=$|\n|\.)",  # noqa W605
         ]
 
         string_patterns = [
             # Patterns to match exact ground truth text, with optional markdown bold formatting
             r"The correct answer is:?\s(?:\*\*)?"
             + re.escape(ground_truth_text)
-            + r"(?:\*\*)?(?:[^A-Da-d]*.*?)?(?=$|\n|\.)",
+            + r"(?:\*\*)?(?:[^A-Ja-j]*.*?)?(?=$|\n|\.)",
             r"The best answer is:?\s(?:\*\*)?"
             + re.escape(ground_truth_text)
-            + r"(?:\*\*)?(?:[^A-Da-d]*.*?)?(?=$|\n|\.)",
+            + r"(?:\*\*)?(?:[^A-Ja-j]*.*?)?(?=$|\n|\.)",
             r"The answer is:?\s(?:\*\*)?"
             + re.escape(ground_truth_text)
-            + r"(?:\*\*)?(?:[^A-Da-d]*.*?)?(?=$|\n|\.)",
+            + r"(?:\*\*)?(?:[^A-Ja-j]*.*?)?(?=$|\n|\.)",
         ]
 
         # Track all found answers
@@ -439,32 +439,51 @@ class MCQAThinkingEnv(BaseEnv):
         scored_data: Union[ScoredDataGroup, List[ScoredDataGroup]],
         item: Item = None,
     ):
-        # save rollout to trajectory
-        num_keep = self.config.num_rollouts_per_group_for_logging
+        # Initialize rollouts_for_wandb if not exists
+        if not hasattr(self, "rollouts_for_wandb"):
+            self.rollouts_for_wandb = []
+            
+        # Get number of examples to keep
+        num_keep = getattr(self.config, "num_rollouts_per_group_for_logging", -1)
+        
         if num_keep == -1:
             num_keep = self.config.group_size
+            
         self.rollouts_for_wandb.append(
             [
                 (
                     self.tokenizer.decode(scored_data["tokens"][i]),
                     scored_data["scores"][i],
-                    item[1],
-                    item[2],
+                    item[1],  # answer letter (A, B, C, D)
+                    item[2],  # answer string (full text of correct answer)
                 )
-                for i in range(num_keep)
+                for i in range(min(num_keep, len(scored_data["tokens"])))
             ]
         )
-        if len(self.rollouts_for_wandb) > self.config.num_rollouts_to_keep:
+        
+        # Keep buffer size limited
+        max_rollouts = getattr(self.config, "num_rollouts_to_keep", 10)
+        if len(self.rollouts_for_wandb) > max_rollouts:
             self.rollouts_for_wandb.pop(0)
 
     async def create_rollout_table(self, wandb_metrics):
-        if len(self.rollouts_for_wandb) > 0:
-            table = wandb.Table(columns=["text", "score", "answer", "string_answer"])
+        if hasattr(self, "rollouts_for_wandb") and len(self.rollouts_for_wandb) > 0:
+            table = wandb.Table(columns=[
+                "text", 
+                "score", 
+                "answer_letter", 
+                "answer_text"
+            ])
+            
             for group in self.rollouts_for_wandb:
                 for item in group:
                     table.add_data(item[0], item[1], item[2], item[3])
+                    
             wandb_metrics["train/rollouts"] = table
+            
+        # Clear rollouts after logging
         self.rollouts_for_wandb = []
+        
         return wandb_metrics
 
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
