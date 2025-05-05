@@ -336,7 +336,7 @@ class BaseEnv(ABC):
 
     async def register_env(self):
         # Now register the env with retry logic...
-        max_retries = 5
+        max_retries = 10
         for attempt in range(max_retries):
             wait_time = (1 * (2**attempt)) + random.uniform(0, 0.2) # For backoff
             try:
