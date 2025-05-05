@@ -1425,6 +1425,7 @@ class HangmanOnlineEnv(BaseEnv):
         Returns:
             The seed to be used for trajectory collection
         """
+        logger.warning(f"get_next_item: Returning seed")
         return i if i is not None else random.randint(0, 1000000)
 
     async def evaluate(self):

@@ -651,16 +651,18 @@ class BaseEnv(ABC):
         """
         Handle the rollout of an item
         """
+        logger.warning(f"handle_env: Entered for item_uuid {item_uuid}") # Log entry
         item = self.running_items.get(item_uuid)
         if item is None:
-            print(f"item {item_uuid} not found... returning")
+            logger.error(f"handle_env: Item {item_uuid} not found in running_items! Returning None.") # Use error log
             return None
         start_time = time.time()
-        logger.debug(f"handle_env: Starting with item: {item}")
+        logger.warning(f"handle_env: Starting rollout for item_uuid {item_uuid}") # Log before collect
         # do a rollout with item
         try:
             to_postprocess, to_backlog = await self.collect_trajectories(item)
-        except Exception:
+        except Exception as e:
+            logger.exception(f"handle_env: Exception during collect_trajectories for {item_uuid}: {e}") # Log exception
             to_postprocess = None
             to_backlog = []
         # add the items to the queue
