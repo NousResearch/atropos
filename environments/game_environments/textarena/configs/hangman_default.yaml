@@ -3,14 +3,14 @@
 
 # Base environment parameters (can override base.yaml)
 tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
-group_size: 1
+group_size: 64
 use_wandb: false
-max_num_workers: 1
+max_num_workers: 64
 rollout_server_url: "http://localhost:8000"
 total_steps: 1
 batch_size: 1
 steps_per_eval: 20
-max_token_length: 15360  # 1024 * 15
+max_token_length: 16384
 wandb_name: "hangman_tool_calling_think"
 ensure_scores_are_not_same: true
 
@@ -24,11 +24,11 @@ hangman:
   single_step_only: false
 
   # Reward function configuration
-  reward_functions: ["format", "tool_calling"]
-  format_reward_weight: 0.3  # Weight for format/tool_calling rewards
-  environment_reward_weight: 0.7  # Weight for environment rewards
-  format_thinking_weight: 0.5  # Relative weight for think tags (in format reward)
-  format_tool_weight: 0.5  # Relative weight for tool_call tags (in format reward)
+  reward_functions: ["format"]
+  format_reward_weight: 0.3
+  environment_reward_weight: 0.7
+  format_thinking_weight: 0.5
+  format_tool_weight: 0.5
 
 # Server configuration
 server_configs:

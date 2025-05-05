@@ -2,16 +2,16 @@
 
 # Base environment parameters
 tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
-group_size: 1  # Single path testing - no multiple trajectories
+group_size: 32
 use_wandb: false
 max_num_workers: 1
 rollout_server_url: "http://localhost:8000"
-total_steps: 1
-batch_size: 1
+total_steps: 1000
+batch_size: 12
 steps_per_eval: 20
-max_token_length: 15360  # 1024 * 15
+max_token_length: 16384
 wandb_name: "hangman_local_test"
-ensure_scores_are_not_same: false  # Not needed with group_size=1
+ensure_scores_are_not_same: true
 
 # Hangman specific configuration
 temperature: 0.7
@@ -21,7 +21,7 @@ thinking_active: true
 single_step_only: false
 
 # Reward function configuration
-reward_functions: ["format"]  # Simplified reward setup
+reward_functions: ["format"]
 format_reward_weight: 0.3
 environment_reward_weight: 0.7
 format_thinking_weight: 0.5

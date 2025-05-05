@@ -1,7 +1,4 @@
 # Hangman Environment Configuration
-# Inherits from base.yaml
-
-# Base environment parameters (can override base.yaml)
 tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
 group_size: 1
 use_wandb: false
@@ -10,7 +7,7 @@ rollout_server_url: "http://localhost:8000"
 total_steps: 1
 batch_size: 1
 steps_per_eval: 20
-max_token_length: 15360  # 1024 * 15
+max_token_length: 16384
 wandb_name: "hangman_tool_calling_think"
 ensure_scores_are_not_same: true
 
