@@ -584,6 +584,7 @@ class BlackjackEnv(BaseEnv):
             # Append data for this step to the trajectory
             ep.trajectory.append(
                 BlackjackScoredDataGroup(
+                    overrides = [],
                     seed=seed, # Add seed here
                     tokens=alt_tokens,
                     masks=alt_masks,
