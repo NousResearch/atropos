@@ -222,7 +222,7 @@ class BlackjackEnv(BaseEnv):
         )
 
         # Log the parsing results for debugging
-        logger.debug(
+        logger.warning(
             f"Parsed tool call: name={tool_name}, args={arguments}, error={is_error}"
         )
 
