@@ -903,12 +903,8 @@ class BlackjackEnv(BaseEnv):
 
     @classmethod
     def cli(cls):
-        """Provides a command-line interface, likely inheriting from BaseEnv."""
-        # Assuming BaseEnv provides the main CLI logic
         super(BlackjackEnv, cls).cli()
 
-
-# Add this near the end of the file, after the class definition
 if __name__ == "__main__":
     # This allows running the environment directly from the command line
     BlackjackEnv.cli()
