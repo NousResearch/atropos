@@ -413,30 +413,43 @@ class HangmanOnlineEnv(BaseEnv):
         print("seed", seed)
         if seed not in self.episodes:
             self.episodes[seed] = EpisodeState(seed)
+            # Reset the underlying env state (seed doesn't affect word choice here)
             self.episodes[seed].env.reset(seed=seed, num_players=1)
-            env = self.episodes[seed].env
+            env = self.episodes[seed].env # Get reference to the env
+
+            # Get OUR deterministic word
             chosen_word = self._get_deterministic_word(seed, env.word_list)
-
-            # Manually set the chosen word and related state
-            env.chosen_word = chosen_word
             print("chosen_word", chosen_word)
-            env.game_board = list(chosen_word)
-            env.state.game_state["board"] = ["_"] * len(chosen_word)
-            env.guessed_letters = set()  # Ensure guessed letters are reset
-            logger.info(f"Episode {seed}: Set deterministic word to '{chosen_word}'")
+            logger.info(f"Episode {seed}: Using deterministic word '{chosen_word}'")
 
-            self.episodes[seed].current_board_state = env.state.game_state["board"]
-            self.episodes[seed].tries_left = env.state.game_state["tries_left"]
+            # Store OUR word and initialize OUR state management variables
+            episode = self.episodes[seed]
+            episode.current_board_state = ["_"] * len(chosen_word)
+            episode.guessed_letters = [] # Use list for order if needed, or set
+            episode.tries_left = 6 # Standard Hangman tries
+            episode.total_env_reward = 0.0
+            episode.total_format_reward = 0.0
+            episode.total_combined_reward = 0.0
+            episode.num_correct_actions = 0
+            episode.num_total_actions = 0
+            episode.step_rewards = []
 
-        # Always update current board state and tries left when retrieving episode
-        else:
-            self.episodes[seed].current_board_state = self.episodes[
-                seed
-            ].env.state.game_state["board"]
-            self.episodes[seed].tries_left = self.episodes[seed].env.state.game_state[
-                "tries_left"
-            ]
+            # Attempt to set underlying env state for observation rendering compatibility
+            # This does NOT guarantee the env.step() method uses it correctly
+            try:
+                env.state.game_state["board"] = episode.current_board_state
+                env.state.game_state["tries_left"] = episode.tries_left
+                env.chosen_word = chosen_word # Attempt override
+                env.game_board = list(episode.current_board_state) # Attempt override
+                env.guessed_letters = set(episode.guessed_letters) # Attempt override
+            except Exception as e:
+                logger.warning(f"[Get Episode] Failed attempt to set underlying env state: {e}")
 
+        # <<< Debugging Added >>>
+        logger.debug(f"[_get_or_create_episode] After setting: episode.env.chosen_word = {getattr(env, 'chosen_word', 'ERROR')}")
+        logger.debug(f"[_get_or_create_episode] After setting: episode.env.game_board = {getattr(env, 'game_board', 'ERROR')}")
+
+        # Always return the episode state
         return self.episodes[seed]
 
     def _modify_observation(
@@ -800,6 +813,106 @@ class HangmanOnlineEnv(BaseEnv):
         after_think = re.split(r"</think>", message, maxsplit=0)[-1]
         return after_think.strip()
 
+    async def _manual_step(self, episode: EpisodeState, action: str) -> Tuple[bool, Dict[str, Any]]:
+        """Manually update the game state based on OUR chosen word."""
+        done = False
+        info = {"reason": ""}
+        word_to_guess = episode.current_board_state
+        current_board = episode.current_board_state
+        tries_left = episode.tries_left
+        guessed_letters = episode.guessed_letters
+
+        if not word_to_guess:
+            logger.error(f"[Manual Step Error] Episode {episode.seed} has no chosen_word set!")
+            return True, {"reason": "Internal error: No word set."}
+
+        is_letter_guess = False
+        is_word_guess = False
+        guess = ""
+
+        # Parse action (assuming format "[X]" or "[WORD]")
+        action = action.strip()
+        if action.startswith("[") and action.endswith("]") and len(action) > 2:
+            content = action[1:-1].upper()
+            if len(content) == 1 and content.isalpha():
+                is_letter_guess = True
+                guess = content
+            elif len(content) == len(word_to_guess) and content.isalpha():
+                is_word_guess = True
+                guess = content
+            else:
+                info["reason"] = f"Invalid action format or length: {action}"
+                # Consider if this should cost a try or just be an invalid move
+                # For now, treat as invalid, doesn't change state, not done.
+                return False, info
+        else:
+            info["reason"] = f"Invalid action format: {action}"
+            return False, info
+
+        # --- Letter Guess Logic ---
+        if is_letter_guess:
+            if guess in guessed_letters:
+                info["reason"] = f"Letter '{guess}' already guessed."
+                # Does not cost a try, not done.
+                return False, info
+
+            guessed_letters.append(guess)
+            if guess in word_to_guess:
+                info["reason"] = f"Correct letter guess: '{guess}'."
+                new_board = list(current_board)
+                for i, letter in enumerate(word_to_guess):
+                    if letter == guess:
+                        new_board[i] = guess
+                episode.current_board_state = new_board
+                # Check for win after revealing letter
+                if "_" not in episode.current_board_state:
+                    done = True
+                    info["reason"] = f"Word '{word_to_guess}' completed!"
+                    episode.games_won += 1
+            else:
+                info["reason"] = f"Incorrect letter guess: '{guess}'."
+                tries_left -= 1
+                episode.tries_left = tries_left
+
+        # --- Word Guess Logic ---
+        elif is_word_guess:
+            # Assuming word guesses also add letters to guessed list for tracking?
+            # Or maybe only failed word guesses add their letters?
+            # For now, let's not add word guess letters to the list.
+            if guess == word_to_guess:
+                done = True
+                info["reason"] = f"Correct word guess: '{word_to_guess}'!"
+                episode.current_board_state = list(word_to_guess) # Reveal full word
+                episode.games_won += 1
+            else:
+                info["reason"] = f"Incorrect word guess: '{guess}'."
+                tries_left -= 1
+                episode.tries_left = tries_left
+
+        # Check for loss condition (tries run out)
+        if tries_left <= 0:
+            done = True
+            # Append loss reason only if not already won
+            if "completed" not in info["reason"] and "Correct word guess" not in info["reason"]:
+                 info["reason"] += " Out of tries. Game Over." if info["reason"] else "Out of tries. Game Over."
+
+        # Check max turns condition (handled in collect_trajectory loop)
+
+        # Update episode state (board/tries updated above)
+        episode.guessed_letters = guessed_letters
+
+        # We need to update the underlying env state slightly so get_observation works
+        # This is imperfect but necessary if get_observation relies on env.state
+        try:
+            episode.env.state.game_state["board"] = episode.current_board_state
+            episode.env.state.game_state["tries_left"] = episode.tries_left
+            # TODO: Check if textarena uses guessed_letters set internally for observation
+            # If so, we might need to update episode.env.guessed_letters = set(guessed_letters)
+        except Exception as e:
+             logger.warning(f"[Manual Step] Failed to update underlying env state for observation: {e}")
+
+        return done, info
+
     async def collect_trajectory(
         self, seed: int, interactive: bool = False
     ) -> List[ScoredDataGroup]:
@@ -812,14 +925,11 @@ class HangmanOnlineEnv(BaseEnv):
         max_depth = self.config.max_turns
         episode.trajectory = []
 
-        player_id, initial_observation_string = episode.env.get_observation()
+        _, initial_observation_string = episode.env.get_observation()
         initial_raw_observation = (
             str(initial_observation_string)
             if not isinstance(initial_observation_string, str)
             else initial_observation_string
-        )
-        logger.warning(
-            f"[INIT] Using Observation String: {initial_raw_observation[:100]}..."
         )
 
         initial_modified_observation = self._modify_observation(
@@ -846,14 +956,11 @@ class HangmanOnlineEnv(BaseEnv):
             if self.debug_mode:
                 logger.warning(f"\n[STEP] Starting step {i+1}/{max_depth}")
 
-            player_id, current_observation_string = episode.env.get_observation()
+            _, current_observation_string = episode.env.get_observation()
             current_raw_observation = (
                 str(current_observation_string)
                 if not isinstance(current_observation_string, str)
                 else current_observation_string
-            )
-            logger.warning(
-                f"[STEP {i+1}] Using Observation String: {current_raw_observation[:100]}..."
             )
 
             current_turn_modified_observation = self._modify_observation(
@@ -908,6 +1015,22 @@ class HangmanOnlineEnv(BaseEnv):
                 logger.exception(f"[collect_trajectory:{seed}] API Error during self.server.completion: {api_error}")
                 return [] # Cannot proceed if API call fails
 
+            # <<< Added Check >>>
+            # Ensure we received choices from the API
+            if not completions or not completions.choices:
+                 logger.error(f"[collect_trajectory:{seed}] API returned no choices. Aborting trajectory for seed {seed}.")
+                 return []
+
+            # Check if the number of choices matches the expected group size
+            if len(completions.choices) != self.config.group_size:
+                logger.warning(
+                    f"[collect_trajectory:{seed}] API did not return the expected number of choices "
+                    f"(expected {self.config.group_size}, got {len(completions.choices)}). Aborting trajectory for seed {seed}."
+                )
+                # Optionally, you might try to proceed if you got *some* choices,
+                # but returning seems safer based on current logic.
+                return []
+
             step_info = f" - Step {i+1}"
             completions_log_header = (
                 "\n" + "▲" * 40 + f"\nMODEL COMPLETIONS{step_info}:\n" + "-" * 80
@@ -920,16 +1043,11 @@ class HangmanOnlineEnv(BaseEnv):
                 f"{completions_log_header}{completions_text}{completions_log_footer}"
             )
 
-            if len(completions.choices) != self.config.group_size:
-                if self.debug_mode:
-                    logger.warning(
-                        f"[ERROR] Did not receive {self.config.group_size} choices, cancelling episode"
-                    )
-                return []
-
             tokens, masks, messages_list, actions = [], [], [], []
             try:
                 for idx, choice in enumerate(completions.choices):
+                    if self.debug_mode:
+                        logger.warning(f"[collect_trajectory:{seed}] Processing choice {idx+1} of {len(completions.choices)}")
                     response_text = (
                         choice.text if hasattr(choice, "text") else "Invalid response"
                     )
@@ -1006,6 +1124,10 @@ class HangmanOnlineEnv(BaseEnv):
             # Save pre-step state variables
             pre_board = copy.deepcopy(episode.current_board_state)
             pre_tries = episode.tries_left
+
+            # <<< Debugging Added >>>
+            logger.debug(f"[collect_trajectory] BEFORE step: episode.env.chosen_word = {getattr(episode.env, 'chosen_word', 'ERROR')}")
+            logger.debug(f"[collect_trajectory] BEFORE step: best_action = {best_action}")
 
             # Execute the step
             done, info = episode.env.step(best_action)
@@ -1511,6 +1633,7 @@ class HangmanOnlineEnv(BaseEnv):
                     "num_requests_for_eval": sc.get("num_requests_for_eval", 256),
                     "base_url": base_url,
                 }
+                logger.warning(f"openai_config_args: {openai_config_args}")
 
                 server_confs.append(OpenaiConfig(**openai_config_args))
 

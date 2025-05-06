@@ -6,7 +6,7 @@ group_size: 32
 use_wandb: false
 max_num_workers: 1
 rollout_server_url: "http://localhost:8000"
-total_steps: 1000
+total_steps: 1
 batch_size: 12
 steps_per_eval: 20
 max_token_length: 16384
