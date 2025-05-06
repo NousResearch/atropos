@@ -626,7 +626,6 @@ class BlackjackEnv(BaseEnv):
     async def score(
         self,
         rollout_group_data: List[BlackjackScoredDataGroup],
-        interactive: bool = False # Keep signature consistent
     ) -> List[Optional[BlackjackScoredDataGroup]]:
         """
         Applies final scoring adjustments to a completed trajectory, primarily focusing
@@ -777,12 +776,34 @@ class BlackjackEnv(BaseEnv):
 
     @classmethod
     def config_init(
-        cls, config_name: Optional[str] = None
+        cls, config_name_or_path: Optional[str] = None
     ) -> Tuple[BlackjackEnvConfig, List[OpenaiConfig]]:
-        """Load settings from the local configs directory."""
+        """Load settings from the local configs directory or an absolute path."""
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        config_file = config_name or "blackjack_default.yaml"
-        cfg_path = os.path.join(current_dir, "configs", config_file)
+        default_config_filename = "blackjack_default.yaml"
+
+        if config_name_or_path is None:
+            # No input, use default relative to this env
+            cfg_path = os.path.join(current_dir, "configs", default_config_filename)
+            logger.info(f"No config specified, using default: {cfg_path}")
+        elif os.path.isabs(config_name_or_path):
+            # Absolute path provided
+            cfg_path = config_name_or_path
+            logger.info(f"Absolute config path provided: {cfg_path}")
+            # Optional: Check if it ends with .yaml, though absolute path should be precise
+            if not os.path.splitext(cfg_path)[1]:
+                 logger.warning(f"Absolute config path {cfg_path} seems to be missing a file extension.")
+        else:
+            # Relative name/path provided, assume relative to this env's config dir
+            # Ensure it ends with .yaml
+            if not config_name_or_path.endswith(".yaml"):
+                config_filename = config_name_or_path + ".yaml"
+            else:
+                config_filename = config_name_or_path
+            cfg_path = os.path.join(current_dir, "configs", config_filename)
+            logger.info(f"Relative config name '{config_name_or_path}' provided, resolving to: {cfg_path}")
+
+        logger.debug(f"Final config path to check for existence: {cfg_path}")
 
         raw = {}
         try:
@@ -815,12 +836,26 @@ class BlackjackEnv(BaseEnv):
 
             # Create OpenaiConfig instances from the original raw data
             server_confs = []
+            # Use raw.get("server_configs", []) which contains the list of dicts from YAML
             for sc_data in raw.get("server_configs", []):
-                # Prioritize explicit config values, then env vars, then defaults
-                api_key = sc_data.get("api_key", os.getenv("OPENAI_API_KEY", "x"))
-                base_url = sc_data.get("base_url", os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"))
+                # Get values directly from the loaded YAML dict (sc_data)
+                # Provide fallbacks if keys are missing in the YAML dict itself
                 model_name = sc_data.get("model_name", os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"))
+                base_url = sc_data.get("base_url", os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"))
                 num_requests = sc_data.get("num_requests_for_eval", 256)
+
+                # Special handling for api_key: YAML -> Env Var -> "x"
+                api_key = sc_data.get("api_key") # Get from YAML first
+                if not api_key: # If missing or empty in YAML
+                    api_key = os.getenv("OPENAI_API_KEY") # Try environment variable
+                if not api_key: # If still missing or empty
+                    api_key = "x" # Default to "x" (for local server assumption)
+                    logger.warning("API key not found in config or OPENAI_API_KEY env var. Defaulting to 'x'.")
+                else:
+                     # Mask the key partially for logging if it's not 'x'
+                     masked_key = api_key[:4] + "****" + api_key[-4:] if api_key != "x" and len(api_key) > 8 else api_key
+                     logger.debug(f"Using API key: {masked_key}")
+
 
                 openai_config_args = {
                     "model_name": model_name,
@@ -828,20 +863,28 @@ class BlackjackEnv(BaseEnv):
                     "num_requests_for_eval": num_requests,
                     "base_url": base_url,
                 }
-                logger.info(f"Creating OpenaiConfig with args: {openai_config_args}")
+                logger.info(f"Creating OpenaiConfig with args: model='{model_name}', base_url='{base_url}', key_present={api_key != 'x'}, requests={num_requests}")
                 server_confs.append(OpenaiConfig(**openai_config_args))
 
-            # Provide a default server config if none were specified
-            if not server_confs and "server_configs" not in raw:
-                logger.warning("No server_configs specified, using default server settings.")
+            # Provide a default server config ONLY if server_configs was completely missing from YAML
+            if "server_configs" not in raw:
+                logger.warning("No 'server_configs' section found in YAML, creating default server config.")
+                # Default API key logic
+                default_api_key = os.getenv("OPENAI_API_KEY")
+                if not default_api_key:
+                    default_api_key = "x"
+                    logger.warning("Defaulting API key to 'x' for default server config.")
+
                 server_confs = [
                     OpenaiConfig(
                         model_name=os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"),
                         base_url=os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
-                        api_key=os.getenv("OPENAI_API_KEY", "x"),
+                        api_key=default_api_key,
                         num_requests_for_eval=256,
                     )
                 ]
+                logger.info(f"Created default OpenaiConfig: model='{server_confs[0].model_name}', base_url='{server_confs[0].base_url}', key_present={server_confs[0].api_key != 'x'}")
+
 
             return env_conf, server_confs
 

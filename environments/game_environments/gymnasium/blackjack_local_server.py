@@ -61,7 +61,6 @@ async def main():
             config=config,
             server_configs=server_configs,
             slurm=False, # Explicitly false for local testing
-            testing=True # Indicate it's a testing scenario
         )
     except Exception as e:
         logger.exception(f"Failed to initialize BlackjackEnv: {e}")
