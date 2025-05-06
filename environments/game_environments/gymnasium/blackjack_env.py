@@ -104,10 +104,9 @@ class BlackjackEnv(BaseEnv):
         if self.debug_mode:
             logger.setLevel(logging.DEBUG)
         else:
-            # Set default level, e.g., INFO or WARNING
-            # Check if root logger already has a level set
-            if logger.level == logging.NOTSET:
-                 logger.setLevel(logging.INFO) # Or logging.WARNING
+            # Set default level to WARNING to reduce noise
+            if logger.level == logging.NOTSET or logger.level > logging.WARNING:
+                 logger.setLevel(logging.WARNING)
 
         # Define function-calling tool for actions
         self.tools = [
@@ -129,20 +128,20 @@ class BlackjackEnv(BaseEnv):
         tools_json = json.dumps(self.tools)
         # System prompt instructing the LLM on how to call the action tool
         self.system_prompt = (
-            "You are an AI agent playing Blackjack. You need to decide whether to hit or stick based on your "
-            "current hand and the dealer's showing card.\n\n"
+            "You are an AI agent playing Blackjack who uses extreme long chains of thought to carefully consider the probabilities and optimal strategy."
+            "You need to decide whether to hit or stick based on your current hand and the dealer's showing card.\n\n"
             "You should enclose your thoughts and internal monologue inside <think> </think> tags, and then "
             "provide your decision using the take_action function call. You may use extremely long chains "
             "of thought to carefully consider the probabilities and optimal strategy.\n\n"
             f"<tools>\n{tools_json}\n</tools>\n\n"
             "For your function call, return a JSON object with function name and arguments within <tool_call> </tool_call> "
             "tags with the following schema:\n"
-            '<tool_call>\n{"arguments": {"action": "hit"}, "name": "take_action"}\n</tool_call>\n\n'
+            '<tool_call>\n{"arguments": {"action": "hit"}, "name": "take_action"}}\n</tool_call>\n\n'
             "Your answer format should be:\n"
             "<think>\n"
             "[Your detailed reasoning process about whether to hit or stick]\n"
             "</think>\n\n"
-            '<tool_call>\n{"arguments": {"action": "hit_or_stick"}, "name": "take_action"}\n</tool_call>\n\n'
+            '<tool_call>\n{"arguments": {"action": "stick"}, "name": "take_action"}}\n</tool_call>\n\n'
             "Remember to carefully consider the probabilities and optimal strategy for Blackjack."
         )
 
@@ -863,7 +862,7 @@ class BlackjackEnv(BaseEnv):
                     "num_requests_for_eval": num_requests,
                     "base_url": base_url,
                 }
-                logger.info(f"Creating OpenaiConfig with args: model='{model_name}', base_url='{base_url}', key_present={api_key != 'x'}, requests={num_requests}")
+                logger.warning(f"Creating OpenaiConfig with args: model='{model_name}', base_url='{base_url}', key_present={api_key != 'x'}, requests={num_requests}")
                 server_confs.append(OpenaiConfig(**openai_config_args))
 
             # Provide a default server config ONLY if server_configs was completely missing from YAML
@@ -883,7 +882,7 @@ class BlackjackEnv(BaseEnv):
                         num_requests_for_eval=256,
                     )
                 ]
-                logger.info(f"Created default OpenaiConfig: model='{server_confs[0].model_name}', base_url='{server_confs[0].base_url}', key_present={server_confs[0].api_key != 'x'}")
+                logger.warning(f"Created default OpenaiConfig: model='{server_confs[0].model_name}', base_url='{server_confs[0].base_url}', key_present={server_confs[0].api_key != 'x'}")
 
 
             return env_conf, server_confs
