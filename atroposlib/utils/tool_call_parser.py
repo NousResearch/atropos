@@ -61,7 +61,7 @@ def parse_tool_call(
         # Handle potential single quotes
         tool_call_content = tool_call_content.replace("'", '"')
 
-        tool_call = json.loads(tool_call_content)
+        tool_call = json.loads(tool_call_content, strict=False)
 
         # Extract tool name and arguments
         tool_name = tool_call.get("name", "")
@@ -80,6 +80,7 @@ def parse_tool_call(
             if not tool_name or tool_name not in valid_tool_names:
                 return "-ERROR-", arguments, True
 
+        logger.warning(f"Parsed tool call: {tool_name}, {arguments}")
         return tool_name, arguments, False
 
     except (json.JSONDecodeError, Exception) as json_error:
