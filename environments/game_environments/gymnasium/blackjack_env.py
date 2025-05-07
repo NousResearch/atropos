@@ -151,12 +151,12 @@ class BlackjackEnv(BaseEnv):
             f"<tools>\n{tools_json}\n</tools>\n\n"
             "For your function call, return a JSON object with function name and arguments within <tool_call> </tool_call> "
             "tags with the following schema:\n"
-            '<tool_call>\n{"arguments": {"action": "hit"}, "name": "take_action"}}\n</tool_call>\n\n'
+            '<tool_call>\n{"arguments": {"action": "hit"}, "name": "take_action"}\n</tool_call>\n\n'
             "Your answer format should be:\n"
             "<think>\n"
             "[Your detailed reasoning process about whether to hit or stick]\n"
             "</think>\n\n"
-            '<tool_call>\n{"arguments": {"action": "stick"}, "name": "take_action"}}\n</tool_call>\n\n'
+            '<tool_call>\n{"arguments": {"action": "stick"}, "name": "take_action"}\n</tool_call>\n\n'
             "Remember to carefully consider the probabilities and optimal strategy for Blackjack."
         )
 
