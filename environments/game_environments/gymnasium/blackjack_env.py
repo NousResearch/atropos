@@ -25,7 +25,7 @@ from atroposlib.envs.base import (
 from atroposlib.envs.reward_fns import registry
 from atroposlib.envs.reward_fns.combined_reward import CombinedReward
 from atroposlib.type_definitions import Message
-from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer, UNMASKED_ROLES
 
 logger = logging.getLogger(__name__)
 
@@ -1270,102 +1270,170 @@ class BlackjackEnv(BaseEnv):
 
     def _ensure_trajectory_token_limit(self, trajectory: List[BlackjackScoredDataGroup]) -> List[BlackjackScoredDataGroup]:
         """
-        Ensure the message histories in a trajectory don't exceed max_trajectory_tokens.
-        If they do, trim older messages while maintaining alignment across all alternatives.
-        If a step still exceeds the limit after maximum truncation, it will be skipped entirely.
-        
+        Ensure token sequences in a trajectory don't exceed max_trajectory_tokens.
+        Attempts to uniformly truncate older messages from all alternatives within a step.
+        The system prompt, last environment observation, and last agent response are preserved.
+        If a step still exceeds the limit after maximum possible truncation, it is discarded.
+
         Args:
             trajectory: List of BlackjackScoredDataGroup from an episode
-            
+
         Returns:
-            The trajectory with potentially trimmed message histories or filtered steps
+            The trajectory with potentially truncated messages/tokens/masks or filtered steps
         """
         if not trajectory:
             return trajectory
-        
-        filtered_trajectory = []
-        
-        for step_idx, step in enumerate(trajectory):
-            if not step.get("messages") or not step["messages"]:
-                # Keep steps without messages
-                filtered_trajectory.append(step)
+
+        filtered_trajectory: List[BlackjackScoredDataGroup] = []
+
+        for step_idx, original_step_data in enumerate(trajectory):
+            # Ensure essential keys are present
+            if not original_step_data.get("messages") or not original_step_data.get("tokens") or not original_step_data.get("masks"):
+                logger.warning(f"[_ensure_trajectory_token_limit] Step {step_idx} is missing messages, tokens, or masks. Skipping.")
                 continue
-                
-            # Get message counts to ensure we have the same structure for all alternatives
-            alt_count = len(step["messages"])
-            if alt_count == 0:
-                # Keep steps with empty message lists
-                filtered_trajectory.append(step)
+
+            # Make a deep copy for potential modification
+            # We need to copy lists of messages, tokens, and masks carefully
+            current_step_messages = [msgs.copy() for msgs in original_step_data["messages"]]
+            current_step_tokens = [tkns.copy() for tkns in original_step_data["tokens"]]
+            current_step_masks = [msks.copy() for msks in original_step_data["masks"]]
+            
+            num_alternatives = len(current_step_messages)
+            if num_alternatives == 0:
+                filtered_trajectory.append(original_step_data) # Should not happen if check above passes
                 continue
-            
-            # Check if this step needs truncation by examining each alternative
-            needs_truncation = False
-            for messages in step["messages"]:
-                token_count = sum(len(self.tokenizer.encode(msg["content"])) for msg in messages)
-                if token_count > self.config.max_trajectory_tokens:
-                    needs_truncation = True
-                    break
-            
-            if not needs_truncation:
-                # No truncation needed, keep the step as is
-                filtered_trajectory.append(step)
+
+            # Check initial max token length across alternatives for this step
+            max_current_tokens = 0
+            for alt_tokens in current_step_tokens:
+                max_current_tokens = max(max_current_tokens, len(alt_tokens))
+
+            if max_current_tokens <= self.config.max_trajectory_tokens:
+                filtered_trajectory.append(original_step_data) # Step is already fine
                 continue
-            
-            # We need to truncate this step
-            logger.info(f"[_ensure_trajectory_token_limit] Step {step_idx} exceeds token limit. Attempting truncation.")
-            
-            # Process each alternative's message history for this step
-            truncated_step = step.copy()
-            step_still_exceeds_limit = False
-            
-            # Process each alternative's message history
-            for alt_idx in range(alt_count):
-                messages = step["messages"][alt_idx].copy()
-                
-                # Continue trimming until we're under the limit or can't trim anymore
-                # We always keep the system message (index 0) and at least the last agent message
-                min_messages = 2  # At minimum keep system + last agent message
-                
-                while len(messages) > min_messages:
-                    # Calculate current token count
-                    token_count = sum(len(self.tokenizer.encode(msg["content"])) for msg in messages)
+
+            logger.info(f"[_ensure_trajectory_token_limit] Step {step_idx} (max tokens: {max_current_tokens}) exceeds limit ({self.config.max_trajectory_tokens}). Attempting uniform truncation.")
+
+            # --- Iterative Uniform Truncation --- 
+            step_successfully_truncated = False
+            while True: # Loop for truncating messages one by one from the front (after system)
+                # Determine if we can truncate further for ALL alternatives
+                can_truncate_further_globally = True
+                for alt_idx in range(num_alternatives):
+                    messages_alt = current_step_messages[alt_idx]
+                    # Minimum messages: system (idx 0), last env, last agent.
+                    # If only system + agent (e.g. first turn), min is 2.
+                    # If system + env + agent, min is 3.
+                    # We can only remove message at index 1 if len(messages_alt) > min_required
+                    min_required = 2
+                    if len(messages_alt) >=3 and messages_alt[-2]["role"] == "environment" and messages_alt[-1]["role"] in UNMASKED_ROLES:
+                        min_required = 3
                     
-                    if token_count <= self.config.max_trajectory_tokens:
-                        break  # We're under the limit
-                        
-                    # Remove the second message (after system message)
-                    # This preserves the system prompt and most recent context
-                    messages.pop(1)
+                    if len(messages_alt) <= min_required:
+                        can_truncate_further_globally = False
+                        break 
                 
-                # After maximum truncation, check if we're still over the limit
-                token_count = sum(len(self.tokenizer.encode(msg["content"])) for msg in messages)
-                if token_count > self.config.max_trajectory_tokens:
-                    # Even after maximum truncation, we're still over the limit
-                    step_still_exceeds_limit = True
-                    logger.warning(
-                        f"[_ensure_trajectory_token_limit] Step {step_idx}, alternative {alt_idx} "
-                        f"still exceeds token limit ({token_count} > {self.config.max_trajectory_tokens}) "
-                        f"after maximum truncation. Will skip this step."
-                    )
-                    break  # No need to check other alternatives if one already exceeds
+                if not can_truncate_further_globally:
+                    # We have reached the minimum number of messages for at least one alternative
+                    break # Exit truncation loop for this step
+
+                # Uniformly remove the message at index 1 (oldest after system) from all alternatives
+                for alt_idx in range(num_alternatives):
+                    if len(current_step_messages[alt_idx]) > 1: # Ensure there is a message to pop after system
+                        current_step_messages[alt_idx].pop(1)
+                    else:
+                        # This should ideally not be reached if min_required logic is correct
+                        logger.warning(f"[_ensure_trajectory_token_limit] Tried to pop from too short message list for alt {alt_idx} in step {step_idx}.")
+                        # Mark as unable to truncate globally to break outer loop cleanly
+                        can_truncate_further_globally = False 
+                        break 
+                if not can_truncate_further_globally: break # Propagate break
+
+                # Re-tokenize ALL alternatives and update tokens/masks
+                new_max_tokens_after_trunc = 0
+                temp_alt_tokens = []
+                temp_alt_masks = []
+                all_alts_tokenized_successfully = True
+                for alt_idx in range(num_alternatives):
+                    try:
+                        tokenized_alt = tokenize_for_trainer(self.tokenizer, current_step_messages[alt_idx])
+                        temp_alt_tokens.append(tokenized_alt["tokens"])
+                        temp_alt_masks.append(tokenized_alt["masks"])
+                        new_max_tokens_after_trunc = max(new_max_tokens_after_trunc, len(tokenized_alt["tokens"]))
+                    except Exception as e:
+                        logger.error(f"[_ensure_trajectory_token_limit] Error re-tokenizing alt {alt_idx} in step {step_idx} after truncation: {e}")
+                        all_alts_tokenized_successfully = False
+                        break
                 
-                # Update the messages for this alternative in the truncated step
-                truncated_step["messages"][alt_idx] = messages
+                if not all_alts_tokenized_successfully:
+                    # If any re-tokenization failed, we can't trust this truncation attempt for the step
+                    step_successfully_truncated = False # Mark as failed
+                    break # Exit truncation loop for this step
+
+                # Update the step's tokens and masks
+                current_step_tokens = temp_alt_tokens
+                current_step_masks = temp_alt_masks
+                max_current_tokens = new_max_tokens_after_trunc
+
+                logger.debug(f"[_ensure_trajectory_token_limit] Step {step_idx} after one round of truncation, max tokens: {max_current_tokens}")
+
+                if max_current_tokens <= self.config.max_trajectory_tokens:
+                    step_successfully_truncated = True
+                    break # Exit truncation loop, step now fits
             
-            if step_still_exceeds_limit:
-                # Skip this step entirely if it still exceeds the limit after maximum truncation
-                logger.warning(f"[_ensure_trajectory_token_limit] Skipping step {step_idx} entirely due to excessive token count.")
+            # --- Post Truncation Check --- 
+            if step_successfully_truncated:
+                # Construct the new BlackjackScoredDataGroup with truncated messages and new tokens/masks
+                updated_step_data = BlackjackScoredDataGroup(
+                    messages=current_step_messages,
+                    tokens=current_step_tokens,
+                    masks=current_step_masks,
+                    scores=original_step_data.get("scores", []),
+                    seed=original_step_data.get("seed", -1),
+                    parsed_action=original_step_data.get("parsed_action", -1),
+                    # Copy other potential fields if they exist
+                    advantages=original_step_data.get("advantages"),
+                    ref_logprobs=original_step_data.get("ref_logprobs"),
+                    group_overrides=original_step_data.get("group_overrides"),
+                    overrides=original_step_data.get("overrides")
+                )
+                filtered_trajectory.append(updated_step_data)
+                logger.info(f"[_ensure_trajectory_token_limit] Step {step_idx} successfully truncated. Final max tokens: {max_current_tokens}")
             else:
-                # Add the truncated step to the filtered trajectory
-                filtered_trajectory.append(truncated_step)
-        
+                # Check final length one last time (if we broke due to min messages or tokenization error)
+                final_check_max_tokens = 0
+                for alt_tokens in current_step_tokens: # Use potentially updated tokens from last attempt
+                     final_check_max_tokens = max(final_check_max_tokens, len(alt_tokens))
+
+                if final_check_max_tokens > self.config.max_trajectory_tokens:
+                    logger.warning(
+                        f"[_ensure_trajectory_token_limit] Discarding step {step_idx}. Max tokens ({final_check_max_tokens}) still exceed limit "
+                        f"({self.config.max_trajectory_tokens}) after maximum possible uniform truncation or re-tokenization error."
+                    )
+                else:
+                    # This case should ideally be caught by step_successfully_truncated = True earlier,
+                    # but as a fallback, if it somehow fits now, add it.
+                    logger.info(f"[_ensure_trajectory_token_limit] Step {step_idx} fits after loop exit (max tokens: {final_check_max_tokens}). Adding.")
+                    updated_step_data = BlackjackScoredDataGroup(
+                        messages=current_step_messages,
+                        tokens=current_step_tokens,
+                        masks=current_step_masks,
+                        scores=original_step_data.get("scores", []),
+                        seed=original_step_data.get("seed", -1),
+                        parsed_action=original_step_data.get("parsed_action", -1),
+                        advantages=original_step_data.get("advantages"),
+                        ref_logprobs=original_step_data.get("ref_logprobs"),
+                        group_overrides=original_step_data.get("group_overrides"),
+                        overrides=original_step_data.get("overrides")
+                    )
+                    filtered_trajectory.append(updated_step_data)
+
         if len(filtered_trajectory) < len(trajectory):
             logger.warning(
                 f"[_ensure_trajectory_token_limit] Filtered out {len(trajectory) - len(filtered_trajectory)} steps "
-                f"due to token limit constraints. Original: {len(trajectory)}, Remaining: {len(filtered_trajectory)}"
+                f"due to token limit constraints. Original trajectory length: {len(trajectory)}, Filtered: {len(filtered_trajectory)}"
             )
-            
-        # In case all steps were filtered out, return an empty list
+
         return filtered_trajectory
 
 if __name__ == "__main__":
