@@ -1,4 +1,4 @@
-tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-1B-Preview"
+tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-3B-Preview"
 group_size: 8
 use_wandb: true
 max_num_workers: 256

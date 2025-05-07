@@ -13,6 +13,7 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "tenacity",
+    "markdown",
     "numpy",
     "wandb",
     "math-verify==0.7.0",

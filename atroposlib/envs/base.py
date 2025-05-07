@@ -3,24 +3,41 @@ import json
 import logging
 import os
 import random
-import sys
+import string
 import time
 import uuid
 import warnings
 from abc import ABC, abstractmethod
+from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
 
 import aiohttp
 import jsonlines
 import numpy as np
 import wandb
+import yaml
 from pydantic import BaseModel, Field
 from pydantic_cli import Cmd, FailedExecutionException, run_and_exit
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 from transformers import AutoTokenizer
 
+from atroposlib.envs.constants import (
+    ENV_NAMESPACE,
+    NAMESPACE_SEP,
+    OPENAI_NAMESPACE,
+    SERVER_MANAGER_NAMESPACE,
+)
+from atroposlib.frontend.jsonl2html import generate_html
 from atroposlib.type_definitions import UUID
+from atroposlib.utils.cli import (
+    adjust_model_defaults,
+    extract_namespace,
+    get_double_dash_flags,
+    get_prefixed_pydantic_model,
+    merge_dicts,
+)
 from atroposlib.utils.metrics import get_std_min_max_avg
 
 from ..type_definitions import Item, Message
@@ -98,7 +115,7 @@ class BaseEnvConfig(BaseModel):
         default=3, description="Maximum number of batches to have in queue."
     )
     tokenizer_name: str = Field(
-        default="NousResearch/DeepHermes-3-Llama-3-1B-Preview",
+        default="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
         description="Hugging Face tokenzer to use.",
     )
     use_wandb: bool = Field(default=True, description="Whether to use wandb")
@@ -129,6 +146,10 @@ class BaseEnvConfig(BaseModel):
         default=2,
         description="Minimum number of items sent before logging, if 0 or less, logs every time",
     )
+    include_messages: bool = Field(
+        default=False,
+        description="Whether to include messages in the output transmitted to the trainer",
+    )
 
 
 class BaseEnv(ABC):
@@ -140,7 +161,7 @@ class BaseEnv(ABC):
         self,
         config: BaseEnvConfig,
         server_configs: Union[ServerBaseline, List[OpenaiConfig]],
-        slurm=True,
+        slurm=False,
         testing=False,
     ):
         self.items_sent_this_step = 0
@@ -175,10 +196,26 @@ class BaseEnv(ABC):
         self.checkpoint_dir = ""
         self.checkpoint_interval = -1
         if self.config.data_path_to_save_groups is not None:
-            if os.path.exists(self.config.data_path_to_save_groups):
-                raise FileExistsError(
-                    "Data path already exists! Please remove it or change it."
+
+            Path(self.config.data_path_to_save_groups).parent.mkdir(
+                parents=True, exist_ok=True
+            )
+            # Find a suitable filename by appending _1, _2, etc. if the file already exists
+            original_path = self.config.data_path_to_save_groups
+            counter = 1
+            path_changed = False
+            while os.path.exists(self.config.data_path_to_save_groups):
+                path_obj = Path(original_path)
+                self.config.data_path_to_save_groups = str(
+                    path_obj.with_stem(f"{path_obj.stem}_{counter}")
                 )
+                counter += 1
+                path_changed = True
+            if path_changed:
+                print(
+                    f"Changed data path to {self.config.data_path_to_save_groups} because {original_path} already exists."  # noqa: E501
+                )
+
             self.jsonl_writer = jsonlines.open(
                 self.config.data_path_to_save_groups, "w"
             )  # type: jsonlines.Writer
@@ -579,21 +616,28 @@ class BaseEnv(ABC):
         self,
         scored_data: Union[ScoredDataGroup, List[ScoredDataGroup]],
         item: Item = None,
+        do_send_to_api: bool = True,
+        abort_on_any_max_length_exceeded: bool = True,
     ):
         """
         Send the chats to the API with robust error handling and support for multiple ScoredDataGroups.
 
         Args:
-            scored_data: List of scored items to send
-            item: Optional item for context
+            scored_data: List or single scored item(s) to send.
+            item: Optional item for context.
+            do_send_to_api: Whether to actually send the data to the API.
+            abort_on_any_max_length_exceeded: If True, skips sending if any token sequence in any batch exceeds max_token_len, aborting the entire operation.
         """
-        # Unify single and batch handling by wrapping single inputs into a list
         if scored_data is None:
+            logger.debug("handle_send_to_api: scored_data is None, returning.")
             return
-        batches = scored_data if isinstance(scored_data, list) else [scored_data]
-        valid_batches = []
-        for batch in batches:
+
+        batches_to_process = scored_data if isinstance(scored_data, list) else [scored_data]
+        valid_batches: List[ScoredDataGroup] = []
+
+        for i, batch in enumerate(batches_to_process):
             if batch is None:
+                logger.debug(f"handle_send_to_api: Batch {i} is None, skipping.")
                 continue
 
             # Determine group_size for this specific batch, falling back to config default
@@ -602,74 +646,127 @@ class BaseEnv(ABC):
             )
 
             # Ensure correct group size
-            if len(batch.get("tokens", [])) != batch_group_size:
+            actual_tokens_len = len(batch.get("tokens", []))
+            if actual_tokens_len != batch_group_size:
                 logger.warning(
-                    f"Skipping batch due to group size mismatch. "
-                    f"Expected {batch_group_size}, got {len(batch.get('tokens', []))}"
+                    f"Skipping batch {i} due to group size mismatch. "
+                    f"Expected {batch_group_size}, got {actual_tokens_len}. "
+                    f"Batch keys: {list(batch.keys())}"
                 )
                 continue
 
             # Skip identical scores if configured
+            batch_scores = batch.get("scores", [])
             if (
                 self.config.ensure_scores_are_not_same
-                and len(set(batch.get("scores", []))) == 1
-                and len(batch.get("scores", []))
-                > 0  # Avoid triggering for empty scores list
+                and len(set(batch_scores)) == 1
+                and len(batch_scores) > 0  # Avoid triggering for empty scores list
             ):
-                logger.warning("Skipping batch due to identical scores.")
+                logger.warning(
+                    f"Skipping batch {i} due to identical scores. First few scores: {str(batch_scores[:3])}"
+                )
                 continue
 
-            # Ensure optional keys exist (using setdefault is cleaner)
+            # Ensure optional keys exist
             batch.setdefault("ref_logprobs", None)
             batch.setdefault("overrides", None)
             batch.setdefault("group_overrides", None)
+            batch.setdefault("messages", None) # Ensure messages key exists for later population
 
             # Check if all mask sequences in the batch are empty
             all_masks_empty = True
-            # Ensure 'masks' key exists and is a list
             masks_list = batch.get("masks")
             if isinstance(masks_list, list):
-                if not masks_list: # Empty list of masks means all (zero) masks are effectively empty
-                    pass # all_masks_empty remains true
+                if not masks_list:  # Empty list of masks
+                    pass  # all_masks_empty remains true, batch will be skipped
                 else:
-                    for mask_sequence in masks_list:
-                        if len(mask_sequence) > 0:
+                    for mask_idx, mask_sequence in enumerate(masks_list):
+                        if hasattr(mask_sequence, '__iter__') and len(mask_sequence) > 0:
                             all_masks_empty = False
                             break
+                        elif not hasattr(mask_sequence, '__iter__'):
+                            logger.warning(f"Mask sequence {mask_idx} in batch {i} is not iterable. Skipping batch.")
+                            all_masks_empty = True # Mark to ensure skip if loop finishes
+                            break # Cannot process this batch further
             else:
-                # 'masks' key is missing or not a list, treat as problematic for this check
                 logger.warning(
-                    f"Skipping batch due to missing or invalid 'masks' key. Batch keys: {list(batch.keys())}"
+                    f"Skipping batch {i} due to missing or invalid 'masks' key (not a list or missing). "
+                    f"Batch keys: {list(batch.keys())}"
                 )
-                continue # Skip this batch
+                continue # Skip this batch (all_masks_empty remains true by default or skip)
 
             if all_masks_empty:
                 logger.warning(
-                    f"Skipping batch because all mask sequences are empty. Group size: {len(masks_list) if masks_list is not None else 'N/A'}. "
-                    f"First few scores: {str(batch.get('scores', [])[:3])}"
+                    f"Skipping batch {i} because all mask sequences are empty or masks field invalid. "
+                    f"Number of mask sequences: {len(masks_list) if isinstance(masks_list, list) else 'N/A'}. "
+                    f"First few scores: {str(batch_scores[:3])}"
                 )
                 continue # Skip this batch
+            
+            # Check for max token length exceeded
+            batch_tokens = batch.get("tokens", [])
+            if abort_on_any_max_length_exceeded and any(
+                len(x) >= self.max_token_len for x in batch_tokens if x is not None
+            ):
+                token_lengths = [len(x) for x in batch_tokens if x is not None]
+                logger.warning(
+                    f"Token length limit exceeded in batch {i}, aborting send operation due to abort_on_any_max_length_exceeded=True. "
+                    f"Max token len configured: {self.max_token_len}. "
+                    f"Batch token lengths: {token_lengths}. "
+                    f"First few scores: {str(batch_scores[:3])}"
+                )
+                return # Abort entire operation
 
             valid_batches.append(batch)
 
         if not valid_batches:
+            logger.debug("No valid batches to send to API after filtering.")
             return
 
-        # Record rollouts, token lengths, and save to JSONL for each valid batch
-        for batch in valid_batches:
-            await self.add_rollouts_for_wandb(batch, item)
-            for mask in batch.get("masks", []):
-                self.completion_lengths.append(len(mask))
-            if self.jsonl_writer:
-                self.jsonl_writer.write(batch)
+        for batch_idx, batch_data in enumerate(valid_batches):
+            await self.add_rollouts_for_wandb(batch_data, item)
+            
+            current_masks = batch_data.get("masks", [])
+            if isinstance(current_masks, list):
+                for mask in current_masks:
+                    if hasattr(mask, '__iter__'): # Make sure mask is iterable
+                        self.completion_lengths.append(len(mask))
+            
+            if self.config.include_messages and batch_data.get("messages") is None:
+                tokens_for_messages = batch_data.get("tokens")
+                if isinstance(tokens_for_messages, list):
+                    decoded_messages = []
+                    for token_seq_idx, token_sequence in enumerate(tokens_for_messages):
+                        if token_sequence is not None:
+                            try:
+                                decoded_messages.append(self.tokenizer.decode(token_sequence))
+                            except Exception as e:
+                                logger.error(f"Error decoding token sequence {token_seq_idx} for messages in valid batch {batch_idx}: {e}. Sequence (first 10 tokens): {str(token_sequence[:10])}")
+                                decoded_messages.append(f"DECODING_ERROR: {e}") # Placeholder for error
+                        else:
+                            logger.warning(f"Token sequence {token_seq_idx} in valid batch {batch_idx} is None, cannot decode for messages.")
+                            decoded_messages.append(None) # Handle None token_sequence
+                    batch_data["messages"] = decoded_messages
+                else:
+                    logger.warning(f"Cannot generate messages for valid batch {batch_idx}: 'tokens' is missing or not a list.")
 
-        # Send to API (list if multiple batches, single dict if one)
-        try:
-            self.items_sent_this_step += len(valid_batches)
-            payload = valid_batches if len(valid_batches) > 1 else valid_batches[0]
-            await self._send_scored_data_to_api(payload)
-        except (Exception, TimeoutError) as e:
-            print(f"Failed to send scored data after retries: {e}")
+            if self.jsonl_writer is not None:
+                try:
+                    self.jsonl_writer.write(batch_data)
+                    logger.debug(f"Wrote valid batch {batch_idx} to {self.config.data_path_to_save_groups}")
+                except Exception as e:
+                    logger.error(f"Failed to write valid batch {batch_idx} to JSONL: {e}")
+
+        if do_send_to_api:
+            try:
+                self.items_sent_this_step += len(valid_batches)
+                payload_to_send = valid_batches[0] if len(valid_batches) == 1 else valid_batches
+                logger.debug(f"Sending {len(valid_batches)} valid batch(es) to API. Payload type: {type(payload_to_send)}. First item keys (if list): {list(payload_to_send[0].keys()) if isinstance(payload_to_send, list) and payload_to_send else list(payload_to_send.keys()) if not isinstance(payload_to_send, list) else 'N/A'}")
+                await self._send_scored_data_to_api(payload_to_send)
+            except Exception as e: # Catching general Exception as _send_scored_data_to_api might raise various errors
+                logger.error(f"Failed to send {len(valid_batches)} scored batch(es) after retries: {e}")
+        else:
+            logger.debug(f"Skipping API send for {len(valid_batches)} valid batch(es) because do_send_to_api is False.")
         return
 
     async def handle_env(
@@ -892,6 +989,74 @@ class BaseEnv(ABC):
                 await self.add_train_workers()
             await asyncio.sleep(0.1)
 
+    async def process_manager(self):
+        """
+        Process manager for running a specific number of groups
+        """
+        await self.setup()
+
+        if self.config.use_wandb:
+            random_id = "".join(random.choices(string.ascii_lowercase, k=6))
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            wandb_run_name = f"{self.name}-{current_date}-{random_id}"
+            wandb.init(
+                project=self.wandb_project,
+                name=wandb_run_name,
+                group=self.wandb_group,
+                config=self.config.model_dump(),
+            )
+
+        # Initialize the processing
+        self.curr_step = 0
+
+        print(f"Starting to process {self.n_groups_to_process} groups...")
+
+        # Process the required number of groups
+        while self.curr_step < self.n_groups_to_process:
+            # Get an item to process
+            item = await self.get_next_item()
+            if item is None:
+                print("No more items to process")
+                break
+
+            # Process the group
+            print(f"Processing group {self.curr_step + 1}/{self.n_groups_to_process}")
+
+            # Collect trajectories with the specified group size
+            # Override the group_size temporarily
+            self.config.group_size = self.group_size_to_process
+
+            # Collect and process the trajectories
+            to_postprocess, _ = await self.collect_trajectories(item)
+
+            if to_postprocess:
+                # Post-process the trajectories
+                processed_data = await self.postprocess_histories(to_postprocess)
+
+                # Save to output file (don't send to API)
+                await self.handle_send_to_api(
+                    processed_data,
+                    item,
+                    do_send_to_api=False,
+                    abort_on_any_max_length_exceeded=False,
+                )
+                await self.wandb_log()
+
+                self.curr_step += 1
+                print(
+                    f"Successfully processed group {self.curr_step}/{self.n_groups_to_process}"
+                )
+            else:
+                print("Failed to process group, retrying...")
+
+        print(f"Completed processing {self.curr_step} groups")
+
+        # Close the output file if it's open
+        if self.jsonl_writer is not None:
+            self.jsonl_writer.close()
+
+        generate_html(self.config.data_path_to_save_groups)
+
     @classmethod
     def cli(cls):
         """
@@ -913,10 +1078,8 @@ class BaseEnv(ABC):
                 print()
                 print(ex.message.split("error: ")[-1])
                 return 2
-            else:
-                # For any other exception
-                print(f"Error: {str(ex)}", file=sys.stderr)
-                return 1
+
+            raise ex
 
         run_and_exit(
             subcommands,
@@ -934,9 +1097,14 @@ class BaseEnv(ABC):
         """
 
         env_config, server_configs = cls.config_init()
+        env_full_prefix = f"{ENV_NAMESPACE}{NAMESPACE_SEP}"
+        openai_full_prefix = f"{OPENAI_NAMESPACE}{NAMESPACE_SEP}"
 
         class CliServeConfig(
-            cls.env_config_cls, OpenaiConfig, ServerManagerConfig, Cmd
+            get_prefixed_pydantic_model(type(env_config), env_full_prefix),
+            get_prefixed_pydantic_model(OpenaiConfig, openai_full_prefix),
+            ServerManagerConfig,
+            Cmd,
         ):
             """
             Configuration for the serve command.
@@ -946,8 +1114,9 @@ class BaseEnv(ABC):
             def run(self) -> None:
                 """The logic to execute for the 'serve' command."""
                 # Convert this config into the formats needed by BaseEnv
-                if self.wandb_name is None and cls.name is not None:
-                    self.wandb_name = cls.name
+                wandb_name_attr = f"{ENV_NAMESPACE}{NAMESPACE_SEP}wandb_name"
+                if getattr(self, wandb_name_attr) is None and cls.name is not None:
+                    setattr(self, wandb_name_attr, cls.name)
                 model_dumped = self.model_dump(exclude_unset=True)
                 server_manager_config = ServerManagerConfig(**model_dumped)
                 # Create the environment instance
@@ -972,29 +1141,134 @@ class BaseEnv(ABC):
             type: The CliProcessConfig class for processing commands.
         """
 
-        class CliProcessConfig(Cmd):
+        PROCESS_MODE_ENV_DEFAULT_CONFIG = BaseEnvConfig(
+            group_size=8,
+            total_steps=2,
+            ensure_scores_are_not_same=False,
+            include_messages=True,
+        )
+        PROCESS_MODE_OPENAI_DEFAULT_CONFIG = OpenaiConfig(
+            model_name="gpt-4.1-nano",
+            base_url=None,
+            api_key=None,
+        )
+        PROCESS_MODE_SERVER_MANAGER_DEFAULT_CONFIG = ServerManagerConfig(
+            slurm=False,
+            testing=False,
+        )
+
+        default_env_config, default_openai_config = cls.config_init()
+
+        if isinstance(default_openai_config, list):
+            default_openai_config = default_openai_config[0]
+
+        env_full_prefix = f"{ENV_NAMESPACE}{NAMESPACE_SEP}"
+        openai_full_prefix = f"{OPENAI_NAMESPACE}{NAMESPACE_SEP}"
+
+        env_config_cls_new_defaults = adjust_model_defaults(
+            type(default_env_config), PROCESS_MODE_ENV_DEFAULT_CONFIG
+        )
+        openai_config_cls_new_defaults = adjust_model_defaults(
+            OpenaiConfig, PROCESS_MODE_OPENAI_DEFAULT_CONFIG
+        )
+        server_manager_config_cls_new_defaults = adjust_model_defaults(
+            ServerManagerConfig,
+            PROCESS_MODE_SERVER_MANAGER_DEFAULT_CONFIG,
+        )
+
+        class CliProcessConfig(
+            get_prefixed_pydantic_model(env_config_cls_new_defaults, env_full_prefix),
+            get_prefixed_pydantic_model(
+                openai_config_cls_new_defaults, openai_full_prefix
+            ),
+            server_manager_config_cls_new_defaults,
+            Cmd,
+        ):
             """
             Configuration for the process command.
-            This is a placeholder for future implementation.
             """
 
-            # Add process-specific fields here
-            group_size: int = Field(
-                default=4, description="Number of responses per prompt"
-            )
-            n_groups: int = Field(default=1, description="Number of groups to process")
-            output_file: str = Field(
-                ..., description="Path to jsonl file to write results"
+            config: str | None = Field(
+                default=None,
+                description="Path to .yaml config file. CLI args override this.",
             )
 
             def run(self) -> None:
                 """The logic to execute for the 'process' command."""
-                print(
-                    f"Processing {self.n_groups} groups of "
-                    f"{self.group_size} responses and "
-                    f"writing to {self.output_file}"
+                # Setup environment configuration
+                wandb_name_attr = f"{ENV_NAMESPACE}{NAMESPACE_SEP}wandb_name"
+                if getattr(self, wandb_name_attr) is None and cls.name is not None:
+                    setattr(self, wandb_name_attr, cls.name)
+
+                if self.config is not None:
+                    with open(self.config, "r") as f:
+                        config = yaml.safe_load(f)
+                    print(f"Loaded config from {self.config}")
+                else:
+                    config = {}
+
+                cli_passed_flags = get_double_dash_flags()
+
+                # cli args overrides config file which overrides class defaults which overrides process mode defaults
+                env_config = env_config_cls_new_defaults(
+                    **merge_dicts(
+                        default_env_config.model_dump(),
+                        PROCESS_MODE_ENV_DEFAULT_CONFIG.model_dump(),
+                        config.get(ENV_NAMESPACE, {}),
+                        extract_namespace(
+                            cli_passed_flags, env_full_prefix
+                        ),  # only extract namespace for cli-passed args
+                    )
                 )
-                print("This is a placeholder implementation for the process command.")
+                openai_config = openai_config_cls_new_defaults(
+                    **merge_dicts(
+                        default_openai_config.model_dump(),
+                        PROCESS_MODE_OPENAI_DEFAULT_CONFIG.model_dump(),
+                        config.get(OPENAI_NAMESPACE, {}),
+                        extract_namespace(
+                            cli_passed_flags, openai_full_prefix
+                        ),  # only extract namespace for cli-passed args
+                    )
+                )
+
+                server_manager_cli_passed_flags = {}
+                if "slurm" in cli_passed_flags:
+                    server_manager_cli_passed_flags["slurm"] = cli_passed_flags["slurm"]
+                if "testing" in cli_passed_flags:
+                    server_manager_cli_passed_flags["testing"] = cli_passed_flags[
+                        "testing"
+                    ]
+
+                server_manager_config = server_manager_config_cls_new_defaults(
+                    **merge_dicts(
+                        ServerManagerConfig().model_dump(),
+                        PROCESS_MODE_SERVER_MANAGER_DEFAULT_CONFIG.model_dump(),
+                        config.get(SERVER_MANAGER_NAMESPACE, {}),
+                        server_manager_cli_passed_flags,
+                    )
+                )
+
+                # Create the environment instance
+                env = cls(
+                    config=env_config,
+                    server_configs=[openai_config],
+                    slurm=server_manager_config.slurm,
+                    testing=server_manager_config.testing,
+                )
+
+                # Set the process mode parameters
+                env.process_mode = True
+                env.n_groups_to_process = env_config.total_steps
+                env.group_size_to_process = env_config.group_size
+
+                print(
+                    f"Processing {env_config.total_steps} groups of "
+                    f"{env_config.group_size} responses and "
+                    f"writing to {env_config.data_path_to_save_groups}"
+                )
+
+                asyncio.run(env.process_manager())
+
                 # Actual implementation would go here
 
         return CliProcessConfig
