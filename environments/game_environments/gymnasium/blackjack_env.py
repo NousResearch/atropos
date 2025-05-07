@@ -11,8 +11,9 @@ import logging
 import os
 import yaml
 from typing import Any, Dict, List, Optional, Tuple, Union
-
+import random
 import gymnasium
+from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.utils.tool_call_parser import parse_tool_call
 from atroposlib.envs.base import (
@@ -42,6 +43,9 @@ class BlackjackEnvConfig(BaseEnvConfig):
 
     # Thinking configuration
     thinking_active: bool = True
+
+    # Evaluation configuration
+    eval_episodes: int = 100
 
     # Reward function configuration
     reward_functions: List[Union[str, Dict[str, Any]]] = []
@@ -99,6 +103,7 @@ class BlackjackEnv(BaseEnv):
         super().__init__(config, server_configs, slurm, testing)
         self.episodes: Dict[int, EpisodeState] = {}
         self.debug_mode = config.debug_mode # Store debug mode flag
+        self.completed_episode_metrics_buffer: List[Dict[str, Any]] = [] # Buffer for step metrics
 
         # Set logger level based on debug mode
         if self.debug_mode:
@@ -612,7 +617,40 @@ class BlackjackEnv(BaseEnv):
 
         logger.info(f"[Collect Trajectory Seed: {seed}] Finished episode after {len(ep.actions)} steps.")
         logger.info(f"[Collect Trajectory Seed: {seed}] Final Totals: Env Reward={ep.total_env_reward:.2f}, Format Reward={ep.total_format_reward:.2f}, Combined Reward={ep.total_combined_reward:.2f}")
-        logger.info(f"[Collect Trajectory Seed: {seed}] Action Accuracy: {ep.num_correct_actions}/{ep.num_total_actions} ({ep.num_correct_actions/max(1, ep.num_total_actions):.2%})")
+        logger.info(f"[Collect Trajectory Seed: {seed}] Action Accuracy: {ep.num_correct_actions}/{max(1, ep.num_total_actions)} ({ep.num_correct_actions/max(1, ep.num_total_actions):.2%})")
+
+        # --- Collect metrics for this completed episode ---
+        final_env_reward_for_outcome = 0
+        if ep.step_rewards: # Get the last environment reward
+            final_env_reward_for_outcome = ep.step_rewards[-1]
+        # Determine game outcome: 1 for win, -1 for loss, 0 for draw
+        game_outcome = 0
+        if final_env_reward_for_outcome > 0:
+            game_outcome = 1
+        elif final_env_reward_for_outcome < 0:
+            game_outcome = -1
+        
+        episode_summary_metrics = {
+            "seed": seed,
+            "total_env_reward": ep.total_env_reward,
+            "total_format_reward": ep.total_format_reward,
+            "total_combined_reward": ep.total_combined_reward,
+            "num_correct_actions": ep.num_correct_actions,
+            "num_total_actions": ep.num_total_actions, # This is the number of turns
+            "game_outcome": game_outcome, # 1 for win, -1 for loss, 0 for draw
+            "num_steps_in_episode": len(ep.actions)
+        }
+        self.completed_episode_metrics_buffer.append(episode_summary_metrics)
+        
+        # --- Clean up episode state ---
+        # Important for singleton: remove episode from dict to allow fresh starts if seed repeats
+        if seed in self.episodes:
+            try:
+                self.episodes[seed].env.close() # Close the specific gym environment instance
+            except Exception as e:
+                logger.warning(f"[Collect Trajectory Seed: {seed}] Exception closing env for episode: {e}")
+            del self.episodes[seed]
+            logger.debug(f"[Collect Trajectory Seed: {seed}] Cleared episode state from self.episodes.")
 
         return ep.trajectory
 
@@ -771,9 +809,245 @@ class BlackjackEnv(BaseEnv):
 
         return (random.randint(0, 1000000), 0)
 
+    async def rollout_and_score_eval(self, seed: int) -> Dict[str, Any]:
+        """
+        Run a single episode for evaluation and return detailed metrics.
+        Does not use the best-of-n sampling, but a single completion per step.
+        Cleans up the episode state after completion.
+        """
+        ep = self._get_or_create_episode(seed) # Creates a fresh episode state
+        max_turns = self.config.max_turns if self.config.max_turns is not None else 5
+        logger.info(f"[Eval Rollout Seed: {seed}] Starting episode. Max turns: {max_turns}")
+
+        # Metrics to collect for this episode
+        episode_metrics = {
+            "seed": seed,
+            "total_env_reward": 0.0,
+            "total_format_reward": 0.0,
+            "total_combined_reward": 0.0,
+            "num_turns": 0,
+            "num_correct_actions": 0, # Correctly parsed actions (hit/stick)
+            "num_invalid_actions": 0, # Failed to parse action
+            "actions_chosen": [], # List of actions (0 for stick, 1 for hit, -1 for error)
+            "game_outcome": 0, # -1 for loss, 0 for draw, 1 for win
+        }
+
+        for turn in range(max_turns):
+            episode_metrics["num_turns"] = turn + 1
+            messages_for_prompt = ep.message_history.copy()
+
+            if self.config.thinking_active:
+                messages_for_prompt.append({"role": "agent", "content": "<think>\n"})
+            else:
+                messages_for_prompt.append({"role": "agent", "content": ""})
+
+            prompt = self.tokenizer.apply_chat_template(messages_for_prompt, tokenize=False)
+
+            try:
+                completions = await self.server.completion(
+                    prompt=prompt,
+                    n=1, # Single completion for eval
+                    max_tokens=self.config.max_token_length,
+                    temperature=self.config.temperature, # Use main config temperature
+                    top_p=self.config.top_p,           # Use main config top_p
+                    split="eval", # Indicate this is an evaluation call
+                )
+            except Exception as api_error:
+                logger.exception(f"[Eval Rollout Seed: {seed} Turn: {turn+1}] API Error: {api_error}")
+                break # End episode on API error
+
+            if not completions or not completions.choices:
+                logger.error(f"[Eval Rollout Seed: {seed} Turn: {turn+1}] API did not return any choices. Aborting episode.")
+                break
+
+            response_text = completions.choices[0].text if hasattr(completions.choices[0], "text") else getattr(completions.choices[0].message, "content", "")
+            full_response = ("<think>\n" + response_text) if self.config.thinking_active else response_text
+
+            parsed_action = self._parse_tool_call(full_response)
+            episode_metrics["actions_chosen"].append(parsed_action)
+
+            if parsed_action == -1:
+                episode_metrics["num_invalid_actions"] += 1
+                env_action = 0 # Default to stick on parse error for env stepping
+                logger.warning(f"[Eval Rollout Seed: {seed} Turn: {turn+1}] Invalid action parsed. Defaulting to 'stick'.")
+            else:
+                episode_metrics["num_correct_actions"] += 1
+                env_action = parsed_action
+
+            try:
+                obs, reward, term, trunc, info = ep.env.step(env_action)
+            except Exception as env_step_error:
+                logger.exception(f"[Eval Rollout Seed: {seed} Turn: {turn+1}] Error stepping env: {env_step_error}")
+                term = True # Treat as terminal
+                reward = -1.0 # Penalize heavily
+                obs = None
+
+            # Calculate format reward for this single response
+            format_reward_step = 0.0
+            if self.reward_function:
+                format_completions = [[{"role": "assistant", "content": full_response}]]
+                try:
+                    format_rewards = self.reward_function(format_completions)
+                    if format_rewards and len(format_rewards) > 0:
+                        format_reward_step = format_rewards[0]
+                except Exception as e:
+                    logger.error(f"[Eval Rollout Seed: {seed} Turn: {turn+1}] Error calculating format reward: {e}")
+
+            # Update running totals for the episode
+            episode_metrics["total_env_reward"] += reward
+            episode_metrics["total_format_reward"] += format_reward_step
+            combined_reward_step = (self.config.environment_reward_weight * reward) + \
+                                   (self.config.format_reward_weight * format_reward_step)
+            episode_metrics["total_combined_reward"] += combined_reward_step
+
+            if term or trunc:
+                episode_metrics["game_outcome"] = int(reward) # Store final reward as outcome
+                logger.info(f"[Eval Rollout Seed: {seed}] Episode ended. Outcome Reward: {reward}")
+                if obs is not None:
+                    final_formatted_obs = self._format_observation(obs)
+                    ep.message_history.append({"role": "environment", "content": f"Final State: {final_formatted_obs} (Reward: {reward})"})
+                else:
+                    ep.message_history.append({"role": "environment", "content": f"Episode terminated with error. (Reward: {reward})"})
+                break # End of episode
+            else:
+                ep.message_history.append({"role": "agent", "content": full_response})
+                formatted_obs = self._format_observation(obs)
+                ep.message_history.append({"role": "environment", "content": formatted_obs})
+
+        logger.info(f"[Eval Rollout Seed: {seed}] Finished episode. Metrics: {episode_metrics}")
+
+        # Clean up episode state for this seed to ensure next eval is fresh
+        if seed in self.episodes:
+            try:
+                self.episodes[seed].env.close()
+            except Exception as e:
+                logger.warning(f"[Eval Rollout Seed: {seed}] Exception closing env for episode: {e}")
+            del self.episodes[seed]
+
+        return episode_metrics
+
     async def evaluate(self, *args, **kwargs):
-        # TODO: Implement evaluation logic
-        pass
+        """Run evaluation episodes and aggregate metrics for logging."""
+        if not self.config.use_wandb: # Skip if wandb is not enabled
+            logger.info("Skipping evaluation as wandb is not enabled.")
+            return
+
+        num_eval_episodes = self.config.eval_episodes
+        logger.info(f"Starting evaluation for {num_eval_episodes} episodes.")
+
+        eval_tasks = []
+        
+        for i in range(num_eval_episodes):
+            eval_seed = random.randint(1000001, 2000000) # different seed range for eval
+            eval_tasks.append(self.rollout_and_score_eval(eval_seed))
+
+        all_episode_metrics = await tqdm_asyncio.gather(*eval_tasks)
+
+        # --- Aggregate Metrics --- 
+        if not all_episode_metrics:
+            logger.warning("No metrics collected from evaluation episodes.")
+            return
+
+        valid_metrics = [m for m in all_episode_metrics if m is not None]
+        if not valid_metrics:
+            logger.warning("All evaluation episodes resulted in None metrics.")
+            return
+
+        num_completed_episodes = len(valid_metrics)
+
+        # Calculate averages
+        avg_total_env_reward = sum(m["total_env_reward"] for m in valid_metrics) / num_completed_episodes
+        avg_total_format_reward = sum(m["total_format_reward"] for m in valid_metrics) / num_completed_episodes
+        avg_total_combined_reward = sum(m["total_combined_reward"] for m in valid_metrics) / num_completed_episodes
+        avg_num_turns = sum(m["num_turns"] for m in valid_metrics) / num_completed_episodes
+
+        # Calculate rates
+        total_correct_actions = sum(m["num_correct_actions"] for m in valid_metrics)
+        total_invalid_actions = sum(m["num_invalid_actions"] for m in valid_metrics)
+        total_actions_taken = total_correct_actions + total_invalid_actions
+        action_accuracy = total_correct_actions / total_actions_taken if total_actions_taken > 0 else 0
+        invalid_action_rate = total_invalid_actions / total_actions_taken if total_actions_taken > 0 else 0
+
+        # Game outcomes
+        wins = sum(1 for m in valid_metrics if m["game_outcome"] == 1)
+        losses = sum(1 for m in valid_metrics if m["game_outcome"] == -1)
+        draws = sum(1 for m in valid_metrics if m["game_outcome"] == 0)
+
+        win_rate = wins / num_completed_episodes if num_completed_episodes > 0 else 0
+        loss_rate = losses / num_completed_episodes if num_completed_episodes > 0 else 0
+        draw_rate = draws / num_completed_episodes if num_completed_episodes > 0 else 0
+
+        # Action distribution (hit vs stick vs error)
+        all_chosen_actions = [action for m in valid_metrics for action in m["actions_chosen"]]
+        count_hit = sum(1 for act in all_chosen_actions if act == 1)
+        count_stick = sum(1 for act in all_chosen_actions if act == 0)
+        count_error_actions = sum(1 for act in all_chosen_actions if act == -1)
+        total_parsed_actions_in_eval = len(all_chosen_actions)
+
+        self.eval_metrics = [
+            ("eval/avg_total_env_reward", avg_total_env_reward),
+            ("eval/avg_total_format_reward", avg_total_format_reward),
+            ("eval/avg_total_combined_reward", avg_total_combined_reward),
+            ("eval/avg_num_turns", avg_num_turns),
+            ("eval/action_accuracy", action_accuracy), # Correctly parsed hit/stick vs total attempts
+            ("eval/invalid_action_rate", invalid_action_rate), # Rate of unparsable actions
+            ("eval/win_rate", win_rate),
+            ("eval/loss_rate", loss_rate),
+            ("eval/draw_rate", draw_rate),
+            ("eval/num_wins", wins),
+            ("eval/num_losses", losses),
+            ("eval/num_draws", draws),
+            ("eval/num_completed_episodes", num_completed_episodes),
+            ("eval/hit_chosen_rate", count_hit / total_parsed_actions_in_eval if total_parsed_actions_in_eval > 0 else 0),
+            ("eval/stick_chosen_rate", count_stick / total_parsed_actions_in_eval if total_parsed_actions_in_eval > 0 else 0),
+            ("eval/error_action_chosen_rate", count_error_actions / total_parsed_actions_in_eval if total_parsed_actions_in_eval > 0 else 0),
+        ]
+
+        logger.info(f"Evaluation completed. Aggregated metrics: {self.eval_metrics}")
+
+    async def wandb_log(self, wandb_metrics: Optional[Dict[str, Any]] = None):
+        """
+        Log aggregated metrics from completed training episodes and call super().wandb_log.
+        """
+        if wandb_metrics is None:
+            wandb_metrics = {}
+
+        if self.completed_episode_metrics_buffer:
+            num_episodes_in_buffer = len(self.completed_episode_metrics_buffer)
+            
+            # Aggregate metrics from the buffer
+            avg_ep_env_reward = sum(m["total_env_reward"] for m in self.completed_episode_metrics_buffer) / num_episodes_in_buffer
+            avg_ep_format_reward = sum(m["total_format_reward"] for m in self.completed_episode_metrics_buffer) / num_episodes_in_buffer
+            avg_ep_combined_reward = sum(m["total_combined_reward"] for m in self.completed_episode_metrics_buffer) / num_episodes_in_buffer
+            
+            total_ep_correct_actions = sum(m["num_correct_actions"] for m in self.completed_episode_metrics_buffer)
+            total_ep_actions = sum(m["num_total_actions"] for m in self.completed_episode_metrics_buffer)
+            avg_ep_action_accuracy = total_ep_correct_actions / total_ep_actions if total_ep_actions > 0 else 0
+            
+            avg_ep_num_steps = sum(m["num_steps_in_episode"] for m in self.completed_episode_metrics_buffer) / num_episodes_in_buffer
+
+            ep_wins = sum(1 for m in self.completed_episode_metrics_buffer if m["game_outcome"] == 1)
+            ep_losses = sum(1 for m in self.completed_episode_metrics_buffer if m["game_outcome"] == -1)
+            ep_draws = sum(1 for m in self.completed_episode_metrics_buffer if m["game_outcome"] == 0)
+
+            ep_win_rate = ep_wins / num_episodes_in_buffer if num_episodes_in_buffer > 0 else 0
+            ep_loss_rate = ep_losses / num_episodes_in_buffer if num_episodes_in_buffer > 0 else 0
+            ep_draw_rate = ep_draws / num_episodes_in_buffer if num_episodes_in_buffer > 0 else 0
+
+            # Add to wandb_metrics dictionary with a specific prefix for training rollouts
+            wandb_metrics[f"{self.wandb_prepend or 'blackjack'}_train/avg_episode_env_reward"] = avg_ep_env_reward
+            wandb_metrics[f"{self.wandb_prepend or 'blackjack'}_train/avg_episode_format_reward"] = avg_ep_format_reward
+            wandb_metrics[f"{self.wandb_prepend or 'blackjack'}_train/avg_episode_combined_reward"] = avg_ep_combined_reward
+            wandb_metrics[f"{self.wandb_prepend or 'blackjack'}_train/avg_episode_action_accuracy"] = avg_ep_action_accuracy
+            wandb_metrics[f"{self.wandb_prepend or 'blackjack'}_train/avg_episode_num_steps"] = avg_ep_num_steps
+            wandb_metrics[f"{self.wandb_prepend or 'blackjack'}_train/episode_win_rate"] = ep_win_rate
+            wandb_metrics[f"{self.wandb_prepend or 'blackjack'}_train/episode_loss_rate"] = ep_loss_rate
+            wandb_metrics[f"{self.wandb_prepend or 'blackjack'}_train/episode_draw_rate"] = ep_draw_rate
+            wandb_metrics[f"{self.wandb_prepend or 'blackjack'}_train/num_episodes_in_log_period"] = num_episodes_in_buffer
+            
+            logger.info(f"Logging metrics for {num_episodes_in_buffer} completed training episodes.")
+            self.completed_episode_metrics_buffer = []
+        await super().wandb_log(wandb_metrics)
 
     @classmethod
     def config_init(
