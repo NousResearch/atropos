@@ -214,7 +214,6 @@ class BlackjackEnv(BaseEnv):
             # Initialize history
             ep.message_history = [{"role": "system", "content": self.system_prompt}]
             formatted = self._format_observation(obs)
-            print("formatted", formatted)
             ep.message_history.append({"role": "environment", "content": formatted})
             self.episodes[seed] = ep
         return self.episodes[seed]
@@ -717,6 +716,7 @@ class BlackjackEnv(BaseEnv):
             The list of ScoredDataGroups with potentially adjusted scores.
             Returns a list containing None if input is invalid.
         """
+        logger.info(f"score: Received rollout_group_data with {len(rollout_group_data)} groups.")
         if not rollout_group_data:
             logger.warning("score: Received empty rollout_group_data.")
             return [None] * len(rollout_group_data) # Maintain expected structure if needed downstream
@@ -1287,11 +1287,16 @@ class BlackjackEnv(BaseEnv):
         filtered_trajectory: List[BlackjackScoredDataGroup] = []
 
         for step_idx, original_step_data in enumerate(trajectory):
+            logger.info(f"[_ensure_trajectory_token_limit] Step {step_idx} has {len(original_step_data['messages'])} messages.")
             if not original_step_data.get("messages") or not original_step_data.get("tokens") or not original_step_data.get("masks"):
                 logger.warning(f"[_ensure_trajectory_token_limit] Step {step_idx} is missing messages, tokens, or masks. Skipping.")
                 continue
 
             current_step_messages_orig = [msgs.copy() for msgs in original_step_data["messages"]]
+            for alt_idx, alt_msgs in enumerate(current_step_messages_orig):
+                logger.info(f"[_ensure_trajectory_token_limit] Step {step_idx}, alt {alt_idx} has {len(alt_msgs)} messages.")
+                for msg_idx, msg in enumerate(alt_msgs):
+                    logger.info(f"[_ensure_trajectory_token_limit] Step {step_idx}, alt {alt_idx}, msg {msg['content']}")
             current_step_tokens_orig = [tkns.copy() for tkns in original_step_data["tokens"]]
             current_step_masks_orig = [msks.copy() for msks in original_step_data["masks"]]
             
@@ -1421,9 +1426,6 @@ class BlackjackEnv(BaseEnv):
                         f"[_ensure_trajectory_token_limit] Discarding step {step_idx}. Max tokens ({max_current_tokens}) still exceed limit "
                         f"({self.config.max_trajectory_tokens}) after maximum possible uniform truncation or re-tokenization error."
                     )
-                # else: If it somehow fits now (e.g. due to a re-tokenization error on a previous longer attempt making it seem too long)
-                # but max_current_tokens from the *last valid state* is fine, this case is implicitly handled by the successfully_truncated branch.
-                # This else block is mainly for the warning above.
 
         if len(filtered_trajectory) < len(trajectory):
             logger.warning(
@@ -1433,5 +1435,4 @@ class BlackjackEnv(BaseEnv):
         return filtered_trajectory
 
 if __name__ == "__main__":
-    # This allows running the environment directly from the command line
     BlackjackEnv.cli()
