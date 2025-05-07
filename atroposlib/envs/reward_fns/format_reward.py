@@ -68,7 +68,7 @@ class FormatReward(RewardFunction):
                     if not re.search(pattern, content, flags):
                         all_tags_present = False
                         break
-                rewards.append(1.0 if all_tags_present else 0.0)
+                rewards.append(1.0 if all_tags_present else -1.0)
             else:
                 # Any tag can be present
                 has_tags = False
@@ -77,7 +77,7 @@ class FormatReward(RewardFunction):
                     if re.search(pattern, content, flags):
                         has_tags = True
                         break
-                rewards.append(1.0 if has_tags else 0.0)
+                rewards.append(1.0 if has_tags else -1.0)
 
         # Log the results
         logger.info(

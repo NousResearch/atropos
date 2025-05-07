@@ -154,7 +154,7 @@ class ToolCallingReward(RewardFunction):
             tool_call_content = self._extract_tool_call(content)
             if not tool_call_content:
                 logger.debug(f"No tool call format found in: {content[:100]}...")
-                results.append(0.0)
+                results.append(-1.0)
                 continue
             
             # Try to parse the JSON
