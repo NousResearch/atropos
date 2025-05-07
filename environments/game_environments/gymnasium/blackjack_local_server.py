@@ -8,8 +8,6 @@ from dotenv import load_dotenv
 
 # Use config_init from the environment itself
 from environments.game_environments.gymnasium.blackjack_env import BlackjackEnv
-# from trajectoryhandler.envs.base import OpenaiConfig # No longer needed here
-# from trajectoryhandler.utils.config_handler import ConfigHandler # No longer needed here
 
 load_dotenv()
 
