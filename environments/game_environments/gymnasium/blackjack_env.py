@@ -58,8 +58,8 @@ class BlackjackEnvConfig(BaseEnvConfig):
     # Max characters for thinking blocks in history prompts
     max_think_chars_history: int = 3000
     
-    # Max tokens for a full trajectory (to prevent exceeding context limits)
-    max_trajectory_tokens: int = 24576
+    # Should be higher than the max tokens to allow for multiple turns
+    max_trajectory_tokens: int = 24576 
 
     # Debug mode
     debug_mode: bool = False
@@ -287,7 +287,7 @@ class BlackjackEnv(BaseEnv):
         if self.reward_function:
             # Prepare completions for the reward function
             # Assumes reward function expects a list of lists of messages
-            format_completions = [[{"role": "assistant", "content": response_text}]]
+            format_completions = [[{"role": "agent", "content": response_text}]]
             try:
                 format_rewards = self.reward_function(format_completions)
                 if format_rewards and len(format_rewards) > 0:
@@ -591,7 +591,7 @@ class BlackjackEnv(BaseEnv):
             # Re-calculate format reward for the chosen (full) response for accurate tracking
             format_reward_chosen = 0.0
             if self.reward_function:
-                 format_completions = [[{"role": "assistant", "content": best_response}]]
+                 format_completions = [[{"role": "agent", "content": best_response}]]
                  try:
                      format_rewards = self.reward_function(format_completions)
                      if format_rewards and len(format_rewards) > 0:
@@ -630,14 +630,14 @@ class BlackjackEnv(BaseEnv):
             # Prepare for next turn or break if terminated
             if term or trunc:
                 logger.info(f"[Collect Trajectory Seed: {seed}] Episode ended. Term={term}, Trunc={trunc}. Final Reward: {reward}")
+                ep.message_history.append({"role": "agent", "content": best_response})
+                
                 if obs is not None:
-                     final_formatted_obs = self._format_observation(obs)
-                     # For the final message, no truncation of agent's last thought is needed as it won't form a new prompt
-                     ep.message_history.append({"role": "agent", "content": best_response}) # Log full final agent response
-                     ep.message_history.append({"role": "environment", "content": f"Final State: {final_formatted_obs} (Reward: {reward})"})
+                    final_formatted_obs = self._format_observation(obs)
+                    logger.debug(f"[Collect Trajectory Seed: {seed}] Final State: {final_formatted_obs} (Reward: {reward})")
                 else:
-                     ep.message_history.append({"role": "agent", "content": best_response}) # Log full final agent response
-                     ep.message_history.append({"role": "environment", "content": f"Episode terminated with error. (Reward: {reward})"})
+                    logger.debug(f"[Collect Trajectory Seed: {seed}] Episode terminated with error. (Reward: {reward})")
+                
                 break
             else:
                 # Truncate the thinking part of the best response for message history for the *next* turn
@@ -694,6 +694,11 @@ class BlackjackEnv(BaseEnv):
         # Apply token limit check to trajectory before returning
         if traj:
             traj = self._ensure_trajectory_token_limit(traj)
+            
+        if not traj:
+            # If all steps were filtered out, log a warning
+            logger.warning(f"[collect_trajectories] All steps for seed {seed} were filtered out due to token limit constraints. Returning empty trajectory.")
+            
         return traj, []
 
     async def score(
@@ -920,7 +925,7 @@ class BlackjackEnv(BaseEnv):
             # Calculate format reward for this single response
             format_reward_step = 0.0
             if self.reward_function:
-                format_completions = [[{"role": "assistant", "content": full_response}]]
+                format_completions = [[{"role": "agent", "content": full_response}]]
                 try:
                     format_rewards = self.reward_function(format_completions)
                     if format_rewards and len(format_rewards) > 0:
@@ -938,11 +943,17 @@ class BlackjackEnv(BaseEnv):
             if term or trunc:
                 episode_metrics["game_outcome"] = int(reward) # Store final reward as outcome
                 logger.info(f"[Eval Rollout Seed: {seed}] Episode ended. Outcome Reward: {reward}")
+                
+                # Add the agent response but not the final environment observation
+                ep.message_history.append({"role": "agent", "content": full_response})
+                
+                # Log the final state information for debugging only
                 if obs is not None:
                     final_formatted_obs = self._format_observation(obs)
-                    ep.message_history.append({"role": "environment", "content": f"Final State: {final_formatted_obs} (Reward: {reward})"})
+                    logger.debug(f"[Eval Rollout Seed: {seed}] Final State: {final_formatted_obs} (Reward: {reward})")
                 else:
-                    ep.message_history.append({"role": "environment", "content": f"Episode terminated with error. (Reward: {reward})"})
+                    logger.debug(f"[Eval Rollout Seed: {seed}] Episode terminated with error. (Reward: {reward})")
+                    
                 break # End of episode
             else:
                 ep.message_history.append({"role": "agent", "content": full_response})
@@ -1261,50 +1272,61 @@ class BlackjackEnv(BaseEnv):
         """
         Ensure the message histories in a trajectory don't exceed max_trajectory_tokens.
         If they do, trim older messages while maintaining alignment across all alternatives.
+        If a step still exceeds the limit after maximum truncation, it will be skipped entirely.
         
         Args:
             trajectory: List of BlackjackScoredDataGroup from an episode
             
         Returns:
-            The trajectory with potentially trimmed message histories
+            The trajectory with potentially trimmed message histories or filtered steps
         """
         if not trajectory:
             return trajectory
         
-        # First check if we need trimming at all by examining all alternatives in the last step
-        last_step = trajectory[-1]
-        if not last_step.get("messages") or not last_step["messages"]:
-            return trajectory  # Nothing to trim
-            
-        # Check the maximum token count across all alternatives in the last step
-        max_token_count = 0
-        for messages in last_step["messages"]:
-            token_count = sum(len(self.tokenizer.encode(msg["content"])) for msg in messages)
-            max_token_count = max(max_token_count, token_count)
+        filtered_trajectory = []
         
-        # If even the largest alternative is under the limit, we're good
-        if max_token_count <= self.config.max_trajectory_tokens:
-            return trajectory  # No trimming needed
-            
-        logger.info(f"Message history exceeds token limit (max: {max_token_count} > {self.config.max_trajectory_tokens}). Trimming older messages.")
-        
-        # We need to trim - process each step in the trajectory
         for step_idx, step in enumerate(trajectory):
             if not step.get("messages") or not step["messages"]:
+                # Keep steps without messages
+                filtered_trajectory.append(step)
                 continue
                 
             # Get message counts to ensure we have the same structure for all alternatives
             alt_count = len(step["messages"])
             if alt_count == 0:
+                # Keep steps with empty message lists
+                filtered_trajectory.append(step)
                 continue
-                
+            
+            # Check if this step needs truncation by examining each alternative
+            needs_truncation = False
+            for messages in step["messages"]:
+                token_count = sum(len(self.tokenizer.encode(msg["content"])) for msg in messages)
+                if token_count > self.config.max_trajectory_tokens:
+                    needs_truncation = True
+                    break
+            
+            if not needs_truncation:
+                # No truncation needed, keep the step as is
+                filtered_trajectory.append(step)
+                continue
+            
+            # We need to truncate this step
+            logger.info(f"[_ensure_trajectory_token_limit] Step {step_idx} exceeds token limit. Attempting truncation.")
+            
+            # Process each alternative's message history for this step
+            truncated_step = step.copy()
+            step_still_exceeds_limit = False
+            
             # Process each alternative's message history
             for alt_idx in range(alt_count):
-                messages = step["messages"][alt_idx]
+                messages = step["messages"][alt_idx].copy()
                 
-                # Continue trimming until we're under the limit
-                # We always keep the system message (index 0) and at least the two most recent messages
-                while len(messages) > 3:  # At minimum keep system + last two messages
+                # Continue trimming until we're under the limit or can't trim anymore
+                # We always keep the system message (index 0) and at least the last agent message
+                min_messages = 2  # At minimum keep system + last agent message
+                
+                while len(messages) > min_messages:
                     # Calculate current token count
                     token_count = sum(len(self.tokenizer.encode(msg["content"])) for msg in messages)
                     
@@ -1313,24 +1335,38 @@ class BlackjackEnv(BaseEnv):
                         
                     # Remove the second message (after system message)
                     # This preserves the system prompt and most recent context
-                    try:
-                        messages.pop(1)
-                    except IndexError:
-                        # If we somehow have an unexpected message structure, log and break
-                        logger.warning(f"Unexpected message structure while trimming step {step_idx}, alt {alt_idx}. Remaining messages: {len(messages)}")
-                        break
-                    
-                    # Update the messages for this alternative
-                    step["messages"][alt_idx] = messages
-                    
-                    logger.debug(f"Trimmed messages for step {step_idx}, alternative {alt_idx}. New count: {len(messages)}")
+                    messages.pop(1)
+                
+                # After maximum truncation, check if we're still over the limit
+                token_count = sum(len(self.tokenizer.encode(msg["content"])) for msg in messages)
+                if token_count > self.config.max_trajectory_tokens:
+                    # Even after maximum truncation, we're still over the limit
+                    step_still_exceeds_limit = True
+                    logger.warning(
+                        f"[_ensure_trajectory_token_limit] Step {step_idx}, alternative {alt_idx} "
+                        f"still exceeds token limit ({token_count} > {self.config.max_trajectory_tokens}) "
+                        f"after maximum truncation. Will skip this step."
+                    )
+                    break  # No need to check other alternatives if one already exceeds
+                
+                # Update the messages for this alternative in the truncated step
+                truncated_step["messages"][alt_idx] = messages
+            
+            if step_still_exceeds_limit:
+                # Skip this step entirely if it still exceeds the limit after maximum truncation
+                logger.warning(f"[_ensure_trajectory_token_limit] Skipping step {step_idx} entirely due to excessive token count.")
+            else:
+                # Add the truncated step to the filtered trajectory
+                filtered_trajectory.append(truncated_step)
         
-        # After trimming, we could potentially re-tokenize the message histories to ensure
-        # the tokens and masks are aligned with the trimmed messages, but that's expensive.
-        # Since we're only concerned with keeping the token count under the limit for the trainer,
-        # we'll rely on the trimming logic above.
-        
-        return trajectory
+        if len(filtered_trajectory) < len(trajectory):
+            logger.warning(
+                f"[_ensure_trajectory_token_limit] Filtered out {len(trajectory) - len(filtered_trajectory)} steps "
+                f"due to token limit constraints. Original: {len(trajectory)}, Remaining: {len(filtered_trajectory)}"
+            )
+            
+        # In case all steps were filtered out, return an empty list
+        return filtered_trajectory
 
 if __name__ == "__main__":
     # This allows running the environment directly from the command line
