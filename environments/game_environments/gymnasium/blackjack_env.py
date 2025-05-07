@@ -55,6 +55,9 @@ class BlackjackEnvConfig(BaseEnvConfig):
     # Batch size for this environment
     batch_size: int = 1024
 
+    # Max characters for thinking blocks in history prompts
+    max_think_chars_history: int = 3000
+
     # Debug mode
     debug_mode: bool = False
 
@@ -511,6 +514,13 @@ class BlackjackEnv(BaseEnv):
                 best_response = alt_responses[best_action_idx]
             except (ValueError, IndexError) as e:
                 logger.error(f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Error finding index for best action {best_action}: {e}. Cannot proceed with episode.")
+                # Clean up this partially failed episode before returning
+                if seed in self.episodes: # Check before accessing
+                    try:
+                        self.episodes[seed].env.close()
+                    except Exception as close_exc:
+                        logger.warning(f"[Collect Trajectory Seed: {seed}] Exception closing env for aborted episode on best_action index error: {close_exc}")
+                    del self.episodes[seed]
                 return ep.trajectory # Abort episode
 
 
@@ -575,7 +585,7 @@ class BlackjackEnv(BaseEnv):
             ep.actions.append(env_action) # Store the action actually taken in env
             ep.step_rewards.append(reward) # Store raw env reward
 
-            # Re-calculate format reward for the chosen response for accurate tracking
+            # Re-calculate format reward for the chosen (full) response for accurate tracking
             format_reward_chosen = 0.0
             if self.reward_function:
                  format_completions = [[{"role": "assistant", "content": best_response}]]
@@ -619,13 +629,17 @@ class BlackjackEnv(BaseEnv):
                 logger.info(f"[Collect Trajectory Seed: {seed}] Episode ended. Term={term}, Trunc={trunc}. Final Reward: {reward}")
                 if obs is not None:
                      final_formatted_obs = self._format_observation(obs)
+                     # For the final message, no truncation of agent's last thought is needed as it won't form a new prompt
+                     ep.message_history.append({"role": "agent", "content": best_response}) # Log full final agent response
                      ep.message_history.append({"role": "environment", "content": f"Final State: {final_formatted_obs} (Reward: {reward})"})
                 else:
+                     ep.message_history.append({"role": "agent", "content": best_response}) # Log full final agent response
                      ep.message_history.append({"role": "environment", "content": f"Episode terminated with error. (Reward: {reward})"})
                 break
             else:
-                # Add the chosen agent response and the new environment observation to history
-                ep.message_history.append({"role": "agent", "content": best_response})
+                # Truncate the thinking part of the best response for message history for the *next* turn
+                response_for_history = self._truncate_thinking_for_history(best_response, self.config.max_think_chars_history)
+                ep.message_history.append({"role": "agent", "content": response_for_history})
                 formatted_obs = self._format_observation(obs)
                 ep.message_history.append({"role": "environment", "content": formatted_obs})
                 logger.debug(f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] New Observation: {formatted_obs}")
@@ -1176,6 +1190,66 @@ class BlackjackEnv(BaseEnv):
     @classmethod
     def cli(cls):
         super(BlackjackEnv, cls).cli()
+
+    def _truncate_thinking_for_history(self, response_text: str, max_chars_fallback: int) -> str:
+        """Helper to truncate the <think> block of a response for message history."""
+        try:
+            think_start_tag = "<think>"
+            think_end_tag = "</think>"
+            
+            think_start_idx = response_text.find(think_start_tag)
+            think_end_idx = response_text.find(think_end_tag)
+
+            if think_start_idx != -1 and think_end_idx != -1 and think_start_idx < think_end_idx:
+                # Part 1: Everything up to and including the think_start_tag
+                part_before_content = response_text[:think_start_idx + len(think_start_tag)]
+                # Part 2: The actual content inside <think>...</think>, stripped of leading/trailing whitespace
+                original_think_content = response_text[think_start_idx + len(think_start_tag) : think_end_idx].strip()
+                # Part 3: Everything from the think_end_tag to the end of the string
+                part_after_content = response_text[think_end_idx:]
+                
+                truncated_think_content = original_think_content
+                is_truncated = False
+
+                if not original_think_content: # Handles empty or whitespace-only think block
+                    return response_text # Return original as there's nothing to truncate
+
+                # Try to get the last non-empty paragraph
+                paragraphs = [p.strip() for p in original_think_content.split('\n\n') if p.strip()]
+                if len(paragraphs) > 0:
+                    last_paragraph = paragraphs[-1]
+                    # If taking the last paragraph makes it shorter than the original, use it.
+                    # This handles cases where the last paragraph is a good summary.
+                    if len(last_paragraph) < len(original_think_content):
+                        truncated_think_content = last_paragraph
+                        is_truncated = True # Considered truncated if we picked a specific, shorter paragraph
+                    # If it was a single paragraph, or last paragraph isn't shorter, check against max_chars_fallback
+                    elif len(original_think_content) > max_chars_fallback:
+                        truncated_think_content = original_think_content[-max_chars_fallback:]
+                        is_truncated = True
+                elif len(original_think_content) > max_chars_fallback: # No paragraphs found, check length directly
+                    truncated_think_content = original_think_content[-max_chars_fallback:]
+                    is_truncated = True
+
+                if is_truncated and truncated_think_content: # Prepend "..." if actual truncation happened and content exists
+                    # Avoid double "..." if content already started with it (e.g. from previous truncation)
+                    if not truncated_think_content.startswith("... "):
+                         truncated_think_content = "... " + truncated_think_content.lstrip()
+                
+                # If truncated_think_content becomes empty or just "...", treat as no meaningful think content left.
+                if not truncated_think_content.strip() or truncated_think_content.strip() == "...":
+                    final_content_for_block = ""
+                else:
+                    final_content_for_block = f"\n{truncated_think_content.strip()}\n"
+                
+                # Use rstrip on part_before_content and lstrip on part_after_content 
+                # to allow final_content_for_block to control newlines around the content.
+                return f"{part_before_content.rstrip()}{final_content_for_block}{part_after_content.lstrip()}"
+            
+            return response_text # No valid <think> block found
+        except Exception as e:
+            logger.error(f"Error in _truncate_thinking_for_history for text '{response_text[:200]}...': {e}", exc_info=True)
+            return response_text # Fallback to original on any error
 
 if __name__ == "__main__":
     # This allows running the environment directly from the command line
