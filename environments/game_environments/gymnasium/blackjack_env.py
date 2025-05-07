@@ -30,6 +30,7 @@ from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer, UNMASKED
 logger = logging.getLogger(__name__)
 
 
+
 class BlackjackEnvConfig(BaseEnvConfig):
     """
     Configuration for the Blackjack environment trainer.
@@ -74,7 +75,7 @@ class BlackjackScoredDataGroup(ScoredDataGroup):
     masks: Optional[List[List[int]]] = None
     scores: Optional[List[float]] = None
     messages: Optional[List[List[Message]]] = None
-    parsed_action: Optional[int] = None # Store the chosen action (0=stick, 1=hit, -1=error)
+    parsed_action: Optional[int] = None
 
 
 class EpisodeState:
@@ -716,6 +717,7 @@ class BlackjackEnv(BaseEnv):
             The list of ScoredDataGroups with potentially adjusted scores.
             Returns a list containing None if input is invalid.
         """
+        logger.setLevel(logging.INFO)
         logger.info(f"score: Received rollout_group_data with {len(rollout_group_data)} groups.")
         if not rollout_group_data:
             logger.warning("score: Received empty rollout_group_data.")
