@@ -6,14 +6,16 @@ import os
 
 from dotenv import load_dotenv
 
-from atroposlib.envs.base import OpenaiConfig
-from atroposlib.envs.reward_fns import registry
-from environments.dataset_environment.dataset_env import DatasetEnv, DatasetEnvConfig
+# Only need DatasetEnv now, as it handles config init
+from environments.dataset_environment.dataset_env import DatasetEnv
+# from atroposlib.envs.base import OpenaiConfig # Not needed here
+# from atroposlib.envs.reward_fns import registry # Not needed here
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO) # Keep base level INFO for the script itself
 logger = logging.getLogger(__name__)
+# Note: DatasetEnv will set its own logger level based on debug_mode in its config
 
 
 def parse_arguments():
@@ -23,8 +25,8 @@ def parse_arguments():
         type=str,
         default="dataset_local",
         help=(
-            "Configuration file name (without .yaml extension) relative to "
-            "environments/dataset_environment/configs/, or full path to a YAML file."
+            "Configuration file name (without .yaml extension, relative to "
+            "environments/dataset_environment/configs/), or full path to a YAML file."
         ),
     )
     return parser.parse_args()
@@ -36,131 +38,41 @@ async def main():
     # Parse command line arguments
     args = parse_arguments()
 
-    # Initialize config handler
-    # config_handler = ConfigHandler()
-
-    # Determine config path
-    if (
-        os.path.isabs(args.config)
-        or "/" in args.config
-        or args.config.endswith(".yaml")
-    ):
-        config_path = args.config
+    # Determine config name/path for config_init
+    config_input = args.config
+    if not os.path.isabs(config_input) and not config_input.endswith(".yaml"):
+        # Assume it's a name relative to the dataset env's config dir
+        # (config_init handles joining with its own base dir and adding .yaml)
+        config_name_or_path = config_input
+        logger.info(f"Using relative config name: {config_name_or_path}")
     else:
-        # Assume it's a name relative to the new default directory
-        config_path = os.path.join(
-            os.path.dirname(__file__), "configs", f"{args.config}.yaml"
-        )
+        # It's likely an absolute path or path relative to cwd
+        config_name_or_path = os.path.abspath(config_input)
+        logger.info(f"Using absolute config path: {config_name_or_path}")
 
-    logger.info(f"Loading configuration from: {config_path}")
-
+    # Use the environment's config_init method to load configurations
     try:
-        with open(config_path, "r") as f:
-            import yaml
-
-            raw_config = yaml.safe_load(f)
-            logger.info("Loaded configuration successfully")
-    except FileNotFoundError:
-        logger.error(f"Configuration file not found at: {config_path}")
-        logger.info("Ensure the --config argument is correct or the file exists.")
-        return
+        env_config, server_configs = DatasetEnv.config_init(config_name_or_path)
+        logger.info("Configuration loaded successfully via DatasetEnv.config_init")
+        logger.debug(f"Loaded Env Config: {env_config}")
+        logger.debug(f"Loaded Server Configs: {server_configs}")
     except Exception as e:
-        logger.error(f"Error loading config from {config_path}: {e}")
-        return
+        logger.exception(f"Failed to load configuration using DatasetEnv.config_init: {e}")
+        return # Cannot proceed without config
 
-    # Ensure dataset configuration exists (assuming it's top-level in these files)
-    if "dataset" not in raw_config:
-        logger.warning(
-            "'dataset' key not found at the top level of the config file. "
-            "Assuming the entire file is the dataset configuration."
-        )
-        # Treat the whole raw_config as the 'dataset' section for compatibility
-        dataset_section = raw_config
-    else:
-        dataset_section = raw_config["dataset"]
 
-    if "dataset_name" not in dataset_section:
-        logger.error("dataset_name not found in dataset configuration")
-        return
-    if "prompt_field" not in dataset_section:
-        logger.error("prompt_field not found in dataset configuration")
-        return
-
-    # Configure the dataset environment
-    # Merging logic: Start with raw_config defaults, then dataset_section specifics
-    env_config_data = {**raw_config, **dataset_section}
-
-    # Pydantic will ignore extra fields, so we just pass everything
-    try:
-        env_config = DatasetEnvConfig(**env_config_data)
-    except Exception as pydantic_error:
-        logger.error(f"Error validating configuration: {pydantic_error}")
-        return
-
-    # Preload reward functions
-    reward_names_to_load = set()
-    if env_config.reward_funcs:
-        reward_names_to_load.update(env_config.reward_funcs)
-    if env_config.reward_functions:
-        for rf_config in env_config.reward_functions:
-            if isinstance(rf_config, str):
-                reward_names_to_load.add(rf_config)
-            elif isinstance(rf_config, dict) and "type" in rf_config:
-                reward_names_to_load.add(rf_config["type"])
-
-    if reward_names_to_load:
-        logger.info(f"Preloading reward functions: {list(reward_names_to_load)}")
-        for func_name in reward_names_to_load:
-            try:
-                registry.get(func_name)
-                logger.info(f"Successfully loaded reward function: {func_name}")
-            except Exception as e:
-                logger.error(f"Failed to load reward function {func_name}: {e}")
-
-    # Server configuration - process env vars
-    server_configs = []
-
-    if "server_configs" in raw_config:
-        for server_config in raw_config["server_configs"]:
-            api_key = server_config.get("api_key", os.environ.get("OPENAI_API_KEY"))
-            # Handle environment variable references like ${OPENAI_API_KEY}
-            if (
-                isinstance(api_key, str)
-                and api_key.startswith("${")
-                and api_key.endswith("}")
-            ):
-                env_var = api_key[2:-1]
-                api_key = os.environ.get(env_var, "")
-
-            server_configs.append(
-                OpenaiConfig(
-                    model_name=server_config.get("model_name", "gpt-4.1-nano"),
-                    base_url=server_config.get("base_url", None),
-                    api_key=api_key,
-                    timeout=server_config.get("timeout", 600),
-                )
-            )
-    else:
-        # Default configuration if not specified in config file
-        logger.warning(
-            "No 'server_configs' found in config. Using default OpenAI config."
-        )
-        server_configs.append(
-            OpenaiConfig(
-                model_name="gpt-4.1-nano",
-                base_url=None,
-                api_key=os.environ.get("OPENAI_API_KEY"),
-                timeout=600,
-            )
-        )
-
-    # Create the environment
+    # Create the environment using loaded configs
     logger.info("Creating dataset environment...")
-    env = DatasetEnv(
-        config=env_config,
-        server_configs=server_configs,
-        slurm=False,
-    )
+    try:
+        env = DatasetEnv(
+            config=env_config,
+            server_configs=server_configs,
+            slurm=False, # Explicitly false for local testing
+            testing=False # Explicitly false unless needed for harness
+        )
+    except Exception as e:
+        logger.exception(f"Failed to initialize DatasetEnv: {e}")
+        return
 
     # Setup the environment directly
     try:
@@ -168,11 +80,12 @@ async def main():
         logger.info("Environment setup complete")
     except Exception as setup_error:
         logger.error(f"Error during environment setup: {setup_error}")
+        logger.exception(setup_error)
         return
 
     # --- Start Test Run --- #
     logger.info("\n=== Starting Local Test Run ===")
-    test_items_count = 5
+    test_items_count = 5 # Number of dataset items to test
     successful_runs = 0
 
     for i in range(test_items_count):
@@ -202,8 +115,9 @@ async def main():
 
             # Collect trajectories (using group_size from config)
             logger.info(
-                f"Collecting {env_config.group_size} trajectories for this item..."
+                f"Collecting {env.config.group_size} trajectories for this item..."
             )
+            # Use the correct config attribute name (group_size)
             trajectories_data, backlog = await env.collect_trajectories(item)
 
             if not trajectories_data:
@@ -222,6 +136,9 @@ async def main():
                 if assistant_msgs:
                     first_response = assistant_msgs[-1].get("content", "(No content)")
                 logger.info(f"First Response Content: {first_response[:300]}...")
+            else:
+                 logger.warning(f"First trajectory data is empty or not a list: {trajectories_data[0]}")
+
 
             # Score the collected trajectories
             logger.info("Scoring trajectories...")
@@ -230,14 +147,18 @@ async def main():
             # Print scores
             if scored_data and "scores" in scored_data:
                 scores_list = scored_data["scores"]
-                logger.info(f"Scores: {scores_list}")
-                logger.info(f"  Avg Score: {sum(scores_list)/len(scores_list):.4f}")
-                successful_runs += 1
+                if scores_list:
+                     logger.info(f"Scores: {scores_list}")
+                     logger.info(f"  Avg Score: {sum(scores_list)/len(scores_list):.4f}")
+                     successful_runs += 1
+                else:
+                     logger.warning("Scores list is empty in scored_data.")
             else:
                 logger.warning("No scores available in the scored data for this item.")
 
         except Exception as run_error:
-            logger.error(f"Error during test item {i+1}: {run_error}")
+            logger.error(f"Error during test item {i+1}")
+            logger.exception(run_error) # Log full traceback
             # Optionally continue to the next item or break
             # break
 

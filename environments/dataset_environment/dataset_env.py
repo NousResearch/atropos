@@ -66,6 +66,7 @@ class DatasetEnvConfig(BaseEnvConfig):
         None, description="Evaluation dataset config"
     )
     eval_split: Optional[str] = Field(None, description="Evaluation dataset split")
+    debug_mode: bool = Field(False, description="Enable debug logging")
 
 
 class DatasetEnv(BaseEnv):
@@ -79,6 +80,14 @@ class DatasetEnv(BaseEnv):
         self.dataset = None
         self.iter = 0
         self.metric_buffer = {}
+
+        # Store debug mode and set logger level
+        self.debug_mode = config.debug_mode
+        if self.debug_mode:
+            logger.setLevel(logging.DEBUG)
+        else:
+            if logger.level == logging.NOTSET or logger.level > logging.WARNING:
+                logger.setLevel(logging.WARNING) # Default to WARNING
 
         self.reward_function = self._initialize_reward_function()
 
@@ -416,43 +425,57 @@ class DatasetEnv(BaseEnv):
                 )
                 raw = {}
 
+            # Ensure debug_mode exists before creating config
+            if 'debug_mode' not in raw:
+                 raw['debug_mode'] = False # Default if missing in YAML
+
             env_conf = DatasetEnvConfig(**raw)
             server_confs = []
 
-            for sc in raw.get("server_configs", []):
-                api_key = sc.get("api_key", os.getenv("OPENAI_API_KEY", "x"))
-                server_confs.append(
-                    OpenaiConfig(
-                        model_name=sc.get(
-                            "model_name",
-                            os.getenv(
-                                "OPENAI_MODEL",
-                                "NousResearch/DeepHermes-3-Llama-3-8B-Preview",
-                            ),
-                        ),
-                        base_url=sc.get(
-                            "base_url",
-                            os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
-                        ),
-                        api_key=api_key,
-                        num_requests_for_eval=sc.get("num_requests_for_eval", 256),
-                    )
-                )
+            # Updated server config loading
+            for sc_data in raw.get("server_configs", []):
+                # Get values directly from YAML data
+                model_name = sc_data.get("model_name", os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"))
+                base_url = sc_data.get("base_url", os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"))
+                num_requests = sc_data.get("num_requests_for_eval", 256)
 
-            if not server_confs:
+                # Special handling for api_key: YAML -> Env Var -> "x"
+                api_key = sc_data.get("api_key")
+                if not api_key:
+                    api_key = os.getenv("OPENAI_API_KEY")
+                if not api_key:
+                    api_key = "x"
+                    logger.warning("API key not found in config or OPENAI_API_KEY env var. Defaulting to 'x'.")
+                else:
+                    masked_key = api_key[:4] + "****" + api_key[-4:] if api_key != "x" and len(api_key) > 8 else api_key
+                    logger.debug(f"Using API key: {masked_key}")
+
+                openai_config_args = {
+                    "model_name": model_name,
+                    "api_key": api_key,
+                    "num_requests_for_eval": num_requests,
+                    "base_url": base_url,
+                }
+                logger.info(f"Creating OpenaiConfig with args: model='{model_name}', base_url='{base_url}', key_present={api_key != 'x'}, requests={num_requests}")
+                server_confs.append(OpenaiConfig(**openai_config_args))
+
+            # Provide a default server config ONLY if server_configs was completely missing
+            if "server_configs" not in raw:
+                logger.warning("No 'server_configs' section found in YAML, creating default server config.")
+                default_api_key = os.getenv("OPENAI_API_KEY")
+                if not default_api_key:
+                    default_api_key = "x"
+                    logger.warning("Defaulting API key to 'x' for default server config.")
+
                 server_confs = [
                     OpenaiConfig(
-                        model_name=os.getenv(
-                            "OPENAI_MODEL",
-                            "NousResearch/DeepHermes-3-Llama-3-8B-Preview",
-                        ),
-                        base_url=os.getenv(
-                            "OPENAI_API_BASE", "http://localhost:9004/v1"
-                        ),
-                        api_key=os.getenv("OPENAI_API_KEY", "x"),
+                        model_name=os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"),
+                        base_url=os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
+                        api_key=default_api_key,
                         num_requests_for_eval=256,
                     )
                 ]
+                logger.info(f"Created default OpenaiConfig: model='{server_confs[0].model_name}', base_url='{server_confs[0].base_url}', key_present={server_confs[0].api_key != 'x'}")
 
             return env_conf, server_confs
 

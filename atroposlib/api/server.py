@@ -239,6 +239,8 @@ async def scored_data_list(scored_data_list: List[ScoredData]):
                 "masks": scored_data.masks,
                 "scores": scored_data.scores,
                 "ref_logprobs": scored_data.ref_logprobs,
+                "overrides": scored_data.overrides,
+                "group_overrides": scored_data.group_overrides,
                 "images": scored_data.images,
             }
         )
