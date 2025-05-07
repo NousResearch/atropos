@@ -91,8 +91,8 @@ class BaseEnvConfig(BaseModel):
         description="Inference weight, set to -1 to ignore it if you're doing something special here.",
     )
     batch_size: int = Field(
-        default=1024,
-        description="Batch size for training. Default is 1024. Can be set in environment-specific YAML configs or overridden by the trainer/server.",  # noqa: E501
+        default=-1,
+        description="Batch size for training. Default is -1, typically set by environment-specific YAML configs or overridden by the trainer/server.",  # noqa: E501
     )
     max_batches_offpolicy: int = Field(
         default=3, description="Maximum number of batches to have in queue."
@@ -623,6 +623,33 @@ class BaseEnv(ABC):
             batch.setdefault("ref_logprobs", None)
             batch.setdefault("overrides", None)
             batch.setdefault("group_overrides", None)
+
+            # Check if all mask sequences in the batch are empty
+            all_masks_empty = True
+            # Ensure 'masks' key exists and is a list
+            masks_list = batch.get("masks")
+            if isinstance(masks_list, list):
+                if not masks_list: # Empty list of masks means all (zero) masks are effectively empty
+                    pass # all_masks_empty remains true
+                else:
+                    for mask_sequence in masks_list:
+                        if len(mask_sequence) > 0:
+                            all_masks_empty = False
+                            break
+            else:
+                # 'masks' key is missing or not a list, treat as problematic for this check
+                logger.warning(
+                    f"Skipping batch due to missing or invalid 'masks' key. Batch keys: {list(batch.keys())}"
+                )
+                continue # Skip this batch
+
+            if all_masks_empty:
+                logger.warning(
+                    f"Skipping batch because all mask sequences are empty. Group size: {len(masks_list) if masks_list is not None else 'N/A'}. "
+                    f"First few scores: {str(batch.get('scores', [])[:3])}"
+                )
+                continue # Skip this batch
+
             valid_batches.append(batch)
 
         if not valid_batches:
