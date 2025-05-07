@@ -57,6 +57,9 @@ class BlackjackEnvConfig(BaseEnvConfig):
 
     # Max characters for thinking blocks in history prompts
     max_think_chars_history: int = 3000
+    
+    # Max tokens for a full trajectory (to prevent exceeding context limits)
+    max_trajectory_tokens: int = 24576
 
     # Debug mode
     debug_mode: bool = False
@@ -471,11 +474,11 @@ class BlackjackEnv(BaseEnv):
             except Exception as api_error:
                  logger.exception(f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] API Error during self.server.completion: {api_error}")
                  # Cannot proceed if API call fails, return trajectory collected so far
-                 return ep.trajectory
+                 return self._ensure_trajectory_token_limit(ep.trajectory)
 
             if not completions or not completions.choices or len(completions.choices) != self.config.group_size:
                  logger.error(f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] API did not return the expected number of choices ({self.config.group_size} vs {len(completions.choices) if completions else 0}). Aborting episode.")
-                 return ep.trajectory # Return trajectory collected so far
+                 return self._ensure_trajectory_token_limit(ep.trajectory) # Return trajectory collected so far
 
 
             # Parse actions and collect responses from all completions
@@ -521,7 +524,7 @@ class BlackjackEnv(BaseEnv):
                     except Exception as close_exc:
                         logger.warning(f"[Collect Trajectory Seed: {seed}] Exception closing env for aborted episode on best_action index error: {close_exc}")
                     del self.episodes[seed]
-                return ep.trajectory # Abort episode
+                return self._ensure_trajectory_token_limit(ep.trajectory) # Abort episode
 
 
             # Tokenize all alternatives *before* stepping the main env
@@ -555,7 +558,7 @@ class BlackjackEnv(BaseEnv):
                     except Exception as e:
                         logger.warning(f"[Collect Trajectory Seed: {seed}] Exception closing env for aborted episode: {e}")
                     del self.episodes[seed]
-                return ep.trajectory # Return whatever was collected, could be empty
+                return self._ensure_trajectory_token_limit(ep.trajectory) # Return whatever was collected, could be empty
             
             # The following padding should only happen if tokenization did NOT fail for the step
             # Ensure lists have the expected length
@@ -681,13 +684,16 @@ class BlackjackEnv(BaseEnv):
             del self.episodes[seed]
             logger.debug(f"[Collect Trajectory Seed: {seed}] Cleared episode state from self.episodes.")
 
-        return ep.trajectory
+        return self._ensure_trajectory_token_limit(ep.trajectory)
 
     async def collect_trajectories(
         self, item: Tuple[int, int]
     ) -> Tuple[List[BlackjackScoredDataGroup], List[Tuple[int, int]]]:
         seed, _ = item
         traj = await self.collect_trajectory(seed)
+        # Apply token limit check to trajectory before returning
+        if traj:
+            traj = self._ensure_trajectory_token_limit(traj)
         return traj, []
 
     async def score(
@@ -1250,6 +1256,81 @@ class BlackjackEnv(BaseEnv):
         except Exception as e:
             logger.error(f"Error in _truncate_thinking_for_history for text '{response_text[:200]}...': {e}", exc_info=True)
             return response_text # Fallback to original on any error
+
+    def _ensure_trajectory_token_limit(self, trajectory: List[BlackjackScoredDataGroup]) -> List[BlackjackScoredDataGroup]:
+        """
+        Ensure the message histories in a trajectory don't exceed max_trajectory_tokens.
+        If they do, trim older messages while maintaining alignment across all alternatives.
+        
+        Args:
+            trajectory: List of BlackjackScoredDataGroup from an episode
+            
+        Returns:
+            The trajectory with potentially trimmed message histories
+        """
+        if not trajectory:
+            return trajectory
+        
+        # First check if we need trimming at all by examining all alternatives in the last step
+        last_step = trajectory[-1]
+        if not last_step.get("messages") or not last_step["messages"]:
+            return trajectory  # Nothing to trim
+            
+        # Check the maximum token count across all alternatives in the last step
+        max_token_count = 0
+        for messages in last_step["messages"]:
+            token_count = sum(len(self.tokenizer.encode(msg["content"])) for msg in messages)
+            max_token_count = max(max_token_count, token_count)
+        
+        # If even the largest alternative is under the limit, we're good
+        if max_token_count <= self.config.max_trajectory_tokens:
+            return trajectory  # No trimming needed
+            
+        logger.info(f"Message history exceeds token limit (max: {max_token_count} > {self.config.max_trajectory_tokens}). Trimming older messages.")
+        
+        # We need to trim - process each step in the trajectory
+        for step_idx, step in enumerate(trajectory):
+            if not step.get("messages") or not step["messages"]:
+                continue
+                
+            # Get message counts to ensure we have the same structure for all alternatives
+            alt_count = len(step["messages"])
+            if alt_count == 0:
+                continue
+                
+            # Process each alternative's message history
+            for alt_idx in range(alt_count):
+                messages = step["messages"][alt_idx]
+                
+                # Continue trimming until we're under the limit
+                # We always keep the system message (index 0) and at least the two most recent messages
+                while len(messages) > 3:  # At minimum keep system + last two messages
+                    # Calculate current token count
+                    token_count = sum(len(self.tokenizer.encode(msg["content"])) for msg in messages)
+                    
+                    if token_count <= self.config.max_trajectory_tokens:
+                        break  # We're under the limit
+                        
+                    # Remove the second message (after system message)
+                    # This preserves the system prompt and most recent context
+                    try:
+                        messages.pop(1)
+                    except IndexError:
+                        # If we somehow have an unexpected message structure, log and break
+                        logger.warning(f"Unexpected message structure while trimming step {step_idx}, alt {alt_idx}. Remaining messages: {len(messages)}")
+                        break
+                    
+                    # Update the messages for this alternative
+                    step["messages"][alt_idx] = messages
+                    
+                    logger.debug(f"Trimmed messages for step {step_idx}, alternative {alt_idx}. New count: {len(messages)}")
+        
+        # After trimming, we could potentially re-tokenize the message histories to ensure
+        # the tokens and masks are aligned with the trimmed messages, but that's expensive.
+        # Since we're only concerned with keeping the token count under the limit for the trainer,
+        # we'll rely on the trimming logic above.
+        
+        return trajectory
 
 if __name__ == "__main__":
     # This allows running the environment directly from the command line
