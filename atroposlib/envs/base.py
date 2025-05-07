@@ -91,8 +91,8 @@ class BaseEnvConfig(BaseModel):
         description="Inference weight, set to -1 to ignore it if you're doing something special here.",
     )
     batch_size: int = Field(
-        default=-1,
-        description="Batch size for training, will be set by the trainer and passed in via the fastapi interface, if applicable",  # noqa: E501
+        default=1024,
+        description="Batch size for training. Default is 1024. Can be set in environment-specific YAML configs or overridden by the trainer/server.",  # noqa: E501
     )
     max_batches_offpolicy: int = Field(
         default=3, description="Maximum number of batches to have in queue."

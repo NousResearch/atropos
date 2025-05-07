@@ -52,6 +52,9 @@ class BlackjackEnvConfig(BaseEnvConfig):
     format_reward_weight: float = 0.2
     environment_reward_weight: float = 0.8
 
+    # Batch size for this environment
+    batch_size: int = 1024
+
     # Debug mode
     debug_mode: bool = False
 
@@ -515,6 +518,7 @@ class BlackjackEnv(BaseEnv):
             alt_tokens: List[List[int]] = []
             alt_masks: List[List[int]] = []
             alt_messages: List[List[Message]] = []
+            tokenization_failed_for_step = False # Flag to track tokenization failure
             for response in alt_responses:
                 step_msgs: List[Message] = [
                     {"role": m["role"], "content": m["content"]}
@@ -528,16 +532,27 @@ class BlackjackEnv(BaseEnv):
                      alt_masks.append(out["masks"])
                      alt_messages.append(step_msgs)
                 except Exception as tokenization_error:
-                      logger.exception(f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Error tokenizing response: {response[:100]}... Error: {tokenization_error}")
-                      alt_tokens.append([])
-                      alt_masks.append([])
-                      alt_messages.append([{"role":"system", "content":"Tokenization Failed"}])
+                      logger.exception(f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Critical tokenization error for response: {response[:100]}... Error: {tokenization_error}. Aborting episode.")
+                      tokenization_failed_for_step = True
+                      break # Break from loop over alt_responses
 
-            # Ensure lists have the expected length even if tokenization failed
+            if tokenization_failed_for_step:
+                logger.warning(f"[Collect Trajectory Seed: {seed}] Episode aborted at turn {turn+1} due to tokenization failure.")
+                # Clean up this partially failed episode before returning
+                if seed in self.episodes: # Check before accessing
+                    try:
+                        self.episodes[seed].env.close()
+                    except Exception as e:
+                        logger.warning(f"[Collect Trajectory Seed: {seed}] Exception closing env for aborted episode: {e}")
+                    del self.episodes[seed]
+                return ep.trajectory # Return whatever was collected, could be empty
+            
+            # The following padding should only happen if tokenization did NOT fail for the step
+            # Ensure lists have the expected length
             expected_len = self.config.group_size
             if len(alt_tokens) != expected_len: alt_tokens.extend([[]] * (expected_len - len(alt_tokens)))
             if len(alt_masks) != expected_len: alt_masks.extend([[]] * (expected_len - len(alt_masks)))
-            if len(alt_messages) != expected_len: alt_messages.extend([[{"role":"system", "content":"Tokenization Failed"}]] * (expected_len - len(alt_messages)))
+            if len(alt_messages) != expected_len: alt_messages.extend([[{"role":"system", "content":"Missing due to prior success but unexpected count"}]] * (expected_len - len(alt_messages)))
 
 
             # Step the main environment with the selected best action
@@ -1058,121 +1073,103 @@ class BlackjackEnv(BaseEnv):
         default_config_filename = "blackjack_default.yaml"
 
         if config_name_or_path is None:
-            # No input, use default relative to this env
             cfg_path = os.path.join(current_dir, "configs", default_config_filename)
             logger.info(f"No config specified, using default: {cfg_path}")
         elif os.path.isabs(config_name_or_path):
-            # Absolute path provided
             cfg_path = config_name_or_path
             logger.info(f"Absolute config path provided: {cfg_path}")
-            # Optional: Check if it ends with .yaml, though absolute path should be precise
-            if not os.path.splitext(cfg_path)[1]:
+            if not os.path.splitext(cfg_path)[1]: # Check for file extension
                  logger.warning(f"Absolute config path {cfg_path} seems to be missing a file extension.")
         else:
-            # Relative name/path provided, assume relative to this env's config dir
-            # Ensure it ends with .yaml
+            config_filename = config_name_or_path
             if not config_name_or_path.endswith(".yaml"):
-                config_filename = config_name_or_path + ".yaml"
-            else:
-                config_filename = config_name_or_path
+                config_filename += ".yaml"
             cfg_path = os.path.join(current_dir, "configs", config_filename)
             logger.info(f"Relative config name '{config_name_or_path}' provided, resolving to: {cfg_path}")
 
         logger.debug(f"Final config path to check for existence: {cfg_path}")
 
-        raw = {}
+        raw_yaml_data = {}
         try:
             if os.path.exists(cfg_path):
                 with open(cfg_path) as f:
-                    raw = yaml.safe_load(f) or {}
+                    raw_yaml_data = yaml.safe_load(f) or {} # Ensure dict even if file is empty/null
                 logger.info(f"Loaded config from {cfg_path}")
             else:
                 logger.warning(
-                    f"Config file not found at {cfg_path}, using default BlackjackEnvConfig settings."
+                    f"Config file not found at {cfg_path}, using default BlackjackEnvConfig settings and default server config."
                 )
-                # raw remains empty, defaults from BlackjackEnvConfig will be used
+                # raw_yaml_data remains empty, leading to defaults.
 
-            # Separate base keys and blackjack-specific keys
-            blackjack_specific_raw = raw.pop("blackjack", {}) # Extract and remove blackjack dict
-            # Base keys are what remains in raw (excluding server_configs handled separately)
-            base_raw = {k: v for k, v in raw.items() if k != "server_configs"}
+            # Prepare data for BlackjackEnvConfig
+            env_conf_data = raw_yaml_data.copy()
+            server_configs_list_from_yaml = env_conf_data.pop("server_configs", []) # Pop for separate processing
 
-            # Combine base and specific configs, specific ones overwrite base if names clash
-            combined_config_data = base_raw.copy()
-            combined_config_data.update(blackjack_specific_raw)
-
-            # Create BlackjackEnvConfig instance using combined data
-            # Ensure boolean flags like debug_mode are present if not in combined_data
-            if 'debug_mode' not in combined_config_data:
-                combined_config_data['debug_mode'] = False # Default if missing
-
-            env_conf = BlackjackEnvConfig(**combined_config_data)
+            # Apply 'blackjack' section overrides if present
+            if "blackjack" in env_conf_data:
+                blackjack_overrides = env_conf_data.pop("blackjack")
+                if isinstance(blackjack_overrides, dict):
+                    env_conf_data.update(blackjack_overrides) # Overrides take precedence
+                else:
+                    logger.warning(f"'blackjack' section in config YAML is not a dictionary (type: {type(blackjack_overrides)}), ignoring.")
+            
+            # Pydantic will use BlackjackEnvConfig's defined defaults for any missing keys
+            env_conf = BlackjackEnvConfig(**env_conf_data)
             logger.debug(f"Initialized BlackjackEnvConfig: {env_conf}")
 
-            # Create OpenaiConfig instances from the original raw data
+            # --- Process server_configs ---
             server_confs = []
-            # Use raw.get("server_configs", []) which contains the list of dicts from YAML
-            for sc_data in raw.get("server_configs", []):
-                # Get values directly from the loaded YAML dict (sc_data)
-                # Provide fallbacks if keys are missing in the YAML dict itself
-                model_name = sc_data.get("model_name", os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"))
-                base_url = sc_data.get("base_url", os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"))
-                num_requests = sc_data.get("num_requests_for_eval", 256)
+            # Check if server_configs_list_from_yaml is not None and is a list,
+            # it defaults to [] if key missing, but could be None if YAML has `server_configs: null`
+            if isinstance(server_configs_list_from_yaml, list):
+                for sc_data in server_configs_list_from_yaml:
+                    if not isinstance(sc_data, dict):
+                        logger.warning(f"Skipping non-dictionary item in server_configs: {sc_data}")
+                        continue
+                    
+                    current_params = sc_data.copy()
 
-                # Special handling for api_key: YAML -> Env Var -> "x"
-                api_key = sc_data.get("api_key") # Get from YAML first
-                if not api_key: # If missing or empty in YAML
-                    api_key = os.getenv("OPENAI_API_KEY") # Try environment variable
-                if not api_key: # If still missing or empty
-                    api_key = "x" # Default to "x" (for local server assumption)
-                    logger.warning("API key not found in config or OPENAI_API_KEY env var. Defaulting to 'x'.")
-                else:
-                     # Mask the key partially for logging if it's not 'x'
-                     masked_key = api_key[:4] + "****" + api_key[-4:] if api_key != "x" and len(api_key) > 8 else api_key
-                     logger.debug(f"Using API key: {masked_key}")
+                    # API Key: YAML value (even empty) -> Environment Variable -> "x"
+                    resolved_api_key = sc_data.get("api_key")
+                    if resolved_api_key is None or resolved_api_key == "":
+                        resolved_api_key = os.getenv("OPENAI_API_KEY")
+                    if resolved_api_key is None or resolved_api_key == "":
+                        resolved_api_key = "x"
+                    current_params["api_key"] = resolved_api_key
 
-
-                openai_config_args = {
-                    "model_name": model_name,
-                    "api_key": api_key,
-                    "num_requests_for_eval": num_requests,
-                    "base_url": base_url,
-                }
-                logger.warning(f"Creating OpenaiConfig with args: model='{model_name}', base_url='{base_url}', key_present={api_key != 'x'}, requests={num_requests}")
-                server_confs.append(OpenaiConfig(**openai_config_args))
-
-            # Provide a default server config ONLY if server_configs was completely missing from YAML
-            if "server_configs" not in raw:
-                logger.warning("No 'server_configs' section found in YAML, creating default server config.")
-                # Default API key logic
-                default_api_key = os.getenv("OPENAI_API_KEY")
-                if not default_api_key:
-                    default_api_key = "x"
-                    logger.warning("Defaulting API key to 'x' for default server config.")
-
+                    # Apply Blackjack-specific defaults for model and base_url if not in sc_data
+                    # These override OpenaiConfig's generic default_factories if needed for Blackjack.
+                    if "model_name" not in current_params:
+                        current_params["model_name"] = os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview")
+                    if "base_url" not in current_params:
+                        current_params["base_url"] = os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1")
+                    # num_requests_for_eval will use OpenaiConfig's Pydantic default (256) if not in current_params.
+                    
+                    server_confs.append(OpenaiConfig(**current_params))
+            elif "server_configs" not in raw_yaml_data: # server_configs key was completely MISSING
+                logger.warning("No 'server_configs' key found in YAML, creating default Blackjack server config.")
                 server_confs = [
                     OpenaiConfig(
                         model_name=os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"),
                         base_url=os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
-                        api_key=default_api_key,
-                        num_requests_for_eval=256,
+                        api_key=os.getenv("OPENAI_API_KEY", "x") 
+                        # num_requests_for_eval=256 comes from OpenaiConfig Pydantic default
                     )
                 ]
-                logger.warning(f"Created default OpenaiConfig: model='{server_confs[0].model_name}', base_url='{server_confs[0].base_url}', key_present={server_confs[0].api_key != 'x'}")
-
+            # If server_configs was present but null or not a list, server_confs might be empty or minimally populated.
 
             return env_conf, server_confs
 
         except Exception as e:
-            logger.exception(f"Error loading config from {cfg_path}: {e}")
-            logger.warning("Falling back to default configurations due to error.")
-            # Fall back to default configs on error
+            cfg_path_for_log = cfg_path if 'cfg_path' in locals() else 'unknown path'
+            logger.exception(f"Error loading or parsing config from {cfg_path_for_log}: {e}")
+            logger.warning("Falling back to default Blackjack configurations due to error.")
             return BlackjackEnvConfig(), [
                 OpenaiConfig(
-                    model_name=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-                    base_url=os.getenv("OPENAI_API_BASE"),
-                    api_key=os.getenv("OPENAI_API_KEY", ""),
-                    num_requests_for_eval=1,
+                    model_name=os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"),
+                    base_url=os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
+                    api_key=os.getenv("OPENAI_API_KEY", "x"),
+                    num_requests_for_eval=1 # Minimal eval requests on error
                 )
             ]
 

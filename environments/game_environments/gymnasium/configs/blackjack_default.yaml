@@ -10,7 +10,7 @@ rollout_server_url: "http://localhost:8000"
 total_steps: 1000
 batch_size: 1024
 steps_per_eval: 20
-max_token_length: 16384
+max_token_length: 15360
 wandb_name: "blackjack_tool_calling"
 ensure_scores_are_not_same: true
 
