@@ -100,17 +100,24 @@ async def register(registration: Registration):
 
 @app.post("/register-env")
 async def register_env_url(register_env: RegisterEnv):
-    # Check if essential state from /register has been initialized
-    required_attrs = ["envs", "status_dict", "checkpoint_dir", "save_checkpoint_interval", "num_steps"]
-    for attr in required_attrs:
-        if not hasattr(app.state, attr):
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Server state not fully initialized. Missing '{attr}'. Please ensure the trainer has registered first."
-            )
-
-    # Original logic proceeds if state is initialized
-    checkpoint_dir = app.state.checkpoint_dir
+    try:
+        if not app.state.started:
+            return {
+                "status": "wait for trainer to start",
+            }
+    except AttributeError:
+        return {
+            "status": "wait for trainer to start",
+        }
+    try:
+        isinstance(app.state.envs, list)
+    except AttributeError:
+        app.state.envs = []
+    checkpoint_dir = ""
+    try:
+        checkpoint_dir = app.state.checkpoint_dir
+    except AttributeError:
+        pass
     real_name = (
         f"{register_env.desired_name}_"
         f"{len([x for x in app.state.envs if x['desired_name'] == register_env.desired_name])}"
