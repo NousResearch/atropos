@@ -342,6 +342,7 @@ class BlackjackEnv(BaseEnv):
         
         # This list will store the BlackjackScoredDataGroup for each step of the single trajectory
         trajectory_data_for_trainer: List[BlackjackScoredDataGroup] = [] 
+        episode_summary_metrics: Optional[Dict[str, Any]] = None # Initialize here
 
         logger.info(f"[Collect Trajectory Seed: {seed}] Starting trajectory. Group size G={G}, MC samples K={K}.")
 
@@ -632,10 +633,10 @@ class BlackjackEnv(BaseEnv):
 
     async def collect_trajectories(self, item: Tuple[int, int]) -> Tuple[List[BlackjackScoredDataGroup], List[Tuple[int, int]]]:
         seed, _ = item
-        traj = await self.collect_trajectory(seed)
+        traj = await self.collect_trajectory(seed) # No longer returns episode_summary directly
         if not traj:
             logger.warning(f"[Collect Trajectories] Empty trajectory for seed {seed}.")
-        return traj, []
+        return traj, [] # Adheres to BaseEnv's expected Tuple[List[ScoredDataGroup], List[Item]]
 
     async def setup(self):
         pass

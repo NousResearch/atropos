@@ -75,28 +75,40 @@ async def main():
         # This also initializes the message history correctly
         _ = env._get_or_create_episode(seed)
 
-        result = await env.collect_trajectory(seed)
-        logger.info(f"Trajectory collection complete with {len(result)} steps.")
+        result_trajectory = await env.collect_trajectory(seed)
+        logger.info(f"Trajectory collection complete with {len(result_trajectory)} steps.")
 
-        # Get episode state for summary (should exist now)
-        if seed in env.episodes:
-            episode_state = env.episodes[seed]
+        episode_summary = None
+        if env.completed_episode_metrics_buffer:
+            # Assume the last entry in the buffer corresponds to the trajectory just run
+            episode_summary = env.completed_episode_metrics_buffer[-1]
+            # Optionally, clear the buffer if this script is only for single runs
+            # env.completed_episode_metrics_buffer.clear()
 
+        if episode_summary and episode_summary.get("seed") == seed:
             # Print a final summary
             logger.info("\n========== Episode Summary ==========")
-            logger.info(f"Seed: {seed}")
-            logger.info(f"Total steps taken: {episode_state.num_steps}")
-            logger.info(f"Final Environment reward: {episode_state.total_reward:.2f}")
+            logger.info(f"Seed: {episode_summary['seed']}")
+            logger.info(f"Total steps taken: {episode_summary['num_steps']}")
+            logger.info(f"Final Environment reward: {episode_summary['total_reward']:.2f}")
+
+            game_outcome_val = episode_summary.get('game_outcome', 0)
+            outcome_str = "Draw"
+            if game_outcome_val == 1:
+                outcome_str = "Win"
+            elif game_outcome_val == -1:
+                outcome_str = "Loss"
+            logger.info(f"Game Outcome: {outcome_str} (Reward: {episode_summary['total_reward']:.0f})")
 
             # Calculate and log action accuracy based on EpisodeState fields
-            if episode_state.num_total_actions > 0:
-                accuracy = episode_state.num_correct_actions / episode_state.num_total_actions
-                logger.info(f"Action accuracy (valid tool calls): {episode_state.num_correct_actions}/{episode_state.num_total_actions} ({accuracy:.2%})")
+            if episode_summary['num_total_actions'] > 0:
+                accuracy = episode_summary['num_correct_actions'] / episode_summary['num_total_actions']
+                logger.info(f"Action accuracy (valid tool calls): {episode_summary['num_correct_actions']}/{episode_summary['num_total_actions']} ({accuracy:.2%})")
             else:
                 logger.info("Action accuracy (valid tool calls): No tool calls attempted or recorded.")
             logger.info("=======================================")
         else:
-            logger.error(f"Could not find episode state for seed {seed} after running trajectory.")
+            logger.error(f"Could not get episode summary for seed {seed} from metrics buffer or seed mismatch.")
 
     except Exception as e:
         logger.exception(f"An error occurred during trajectory collection or summary: {e}")

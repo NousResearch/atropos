@@ -379,8 +379,7 @@ class BlackjackEnv(BaseEnv):
 
     async def collect_trajectory(
         self,
-        seed: int,
-        interactive: bool = False,
+        seed: int
     ) -> List[BlackjackScoredDataGroup]:
         """
         Run a single episode from the given seed, using a best-of-n approach each step.
