@@ -313,7 +313,10 @@ class BlackjackEnv(BaseEnv):
                         rollout_reward_for_this_sample += reward_mc_step # Accumulate reward for this MC rollout
                         
                         # Update message history for the *next* turn of this MC rollout
-                        current_mc_messages.append({"role": "agent", "content": full_agent_response})
+                        # Truncate thinking to save space in the message history
+                        response_for_history = self._truncate_thinking_for_history(full_agent_response, self.config.max_think_chars_history)
+                        current_mc_messages.append({"role": "agent", "content": response_for_history})
+                        
                         if sim_obs_next is not None:
                             current_mc_messages.append({"role": "environment", "content": self._format_observation(sim_obs_next)})
                         
@@ -538,8 +541,14 @@ class BlackjackEnv(BaseEnv):
             chosen_full_response = alt_full_responses[best_advantage_idx]
             chosen_raw_env_reward = alt_raw_rewards[best_advantage_idx]
             chosen_is_terminal = alt_is_terminal[best_advantage_idx]
+            chosen_parsed_action = alt_parsed_actions[best_advantage_idx] # For action accuracy
             
             logger.info(f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Chosen action to step env: {chosen_env_action} (from Alt {best_advantage_idx} with Adv {alt_advantages[best_advantage_idx]:.2f})")
+
+            # --- Update action accuracy for the chosen action ---
+            ep.num_total_actions += 1
+            if chosen_parsed_action != -1: # -1 indicates a parsing error
+                ep.num_correct_actions += 1
 
             # --- Update main episode state --- 
             # Action was already added during simulation loop, need to ensure it matches chosen one?
@@ -548,7 +557,10 @@ class BlackjackEnv(BaseEnv):
             # The history was advanced with *all* potential responses temporarily during eval loop,
             # we need to reset it and add only the chosen one + actual env observation.
             ep.message_history = current_state_messages # Reset to state before this turn's agent responses
-            ep.message_history.append({"role": "agent", "content": chosen_full_response}) # Add chosen response
+            
+            # Truncate thinking for history to save space
+            response_for_history = self._truncate_thinking_for_history(chosen_full_response, self.config.max_think_chars_history)
+            ep.message_history.append({"role": "agent", "content": response_for_history}) # Add chosen response
             
             # Re-step the *main* environment with the chosen action to get definitive obs for history
             # (This seems redundant if the simulation was correct, but safer for state consistency)
@@ -583,6 +595,25 @@ class BlackjackEnv(BaseEnv):
         # --- End of single trajectory collection --- 
         final_raw_reward = sum(ep.step_rewards) if ep.step_rewards else 0.0
         logger.info(f"[Collect Trajectory Seed: {seed}] Finished collecting trajectory. Steps collected: {len(trajectory_data_for_trainer)}, Final raw reward: {final_raw_reward:.2f}")
+
+        # Populate metrics for wandb logging
+        if ep: # Ensure episode state exists
+            game_outcome = 0
+            if final_raw_reward > 0:
+                game_outcome = 1
+            elif final_raw_reward < 0:
+                game_outcome = -1
+            
+            episode_summary_metrics = {
+                "seed": ep.seed,
+                "total_reward": final_raw_reward, # Sum of environment rewards for the episode
+                "num_steps": ep.num_steps,
+                "num_correct_actions": ep.num_correct_actions,
+                "num_total_actions": ep.num_total_actions,
+                "game_outcome": game_outcome,
+            }
+            self.completed_episode_metrics_buffer.append(episode_summary_metrics)
+            logger.debug(f"[Collect Trajectory Seed: {seed}] Added episode summary to buffer: {episode_summary_metrics}")
 
         # Clean up the main episode environment if it still exists
         if seed in self.episodes:
@@ -656,8 +687,11 @@ class BlackjackEnv(BaseEnv):
             metrics["total_reward"] += reward
             metrics["num_turns"] = turn + 1
             
-            # Update message history with the full agent response
-            ep.message_history.append({"role": "agent", "content": full_agent_response})
+            # Truncate thinking for history to save space
+            response_for_history = self._truncate_thinking_for_history(full_agent_response, self.config.max_think_chars_history)
+            
+            # Update message history with the truncated agent response
+            ep.message_history.append({"role": "agent", "content": response_for_history})
             
             if obs:
                 ep.message_history.append({"role": "environment", "content": self._format_observation(obs)})
@@ -773,35 +807,214 @@ class BlackjackEnv(BaseEnv):
             )]
 
     def _truncate_thinking_for_history(self, response_text: str, max_chars: int) -> str:
+        """Helper to truncate the <think> block of a response for message history."""
         try:
-            think_start = "<think>"
-            think_end = "</think>"
-            start_idx = response_text.find(think_start)
-            end_idx = response_text.find(think_end)
-            if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
-                before = response_text[:start_idx + len(think_start)]
-                content = response_text[start_idx + len(think_start):end_idx].strip()
-                after = response_text[end_idx:]
-                if len(content) > max_chars:
-                    truncated = "... " + content[-max_chars:].lstrip()
-                    return f"{before}\n{truncated}\n{after}"
-                return response_text
-            return response_text
+            think_start_tag = "<think>"
+            think_end_tag = "</think>"
+            
+            think_start_idx = response_text.find(think_start_tag)
+            think_end_idx = response_text.find(think_end_tag)
+
+            if think_start_idx != -1 and think_end_idx != -1 and think_start_idx < think_end_idx:
+                part_before_content = response_text[:think_start_idx + len(think_start_tag)]
+                original_think_content = response_text[think_start_idx + len(think_start_tag) : think_end_idx].strip()
+                part_after_content = response_text[think_end_idx:]
+                
+                truncated_think_content = original_think_content
+                is_truncated = False
+
+                if not original_think_content: 
+                    return response_text 
+
+                paragraphs = [p.strip() for p in original_think_content.split('\n\n') if p.strip()]
+                if len(paragraphs) > 0:
+                    last_paragraph = paragraphs[-1]
+                    if len(last_paragraph) < len(original_think_content):
+                        truncated_think_content = last_paragraph
+                        is_truncated = True 
+                    elif len(original_think_content) > max_chars:
+                        truncated_think_content = original_think_content[-max_chars:]
+                        is_truncated = True
+                elif len(original_think_content) > max_chars: 
+                    truncated_think_content = original_think_content[-max_chars:]
+                    is_truncated = True
+
+                if is_truncated and truncated_think_content: 
+                    if not truncated_think_content.startswith("... "):
+                         truncated_think_content = "... " + truncated_think_content.lstrip()
+                
+                if not truncated_think_content.strip() or truncated_think_content.strip() == "...":
+                    final_content_for_block = ""
+                else:
+                    final_content_for_block = f"\n{truncated_think_content.strip()}\n"
+                
+                return f"{part_before_content.rstrip()}{final_content_for_block}{part_after_content.lstrip()}"
+            
+            return response_text 
         except Exception as e:
-            logger.error(f"Error truncating thinking: {e}")
+            logger.error(f"Error in _truncate_thinking_for_history for text '{response_text[:200]}...': {e}", exc_info=True)
             return response_text
 
     def _ensure_trajectory_token_limit(self, trajectory: List[BlackjackScoredDataGroup]) -> List[BlackjackScoredDataGroup]:
-        filtered_trajectory = []
-        for step_idx, step_data in enumerate(trajectory):
-            if not step_data.get("messages") or not step_data.get("tokens") or not step_data.get("masks"):
-                logger.warning(f"[Ensure Token Limit] Step {step_idx} missing data. Skipping.")
+        """
+        Ensure token sequences in a trajectory don't exceed max_trajectory_tokens.
+        Attempts to uniformly truncate older messages (preferably paired turns) from all alternatives within a step.
+        The system prompt, last environment observation, and last agent response are preserved as a minimum.
+        If a step still exceeds the limit after maximum possible truncation, it is discarded.
+
+        Args:
+            trajectory: List of BlackjackScoredDataGroup from an episode
+
+        Returns:
+            The trajectory with potentially truncated messages/tokens/masks or filtered steps
+        """
+        if not trajectory:
+            return trajectory
+
+        filtered_trajectory: List[BlackjackScoredDataGroup] = []
+
+        for step_idx, original_step_data in enumerate(trajectory):
+            logger.info(f"[_ensure_trajectory_token_limit] Step {step_idx} has {len(original_step_data['messages'])} alternatives.")
+            if not original_step_data.get("messages") or not original_step_data.get("tokens") or not original_step_data.get("masks"):
+                logger.warning(f"[_ensure_trajectory_token_limit] Step {step_idx} is missing messages, tokens, or masks. Skipping.")
                 continue
-            max_tokens = max(len(t) for t in step_data["tokens"])
-            if max_tokens <= self.config.max_trajectory_tokens:
-                filtered_trajectory.append(step_data)
+
+            current_step_messages_orig = [msgs.copy() for msgs in original_step_data["messages"]]
+            current_step_tokens_orig = [tkns.copy() for tkns in original_step_data["tokens"]]
+            current_step_masks_orig = [msks.copy() for msks in original_step_data["masks"]]
+            
+            num_alternatives = len(current_step_messages_orig)
+            if num_alternatives == 0:
+                filtered_trajectory.append(original_step_data)
                 continue
-            logger.warning(f"[Ensure Token Limit] Step {step_idx} exceeds token limit ({max_tokens} > {self.config.max_trajectory_tokens}). Discarding.")
+
+            max_initial_tokens = max(len(alt_tokens) for alt_tokens in current_step_tokens_orig)
+
+            if max_initial_tokens <= self.config.max_trajectory_tokens:
+                filtered_trajectory.append(original_step_data) 
+                continue
+
+            logger.info(f"[_ensure_trajectory_token_limit] Step {step_idx} (max tokens: {max_initial_tokens}) exceeds limit ({self.config.max_trajectory_tokens}). Attempting uniform truncation.")
+
+            working_messages = [msgs.copy() for msgs in current_step_messages_orig]
+            working_tokens = [tkns.copy() for tkns in current_step_tokens_orig]
+            working_masks = [msks.copy() for msks in current_step_masks_orig]
+            max_current_tokens = max_initial_tokens
+
+            step_successfully_truncated = False
+            while True: 
+                num_messages_to_pop_per_alt = [0] * num_alternatives 
+                can_truncate_globally = True
+
+                for alt_idx in range(num_alternatives):
+                    alt_msg_list = working_messages[alt_idx]
+                    
+                    min_len_to_preserve = 1 
+                    if len(alt_msg_list) > 0 and alt_msg_list[-1]["role"] in ["agent"]:
+                        min_len_to_preserve += 1 
+                        if len(alt_msg_list) > 1 and alt_msg_list[-2]["role"] == "environment":
+                            min_len_to_preserve +=1 
+                    
+                    if len(alt_msg_list) <= min_len_to_preserve:
+                        num_messages_to_pop_per_alt[alt_idx] = 0
+                        can_truncate_globally = False 
+                        break
+
+                    if (len(alt_msg_list) > 2 and 
+                        alt_msg_list[1]["role"] == "environment" and 
+                        alt_msg_list[2]["role"] == "agent"):
+                        if (len(alt_msg_list) - 2) < min_len_to_preserve:
+                            if (len(alt_msg_list) - 1) < min_len_to_preserve:
+                                num_messages_to_pop_per_alt[alt_idx] = 0 
+                                can_truncate_globally = False
+                                break
+                            else:
+                                num_messages_to_pop_per_alt[alt_idx] = 1 
+                        else:
+                            num_messages_to_pop_per_alt[alt_idx] = 2 
+                    elif len(alt_msg_list) > 1: 
+                         if (len(alt_msg_list) - 1) < min_len_to_preserve:
+                            num_messages_to_pop_per_alt[alt_idx] = 0 
+                            can_truncate_globally = False
+                            break
+                         else:
+                            num_messages_to_pop_per_alt[alt_idx] = 1
+                    else: 
+                        num_messages_to_pop_per_alt[alt_idx] = 0
+                        can_truncate_globally = False
+                        break
+                
+                if not can_truncate_globally: break 
+
+                min_pop_count = float('inf')
+                for count in num_messages_to_pop_per_alt:
+                    if count > 0:
+                        min_pop_count = min(min_pop_count, count)
+                
+                if min_pop_count == float('inf') or min_pop_count == 0: 
+                    break
+
+                successfully_retokenized_all = True
+                new_alt_tokens_list = []
+                new_alt_masks_list = []
+                max_tokens_after_this_trunc = 0
+
+                for alt_idx in range(num_alternatives):
+                    for _ in range(min_pop_count):
+                        if len(working_messages[alt_idx]) > 1: 
+                            working_messages[alt_idx].pop(1)
+                        else: 
+                            logger.error(f"[_ensure_trajectory_token_limit] Critical error during pop for alt {alt_idx}, step {step_idx}.")
+                            successfully_retokenized_all = False
+                            break
+                    if not successfully_retokenized_all: break
+
+                    try:
+                        tokenized_alt = tokenize_for_trainer(self.tokenizer, working_messages[alt_idx])
+                        new_alt_tokens_list.append(tokenized_alt["tokens"])
+                        new_alt_masks_list.append(tokenized_alt["masks"])
+                        max_tokens_after_this_trunc = max(max_tokens_after_this_trunc, len(tokenized_alt["tokens"]))
+                    except Exception as e:
+                        logger.error(f"[_ensure_trajectory_token_limit] Error re-tokenizing alt {alt_idx} in step {step_idx} after truncation: {e}")
+                        successfully_retokenized_all = False
+                        break
+                
+                if not successfully_retokenized_all:
+                    step_successfully_truncated = False 
+                    break 
+
+                working_tokens = new_alt_tokens_list
+                working_masks = new_alt_masks_list
+                max_current_tokens = max_tokens_after_this_trunc
+                logger.debug(f"[_ensure_trajectory_token_limit] Step {step_idx}, after uniform pop of {min_pop_count}, max tokens: {max_current_tokens}")
+
+                if max_current_tokens <= self.config.max_trajectory_tokens:
+                    step_successfully_truncated = True
+                    break
+            
+            if step_successfully_truncated:
+                updated_step_data = BlackjackScoredDataGroup(
+                    seed=original_step_data["seed"],
+                    messages=working_messages,
+                    tokens=working_tokens,
+                    masks=working_masks,
+                    scores=original_step_data["scores"],
+                    parsed_actions=original_step_data["parsed_actions"]
+                )
+                filtered_trajectory.append(updated_step_data)
+                logger.info(f"[_ensure_trajectory_token_limit] Step {step_idx} successfully truncated. Final max tokens: {max_current_tokens}")
+            else:
+                if max_current_tokens > self.config.max_trajectory_tokens:
+                    logger.warning(
+                        f"[_ensure_trajectory_token_limit] Discarding step {step_idx}. Max tokens ({max_current_tokens}) still exceed limit "
+                        f"({self.config.max_trajectory_tokens}) after maximum possible uniform truncation or re-tokenization error."
+                    )
+
+        if len(filtered_trajectory) < len(trajectory):
+            logger.warning(
+                f"[_ensure_trajectory_token_limit] Filtered out {len(trajectory) - len(filtered_trajectory)} steps "
+                f"due to token limit constraints. Original trajectory length: {len(trajectory)}, Filtered: {len(filtered_trajectory)}"
+            )
         return filtered_trajectory
 
     @classmethod
