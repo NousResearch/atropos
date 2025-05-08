@@ -4,9 +4,9 @@ This directory contains RL environments based on OpenAI's Gymnasium.
 
 ## Blackjack Environment
 
-A reinforcement learning environment for Blackjack that uses a best-of-n approach to select actions. The model is trained to make function calls with proper formatting to choose between "hit" and "stick" actions.
+A reinforcement learning environment for Blackjack that uses a best-of-n approach to select actions. The model is trained to make function calls with proper formatting to choose between "hit" and "stick" actions. The training objective here is decisive decision making, and to experiment with an environment where even playing correct strategy can result in a loss (perfect Blackjack strategy results in a statistical edge over time, but never guarantess a win). Will the LLM learn the correct strategy in an emergent fashion after enough games, from the cumulative effect of all rewards?
 
-The environment implements a strategy for multi-step decision-making, aiming to refine credit assignment. This approach is designed to be compatible with GRPO-style training and includes the following key components:
+The environment implements a strategy for multi-step decision-making, aiming to refine credit assignment. This approach is designed to be compatible with GRPO-style RL training and includes the following key components:
 
 1.  **Alternative Generation (Best-of-N):** At each turn, the LLM generates `G` (configurable via `group_size` in the YAML configuration) alternative responses. Each response typically includes a "thinking" phase (e.g., enclosed in `<think> </think>` tags) followed by a structured tool call ("hit" or "stick").
 2.  **Monte Carlo (MC) Value Estimation:** To evaluate game states, the environment employs MC rollouts, inspired by methods like VinePPO to avoid a separate learned value network.
@@ -76,7 +76,7 @@ The Monte Carlo sampling greatly increases the amount of calls to the policy mod
 
 **Example Server Configuration in YAML:**
 
-The `server_configs` section in the YAML directly specifies parameters for the LLM API, including the model name, base URL, and API key. The `api_key` should be set directly in the YAML or handled by the server/client using it if a placeholder like "x" is used.
+The `server_configs` section in the YAML directly specifies parameters for the LLM API, including the model name, base URL, and API key. The `api_key` should be set directly in the YAML or handled by the server/client using it if a placeholder like "x" is used (eg, add a dotenv file and read the key from the environment).
 
 ```yaml
 # Server configuration
