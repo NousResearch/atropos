@@ -6,6 +6,9 @@ This directory contains RL environments based on OpenAI's Gymnasium.
 
 A reinforcement learning environment for Blackjack that uses a best-of-n approach to select actions. The model is trained to make function calls with proper formatting to choose between "hit" and "stick" actions.
 
+For multistep environments, the attempt is to do something similar to (VinePPO)[https://github.com/McGill-NLP/VinePPO], but with GRPO instead. It scores each step (using outcome rewards, whether the trajectory is complete or not), using Monte Carlo estimation to try and approximate the value by rolling out k responses following the current alternative, and then calculating the advantage from that. To prevent blowing
+out the size in the trainer, each individual step is batched and processed seperately (again, similar to VinePPO), and to keep the groups consistent, the state is always reset via selecting the best alternative as the "canonical path". The value estimate hopefully prevents it from being effectively a series of bandits. Given the Blackjack episodes are quite short, a discount factor of 1 is used for simplicity here.
+
 ### Features
 
 - Uses Gymnasium's Blackjack-v1 environment
