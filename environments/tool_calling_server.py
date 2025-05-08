@@ -8,11 +8,11 @@ from datasets import load_dataset
 from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
+    APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
     EvalHandlingEnum,
     Item,
-    OpenaiConfig,
     ScoredDataGroup,
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
@@ -29,7 +29,7 @@ class SingleToolCallingEnv(BaseEnv):
     def __init__(
         self,
         config: BaseEnvConfig,
-        server_configs: List[OpenaiConfig],
+        server_configs: List[APIServerConfig],
         slurm=True,
         testing=False,
     ):
@@ -41,7 +41,7 @@ class SingleToolCallingEnv(BaseEnv):
         self.completion_lengths = []
 
     @classmethod
-    def config_init(self) -> Tuple[BaseEnvConfig, List[OpenaiConfig]]:
+    def config_init(self) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = BaseEnvConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
             group_size=32,
@@ -57,14 +57,14 @@ class SingleToolCallingEnv(BaseEnv):
             eval_limit_ratio=0.1,
         )
         server_configs = [
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9004/v1",
                 api_key="x",
                 num_max_requests_at_once=32,
                 num_requests_for_eval=256,
             ),
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9005/v1",
                 api_key="x",

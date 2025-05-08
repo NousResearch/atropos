@@ -18,7 +18,7 @@ When you initialize `ServerManager` with `slurm=True`:
     *   Servers run on ports starting from `9000` (`9000`, `9001`, `9002`, ...).
     *   The number of server instances per node is determined by `8 // INFER_TP` (where `INFER_TP` is another environment variable, defaulting to 1 if not set, implying 8 servers per node). You should set `INFER_TP` according to your inference server's tensor parallelism configuration if applicable.
     *   The URL format is `http://{node_hostname}:{port}/v1`.
-5.  It uses the *first* configuration object you pass in the `configs` list as a template (for settings like `timeout`, `num_max_requests_at_once`, etc.) and creates specific `OpenaiConfig` objects for each discovered URL.
+5.  It uses the *first* configuration object you pass in the `configs` list as a template (for settings like `timeout`, `num_max_requests_at_once`, etc.) and creates specific `APIServerConfig` objects for each discovered URL.
 6.  The `ServerManager` then load-balances requests across these automatically configured `OpenAIServer` instances.
 
 **Setup Steps:**
@@ -32,18 +32,18 @@ When you initialize `ServerManager` with `slurm=True`:
     *   `export INFER_TP=<your_tensor_parallel_size>` (Optional, defaults to 1. Set this if your inference servers use tensor parallelism and you run fewer than 8 instances per node).
 3.  **Initialize `ServerManager`:** In your Python script:
     ```python
-    from atroposlib.envs.server_handling.server_manager import ServerManager, ServerBaseline, OpenaiConfig
+    from atroposlib.envs.server_handling.server_manager import ServerManager, ServerBaseline, APIServerConfig
 
     # Provide at least one config object. It will be used as a template
     # for Slurm-discovered servers if slurm=True.
     # If you pass ServerBaseline, ensure NUM_TRAINING_NODES and potentially INFER_TP are set.
-    # If you pass a list of OpenaiConfig, the first one is used as the template.
+    # If you pass a list of APIServerConfig, the first one is used as the template.
     base_config = ServerBaseline(
         timeout=1200,
         # other baseline settings...
     )
     # OR
-    # base_config = OpenaiConfig(
+    # base_config = APIServerConfig(
     #     base_url="http://dummy", # This URL is ignored when slurm=True finds nodes
     #     api_key="dummy",
     #     timeout=1200,
@@ -51,7 +51,7 @@ When you initialize `ServerManager` with `slurm=True`:
     # )
 
     server_manager = ServerManager(
-        configs=base_config, # Or [base_config] if using OpenaiConfig
+        configs=base_config, # Or [base_config] if using APIServerConfig
         slurm=True
     )
 
@@ -128,7 +128,7 @@ wait # Wait for background server processes launched with '&'
 
 *   This setup relies on the `scontrol` command being available in the environment where `ServerManager` is initialized.
 *   Ensure network connectivity and firewall rules allow the training node(s) to reach the inference nodes on ports 9000+.
-*   The logic assumes a specific port assignment (9000+) and server count based on `INFER_TP`. If your inference server setup differs (e.g., different ports, different discovery mechanism), you would need to modify `server_manager.py` or manually provide the correct list of `OpenaiConfig` objects instead of relying on `slurm=True`.
+*   The logic assumes a specific port assignment (9000+) and server count based on `INFER_TP`. If your inference server setup differs (e.g., different ports, different discovery mechanism), you would need to modify `server_manager.py` or manually provide the correct list of `APIServerConfig` objects instead of relying on `slurm=True`.
 
 ## Monitoring Inference Nodes with Weights & Biases
 

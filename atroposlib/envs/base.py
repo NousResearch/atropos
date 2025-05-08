@@ -42,7 +42,7 @@ from atroposlib.utils.metrics import get_std_min_max_avg
 
 from ..type_definitions import Item, Message
 from .server_handling.server_manager import (
-    OpenaiConfig,
+    APIServerConfig,
     ServerBaseline,
     ServerManager,
     ServerManagerConfig,
@@ -160,9 +160,10 @@ class BaseEnv(ABC):
     def __init__(
         self,
         config: BaseEnvConfig,
-        server_configs: Union[ServerBaseline, List[OpenaiConfig]],
+        server_configs: Union[ServerBaseline, List[APIServerConfig]],
         slurm=False,
         testing=False,
+        server_class=None,
     ):
         self.items_sent_this_step = 0
         self.eval_runner = None  # type: Optional[asyncio.Task]
@@ -175,7 +176,9 @@ class BaseEnv(ABC):
         self.last_loop_time = None
         self.last_completed_item = None
         self.config = config
-        self.server = ServerManager(server_configs, slurm=slurm, testing=testing)
+        self.server = ServerManager(
+            server_configs, slurm=slurm, testing=testing, server_class=server_class
+        )
         self.workers = set()
         self.eval_workers = set()
         self.backlog = []
@@ -225,11 +228,14 @@ class BaseEnv(ABC):
     @classmethod
     def config_init(
         cls,
-    ) -> Tuple[BaseEnvConfig, Union[ServerBaseline, List[OpenaiConfig]]]:
+    ) -> Union[
+        Tuple[BaseEnvConfig, Union[ServerBaseline, List[APIServerConfig]]],
+        Tuple[BaseEnvConfig, Union[ServerBaseline, List[APIServerConfig]], Any],
+    ]:
         """
         Initialize the config
         """
-        return cls.env_config_cls(), ServerBaseline()
+        return cls.env_config_cls(), ServerBaseline(), None
 
     async def collect_trajectory(self, item: Item) -> Tuple[Any | None, List[Item]]:
         raise NotImplementedError(
@@ -365,35 +371,55 @@ class BaseEnv(ABC):
                     )
                     break
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_random_exponential(multiplier=1, max=10),
+    )
+    async def _register_env(self):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.config.rollout_server_url}/register-env",
+                    json={
+                        "max_token_length": self.config.max_token_length,
+                        "desired_name": self.config.wandb_name,
+                        "weight": self.config.inference_weight,
+                    },
+                ) as resp:
+                    data = await resp.json()
+                    return data
+        except Exception as e:
+            logger.error(f"Error registering env: {e}")
+            raise e
+
     async def register_env(self):
         # Now register the env...
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.config.rollout_server_url}/register-env",
-                json={
-                    "max_token_length": self.config.max_token_length,
-                    "desired_name": self.config.wandb_name,
-                    "weight": self.config.inference_weight,
-                },
-            ) as resp:
-                data = await resp.json()
-                self.env_id = data["env_id"]
-                self.wandb_prepend = data["wandb_name"]
-                self.curr_step = data["starting_step"]
-                self.checkpoint_dir = data["checkpoint_dir"]
-                self.checkpoint_interval = data["checkpoint_interval"]
-                if self.config.total_steps == -1:
-                    self.config.total_steps = data["num_steps"]
-                    if self.config.total_steps == -1:
-                        raise ValueError("Total steps not set in config or server!")
-                print(
-                    f"Initialized env with id {self.env_id}: "
-                    f"curr_step: {self.curr_step}, "
-                    f"checkpoint_dir: {self.checkpoint_dir}, "
-                    f"checkpoint_interval: {self.checkpoint_interval}"
+        while True:
+            data = await self._register_env()
+            if data["status"] != "success":
+                logging.warning(
+                    f"Waiting to register the env due to status {data['status']}"
                 )
-                if self.curr_step > 0:
-                    self.load_checkpoint()
+                await asyncio.sleep(1)
+                continue
+            self.env_id = data["env_id"]
+            self.wandb_prepend = data["wandb_name"]
+            self.curr_step = data["starting_step"]
+            self.checkpoint_dir = data["checkpoint_dir"]
+            self.checkpoint_interval = data["checkpoint_interval"]
+            if self.config.total_steps == -1:
+                self.config.total_steps = data["num_steps"]
+                if self.config.total_steps == -1:
+                    raise ValueError("Total steps not set in config or server!")
+            print(
+                f"Initialized env with id {self.env_id}: "
+                f"curr_step: {self.curr_step}, "
+                f"checkpoint_dir: {self.checkpoint_dir}, "
+                f"checkpoint_interval: {self.checkpoint_interval}"
+            )
+            if self.curr_step > 0:
+                self.load_checkpoint()
+            break
 
     async def get_server_info(self):
         """
@@ -938,20 +964,24 @@ class BaseEnv(ABC):
         Returns:
             type: The CliServeConfig class for serving commands.
         """
-
-        env_config, server_configs = cls.config_init()
+        configs_and_maybe_server_class = cls.config_init()
+        if len(configs_and_maybe_server_class) == 2:
+            env_config, server_configs = configs_and_maybe_server_class
+            server_class = None
+        else:
+            env_config, server_configs, server_class = configs_and_maybe_server_class
         env_full_prefix = f"{ENV_NAMESPACE}{NAMESPACE_SEP}"
         openai_full_prefix = f"{OPENAI_NAMESPACE}{NAMESPACE_SEP}"
 
         class CliServeConfig(
             get_prefixed_pydantic_model(type(env_config), env_full_prefix),
-            get_prefixed_pydantic_model(OpenaiConfig, openai_full_prefix),
+            get_prefixed_pydantic_model(APIServerConfig, openai_full_prefix),
             ServerManagerConfig,
             Cmd,
         ):
             """
             Configuration for the serve command.
-            This combines BaseEnvConfig and OpenaiConfig into a single command.
+            This combines BaseEnvConfig and APIServerConfig into a single command.
             """
 
             def run(self) -> None:
@@ -963,13 +993,24 @@ class BaseEnv(ABC):
                 model_dumped = self.model_dump(exclude_unset=True)
                 server_manager_config = ServerManagerConfig(**model_dumped)
                 # Create the environment instance
-                env = cls(
-                    config=env_config,
-                    server_configs=server_configs,
-                    slurm=server_manager_config.slurm,
-                    testing=server_manager_config.testing,
-                )
-
+                try:
+                    env = cls(
+                        config=env_config,
+                        server_configs=server_configs,
+                        slurm=server_manager_config.slurm,
+                        testing=server_manager_config.testing,
+                        server_class=server_class,
+                    )
+                except TypeError as e:
+                    warnings.warn(
+                        "Not supporting server_class will be deprecated soon, please add that kwarg"
+                    )
+                    env = cls(
+                        config=env_config,
+                        server_configs=server_configs,
+                        slurm=server_manager_config.slurm,
+                        testing=server_manager_config.testing,
+                    )
                 # Run the environment
                 asyncio.run(env.env_manager())
 
@@ -990,7 +1031,7 @@ class BaseEnv(ABC):
             ensure_scores_are_not_same=False,
             include_messages=True,
         )
-        PROCESS_MODE_OPENAI_DEFAULT_CONFIG = OpenaiConfig(
+        PROCESS_MODE_OPENAI_DEFAULT_CONFIG = APIServerConfig(
             model_name="gpt-4.1-nano",
             base_url=None,
             api_key=None,
@@ -1000,7 +1041,14 @@ class BaseEnv(ABC):
             testing=False,
         )
 
-        default_env_config, default_openai_config = cls.config_init()
+        configs_and_maybe_server_class = cls.config_init()
+        if len(configs_and_maybe_server_class) == 2:
+            default_env_config, default_openai_config = configs_and_maybe_server_class
+            server_class = None
+        else:
+            default_env_config, default_openai_config, server_class = (
+                configs_and_maybe_server_class
+            )
 
         if isinstance(default_openai_config, list):
             default_openai_config = default_openai_config[0]
@@ -1012,7 +1060,7 @@ class BaseEnv(ABC):
             type(default_env_config), PROCESS_MODE_ENV_DEFAULT_CONFIG
         )
         openai_config_cls_new_defaults = adjust_model_defaults(
-            OpenaiConfig, PROCESS_MODE_OPENAI_DEFAULT_CONFIG
+            APIServerConfig, PROCESS_MODE_OPENAI_DEFAULT_CONFIG
         )
         server_manager_config_cls_new_defaults = adjust_model_defaults(
             ServerManagerConfig,
@@ -1097,6 +1145,7 @@ class BaseEnv(ABC):
                     server_configs=[openai_config],
                     slurm=server_manager_config.slurm,
                     testing=server_manager_config.testing,
+                    server_class=server_class,
                 )
 
                 # Set the process mode parameters

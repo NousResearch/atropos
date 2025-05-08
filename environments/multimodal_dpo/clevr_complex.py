@@ -8,7 +8,12 @@ from typing import List, Optional, Tuple
 
 from datasets import load_dataset
 
-from atroposlib.envs.base import BaseEnv, BaseEnvConfig, OpenaiConfig, ScoredDataGroup
+from atroposlib.envs.base import (
+    APIServerConfig,
+    BaseEnv,
+    BaseEnvConfig,
+    ScoredDataGroup,
+)
 from atroposlib.type_definitions import GameHistory, Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
@@ -243,7 +248,7 @@ class MultimodalComplexEnv(BaseEnv):
         return scores
 
     @classmethod
-    def config_init(cls) -> Tuple[BaseEnvConfig, List[OpenaiConfig]]:
+    def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         if not os.environ.get("OPENAI_API_KEY"):
             print("ERROR: OPENAI_API_KEY environment variable is not set!")
             print("Please set it using: export OPENAI_API_KEY=your_api_key")
@@ -268,7 +273,7 @@ class MultimodalComplexEnv(BaseEnv):
 
         print("DEBUG: Creating OpenAI configuration")
         server_configs = [
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="gpt-4o",  # Using GPT-4o which has multimodal capabilities
                 base_url=None,
                 api_key=os.environ.get("OPENAI_API_KEY"),

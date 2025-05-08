@@ -227,7 +227,7 @@ Rejection sampling can be controlled via `--save-top-n-per-group`, `--allow-nega
 If you would like to use OpenAI models, please edit your `config_init` to something like the following:
 ```python
     @classmethod
-    def config_init(cls) -> Tuple[BaseEnvConfig, List[OpenaiConfig]]:
+    def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = BaseEnvConfig(
             tokenizer_name="Qwen/Qwen2.5-1.5B-Instruct",
             group_size=8,
@@ -240,7 +240,7 @@ If you would like to use OpenAI models, please edit your `config_init` to someth
             wandb_name="gsm8k",
         )
         server_configs = [
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="gpt-4.1-nano",
                 base_url=None,
                 api_key=os.environ.get("OPENAI_API_KEY"),

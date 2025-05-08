@@ -101,6 +101,15 @@ async def register(registration: Registration):
 @app.post("/register-env")
 async def register_env_url(register_env: RegisterEnv):
     try:
+        if not app.state.started:
+            return {
+                "status": "wait for trainer to start",
+            }
+    except AttributeError:
+        return {
+            "status": "wait for trainer to start",
+        }
+    try:
         isinstance(app.state.envs, list)
     except AttributeError:
         app.state.envs = []

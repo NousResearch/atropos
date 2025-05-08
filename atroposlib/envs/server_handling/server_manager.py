@@ -7,7 +7,11 @@ from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.completion import Completion
 from pydantic import BaseModel, Field
 
-from atroposlib.envs.server_handling.openai_server import OpenaiConfig, OpenAIServer
+from atroposlib.envs.server_handling.openai_server import OpenAIServer
+from atroposlib.envs.server_handling.server_baseline import (
+    APIServerConfig,
+    ServerBaseline,
+)
 from atroposlib.envs.server_handling.server_harness import ServerHarness
 
 
@@ -20,38 +24,25 @@ class ServerManagerConfig(BaseModel):
     )
 
 
-class ServerBaseline(BaseModel):
-    """
-    Baseline configuration for server information. If local, uses ports 9004-9007 for the servers,
-    assuming a 1:1 split of GPUs.
-    """
-
-    timeout: int = Field(
-        default=1200, description="Timeout for the request in seconds."
-    )
-    num_max_requests_at_once: int = Field(
-        default=512,
-        description="Maximum number of concurrent requests. You should divide this by the n kwarg.",
-    )
-    num_requests_for_eval: int = Field(
-        default=64, description="Maximum number of concurrent requests for evaluation."
-    )
-    model_name: str = Field(
-        default="default",
-        description="The model name to use. Only works with sglang, please provide the model name.",
-    )
-    rolling_buffer_length: int = Field(
-        default=1000, description="Length of the rolling buffer to store metrics."
-    )
-
-
 class ServerManager:
     def __init__(
         self,
-        configs: Union[ServerBaseline, List[OpenaiConfig]],
+        configs: Union[ServerBaseline, List[APIServerConfig]],
+        server_class=None,
         slurm=False,
         testing=False,
     ):
+        if server_class is None:
+            if isinstance(configs, ServerBaseline):
+                if configs.server_type == "openai":
+                    server_class = OpenAIServer
+                else:
+                    raise ValueError(f"Invalid server type: {configs.server_type}")
+            else:
+                if configs[0].server_type == "openai":
+                    server_class = OpenAIServer
+                else:
+                    raise ValueError(f"Invalid server type: {configs[0].server_type}")
         if testing:
             # testing :)
             self.servers = [ServerHarness()]
@@ -84,7 +75,7 @@ class ServerManager:
                 openai_configs = []
             for url in urls:
                 openai_configs.append(
-                    OpenaiConfig(
+                    APIServerConfig(
                         base_url=url,
                         timeout=configs.timeout,
                         num_max_requests_at_once=configs.num_max_requests_at_once,
@@ -96,7 +87,7 @@ class ServerManager:
                 )
             self.servers = [OpenAIServer(config) for config in openai_configs]
         if not slurm:
-            self.servers = [OpenAIServer(config) for config in configs]
+            self.servers = [server_class(config) for config in configs]
         else:
             nodelist = (
                 os.popen(f'scontrol show hostnames {os.environ["SLURM_JOB_NODELIST"]}')
@@ -109,7 +100,7 @@ class ServerManager:
                     "Not enough nodes to distribute to, assuming single node"
                     " and you've setup your sglang appropriately."
                 )
-                self.servers = [OpenAIServer(config) for config in configs]
+                self.servers = [server_class(config) for config in configs]
                 return
             urls = []
             num_training_nodes = int(os.environ.get("NUM_TRAINING_NODES"))
@@ -124,7 +115,7 @@ class ServerManager:
                 new_conf = configs[0].model_copy(deep=True)
                 new_conf.base_url = urls[i]
                 new_configs.append(new_conf)
-            self.servers = [OpenAIServer(config) for config in new_configs]
+            self.servers = [server_class(config) for config in new_configs]
 
     async def update_weight(self, weight: float):
         for server in self.servers:

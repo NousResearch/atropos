@@ -9,6 +9,7 @@ import re
 from concurrent.futures import ProcessPoolExecutor
 from typing import Dict, List, Optional, Tuple
 
+import wandb
 from datasets import load_dataset
 from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
@@ -16,12 +17,11 @@ from math_verify.errors import TimeoutException
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
-import wandb
 from atroposlib.envs.base import (
+    APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
     EvalHandlingEnum,
-    OpenaiConfig,
     ScoredDataGroup,
 )
 
@@ -115,7 +115,7 @@ class MathEnv(BaseEnv):
     def __init__(
         self,
         config: RSConfig,
-        server_configs: List[OpenaiConfig],
+        server_configs: List[APIServerConfig],
         slurm=True,
         testing=False,
     ):
@@ -133,7 +133,7 @@ class MathEnv(BaseEnv):
         self.iter = 0
 
     @classmethod
-    def config_init(cls) -> Tuple[RSConfig, List[OpenaiConfig]]:
+    def config_init(cls) -> Tuple[RSConfig, List[APIServerConfig]]:
         env_config = RSConfig(
             tokenizer_name="Qwen/Qwen2.5-7B",
             group_size=8,
@@ -148,7 +148,7 @@ class MathEnv(BaseEnv):
             eval_limit_ratio=0.1,
         )
         server_configs = [
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="default",
                 base_url="http://localhost:9004/v1",
                 api_key="x",

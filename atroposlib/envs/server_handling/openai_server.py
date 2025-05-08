@@ -12,36 +12,7 @@ from openai.types.completion import Completion
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 
-
-class OpenaiConfig(BaseModel):
-    """
-    Configuration for the server manager.
-    """
-
-    api_key: Optional[str] = Field(
-        default=None, description="API key for OpenAI API. Use 'x' for local servers."
-    )
-    base_url: Optional[str] = Field(
-        default=None,
-        description="URL of the API endpoint. None if using official OpenAI API, otherwise local server URL.",
-    )
-    timeout: int = Field(
-        default=1200, description="Timeout for the request in seconds."
-    )
-    num_max_requests_at_once: int = Field(
-        default=512,
-        description="Maximum number of concurrent requests. Note: You should divide this by the n kwarg.",
-    )
-    num_requests_for_eval: int = Field(
-        default=64, description="Maximum number of concurrent requests for evaluation."
-    )
-    model_name: str = Field(
-        default="default",
-        description="The model name to use. Required for both OpenAI and local models.",
-    )
-    rolling_buffer_length: int = Field(
-        default=1000, description="Length of the rolling buffer to store metrics."
-    )
+from atroposlib.envs.server_handling.server_baseline import APIServerConfig
 
 
 class AsyncSemWithAdaptiveWeight(asyncio.Semaphore):
@@ -112,7 +83,7 @@ class AsyncSemWithAdaptiveWeight(asyncio.Semaphore):
 
 
 class OpenAIServer:
-    def __init__(self, config: OpenaiConfig):
+    def __init__(self, config: APIServerConfig):
         self.config = config
         self.openai = openai.AsyncClient(
             api_key=config.api_key,

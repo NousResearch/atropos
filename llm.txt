@@ -254,7 +254,7 @@ This class provides the foundation for creating custom RL environments. Subclass
 *   **`async def postprocess_histories(self, trajectories: Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]) -> Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]`**: Called after `collect_trajectories` and before sending data to the server. Use for final processing, scoring, filtering, or formatting of the collected group data.
 *   **`async def wandb_log(self, wandb_metrics: Optional[Dict] = None)`**: Called periodically for W&B logging. Add custom metrics to `wandb_metrics`. **Crucially, call `await super().wandb_log(wandb_metrics)`** at the end to include base metrics and rollouts.
 *   **`save_checkpoint(self, step, data=None)`**: Called automatically by the server based on `checkpoint_interval`. Saves the provided `data` dict (populated with environment state) to JSON. Override to customize *what* or *how* data is saved.
-*   **`@classmethod config_init(cls) -> Tuple[BaseEnvConfig, Union[ServerBaseline, List[OpenaiConfig]]]`**: Used by CLI `serve` command setup. Returns initial `BaseEnvConfig` and server config(s). Override for custom default CLI configurations. Default returns `cls.env_config_cls(), ServerBaseline()`.
+*   **`@classmethod config_init(cls) -> Tuple[BaseEnvConfig, Union[ServerBaseline, List[APIServerConfig]]]`**: Used by CLI `serve` command setup. Returns initial `BaseEnvConfig` and server config(s). Override for custom default CLI configurations. Default returns `cls.env_config_cls(), ServerBaseline()`.
 *   **`async def cleanup(self)`**: Called after each item processing (`handle_env`). Use for per-item cleanup if needed (rarely required).
 
 **Provided Functionality:**
@@ -308,7 +308,7 @@ Settings for the `ServerManager` which handles inference server interactions.
 
 #### 10.2.3. Server Baseline Config (`atroposlib.envs.server_handling.server_manager.ServerBaseline`)
 
-Default settings used by `ServerManager` if specific `OpenaiConfig` list isn't provided (e.g., for local/SLURM discovery).
+Default settings used by `ServerManager` if specific `APIServerConfig` list isn't provided (e.g., for local/SLURM discovery).
 
 | Parameter                  | Type    | Default   | Description                                                                                             |
 | :------------------------- | :------ | :-------- | :------------------------------------------------------------------------------------------------------ |
@@ -318,7 +318,7 @@ Default settings used by `ServerManager` if specific `OpenaiConfig` list isn't p
 | `model_name`               | `str`   | `default` | Default model name for inference calls.                                                                 |
 | `rolling_buffer_length`    | `int`   | `1000`    | Buffer length for server metrics (timings, attempts).                                                  |
 
-#### 10.2.4. OpenAI Server Config (`atroposlib.envs.server_handling.openai_server.OpenaiConfig`)
+#### 10.2.4. OpenAI Server Config (`atroposlib.envs.server_handling.openai_server.APIServerConfig`)
 
 Configuration for individual OpenAI-compatible API servers (official OpenAI, local vLLM/SGLang, etc.). A list of these can be passed to the environment.
 
