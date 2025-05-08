@@ -46,44 +46,55 @@ class FormatReward(RewardFunction):
             **kwargs: Additional context
 
         Returns:
-            List of rewards for each completion (1.0 for good format, 0.0 otherwise)
+            List of rewards for each completion (1.0 for good format, -1.0 otherwise)
         """
-        # Extract content from different possible formats
         completion_contents = [
             self.get_content(completion) for completion in completions
         ]
 
-        # For each completion, check for the preferred tags
         rewards = []
-
         flags = 0 if self.case_sensitive else re.IGNORECASE
         flags |= re.DOTALL  # Allow . to match newlines
 
-        for content in completion_contents:
+        for idx, content in enumerate(completion_contents):
+            logger.debug(f"[{self.name}] Checking completion {idx}: Content='{content[:100]}...' Tags={self.preferred_tags}, RequireAll={self.require_all_tags}")
+            current_reward = -1.0 # Default to penalty
+            
             if self.require_all_tags:
-                # All tags must be present
                 all_tags_present = True
+                missing_tag = None
                 for tag in self.preferred_tags:
                     pattern = f"<{tag}>.*?</{tag}>"
                     if not re.search(pattern, content, flags):
                         all_tags_present = False
+                        missing_tag = tag
+                        logger.debug(f"  -> Tag '{tag}' not found.")
                         break
-                rewards.append(1.0 if all_tags_present else -1.0)
+                if all_tags_present:
+                    current_reward = 1.0
+                    logger.debug(f"  -> All required tags found.")
             else:
-                # Any tag can be present
                 has_tags = False
+                found_tag = None
                 for tag in self.preferred_tags:
                     pattern = f"<{tag}>.*?</{tag}>"
                     if re.search(pattern, content, flags):
                         has_tags = True
+                        found_tag = tag
+                        logger.debug(f"  -> Tag '{tag}' found.")
                         break
-                rewards.append(1.0 if has_tags else -1.0)
+                if has_tags:
+                    current_reward = 1.0
+                else:
+                    logger.debug(f"  -> No preferred tags found.")
+            
+            rewards.append(current_reward)
+            logger.debug(f"  -> Determined reward for completion {idx}: {current_reward}")
 
-        # Log the results
-        logger.info(
-            f"Format reward results: {sum(rewards)}/{len(rewards)} completions match format"
-        )
-        return rewards
+        # Removed summary log: logger.info(f"Format reward results: {sum(rewards)}/{len(rewards)} completions match format")
+        # Apply weight - RewardFunction base class or CombinedReward handles weighting.
+        # The value returned should be the raw score (1.0 or -1.0 in this case).
+        return [r * self.weight for r in rewards] # Apply weight here
 
 
 # Legacy function for backward compatibility

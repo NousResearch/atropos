@@ -133,59 +133,70 @@ class ToolCallingReward(RewardFunction):
         Compute reward scores for the given completions.
         
         Scores:
-        - 1.0: Perfect format with valid JSON and existing tool
+        - 1.0: Perfect format, valid JSON, existing tool, valid args (if checked)
+        - 0.8: Valid tool but invalid arguments (if checked)
         - 0.7: Valid format and JSON, but tool doesn't exist
         - 0.5: Valid format but JSON parsing error
-        - 0.0: No tool call format found
+        - -1.0: No tool call format found (changed from 0.0 for stronger penalty)
         
         Args:
             completions: List of completions to evaluate
             
         Returns:
-            List of reward scores, one for each completion
+            List of reward scores (before weighting), one for each completion
         """
-        results = []
+        results_unweighted = []
         
-        for completion in completions:
-            # Get the content from the completion
+        for idx, completion in enumerate(completions):
             content = self.get_content(completion)
+            logger.debug(f"[{self.name}] Checking completion {idx}: Content='{content[:100]}...'")
+            final_score_for_completion = -1.0 # Default score (no format)
             
-            # Check if tool call format exists
+            # 1. Check if tool call format exists
             tool_call_content = self._extract_tool_call(content)
             if not tool_call_content:
-                logger.debug(f"No tool call format found in: {content[:100]}...")
-                results.append(-1.0)
-                continue
+                logger.debug("  -> No tool call format found.")
+                # final_score_for_completion remains -1.0
+            else:
+                logger.debug(f"  -> Extracted content: '{tool_call_content[:100]}...'")
+                # 2. Try to parse the JSON
+                try:
+                    # Safely handle single quotes or malformed JSON before parsing
+                    processed_content = tool_call_content.replace("\'", "\"") # Replace remaining single quotes
+                    tool_call = json.loads(processed_content)
+                    logger.debug(f"  -> JSON parsed successfully: {tool_call}")
+                    
+                    # 3. Check if the tool exists
+                    tool_name = tool_call.get("name", "")
+                    if not tool_name or tool_name not in self.valid_tool_names:
+                        logger.debug(f"  -> Tool '{tool_name}' not found in valid tools {self.valid_tool_names}.")
+                        final_score_for_completion = 0.7 # Valid JSON but invalid tool
+                    else:
+                        logger.debug(f"  -> Tool '{tool_name}' is valid.")
+                        # 4. Check arguments if enabled
+                        if self.check_arguments:
+                            arguments = tool_call.get("arguments", {})
+                            if not self._validate_arguments(tool_name, arguments):
+                                logger.debug(f"  -> Invalid arguments for tool {tool_name}: {arguments}")
+                                final_score_for_completion = 0.8 # Valid tool but invalid arguments
+                            else:
+                                logger.debug("  -> Arguments validated successfully.")
+                                final_score_for_completion = 1.0 # Everything is valid
+                        else: # Arguments not checked
+                            final_score_for_completion = 1.0 # Format, JSON, Tool Name are valid
+                except json.JSONDecodeError as e:
+                    logger.debug(f"  -> JSON parsing error: {e} on content: '{processed_content[:100]}...'")
+                    final_score_for_completion = 0.5 # Valid format but JSON error
             
-            # Try to parse the JSON
-            try:
-                # Safely handle single quotes or malformed JSON
-                tool_call_content = tool_call_content.replace("'", '"')
-                tool_call = json.loads(tool_call_content)
-                
-                # Check if the tool exists
-                tool_name = tool_call.get("name", "")
-                if not tool_name or tool_name not in self.valid_tool_names:
-                    logger.debug(f"Tool '{tool_name}' not found in valid tools")
-                    results.append(0.7)  # Valid JSON but invalid tool
-                    continue
-                
-                # Check arguments if enabled
-                if self.check_arguments:
-                    arguments = tool_call.get("arguments", {})
-                    if not self._validate_arguments(tool_name, arguments):
-                        logger.debug(f"Invalid arguments for tool {tool_name}: {arguments}")
-                        results.append(0.8)  # Valid tool but invalid arguments
-                        continue
-                
-                # Everything is valid
-                results.append(1.0)
-                
-            except json.JSONDecodeError as e:
-                logger.debug(f"JSON parsing error: {e} in: {tool_call_content[:100]}...")
-                results.append(0.5)  # Valid format but JSON error
-                
-        return results
+            logger.debug(f"  -> Determined score for completion {idx}: {final_score_for_completion}")
+            results_unweighted.append(final_score_for_completion)
+        
+        # Apply weight
+        final_results = [r * self.weight for r in results_unweighted]
+        # Format scores for logging
+        formatted_scores = [f'{r:.4f}' for r in final_results]
+        logger.debug(f"[{self.name}] Final weighted scores: {formatted_scores}")
+        return final_results
 
 
 # Legacy function for backward compatibility
