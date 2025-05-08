@@ -21,7 +21,6 @@ def extract_tool_call(text: str, preferred_tags: List[str] = None) -> Optional[s
     Returns:
         The extracted content or None if no tool call found
     """
-    logger.warning(f"Extracting tool call from text: {text}")
     preferred_tags = preferred_tags or ["tool_call"]
     for tag in preferred_tags:
         pattern = f"<{tag}>(.*?)</{tag}>"
@@ -51,9 +50,8 @@ def parse_tool_call(
     # Extract content from tags
     tool_call_content = extract_tool_call(response, preferred_tags)
 
-    logger.warning(f"Extracted tool call content: {tool_call_content}")
-
     if not tool_call_content:
+        logger.warning(f"No tool call found in response: {response}...")
         return "-ERROR-", {}, True
 
     # Parse JSON

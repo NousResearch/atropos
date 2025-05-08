@@ -75,7 +75,7 @@ async def main():
         # This also initializes the message history correctly
         _ = env._get_or_create_episode(seed)
 
-        result = await env.collect_trajectory(seed, interactive=False) # interactive=False is typical for direct run
+        result = await env.collect_trajectory(seed)
         logger.info(f"Trajectory collection complete with {len(result)} steps.")
 
         # Get episode state for summary (should exist now)
@@ -85,19 +85,15 @@ async def main():
             # Print a final summary
             logger.info("\n========== Episode Summary ==========")
             logger.info(f"Seed: {seed}")
-            logger.info(f"Total steps taken: {len(episode_state.actions)}")
-            logger.info(f"Final Environment reward: {episode_state.total_env_reward:.2f}")
-            logger.info(f"Final Format reward: {episode_state.total_format_reward:.2f}")
-            logger.info(f"Final Combined reward: {episode_state.total_combined_reward:.2f}")
-            # Verify calculation based on final totals and weights
-            logger.info(
-                f"Combined Calculation Check: ({config.environment_reward_weight:.2f} * {episode_state.total_env_reward:.2f}) + "
-                f"({config.format_reward_weight:.2f} * {episode_state.total_format_reward:.2f}) = "
-                f"{(config.environment_reward_weight * episode_state.total_env_reward) + (config.format_reward_weight * episode_state.total_format_reward):.2f}"
-            )
+            logger.info(f"Total steps taken: {episode_state.num_steps}")
+            logger.info(f"Final Environment reward: {episode_state.total_reward:.2f}")
 
-            accuracy = episode_state.num_correct_actions / max(1, episode_state.num_total_actions)
-            logger.info(f"Action accuracy (valid format): {episode_state.num_correct_actions}/{episode_state.num_total_actions} ({accuracy:.2%})")
+            # Calculate and log action accuracy based on EpisodeState fields
+            if episode_state.num_total_actions > 0:
+                accuracy = episode_state.num_correct_actions / episode_state.num_total_actions
+                logger.info(f"Action accuracy (valid tool calls): {episode_state.num_correct_actions}/{episode_state.num_total_actions} ({accuracy:.2%})")
+            else:
+                logger.info("Action accuracy (valid tool calls): No tool calls attempted or recorded.")
             logger.info("=======================================")
         else:
             logger.error(f"Could not find episode state for seed {seed} after running trajectory.")
