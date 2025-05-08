@@ -3,7 +3,7 @@
 
 # Base environment parameters (can override base.yaml)
 tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
-group_size: 32
+group_size: 16
 use_wandb: true
 max_num_workers: 32
 rollout_server_url: "http://localhost:8000"

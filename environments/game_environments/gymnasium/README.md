@@ -6,10 +6,18 @@ This directory contains RL environments based on OpenAI's Gymnasium.
 
 A reinforcement learning environment for Blackjack that uses a best-of-n approach to select actions. The model is trained to make function calls with proper formatting to choose between "hit" and "stick" actions.
 
-For multistep environments, the attempt is to do something similar to (VinePPO)[https://github.com/McGill-NLP/VinePPO], but with GRPO instead. It scores each step (using outcome rewards, whether the trajectory is complete or not), using Monte Carlo sampling to try and approximate the value by rolling out k responses following the current alternative, and then calculating the advantage from that. To prevent blowing
-out the size in the trainer, each individual step is batched and processed seperately (again, similar to VinePPO), and to keep the groups consistent, the state is always reset via selecting the best alternative as the "canonical path". Long chains-of-thought are truncated for past steps, and doing some form of summarisation is future intended work. The messages list is also truncated, from oldest input & output pairs first, to further reduce issues with RL trainer sequence lengths.
+The environment implements a strategy for multi-step decision-making, aiming to refine credit assignment. This approach is designed to be compatible with GRPO-style training and includes the following key components:
 
-Conceivably, a tree search strategy more exploratory than best-of-n could be used here (Beam search or MCTS as obvious candidates), but given the additional computational overhead and processing time it's avoided for now. The value estimate hopefully prevents it from being effectively just a series of bandits. Given the Blackjack episodes are quite short, a discount factor of 1 is used for simplicity here.
+1.  **Alternative Generation (Best-of-N):** At each turn, the LLM generates `G` (configurable via `group_size` in the YAML configuration) alternative responses. Each response typically includes a "thinking" phase (e.g., enclosed in `<think> </think>` tags) followed by a structured tool call ("hit" or "stick").
+2.  **Monte Carlo (MC) Value Estimation:** To evaluate game states, the environment employs MC rollouts, inspired by methods like VinePPO to avoid a separate learned value network.
+    *   For the current state `s_t`, `K` (configurable via `mc_samples`) full game playouts are simulated using the current LLM policy. The average total environment reward from these rollouts is used as the estimate `V(s_t)`.
+    *   Similarly, for each of the `G` alternatives leading to potential next states `s'_i`, the value `V(s'_i)` is estimated.
+3.  **Advantage Calculation:** For each alternative `i`, an advantage `A_i = R_combined_i + V(s'_i) - V(s_t)` is computed. `R_combined_i` includes both the immediate environment reward from taking that alternative and any format-based rewards (e.g., for correct tool use and thinking tags). A discount factor of γ=1 is used.
+4.  **Action Selection:** The alternative with the highest calculated advantage is chosen as the canonical action to advance the game trajectory.
+5.  **Data for Trainer:** Detailed information for all `G` alternatives (including their messages, tokenized representations, and calculated advantage scores) is collected at each step, providing rich data for policy training.
+6.  **Handling Long Sequences:** Necessary to prevent blowing up sequence length limits on RL trainers. Blackjack episodes are typically quite short, but can go for enough turns for it to be a problem, especially with excessively long thinking blocks
+    *   **Thinking Blocks:** Long "thinking" blocks are permitted. To manage history length for the LLM's context, these thoughts are truncated in messages representing past turns. Currently this is just taking the last paragraph of text (as this often contains the LLMs final conclusions), in other examples will move to a summarisation with the LLM itself
+    *   **Token Limits:** The environment actively manages the overall token length of conversation histories by truncating older message pairs (system prompt is preserved, last agent/environment exchange is preserved) to ensure sequences fit within the trainer's maximum token limits.
 
 ### Features
 
@@ -45,78 +53,36 @@ The `--config` parameter can be:
 
 For example:
 ```bash
-# Using a config in configs/envs/
-python environments/game_environments/gymnasium/blackjack_local_server.py --config blackjack_hard
+# Using a config in configs/
+python environments/game_environments/gymnasium/blackjack_local_server.py --config blackjack_default
 
 # Using a config with full path
 python environments/game_environments/gymnasium/blackjack_local_server.py --config /path/to/my/config.yaml
 ```
 
-## Configuration Structure
+## Configuration
 
-The configuration file follows this structure:
+The environment's behavior is controlled via YAML configuration files (e.g., `environments/game_environments/gymnasium/configs/blackjack_default.yaml`).
+
+Key aspects controlled by the configuration include:
+*   LLM model parameters (e.g., `temperature`, `top_p`).
+*   Training strategy parameters (`group_size` for N alternatives, `mc_samples` for value estimation, `max_turns`).
+*   Reward function setup and weights (`reward_functions`, `format_reward_weight`, `environment_reward_weight`).
+*   Tokenization (`tokenizer_name`) and sequence length limits (`max_token_length`, `max_think_chars_history`).
+*   Server endpoints for the LLM.
+
+## Note:
+The Monte Carlo sampling greatly increases the amount of calls to the policy model (ie, vLLM, sglang, whatever LLM server is being used). So it's highly suggested to allocate extra nodes to it so this doesn't become a bottleneck
+
+**Example Server Configuration in YAML:**
+
+The `server_configs` section in the YAML directly specifies parameters for the LLM API, including the model name, base URL, and API key. The `api_key` should be set directly in the YAML or handled by the server/client using it if a placeholder like "x" is used.
 
 ```yaml
-# Base environment parameters
-tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
-group_size: 1
-use_wandb: false
-# ... other base parameters
-
-# Blackjack specific configuration
-blackjack:
-  # Environment parameters
-  env_name: "Blackjack-v1"
-  temperature: 0.7
-  top_p: 0.9
-  # ... other Blackjack specific parameters
-  
-  # Reward function configuration
-  reward_functions: ["format"]
-  format_reward_weight: 0.2
-
 # Server configuration
 server_configs:
-  - model_name: "${OPENAI_MODEL:gpt-4.1-nano}"
-    base_url: "${OPENAI_API_BASE}"
-    api_key: "${OPENAI_API_KEY}"
+  - model_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+    base_url: "http://localhost:9004/v1"
+    api_key: "x" # Or your actual API key
     num_requests_for_eval: 256
 ```
-
-### Important Configuration Parameters
-
-#### Base Parameters
-
-- `tokenizer_name`: The tokenizer to use for encoding/decoding text
-- `group_size`: Number of model responses to evaluate for each action (best-of-n)
-- `max_token_length`: Maximum token length for generation
-
-#### Blackjack Specific Parameters
-
-- `env_name`: The Gymnasium environment name ("Blackjack-v1")
-- `temperature`: Temperature for model generation
-- `top_p`: Top-p sampling parameter
-- `max_steps`: Maximum steps per episode
-- `reward_functions`: List of reward functions to apply (e.g., ["format"])
-- `format_reward_weight`: Weight for the format reward
-
-#### Server Configuration
-
-- `model_name`: LLM model to use (can use environment variables with ${VAR_NAME:default} syntax)
-- `base_url`: Base URL for the model API (optional)
-- `api_key`: API key for the model
-- `num_requests_for_eval`: Number of evaluation requests to allocate
-
-## Environment Variables
-
-The server configuration supports using environment variables with optional default values:
-
-- `${VARIABLE_NAME}`: Uses the value of the environment variable
-- `${VARIABLE_NAME:default}`: Uses the default value if the environment variable is not set
-
-For example:
-```yaml
-model_name: "${OPENAI_MODEL:gpt-4.1-nano}"
-```
-
-This will use the value of the OPENAI_MODEL environment variable if set, otherwise it will use "gpt-4.1-nano". 

@@ -27,8 +27,8 @@ class BlackjackEnvConfig(BaseEnvConfig):
     max_think_chars_history: int = 3000
     max_trajectory_tokens: int = 24576
     debug_mode: bool = False
-    group_size: int = 8  # G for GRPO
-    mc_samples: int = 3  # K for MC value estimation
+    group_size: int = 16  # G for GRPO
+    mc_samples: int = 3  # lowish K for MC value estimation
     reward_functions: List[Union[str, Dict[str, Any]]] = []
     format_reward_weight: float = 0.5
     environment_reward_weight: float = 0.5
