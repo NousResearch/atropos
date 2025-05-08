@@ -4,6 +4,10 @@ BlackjackEnv: Trainer environment for Gymnasium Blackjack
 
 This wraps Gymnasium's Blackjack-v1 environment to train an LLM via a best-of-n pattern
 using function-call style actions. Extends BaseEnv.
+
+Alternative formulation of BlackjackEnv that uses a best-of-n approach to select actions
+and no Monte Carlo sampling (direct bonus for winning trajectory). Much faster to train,
+but may not be as effective at learning correct strategy (it's effectively a series of bandits).
 """
 
 import json

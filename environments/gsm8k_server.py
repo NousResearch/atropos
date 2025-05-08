@@ -52,7 +52,7 @@ class GSM8kEnv(BaseEnv):
     @classmethod
     def config_init(cls) -> Tuple[BaseEnvConfig, List[OpenaiConfig]]:
         env_config = BaseEnvConfig(
-            tokenizer_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
+            tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
             group_size=8,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
@@ -64,7 +64,7 @@ class GSM8kEnv(BaseEnv):
         )
         server_configs = [
             OpenaiConfig(
-                model_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
+                model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9001/v1",
                 api_key="x",
                 num_requests_for_eval=256,
