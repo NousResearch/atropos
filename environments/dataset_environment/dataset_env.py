@@ -196,8 +196,23 @@ class DatasetEnv(BaseEnv):
 
         return to_score, to_backlog
 
-    async def postprocess_histories(self, trajectories: List) -> Tuple[List, List]:
-        return trajectories, []
+    async def postprocess_histories(
+        self, trajectories: List[List[Dict[str, Any]]]
+    ) -> Optional[ScoredDataGroup]:
+        """
+        Postprocess the histories by scoring them.
+        The input 'trajectories' is expected to be a list of message lists,
+        which is suitable for the `score` method's `rollout_group_data` argument.
+        """
+        if not trajectories:
+            logger.warning(
+                "postprocess_histories: received empty or invalid trajectories, returning None."
+            )
+            return None
+        # The 'score' method expects List of trajectories, where each trajectory is List[Message]
+        # This matches the input 'trajectories' (which is rollout_group_data from collect_trajectories)
+        scored_data = await self.score(trajectories)
+        return scored_data
 
     async def collect_trajectories(self, item: Item) -> Tuple[List, List]:
         self.current_item = item
