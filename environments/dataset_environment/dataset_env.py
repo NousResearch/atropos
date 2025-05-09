@@ -72,6 +72,17 @@ class DatasetEnv(BaseEnv):
     ):
         super().__init__(config, server_configs, slurm, testing)
         self.config = config
+
+        # If ground_truth_field was configured as the literal string "None",
+        # interpret it as Python None (meaning no specific ground truth field is designated).
+        if self.config.ground_truth_field == "None":
+            logger.warning(
+                f"DatasetEnv.__init__: Configured 'ground_truth_field' was the string \"None\". "
+                f"Setting to Python None, so no specific ground truth field will be looked up by default. "
+                f"The 'answer_field' ('{self.config.answer_field}') will likely be used as fallback by reward functions."
+            )
+            self.config.ground_truth_field = None
+
         self.dataset = None
         self.iter = 0
         self.metric_buffer = {}
@@ -158,6 +169,7 @@ class DatasetEnv(BaseEnv):
             messages.append({"role": "assistant", "content": self.config.prefill})
 
         prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
+        logger.warning(f"collect_trajectory: prompt: {prompt}")
 
         max_tokens = self.config.max_tokens
         if self.config.length_warmup_steps > 0:
