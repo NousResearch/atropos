@@ -16,7 +16,6 @@ class CombinedReward(RewardFunction):
     def __init__(
         self,
         rewards: List[Union[str, Dict]],
-        normalization: str = "none",
         weight: float = 1.0,
         **kwargs,
     ):
@@ -25,15 +24,10 @@ class CombinedReward(RewardFunction):
 
         Args:
             rewards: List of reward functions (names or config dicts)
-            normalization: How to normalize rewards, one of:
-                          - "none": No normalization
-                          - "sum": Divide by sum of weights
-                          - "minmax": Scale to range [0,1] based on min/max values
             weight: Weight for this combined reward
             **kwargs: Additional parameters
         """
         super().__init__(weight=weight, **kwargs)
-        self.normalization = normalization
         self.reward_functions = []
 
         # Initialize all sub-reward functions
@@ -56,7 +50,7 @@ class CombinedReward(RewardFunction):
         if not completions:
             return []
 
-        logger.debug(f"[{self.name}] Computing combined reward for {len(completions)} completions. Normalization='{self.normalization}'")
+        logger.debug(f"[{self.name}] Computing combined reward for {len(completions)} completions.")
         
         # Initialize with zeros
         combined_rewards = [0.0] * len(completions)
@@ -85,22 +79,11 @@ class CombinedReward(RewardFunction):
                 # Ensure we have a placeholder if a sub-reward fails
                 all_rewards_dict[reward_fn.name] = [0.0] * len(completions)
 
-        logger.debug(f"[{self.name}]  -> Combined rewards before normalization: {[f'{r:.4f}' for r in combined_rewards]}")
+        logger.debug(f"[{self.name}]  -> Combined rewards before (any potential parent) weighting: {[f'{r:.4f}' for r in combined_rewards]}")
 
-        # Apply normalization if needed
-        if self.normalization == "sum":
-            total_weight = sum(r.weight for r in self.reward_functions)
-            if total_weight > 0:
-                combined_rewards = [r / total_weight for r in combined_rewards]
-        elif self.normalization == "minmax":
-            # Avoid division by zero
-            reward_min = min(combined_rewards) if combined_rewards else 0
-            reward_max = max(combined_rewards) if combined_rewards else 0
-            if reward_max > reward_min:
-                combined_rewards = [
-                    (r - reward_min) / (reward_max - reward_min)
-                    for r in combined_rewards
-                ]
+        # Normalization logic has been removed.
+        # The combined_rewards now represent the sum of weighted raw scores from sub-rewards.
+        # The CombinedReward's own weight (self.weight) will be applied by the base RewardFunction.__call__ method.
 
-        logger.debug(f"[{self.name}]  -> Final combined rewards after normalization: {[f'{r:.4f}' for r in combined_rewards]}")
+        # logger.debug(f"[{self.name}]  -> Final combined rewards after normalization: {[f'{r:.4f}' for r in combined_rewards]}") # Log referred to normalization
         return combined_rewards

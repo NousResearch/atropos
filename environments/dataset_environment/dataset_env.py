@@ -118,8 +118,12 @@ class DatasetEnv(BaseEnv):
                 return registry.create(self.config.reward_functions[0])
             else:
                 # This assumes reward_functions is a list of names or full configs
+                # The CombinedReward will now sum the weighted raw scores of its components.
+                # Its own weight defaults to 1.0 unless specified otherwise if CombinedReward
+                # were to be configured explicitly with a 'type: CombinedReward' in YAML.
                 return CombinedReward(
-                    rewards=self.config.reward_functions, normalization="sum"
+                    rewards=self.config.reward_functions
+                    # normalization="sum" # Removed, CombinedReward no longer uses normalization
                 )
         logger.warning(
             "No reward functions configured (field 'reward_functions' is None or list is empty)."
