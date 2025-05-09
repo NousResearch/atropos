@@ -44,7 +44,7 @@ class DatasetEnvConfig(BaseEnvConfig):
     include_messages_in_scoring: bool = Field(
         False, description="Whether to include messages in scoring"
     )
-    reward_functions: List[Union[str, Dict[str, Any]]] = Field(
+    reward_functions: Optional[List[Union[str, Dict[str, Any]]]] = Field(
         default_factory=list,
         description="List of reward functions to apply (string names or full configs)",
     )
