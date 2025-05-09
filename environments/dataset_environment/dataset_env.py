@@ -481,7 +481,8 @@ class DatasetEnv(BaseEnv):
 
         except Exception as e:
             logger.error(f"Error loading config: {e}")
-            return DatasetEnvConfig(), [
+            # Provide minimal required fields for the fallback config to prevent ValidationError
+            return DatasetEnvConfig(dataset_name="default_dataset_on_error", prompt_field="default_prompt_on_error"), [
                 OpenaiConfig(
                     model_name=os.getenv(
                         "OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"

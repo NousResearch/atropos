@@ -7,7 +7,6 @@ batch_size: 1024
 total_steps: 1000
 rollout_server_url: "http://localhost:8000"
 
-# Dataset and Environment specific configurations (now at root level)
 dataset_name: "gsm8k"
 dataset_config: "main"
 split: "train"
@@ -20,7 +19,6 @@ shuffle_dataset: true
 max_generations_per_prompt: 1
 include_messages_in_scoring: false
 
-# Simplified reward functions
 reward_functions:
   - type: "accuracy"
     weight: 1.0
@@ -32,19 +30,16 @@ reward_functions:
       preferred_tags: ["think", "reasoning"]
       require_all_tags: false
 
-# Generation parameters (now at root level)
 temperature: 0.7
 top_p: 0.9
 max_tokens: 16000
 length_warmup_steps: 100
 min_tokens: 2048
 
-# Evaluation dataset parameters (now at root level)
 eval_dataset_name: "gsm8k"
 eval_dataset_config: "main"
 eval_split: "test"
 
-# Server configurations remain unchanged
 server_configs:
   - model_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
     base_url: "http://localhost:9004/v1"
