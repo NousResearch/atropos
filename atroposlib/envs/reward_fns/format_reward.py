@@ -58,7 +58,8 @@ class FormatReward(RewardFunction):
 
         for idx, content in enumerate(completion_contents):
             logger.debug(
-                f"[{self.name}] Checking completion {idx}: Content='{content[:100]}...' Tags={self.preferred_tags}, RequireAll={self.require_all_tags}"
+                f"[{self.name}] Checking completion {idx}: Content='{content[:100]}...' "
+                f"Tags={self.preferred_tags}, RequireAll={self.require_all_tags}"
             )
 
             all_required_tags_valid = True
@@ -90,7 +91,8 @@ class FormatReward(RewardFunction):
                     ):  # Check if the *specific* inner_content has a non-whitespace
                         current_tag_type_has_valid_instance = True
                         logger.debug(
-                            f"  -> Tag '{tag_name}': Found an instance with valid non-whitespace content: '{instance_content[:50]}...'"
+                            f"  -> Tag '{tag_name}': Found an instance with valid non-whitespace "
+                            f"content: '{instance_content[:50]}...'"
                         )
                         break
 
@@ -98,7 +100,8 @@ class FormatReward(RewardFunction):
                     if not self.require_all_tags:
                         any_preferred_tag_valid = True
                         logger.debug(
-                            f"  -> Tag '{tag_name}': Valid instance found, and require_all_tags is False. Marking completion as valid format."
+                            f"  -> Tag '{tag_name}': Valid instance found, and require_all_tags is False. "
+                            f"Marking completion as valid format."
                         )
                         break
                 else:
@@ -114,21 +117,25 @@ class FormatReward(RewardFunction):
                 if all_required_tags_valid:
                     current_reward = 1.0
                     logger.debug(
-                        f"  -> Final check (require_all_tags=True): All required tags were valid. Reward: {current_reward}"
+                        f"  -> Final check (require_all_tags=True): "
+                        f"All required tags were valid. Reward: {current_reward}"
                     )
                 else:
                     logger.debug(
-                        f"  -> Final check (require_all_tags=True): Not all required tags were valid. Reward: {current_reward}"
+                        f"  -> Final check (require_all_tags=True): "
+                        f"Not all required tags were valid. Reward: {current_reward}"
                     )
             else:
                 if any_preferred_tag_valid:
                     current_reward = 1.0
                     logger.debug(
-                        f"  -> Final check (require_all_tags=False): At least one preferred tag was valid. Reward: {current_reward}"
+                        f"  -> Final check (require_all_tags=False): "
+                        f"At least one preferred tag was valid. Reward: {current_reward}"
                     )
                 else:
                     logger.debug(
-                        f"  -> Final check (require_all_tags=False): No preferred tags were valid. Reward: {current_reward}"
+                        f"  -> Final check (require_all_tags=False): "
+                        f"No preferred tags were valid. Reward: {current_reward}"
                     )
 
             rewards.append(current_reward)

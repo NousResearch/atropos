@@ -20,8 +20,9 @@ def parse_arguments():
     parser.add_argument(
         "--config",
         type=str,
-        default="blackjack_local",  # Default to the local config
-        help="Configuration file name (without .yaml extension, relative to envs/gymnasium/configs), or full path to a YAML file.",
+        default="blackjack_local",
+        help="Configuration file name (without .yaml extension, relative to "
+        "envs/gymnasium/configs), or full path to a YAML file.",
     )
     return parser.parse_args()
 
@@ -110,12 +111,13 @@ async def main():
 
             # Calculate and log action accuracy based on EpisodeState fields
             if episode_summary["num_total_actions"] > 0:
-                accuracy = (
-                    episode_summary["num_correct_actions"]
-                    / episode_summary["num_total_actions"]
+                accuracy = episode_summary["num_correct_actions"] / max(
+                    1, episode_summary["num_total_actions"]
                 )
                 logger.info(
-                    f"Action accuracy (valid tool calls): {episode_summary['num_correct_actions']}/{episode_summary['num_total_actions']} ({accuracy:.2%})"
+                    f"Action accuracy (valid tool calls): "
+                    f"{episode_summary['num_correct_actions']}/{episode_summary['num_total_actions']} "
+                    f"({accuracy:.2%})"
                 )
             else:
                 logger.info(

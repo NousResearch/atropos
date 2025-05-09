@@ -599,7 +599,8 @@ class BaseEnv(ABC):
             scored_data: List or single scored item(s) to send.
             item: Optional item for context.
             do_send_to_api: Whether to actually send the data to the API.
-            abort_on_any_max_length_exceeded: If True, skips sending if any token sequence in any batch exceeds max_token_len, aborting the entire operation.
+            abort_on_any_max_length_exceeded: If True, skips sending if any token sequence
+                in any batch exceeds max_token_len, aborting the entire operation.
         """
         if scored_data is None:
             logger.debug("handle_send_to_api: scored_data is None, returning.")
@@ -694,7 +695,8 @@ class BaseEnv(ABC):
             ):
                 token_lengths = [len(x) for x in batch_tokens if x is not None]
                 logger.warning(
-                    f"Token length limit exceeded in batch {i}, aborting send operation due to abort_on_any_max_length_exceeded=True. "
+                    f"Token length limit exceeded in batch {i}, "
+                    f"aborting send operation due to abort_on_any_max_length_exceeded=True. "
                     f"Max token len configured: {self.max_token_len}. "
                     f"Batch token lengths: {token_lengths}. "
                     f"First few scores: {str(batch_scores[:3])}"
@@ -728,14 +730,17 @@ class BaseEnv(ABC):
                                 )
                             except Exception as e:
                                 logger.error(
-                                    f"Error decoding token sequence {token_seq_idx} for messages in valid batch {batch_idx}: {e}. Sequence (first 10 tokens): {str(token_sequence[:10])}"
+                                    f"Error decoding token sequence {token_seq_idx} for messages in "
+                                    f"valid batch {batch_idx}: {e}. Sequence (first 10 tokens): "
+                                    f"{str(token_sequence[:10])}"
                                 )
                                 decoded_messages.append(
                                     f"DECODING_ERROR: {e}"
                                 )  # Placeholder for error
                         else:
                             logger.warning(
-                                f"Token sequence {token_seq_idx} in valid batch {batch_idx} is None, cannot decode for messages."
+                                f"Token sequence {token_seq_idx} in valid batch {batch_idx} "
+                                f"is None, cannot decode for messages."
                             )
                             decoded_messages.append(None)  # Handle None token_sequence
                     batch_data["messages"] = decoded_messages
@@ -761,15 +766,23 @@ class BaseEnv(ABC):
                 payload_to_send = (
                     valid_batches[0] if len(valid_batches) == 1 else valid_batches
                 )
+                first_item_keys_str = "N/A"
+                if isinstance(payload_to_send, list) and payload_to_send:
+                    first_item_keys_str = list(payload_to_send[0].keys())
+                elif not isinstance(payload_to_send, list):
+                    first_item_keys_str = list(payload_to_send.keys())
                 logger.debug(
-                    f"Sending {len(valid_batches)} valid batch(es) to API. Payload type: {type(payload_to_send)}. First item keys (if list): {list(payload_to_send[0].keys()) if isinstance(payload_to_send, list) and payload_to_send else list(payload_to_send.keys()) if not isinstance(payload_to_send, list) else 'N/A'}"
+                    f"Sending {len(valid_batches)} valid batch(es) to API. "
+                    f"Payload type: {type(payload_to_send)}. "
+                    f"First item keys: {first_item_keys_str}"
                 )
                 await self._send_scored_data_to_api(payload_to_send)
             except (
                 Exception
             ) as e:  # Catching general Exception as _send_scored_data_to_api might raise various errors
                 logger.error(
-                    f"Failed to send {len(valid_batches)} scored batch(es) after retries: {e}"
+                    f"Failed to send {len(valid_batches)} "
+                    f"scored batch(es) after retries: {e}"
                 )
         else:
             logger.debug(
@@ -794,9 +807,9 @@ class BaseEnv(ABC):
         # do a rollout with item
         try:
             to_postprocess, to_backlog = await self.collect_trajectories(item)
-        except Exception as e:
+        except Exception:
             logger.exception(
-                f"handle_env: Exception during collect_trajectories for {item_uuid}: {e}"
+                f"handle_env: Exception during collect_trajectories for {item_uuid}"
             )
             to_postprocess = None
             to_backlog = []

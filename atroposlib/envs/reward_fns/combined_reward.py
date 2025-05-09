@@ -68,7 +68,8 @@ class CombinedReward(RewardFunction):
                 rewards = reward_fn.compute(completions, **kwargs)
                 if len(rewards) != len(completions):
                     logger.error(
-                        f"[{self.name}] Sub-reward {reward_fn.name} returned {len(rewards)} scores, expected {len(completions)}. Skipping."
+                        f"[{self.name}] Sub-reward {reward_fn.name} returned {len(rewards)} scores, "
+                        f"expected {len(completions)}. Skipping."
                     )
                     rewards = [0.0] * len(
                         completions
@@ -79,8 +80,10 @@ class CombinedReward(RewardFunction):
                 )
                 all_rewards_dict[reward_fn.name] = rewards
 
-                # Aggregate scores: sum the raw score from the sub-reward, multiplied by the sub-reward's own weight.
-                # This allows each sub-reward to contribute proportionally to the combined total before any overall normalization.
+                # Aggregate scores: sum the raw score from the sub-reward,
+                # multiplied by the sub-reward's own weight.
+                # This allows each sub-reward to contribute proportionally
+                # to the combined total before any overall normalization.
                 for i, r_raw in enumerate(
                     rewards
                 ):  # r_raw is the raw score from sub_reward_fn.compute()
@@ -94,12 +97,14 @@ class CombinedReward(RewardFunction):
                 all_rewards_dict[reward_fn.name] = [0.0] * len(completions)
 
         logger.debug(
-            f"[{self.name}]  -> Combined rewards before (any potential parent) weighting: {[f'{r:.4f}' for r in combined_rewards]}"
+            f"[{self.name}]  -> Combined rewards before (any potential parent) "
+            f"weighting: {[f'{r:.4f}' for r in combined_rewards]}"
         )
 
         # Normalization logic has been removed.
         # The combined_rewards now represent the sum of weighted raw scores from sub-rewards.
         # The CombinedReward's own weight (self.weight) will be applied by the base RewardFunction.__call__ method.
 
-        # logger.debug(f"[{self.name}]  -> Final combined rewards after normalization: {[f'{r:.4f}' for r in combined_rewards]}") # Log referred to normalization
+        # logger.debug(f"[{self.name}]  -> Final combined rewards after normalization: "
+        #              f"{[f'{r:.4f}' for r in combined_rewards]}") # Log referred to normalization
         return combined_rewards

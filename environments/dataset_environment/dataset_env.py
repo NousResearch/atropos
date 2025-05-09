@@ -82,7 +82,8 @@ class DatasetEnv(BaseEnv):
             logger.warning(
                 f"DatasetEnv.__init__: Configured 'ground_truth_field' was the string \"None\". "
                 f"Setting to Python None, so no specific ground truth field will be looked up by default. "
-                f"The 'answer_field' ('{self.config.answer_field}') will likely be used as fallback by reward functions."
+                f"The 'answer_field' ('{self.config.answer_field}') "
+                f"will likely be used as fallback by reward functions."
             )
             self.config.ground_truth_field = None
 
@@ -126,7 +127,8 @@ class DatasetEnv(BaseEnv):
                 self.config.reward_functions, list
             ):
                 logger.warning(
-                    f"DatasetEnv.__init__: Original reward_functions config for single reward: {self.config.reward_functions}"
+                    f"DatasetEnv.__init__: Original reward_functions config for single reward: "
+                    f"{self.config.reward_functions}"
                 )
         else:
             logger.warning("DatasetEnv.__init__: self.reward_function is None.")
@@ -180,7 +182,9 @@ class DatasetEnv(BaseEnv):
 
         logger.warning(f"get_next_item: item_data.keys(): {list(item_data.keys())}")
         logger.warning(
-            f"get_next_item: config: prompt_field='{self.config.prompt_field}', answer_field='{self.config.answer_field}', ground_truth_field='{self.config.ground_truth_field}'"
+            f"get_next_item: config: prompt_field='{self.config.prompt_field}', "
+            f"answer_field='{self.config.answer_field}', "
+            f"ground_truth_field='{self.config.ground_truth_field}'"
         )
         logger.warning(
             f"get_next_item: raw_prompt_data: {item_data.get(self.config.prompt_field)}"
@@ -349,7 +353,8 @@ class DatasetEnv(BaseEnv):
             f"score: self.current_item (type: {type(self.current_item)}): {self.current_item}"
         )
         logger.warning(
-            f"score: config: answer_field='{self.config.answer_field}', ground_truth_field='{self.config.ground_truth_field}'"
+            f"score: config: answer_field='{self.config.answer_field}', "
+            f"ground_truth_field='{self.config.ground_truth_field}'"
         )
 
         scores = ScoredDataGroup()
@@ -590,7 +595,9 @@ class DatasetEnv(BaseEnv):
                     "base_url": base_url,
                 }
                 logger.info(
-                    f"Creating OpenaiConfig with args: model='{model_name}', base_url='{base_url}', key_present={api_key != 'x'}, requests={num_requests}"
+                    f"Creating OpenaiConfig with args: model='{model_name}', "
+                    f"base_url='{base_url}', key_present={api_key != 'x'}, "
+                    f"requests={num_requests}"
                 )
                 server_confs.append(OpenaiConfig(**openai_config_args))
 
@@ -620,7 +627,9 @@ class DatasetEnv(BaseEnv):
                     )
                 ]
                 logger.info(
-                    f"Created default OpenaiConfig: model='{server_confs[0].model_name}', base_url='{server_confs[0].base_url}', key_present={server_confs[0].api_key != 'x'}"
+                    f"Created default OpenaiConfig: model='{server_confs[0].model_name}', "
+                    f"base_url='{server_confs[0].base_url}', "
+                    f"key_present={server_confs[0].api_key != 'x'}"
                 )
 
             return env_conf, server_confs

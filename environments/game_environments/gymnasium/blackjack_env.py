@@ -29,25 +29,19 @@ class BlackjackEnvConfig(BaseEnvConfig):
     max_think_chars_history: int = 3000
     max_trajectory_tokens: int = 24576
     debug_mode: bool = False
-    group_size: int = 16  # G for GRPO
+    group_size: int = 16
     mc_samples: int = 3  # lowish K for MC value estimation
     reward_functions: List[Union[str, Dict[str, Any]]] = []
     environment_reward_weight: float = 0.5
 
 
 class BlackjackScoredDataGroup(ScoredDataGroup):
-    seed: int  # Seed of the trajectory this step belongs to
-    # Fields below are lists, where each element corresponds to one of the G alternatives
-    tokens: Optional[List[List[int]]] = None  # List of token lists for G alternatives
-    masks: Optional[List[List[int]]] = None  # List of mask lists for G alternatives
-    scores: Optional[List[float]] = None  # List of advantage scores for G alternatives
-    messages: Optional[List[List[Dict]]] = (
-        None  # List of message lists for G alternatives
-    )
-    parsed_actions: Optional[List[int]] = (
-        None  # List of parsed actions (0, 1, or -1) for G alternatives
-    )
-    # Removed singular parsed_action
+    seed: int
+    tokens: Optional[List[List[int]]] = None
+    masks: Optional[List[List[int]]] = None
+    scores: Optional[List[float]] = None
+    messages: Optional[List[List[Dict]]] = None
+    parsed_actions: Optional[List[int]] = None
 
 
 class EpisodeState:
@@ -59,8 +53,8 @@ class EpisodeState:
         self.step_rewards: List[float] = []
         self.total_reward: float = 0.0
         self.num_steps: int = 0
-        self.num_correct_actions: int = 0  # Added for action accuracy tracking
-        self.num_total_actions: int = 0  # Added for action accuracy tracking
+        self.num_correct_actions: int = 0
+        self.num_total_actions: int = 0
 
 
 class BlackjackEnv(BaseEnv):
@@ -94,19 +88,19 @@ class BlackjackEnv(BaseEnv):
             }
         ]
 
-        # Initialize reward function
         self.reward_function = self._initialize_reward_function()
 
         tools_json = json.dumps(self.tools)
         self.system_prompt = (
-            "You are an AI agent playing Blackjack who uses extreme long chains of thought to carefully consider the probabilities and optimal strategy. "
+            "You are an AI agent playing Blackjack who uses extreme long chains of thought "
+            "to carefully consider the probabilities and optimal strategy. "
             "You need to decide whether to hit or stick based on your current hand and the dealer's showing card.\n\n"
             "You should enclose your thoughts and internal monologue inside <think> </think> tags, and then "
             "provide your decision using the take_action function call. You may use extremely long chains "
             "of thought to carefully consider the probabilities and optimal strategy.\n\n"
             f"<tools>\n{tools_json}\n</tools>\n\n"
-            "For your function call, return a JSON object with function name and arguments within <tool_call> </tool_call> "
-            "tags with the following schema:\n"
+            "For your function call, return a JSON object with function name and arguments "
+            "within <tool_call> </tool_call> tags with the following schema:\n"
             '<tool_call>\n{"arguments": {"action": "hit"}, "name": "take_action"}\n</tool_call>\n\n'
             "Your full answer format should be:\n"
             "<think>\n[Your detailed reasoning process about whether to hit or stick]\n</think>\n\n"
@@ -117,17 +111,16 @@ class BlackjackEnv(BaseEnv):
     def _initialize_reward_function(self):
         """Initialize the reward function for scoring based on self.config.reward_functions."""
         if hasattr(self.config, "reward_functions") and self.config.reward_functions:
-            # The config directly provides the list of reward configurations (strings or dicts)
             reward_configs = self.config.reward_functions
             logger.info(
-                f"[_initialize_reward_function] Initializing with reward_functions from config: {reward_configs}"
+                f"[_initialize_reward_function] Initializing with reward_functions "
+                f"from config: {reward_configs}"
             )
 
-            if (
-                not reward_configs
-            ):  # Should be caught by the outer if, but as a safeguard
+            if not reward_configs:
                 logger.warning(
-                    "[_initialize_reward_function] reward_functions list is empty after access. No reward function will be active."
+                    "[_initialize_reward_function] reward_functions list is empty "
+                    "after access. No reward function will be active."
                 )
                 return None
 
@@ -136,13 +129,11 @@ class BlackjackEnv(BaseEnv):
                     logger.debug(
                         f"[_initialize_reward_function] Creating single reward function from: {reward_configs[0]}"
                     )
-                    # If reward_configs[0] is a string like "format", the registry.create
-                    # will try to instantiate FormatReward. If it's a dict, it uses that directly.
-                    # The create method handles passing 'weight' and 'params' from the dict to the reward constructor.
                     return registry.create(reward_configs[0])
                 except Exception as e:
                     logger.error(
-                        f"[_initialize_reward_function] Failed to create single reward function from config {reward_configs[0]}: {e}",
+                        f"[_initialize_reward_function] Failed to create single reward function from config "
+                        f"{reward_configs[0]}: {e}",
                         exc_info=True,
                     )
                     return None
@@ -151,10 +142,7 @@ class BlackjackEnv(BaseEnv):
                     logger.debug(
                         f"[_initialize_reward_function] Creating CombinedReward function from: {reward_configs}"
                     )
-                    # CombinedReward will instantiate each item in reward_configs using registry.create
-                    return CombinedReward(
-                        rewards=reward_configs
-                    )  # Normalization removed previously
+                    return CombinedReward(rewards=reward_configs)
                 except Exception as e:
                     logger.error(
                         f"[_initialize_reward_function] Failed to create CombinedReward function from configs: {e}",
@@ -163,7 +151,8 @@ class BlackjackEnv(BaseEnv):
                     return None
         else:
             logger.info(
-                "[_initialize_reward_function] No 'reward_functions' key in config or it's empty. No specific reward function (like format/tool_call) will be active."
+                "[_initialize_reward_function] No 'reward_functions' key in config or it's empty. "
+                "No specific reward function (like format/tool_call) will be active."
             )
         return None
 
@@ -185,25 +174,22 @@ class BlackjackEnv(BaseEnv):
 
     def _score_response(
         self,
-        env_reward: float,  # Raw reward from the environment step
-        response_text: str,  # Full agent response text (<think> + <tool_call>)
-        parsed_action: int,  # Parsed action (0 for stick, 1 for hit, -1 for error)
-        episode_seed: int,  # Seed of the current episode for logging context
+        env_reward: float,
+        response_text: str,
+        parsed_action: int,
+        episode_seed: int,
     ) -> float:
         """
         Calculates a combined score for a single agent response based on environment and format rewards.
         """
-        format_or_tool_call_reward_component = (
-            0.0  # This will be the already weighted score from self.reward_function
-        )
-        current_env_reward = env_reward  # Start with the raw environment reward
+        format_or_tool_call_reward_component = 0.0
+        current_env_reward = env_reward
 
-        # Apply a penalty if the action parsing failed
         if parsed_action == -1:
-            # This penalty is for not adhering to the tool call format that allows parsing.
             current_env_reward -= 0.5
             logger.debug(
-                f"[_score_response Seed: {episode_seed}] Penalty applied to env_reward for invalid action format (-0.5). Current env_reward: {current_env_reward}"
+                f"[_score_response Seed: {episode_seed}] Penalty applied to env_reward for "
+                f"invalid action format (-0.5). Current env_reward: {current_env_reward}"
             )
 
         if self.reward_function:
@@ -215,27 +201,28 @@ class BlackjackEnv(BaseEnv):
                 if reward_func_output_list and len(reward_func_output_list) > 0:
                     format_or_tool_call_reward_component = reward_func_output_list[0]
                     logger.debug(
-                        f"[_score_response Seed: {episode_seed}] Output from self.reward_function (e.g., format/tool_call): {format_or_tool_call_reward_component:.4f}"
+                        f"[_score_response Seed: {episode_seed}] Output from self.reward_function "
+                        f"(e.g., format/tool_call): {format_or_tool_call_reward_component:.4f}"
                     )
                 else:
                     logger.warning(
-                        f"[_score_response Seed: {episode_seed}] self.reward_function returned empty or invalid result: {reward_func_output_list}"
+                        f"[_score_response Seed: {episode_seed}] self.reward_function returned "
+                        f"empty or invalid result: {reward_func_output_list}"
                     )
             except Exception as e:
                 logger.error(
-                    f"[_score_response Seed: {episode_seed}] Error calculating reward via self.reward_function: {e}",
+                    f"[_score_response Seed: {episode_seed}] Error calculating reward via "
+                    f"self.reward_function: {e}",
                     exc_info=True,
                 )
         else:
             logger.debug(
-                f"[_score_response Seed: {episode_seed}] No self.reward_function active, format_or_tool_call_reward_component is 0."
+                f"[_score_response Seed: {episode_seed}] No self.reward_function active, "
+                f"format_or_tool_call_reward_component is 0."
             )
 
         env_w = self.config.environment_reward_weight
-        # fmt_w = self.config.format_reward_weight # Removed, format_or_tool_call_reward_component is already weighted by its YAML config
 
-        # Calculate the final combined score
-        # The format_or_tool_call_reward_component is the output of self.reward_function(), which is already weighted.
         combined_score = (
             env_w * current_env_reward
         ) + format_or_tool_call_reward_component
@@ -249,7 +236,7 @@ class BlackjackEnv(BaseEnv):
         return combined_score
 
     def _parse_tool_call(self, response: str) -> int:
-        if not response:  # Explicitly check for empty response string
+        if not response:
             logger.warning(
                 "Attempted to parse an empty response string. Returning invalid action (-1)."
             )
@@ -276,7 +263,8 @@ class BlackjackEnv(BaseEnv):
             return 0
         else:
             logger.warning(
-                f"Successfully parsed tool call, but action is invalid. Action: '{action}'. Full response: '{response}'. Parsed args: {parsed_args}"
+                f"Successfully parsed tool call, but action is invalid. Action: '{action}'. "
+                f"Full response: '{response}'. Parsed args: {parsed_args}"
             )
             return -1
 
@@ -307,40 +295,34 @@ class BlackjackEnv(BaseEnv):
         Args:
             episode_seed_for_sim: The seed of the original episode to ensure deterministic env creation.
             env_actions_to_replay: List of environment actions (0 or 1) taken to reach the current state s.
-            prompt_messages_for_llm_first_step: Message history up to state s, used to prompt LLM for the first action in simulation.
+            prompt_messages_for_llm_first_step: Message history up to state s, used to prompt LLM for
+                the first action in simulation.
             K: Number of Monte Carlo samples.
         """
         all_rollout_returns = []
-        max_sim_turns = (
-            self.config.max_turns or 5
-        )  # Use same max_turns as main trajectory for consistency
+        max_sim_turns = self.config.max_turns or 5
 
         for i in range(K):
-            sim_env = None  # Ensure sim_env is scoped correctly for finally block
+            sim_env = None
             try:
                 sim_env = gymnasium.make(self.config.env_name)
                 current_sim_obs, _ = sim_env.reset(seed=episode_seed_for_sim)
 
-                # Replay history to reach the current state s
-                # This brings sim_env to the same state as the main env was in when state s was observed.
                 for action_idx, prev_action in enumerate(env_actions_to_replay):
                     current_sim_obs, _, term_replay, trunc_replay, _ = sim_env.step(
                         prev_action
                     )
                     if term_replay or trunc_replay:
                         logger.warning(
-                            f"[_estimate_value Sample {i+1}/{K}] Simulation env terminated during action replay (action {action_idx+1}/{len(env_actions_to_replay)} of prev_actions). State s was already terminal. Value is 0."
+                            f"[_estimate_value Sample {i+1}/{K}] Simulation env terminated during action replay "
+                            f"(action {action_idx+1}/{len(env_actions_to_replay)} of prev_actions). "
+                            f"State s was already terminal. Value is 0."
                         )
                         all_rollout_returns.append(0.0)
-                        # Continue to next MC sample if state was already terminal
                         # This means V(s_terminal) = 0, which is correct.
-                        # Need to break inner loop and go to next K iteration.
                         break
-                else:  # Only execute if the for loop completed without break (i.e., replay didn't terminate)
-                    # Now, sim_env is at state s. Start MC rollout from here.
+                else:
                     rollout_reward_for_this_sample = 0.0
-                    # current_mc_messages is the history for the LLM *within this MC rollout*.
-                    # It starts with the history that led to state s.
                     current_mc_messages = prompt_messages_for_llm_first_step.copy()
                     term_mc, trunc_mc = False, False
 
@@ -348,7 +330,6 @@ class BlackjackEnv(BaseEnv):
                         agent_prompt_content = (
                             "<think>\n" if self.config.thinking_active else ""
                         )
-                        # The messages sent to LLM for this turn of MC rollout
                         messages_for_llm_this_mc_turn = current_mc_messages.copy()
                         messages_for_llm_this_mc_turn.append(
                             {"role": "agent", "content": agent_prompt_content}
@@ -358,9 +339,9 @@ class BlackjackEnv(BaseEnv):
                             messages_for_llm_this_mc_turn, n=1
                         )
                         if not responses:
-                            # If API fails during MC rollout, this sample contributes 0 to the value estimate for state s.
                             logger.warning(
-                                f"[_estimate_value Sample {i+1}/{K}, Turn {turn_mc+1}] No API response. Ending this MC sample with accumulated reward {rollout_reward_for_this_sample}."
+                                f"[_estimate_value Sample {i+1}/{K}, Turn {turn_mc+1}] No API response. "
+                                f"Ending this MC sample with accumulated reward {rollout_reward_for_this_sample}."
                             )
                             break
 
@@ -372,12 +353,8 @@ class BlackjackEnv(BaseEnv):
                         sim_obs_next, reward_mc_step, term_mc, trunc_mc, _ = (
                             sim_env.step(action_mc)
                         )
-                        rollout_reward_for_this_sample += (
-                            reward_mc_step  # Accumulate reward for this MC rollout
-                        )
+                        rollout_reward_for_this_sample += reward_mc_step
 
-                        # Update message history for the *next* turn of this MC rollout
-                        # Truncate thinking to save space in the message history
                         response_for_history = self._truncate_thinking_for_history(
                             full_agent_response, self.config.max_think_chars_history
                         )
@@ -394,7 +371,7 @@ class BlackjackEnv(BaseEnv):
                             )
 
                         if term_mc or trunc_mc:
-                            break  # End this MC sample's rollout
+                            break
 
                     all_rollout_returns.append(rollout_reward_for_this_sample)
 
@@ -403,9 +380,7 @@ class BlackjackEnv(BaseEnv):
                     f"[_estimate_value Sample {i+1}/{K}] Unexpected error: {e_mc_sample}",
                     exc_info=True,
                 )
-                all_rollout_returns.append(
-                    0.0
-                )  # Assign 0 reward if a sample errors out
+                all_rollout_returns.append(0.0)
             finally:
                 if sim_env is not None:
                     sim_env.close()
@@ -418,15 +393,13 @@ class BlackjackEnv(BaseEnv):
         K = self.config.mc_samples
         max_turns = self.config.max_turns or 5
 
-        # This list will store the BlackjackScoredDataGroup for each step of the single trajectory
         trajectory_data_for_trainer: List[BlackjackScoredDataGroup] = []
-        episode_summary_metrics: Optional[Dict[str, Any]] = None  # Initialize here
+        episode_summary_metrics: Optional[Dict[str, Any]] = None
 
         logger.info(
             f"[Collect Trajectory Seed: {seed}] Starting trajectory. Group size G={G}, MC samples K={K}."
         )
 
-        # --- Initialize the single trajectory episode ---
         try:
             ep = self._get_or_create_episode(seed)
         except Exception as e:
@@ -434,21 +407,19 @@ class BlackjackEnv(BaseEnv):
                 f"[Collect Trajectory Seed: {seed}] Failed to create/get episode: {e}",
                 exc_info=True,
             )
-            return []  # Cannot proceed
+            return []
 
-        # --- Main loop for the single trajectory ---
         for turn in range(max_turns):
             current_state_messages = ep.message_history.copy()
             logger.debug(
-                f"[Collect Trajectory Seed: {seed} Turn: {turn+1}/{max_turns}] Current state history length: {len(current_state_messages)}"
+                f"[Collect Trajectory Seed: {seed} Turn: {turn+1}/{max_turns}] "
+                f"Current state history length: {len(current_state_messages)}"
             )
 
-            # --- Estimate V(s_t) ---
-            # Actions taken to reach this state are ep.actions
             try:
                 value_t = await self._estimate_value(
                     episode_seed_for_sim=ep.seed,
-                    env_actions_to_replay=ep.actions,  # Actions leading to current state s_t
+                    env_actions_to_replay=ep.actions,
                     prompt_messages_for_llm_first_step=current_state_messages,
                     K=K,
                 )
@@ -460,9 +431,8 @@ class BlackjackEnv(BaseEnv):
                     f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Error estimating V(s_t): {e_vt}",
                     exc_info=True,
                 )
-                break  # Cannot proceed without V(s_t)
+                break
 
-            # --- Sample G alternative responses ---
             messages_for_llm = current_state_messages.copy()
             agent_prompt_content = "<think>\n" if self.config.thinking_active else ""
             messages_for_llm.append({"role": "agent", "content": agent_prompt_content})
@@ -471,7 +441,9 @@ class BlackjackEnv(BaseEnv):
                 responses = await self._sample_response(messages_for_llm, n=G)
                 if len(responses) != G:
                     logger.error(
-                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Expected {G} responses, got {len(responses)}. Aborting trajectory."
+                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                        f"Expected {G} responses, got {len(responses)}. "
+                        f"Aborting trajectory."
                     )
                     break
             except Exception as e_sample:
@@ -481,10 +453,9 @@ class BlackjackEnv(BaseEnv):
                 )
                 break
 
-            # --- Evaluate each of the G alternatives ---
             alt_full_responses: List[str] = []
             alt_parsed_actions: List[int] = []
-            alt_env_actions: List[int] = []  # Action actually stepped in sim (0 or 1)
+            alt_env_actions: List[int] = []
             alt_raw_rewards: List[float] = []
             alt_combined_rewards: List[float] = []
             alt_next_state_msgs: List[List[Dict]] = []
@@ -505,7 +476,6 @@ class BlackjackEnv(BaseEnv):
                 env_action = parsed_action if parsed_action != -1 else 0
                 alt_env_actions.append(env_action)
 
-                # Simulate this alternative action in a temporary environment
                 sim_env = None
                 raw_env_reward_i = 0.0
                 term_i, trunc_i = False, False
@@ -513,39 +483,32 @@ class BlackjackEnv(BaseEnv):
                 try:
                     sim_env = gymnasium.make(self.config.env_name)
                     sim_obs, _ = sim_env.reset(seed=ep.seed)
-                    # Replay history
                     for prev_action in ep.actions:
                         sim_obs, _, term_replay, trunc_replay, _ = sim_env.step(
                             prev_action
                         )
                         if term_replay or trunc_replay:
-                            # This shouldn't happen if V(s_t) was estimated correctly, unless env is stochastic despite seed? Safety check.
                             logger.error(
-                                f"[Collect Trajectory Seed: {seed} Turn: {turn+1} Alt: {i}] Sim env terminated during replay. State mismatch?"
+                                f"[Collect Trajectory Seed: {seed} Turn: {turn+1} Alt: {i}] "
+                                f"Sim env terminated during replay. State mismatch?"
                             )
-                            term_i, trunc_i = True, True  # Treat as terminal
-                            raw_env_reward_i = (
-                                0.0  # No reward if state was already terminal?
-                            )
+                            term_i, trunc_i = True, True
+                            raw_env_reward_i = 0.0
                             break
 
-                    # If replay succeeded, step with the alternative action
                     if not (term_i or trunc_i):
                         sim_obs_next, raw_env_reward_i, term_i, trunc_i, _ = (
                             sim_env.step(env_action)
                         )
 
-                    # Store results for this alternative
                     alt_raw_rewards.append(raw_env_reward_i)
                     alt_is_terminal.append(term_i or trunc_i)
 
-                    # Calculate combined reward for this alternative
                     combined_reward_i = self._score_response(
                         raw_env_reward_i, full_agent_response, parsed_action, ep.seed
                     )
                     alt_combined_rewards.append(combined_reward_i)
 
-                    # Construct next state messages for V(s') estimation and tokenization
                     current_state_plus_response = current_state_messages + [
                         {"role": "agent", "content": full_agent_response}
                     ]
@@ -556,11 +519,10 @@ class BlackjackEnv(BaseEnv):
                                 "content": self._format_observation(sim_obs_next),
                             }
                         ]
-                    else:  # Handle cases where sim_obs_next might be None (e.g., error during step)
+                    else:
                         next_state_msgs_i = current_state_plus_response
                     alt_next_state_msgs.append(next_state_msgs_i)
 
-                    # Tokenize this alternative's full step message history
                     tokenized_i = tokenize_for_trainer(
                         self.tokenizer, next_state_msgs_i
                     )
@@ -569,31 +531,27 @@ class BlackjackEnv(BaseEnv):
 
                 except Exception as e_sim:
                     logger.error(
-                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1} Alt: {i}] Error simulating action {env_action}: {e_sim}",
+                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1} Alt: {i}] "
+                        f"Error simulating action {env_action}: {e_sim}",
                         exc_info=True,
                     )
-                    # Handle error by adding placeholder/default values
                     alt_raw_rewards.append(0.0)
-                    alt_combined_rewards.append(-1.0)  # Penalize simulation error
+                    alt_combined_rewards.append(-1.0)
                     alt_next_state_msgs.append(
                         current_state_messages
                         + [{"role": "agent", "content": full_agent_response}]
-                    )  # No env obs
-                    alt_is_terminal.append(True)  # Assume terminal on error
+                    )
+                    alt_is_terminal.append(True)
                     alt_tokens.append([])
                     alt_masks.append([])
                 finally:
                     if sim_env:
                         sim_env.close()
 
-            # --- Estimate V(s') for all alternatives ---
-            # value_next_list = [0.0] * G # REMOVED - Unused variable
-            # alt_value_next will store the estimated V(s') for each alternative
             alt_value_next: List[float] = []
             for i in range(G):
                 if not alt_is_terminal[i]:
                     try:
-                        # Actions to reach s'_i = ep.actions + [env_action_i]
                         actions_to_reach_s_prime = ep.actions + [alt_env_actions[i]]
                         value_next_i = await self._estimate_value(
                             episode_seed_for_sim=ep.seed,
@@ -604,25 +562,24 @@ class BlackjackEnv(BaseEnv):
                         alt_value_next.append(value_next_i)
                     except Exception as e_vn:
                         logger.error(
-                            f"[Collect Trajectory Seed: {seed} Turn: {turn+1} Alt: {i}] Error estimating V(s'): {e_vn}",
+                            f"[Collect Trajectory Seed: {seed} Turn: {turn+1} Alt: {i}] "
+                            f"Error estimating V(s'): {e_vn}",
                             exc_info=True,
                         )
-                        alt_value_next.append(0.0)  # Default to 0 on error
+                        alt_value_next.append(0.0)
                 else:
                     alt_value_next.append(0.0)  # V(terminal) = 0
 
-            # --- Calculate Advantage for all alternatives ---
             for i in range(G):
                 # Advantage = R_combined + gamma * V_raw(s') - V_raw(s) (gamma=1)
                 advantage_i = alt_combined_rewards[i] + alt_value_next[i] - value_t
                 alt_advantages.append(advantage_i)
                 logger.debug(
-                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1} Alt: {i}] CombinedR={alt_combined_rewards[i]:.2f}, V_t={value_t:.2f}, V_t+1={alt_value_next[i]:.2f} => Advantage={advantage_i:.2f}"
+                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1} Alt: {i}] "
+                    f"CombinedR={alt_combined_rewards[i]:.2f}, V_t={value_t:.2f}, "
+                    f"V_t+1={alt_value_next[i]:.2f} => Advantage={advantage_i:.2f}"
                 )
 
-            # --- Package data for trainer ---
-            # Ensure all lists have G elements, padding if necessary due to errors
-            # (Error handling above should add placeholders, but double-check lengths)
             if (
                 len(alt_tokens) != G
                 or len(alt_masks) != G
@@ -631,9 +588,10 @@ class BlackjackEnv(BaseEnv):
                 or len(alt_parsed_actions) != G
             ):
                 logger.error(
-                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Mismatch in alternative list lengths after processing. Aborting trajectory."
+                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                    f"Mismatch in alternative list lengths after processing. "
+                    f"Aborting trajectory."
                 )
-                # TODO: Consider more robust padding or error handling
                 break
 
             trajectory_data_for_trainer.append(
@@ -647,7 +605,6 @@ class BlackjackEnv(BaseEnv):
                 )
             )
 
-            # --- Choose action to advance the main trajectory ---
             best_advantage = -float("inf")
             best_advantage_idx = -1
             valid_indices_for_tiebreak = []
@@ -655,91 +612,84 @@ class BlackjackEnv(BaseEnv):
             for i in range(G):
                 if alt_advantages[i] > best_advantage:
                     best_advantage = alt_advantages[i]
-                    valid_indices_for_tiebreak = [i]  # Reset tie-break list
+                    valid_indices_for_tiebreak = [i]
                 elif alt_advantages[i] == best_advantage:
                     valid_indices_for_tiebreak.append(i)
 
-            if not valid_indices_for_tiebreak:  # Should not happen if G >= 1
+            if not valid_indices_for_tiebreak:
                 logger.error(
-                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] No best advantage index found. Defaulting to action 0."
+                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                    f"No best advantage index found. Defaulting to action 0."
                 )
-                best_advantage_idx = 0  # Fallback
+                best_advantage_idx = 0
             elif len(valid_indices_for_tiebreak) == 1:
                 best_advantage_idx = valid_indices_for_tiebreak[0]
             else:
-                # Tie-breaking: choose the one with the shortest response token length
                 try:
                     best_advantage_idx = min(
                         valid_indices_for_tiebreak, key=lambda idx: len(alt_tokens[idx])
                     )
                     logger.debug(
-                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Advantage tie break: chose index {best_advantage_idx} based on token length."
+                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                        f"Advantage tie break: chose index {best_advantage_idx} based on token length."
                     )
                 except IndexError:
                     logger.error(
-                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] IndexError during tie-breaking. Choosing first tied index {valid_indices_for_tiebreak[0]}.",
+                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] IndexError during tie-breaking. "
+                        f"Choosing first tied index {valid_indices_for_tiebreak[0]}.",
                         exc_info=True,
                     )
                     best_advantage_idx = valid_indices_for_tiebreak[0]
 
-            # Get the chosen action and response based on best advantage
             chosen_env_action = alt_env_actions[best_advantage_idx]
             chosen_full_response = alt_full_responses[best_advantage_idx]
             chosen_raw_env_reward = alt_raw_rewards[best_advantage_idx]
             chosen_is_terminal = alt_is_terminal[best_advantage_idx]
-            chosen_parsed_action = alt_parsed_actions[
-                best_advantage_idx
-            ]  # For action accuracy
+            chosen_parsed_action = alt_parsed_actions[best_advantage_idx]
 
             logger.info(
-                f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Chosen action to step env: {chosen_env_action} (from Alt {best_advantage_idx} with Adv {alt_advantages[best_advantage_idx]:.2f})"
+                f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Chosen action to step env: "
+                f"{chosen_env_action} (from Alt {best_advantage_idx} with "
+                f"Adv {alt_advantages[best_advantage_idx]:.2f})"
             )
 
-            # --- Update action accuracy for the chosen action ---
             ep.num_total_actions += 1
-            if chosen_parsed_action != -1:  # -1 indicates a parsing error
+            if chosen_parsed_action != -1:
                 ep.num_correct_actions += 1
 
-            # --- Update main episode state ---
-            # Action was already added during simulation loop, need to ensure it matches chosen one?
-            # No, ep.actions should store the sequence of *chosen* actions.
-            # Let's re-add the chosen action and reward to ep state.
-            # The history was advanced with *all* potential responses temporarily during eval loop,
-            # we need to reset it and add only the chosen one + actual env observation.
-            ep.message_history = current_state_messages  # Reset to state before this turn's agent responses
+            ep.message_history = current_state_messages
 
-            # Truncate thinking for history to save space
             response_for_history = self._truncate_thinking_for_history(
                 chosen_full_response, self.config.max_think_chars_history
             )
             ep.message_history.append(
                 {"role": "agent", "content": response_for_history}
-            )  # Add chosen response
+            )
 
-            # Re-step the *main* environment with the chosen action to get definitive obs for history
-            # (This seems redundant if the simulation was correct, but safer for state consistency)
             try:
                 main_obs, main_reward, main_term, main_trunc, main_info = ep.env.step(
                     chosen_env_action
                 )
-                # Sanity check: main_reward should ideally match chosen_raw_env_reward if env is deterministic with seed
                 if abs(main_reward - chosen_raw_env_reward) > 1e-6:
                     logger.warning(
-                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Mismatch between simulated reward ({chosen_raw_env_reward}) and main env step reward ({main_reward}) for chosen action {chosen_env_action}."
+                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                        f"Mismatch between simulated reward ({chosen_raw_env_reward}) and "
+                        f"main env step reward ({main_reward}) for chosen action {chosen_env_action}."
                     )
                 if (main_term or main_trunc) != chosen_is_terminal:
                     logger.warning(
-                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Mismatch between simulated terminal state ({chosen_is_terminal}) and main env step terminal state ({(main_term or main_trunc)}) for chosen action {chosen_env_action}."
+                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                        f"Mismatch between simulated terminal state ({chosen_is_terminal}) and "
+                        f"main env step terminal state ({(main_term or main_trunc)}) "
+                        f"for chosen action {chosen_env_action}."
                     )
 
-                # Use the results from the main env step
                 term = main_term
                 trunc = main_trunc
                 obs = main_obs
-                # Update action/reward lists with the chosen action's outcome
                 ep.actions.append(chosen_env_action)
                 ep.step_rewards.append(main_reward)
-                ep.num_steps += 1  # Increment steps only for the chosen path
+                ep.num_steps += 1
 
                 if obs:
                     ep.message_history.append(
@@ -750,26 +700,28 @@ class BlackjackEnv(BaseEnv):
                     )
             except Exception as e_main_step:
                 logger.error(
-                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Error stepping MAIN environment with chosen action {chosen_env_action}: {e_main_step}",
+                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                    f"Error stepping MAIN environment with chosen action {chosen_env_action}: {e_main_step}",
                     exc_info=True,
                 )
-                term, trunc = True, True  # Abort trajectory if main step fails
+                term, trunc = True, True
 
             if term or trunc:
                 ep.total_reward = sum(ep.step_rewards)
                 logger.info(
-                    f"[Collect Trajectory Seed: {seed}] Trajectory ended. Term={term}, Trunc={trunc}. Total raw env reward: {ep.total_reward}"
+                    f"[Collect Trajectory Seed: {seed}] Trajectory ended. "
+                    f"Term={term}, Trunc={trunc}. Total raw env reward: {ep.total_reward}"
                 )
-                break  # End the turn loop for this trajectory
+                break
 
-        # --- End of single trajectory collection ---
         final_raw_reward = sum(ep.step_rewards) if ep.step_rewards else 0.0
         logger.info(
-            f"[Collect Trajectory Seed: {seed}] Finished collecting trajectory. Steps collected: {len(trajectory_data_for_trainer)}, Final raw reward: {final_raw_reward:.2f}"
+            f"[Collect Trajectory Seed: {seed}] Finished collecting trajectory. "
+            f"Steps collected: {len(trajectory_data_for_trainer)}, "
+            f"Final raw reward: {final_raw_reward:.2f}"
         )
 
-        # Populate metrics for wandb logging
-        if ep:  # Ensure episode state exists
+        if ep:
             game_outcome = 0
             if final_raw_reward > 0:
                 game_outcome = 1
@@ -778,7 +730,7 @@ class BlackjackEnv(BaseEnv):
 
             episode_summary_metrics = {
                 "seed": ep.seed,
-                "total_reward": final_raw_reward,  # Sum of environment rewards for the episode
+                "total_reward": final_raw_reward,
                 "num_steps": ep.num_steps,
                 "num_correct_actions": ep.num_correct_actions,
                 "num_total_actions": ep.num_total_actions,
@@ -789,7 +741,6 @@ class BlackjackEnv(BaseEnv):
                 f"[Collect Trajectory Seed: {seed}] Added episode summary to buffer: {episode_summary_metrics}"
             )
 
-        # Clean up the main episode environment if it still exists
         if seed in self.episodes:
             try:
                 self.episodes[seed].env.close()
@@ -812,15 +763,10 @@ class BlackjackEnv(BaseEnv):
         self, item: Tuple[int, int]
     ) -> Tuple[List[BlackjackScoredDataGroup], List[Tuple[int, int]]]:
         seed, _ = item
-        traj = await self.collect_trajectory(
-            seed
-        )  # No longer returns episode_summary directly
+        traj = await self.collect_trajectory(seed)
         if not traj:
             logger.warning(f"[Collect Trajectories] Empty trajectory for seed {seed}.")
-        return (
-            traj,
-            [],
-        )  # Adheres to BaseEnv's expected Tuple[List[ScoredDataGroup], List[Item]]
+        return traj, []
 
     async def setup(self):
         pass
@@ -874,12 +820,10 @@ class BlackjackEnv(BaseEnv):
             metrics["total_reward"] += reward
             metrics["num_turns"] = turn + 1
 
-            # Truncate thinking for history to save space
             response_for_history = self._truncate_thinking_for_history(
                 full_agent_response, self.config.max_think_chars_history
             )
 
-            # Update message history with the truncated agent response
             ep.message_history.append(
                 {"role": "agent", "content": response_for_history}
             )
@@ -1142,7 +1086,8 @@ class BlackjackEnv(BaseEnv):
 
         for step_idx, original_step_data in enumerate(trajectory):
             logger.info(
-                f"[_ensure_trajectory_token_limit] Step {step_idx} has {len(original_step_data['messages'])} alternatives."
+                f"[_ensure_trajectory_token_limit] Step {step_idx} has "
+                f"{len(original_step_data['messages'])} alternatives."
             )
             if (
                 not original_step_data.get("messages")
@@ -1150,7 +1095,8 @@ class BlackjackEnv(BaseEnv):
                 or not original_step_data.get("masks")
             ):
                 logger.warning(
-                    f"[_ensure_trajectory_token_limit] Step {step_idx} is missing messages, tokens, or masks. Skipping."
+                    f"[_ensure_trajectory_token_limit] Step {step_idx} "
+                    f"is missing messages, tokens, or masks. Skipping."
                 )
                 continue
 
@@ -1178,7 +1124,8 @@ class BlackjackEnv(BaseEnv):
                 continue
 
             logger.info(
-                f"[_ensure_trajectory_token_limit] Step {step_idx} (max tokens: {max_initial_tokens}) exceeds limit ({self.config.max_trajectory_tokens}). Attempting uniform truncation."
+                f"[_ensure_trajectory_token_limit] Step {step_idx} (max tokens: {max_initial_tokens}) "
+                f"exceeds limit ({self.config.max_trajectory_tokens}). Attempting uniform truncation."
             )
 
             working_messages = [msgs.copy() for msgs in current_step_messages_orig]
@@ -1256,7 +1203,8 @@ class BlackjackEnv(BaseEnv):
                             working_messages[alt_idx].pop(1)
                         else:
                             logger.error(
-                                f"[_ensure_trajectory_token_limit] Critical error during pop for alt {alt_idx}, step {step_idx}."
+                                f"[_ensure_trajectory_token_limit] Critical error during pop for "
+                                f"alt {alt_idx}, step {step_idx}."
                             )
                             successfully_retokenized_all = False
                             break
@@ -1274,7 +1222,8 @@ class BlackjackEnv(BaseEnv):
                         )
                     except Exception as e:
                         logger.error(
-                            f"[_ensure_trajectory_token_limit] Error re-tokenizing alt {alt_idx} in step {step_idx} after truncation: {e}"
+                            f"[_ensure_trajectory_token_limit] Error re-tokenizing alt {alt_idx} "
+                            f"in step {step_idx} after truncation: {e}"
                         )
                         successfully_retokenized_all = False
                         break
@@ -1287,7 +1236,8 @@ class BlackjackEnv(BaseEnv):
                 working_masks = new_alt_masks_list
                 max_current_tokens = max_tokens_after_this_trunc
                 logger.debug(
-                    f"[_ensure_trajectory_token_limit] Step {step_idx}, after uniform pop of {min_pop_count}, max tokens: {max_current_tokens}"
+                    f"[_ensure_trajectory_token_limit] Step {step_idx}, after uniform pop of {min_pop_count}, "
+                    f"max tokens: {max_current_tokens}"
                 )
 
                 if max_current_tokens <= self.config.max_trajectory_tokens:
@@ -1305,19 +1255,23 @@ class BlackjackEnv(BaseEnv):
                 )
                 filtered_trajectory.append(updated_step_data)
                 logger.info(
-                    f"[_ensure_trajectory_token_limit] Step {step_idx} successfully truncated. Final max tokens: {max_current_tokens}"
+                    f"[_ensure_trajectory_token_limit] Step {step_idx} successfully truncated. "
+                    f"Final max tokens: {max_current_tokens}"
                 )
             else:
                 if max_current_tokens > self.config.max_trajectory_tokens:
                     logger.warning(
-                        f"[_ensure_trajectory_token_limit] Discarding step {step_idx}. Max tokens ({max_current_tokens}) still exceed limit "
-                        f"({self.config.max_trajectory_tokens}) after maximum possible uniform truncation or re-tokenization error."
+                        f"[_ensure_trajectory_token_limit] Discarding step {step_idx}. "
+                        f"Max tokens ({max_current_tokens}) still exceed limit "
+                        f"({self.config.max_trajectory_tokens}) after maximum possible "
+                        f"uniform truncation or re-tokenization error."
                     )
 
         if len(filtered_trajectory) < len(trajectory):
             logger.warning(
                 f"[_ensure_trajectory_token_limit] Filtered out {len(trajectory) - len(filtered_trajectory)} steps "
-                f"due to token limit constraints. Original trajectory length: {len(trajectory)}, Filtered: {len(filtered_trajectory)}"
+                f"due to token limit constraints. Original trajectory length: {len(trajectory)}, "
+                f"Filtered: {len(filtered_trajectory)}"
             )
         return filtered_trajectory
 
