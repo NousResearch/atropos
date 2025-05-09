@@ -44,10 +44,6 @@ class DatasetEnvConfig(BaseEnvConfig):
     include_messages_in_scoring: bool = Field(
         False, description="Whether to include messages in scoring"
     )
-    reward_funcs: List[str] = Field(
-        default_factory=list,
-        description="List of reward function names to apply (legacy)",
-    )
     reward_functions: List[Union[str, Dict[str, Any]]] = Field(
         default_factory=list,
         description="List of reward functions to apply (string names or full configs)",
@@ -99,13 +95,8 @@ class DatasetEnv(BaseEnv):
                 return CombinedReward(
                     rewards=self.config.reward_functions, normalization="sum"
                 )
-        elif hasattr(self.config, "reward_funcs") and self.config.reward_funcs:
-            if len(self.config.reward_funcs) == 1:
-                return registry.create(self.config.reward_funcs[0])
-            else:
-                return CombinedReward(
-                    rewards=self.config.reward_funcs, normalization="none"
-                )
+        logger.warning("No reward functions configured or reward_functions list is empty.")
+        return None
 
     async def setup(self):
         if self.config.dataset_path:
@@ -407,42 +398,48 @@ class DatasetEnv(BaseEnv):
 
     @classmethod
     def config_init(
-        cls, config_name: Optional[str] = None
+        cls, 
+        config_name: Optional[str] = None,
+        env_config_override: Optional[DatasetEnvConfig] = None  # Added to accept CLI overrides
     ) -> Tuple[DatasetEnvConfig, List[OpenaiConfig]]:
-        """Load settings from the local configs directory."""
+        """Load settings from the local configs directory, allowing for CLI overrides."""
         current_dir = os.path.dirname(os.path.abspath(__file__))
         config_file = config_name or "dataset_default.yaml"
         cfg_path = os.path.join(current_dir, "configs", config_file)
 
+        raw_from_yaml = {}
         try:
             if os.path.exists(cfg_path):
                 with open(cfg_path) as f:
-                    raw = yaml.safe_load(f) or {}
+                    raw_from_yaml = yaml.safe_load(f) or {}
                 logger.info(f"Loaded config from {cfg_path}")
             else:
+                # This case should ideally be handled by the fallback in the except block if it's critical
                 logger.warning(
-                    f"Config file not found at {cfg_path}, using empty defaults"
+                    f"Config file not found at {cfg_path}. Will proceed with env_config_override or defaults."
                 )
-                raw = {}
+            
+            # Merge CLI overrides: CLI values take precedence over YAML values
+            if env_config_override:
+                # Get non-default values from the override object provided by Tyro
+                override_dict = env_config_override.model_dump(exclude_none=True) # exclude_none to avoid overwriting with None if CLI arg wasn't set
+                raw_from_yaml.update(override_dict) # Update YAML data with CLI data
 
-            # Ensure debug_mode exists before creating config
-            if 'debug_mode' not in raw:
-                 raw['debug_mode'] = False # Default if missing in YAML
+            # Ensure debug_mode exists before creating config if not set by CLI or YAML
+            if 'debug_mode' not in raw_from_yaml:
+                 raw_from_yaml['debug_mode'] = False # Default if missing
 
-            env_conf = DatasetEnvConfig(**raw)
+            env_conf = DatasetEnvConfig(**raw_from_yaml)
 
-            # Validate that essential fields are loaded, even if Optional in type hint for Tyro
+            # Validate that essential fields are loaded (either from YAML or CLI override)
             if env_conf.dataset_name is None:
-                raise ValueError("dataset_name is required but was not found or is null in the configuration.")
+                raise ValueError("dataset_name is required but was not provided by YAML or CLI.")
             if env_conf.prompt_field is None:
-                raise ValueError("prompt_field is required but was not found or is null in the configuration.")
-            # reward_functions and reward_funcs default to [] via default_factory, so they should exist.
-            # If they needed to be non-empty, checks could be added here too.
+                raise ValueError("prompt_field is required but was not provided by YAML or CLI.")
 
             server_confs = []
-
-            # Updated server config loading
-            for sc_data in raw.get("server_configs", []):
+            # Server config loading from the potentially merged raw_from_yaml
+            for sc_data in raw_from_yaml.get("server_configs", []):
                 # Get values directly from YAML data
                 model_name = sc_data.get("model_name", os.getenv("OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"))
                 base_url = sc_data.get("base_url", os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"))
@@ -469,7 +466,7 @@ class DatasetEnv(BaseEnv):
                 server_confs.append(OpenaiConfig(**openai_config_args))
 
             # Provide a default server config ONLY if server_configs was completely missing
-            if "server_configs" not in raw:
+            if "server_configs" not in raw_from_yaml:
                 logger.warning("No 'server_configs' section found in YAML, creating default server config.")
                 default_api_key = os.getenv("OPENAI_API_KEY")
                 if not default_api_key:
@@ -489,9 +486,9 @@ class DatasetEnv(BaseEnv):
             return env_conf, server_confs
 
         except Exception as e:
-            logger.error(f"Error loading config: {e}")
-            # Provide minimal required fields for the fallback config to prevent ValidationError
-            return DatasetEnvConfig(dataset_name="default_dataset_on_error", prompt_field="default_prompt_on_error"), [
+            logger.error(f"Error loading config: {e}. Using hardcoded fallback.")
+            # Fallback if any error occurs, including validation errors from missing essential fields
+            return DatasetEnvConfig(dataset_name="default_dataset_on_error", prompt_field="default_prompt_on_error", debug_mode=False), [
                 OpenaiConfig(
                     model_name=os.getenv(
                         "OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
