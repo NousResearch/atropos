@@ -64,10 +64,9 @@ class FormatReward(RewardFunction):
                 all_tags_present = True
                 missing_tag = None
                 for tag in self.preferred_tags:
-                    # Pattern now requires at least one non-whitespace character inside the tag pair.
-                    # \s* allows for optional leading/trailing whitespace within the content part if desired,
-                    # but \S ensures there's some actual content.
-                    pattern = f"<{tag}>\s*\S.*?</{tag}>"
+                    # Pattern requires at least one non-whitespace character inside the tag pair.
+                    # [^<]* matches any character except '<', to keep search within current tag scope.
+                    pattern = f"<{tag}>[^<]*\S[^<]*</{tag}>"
                     if not re.search(pattern, content, flags):
                         all_tags_present = False
                         missing_tag = tag
@@ -80,8 +79,8 @@ class FormatReward(RewardFunction):
                 has_tags = False
                 found_tag = None
                 for tag in self.preferred_tags:
-                    # Pattern now requires at least one non-whitespace character inside the tag pair.
-                    pattern = f"<{tag}>\s*\S.*?</{tag}>"
+                    # Pattern requires at least one non-whitespace character inside the tag pair.
+                    pattern = f"<{tag}>[^<]*\S[^<]*</{tag}>"
                     if re.search(pattern, content, flags):
                         has_tags = True
                         found_tag = tag
