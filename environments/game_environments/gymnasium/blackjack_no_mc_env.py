@@ -127,14 +127,15 @@ class BlackjackEnv(BaseEnv):
 
         tools_json = json.dumps(self.tools)
         self.system_prompt = (
-            "You are an AI agent playing Blackjack who uses extreme long chains of thought to carefully consider the probabilities and optimal strategy."
+            "You are an AI agent playing Blackjack who uses extreme long chains of thought "
+            "to carefully consider the probabilities and optimal strategy. "
             "You need to decide whether to hit or stick based on your current hand and the dealer's showing card.\n\n"
             "You should enclose your thoughts and internal monologue inside <think> </think> tags, and then "
             "provide your decision using the take_action function call. You may use extremely long chains "
             "of thought to carefully consider the probabilities and optimal strategy.\n\n"
             f"<tools>\n{tools_json}\n</tools>\n\n"
-            "For your function call, return a JSON object with function name and arguments within <tool_call> </tool_call> "
-            "tags with the following schema:\n"
+            "For your function call, return a JSON object with function name and arguments "
+            "within <tool_call> </tool_call> tags with the following schema:\n"
             '<tool_call>\n{"arguments": {"action": "hit"}, "name": "take_action"}\n</tool_call>\n\n'
             "Your answer format should be:\n"
             "<think>\n"
@@ -162,7 +163,7 @@ class BlackjackEnv(BaseEnv):
                     elif reward_func == "tool_calling":
                         tool_calling_config = {
                             "type": "tool_calling",
-                            "weight": self.config.format_reward_weight,  # Using format_reward_weight for consistency
+                            "weight": self.config.format_reward_weight,
                             "params": {
                                 "tools": self.tools,
                                 "preferred_tags": ["tool_call"],
@@ -302,7 +303,8 @@ class BlackjackEnv(BaseEnv):
         """
         if len(actions) != len(responses):
             logger.error(
-                f"[_select_best_action Seed: {episode.seed}] Mismatch between actions ({len(actions)}) and responses ({len(responses)}) count."
+                f"[_select_best_action Seed: {episode.seed}] "
+                f"Mismatch between actions ({len(actions)}) and responses ({len(responses)}) count."
             )
             default_action = next((a for a in actions if a != -1), -1)
             return default_action, [-10.0] * len(actions)
@@ -319,7 +321,9 @@ class BlackjackEnv(BaseEnv):
                     sim_obs, _, term, trunc, sim_info = sim_env.step(past_action)
                     if term or trunc:
                         logger.warning(
-                            f"[_select_best_action Seed: {episode.seed}] Episode terminated during history replay before simulating action {idx}. Assigning low score."
+                            f"[_select_best_action Seed: {episode.seed}] "
+                            f"Episode terminated during history replay before simulating action {idx}. "
+                            f"Assigning low score."
                         )
                         valid_sim = False
                         break
@@ -335,7 +339,8 @@ class BlackjackEnv(BaseEnv):
                         sim_env.step(action)
                     )
                     logger.debug(
-                        f"[_select_best_action Seed: {episode.seed}] Sim Action {idx} (val:{action}) -> Reward:{env_reward_sim}, Term:{term_sim}"
+                        f"[_select_best_action Seed: {episode.seed}] Sim Action {idx} "
+                        f"(val:{action}) -> Reward:{env_reward_sim}, Term:{term_sim}"
                     )
 
                 combined_score = self._score_response(
@@ -350,7 +355,8 @@ class BlackjackEnv(BaseEnv):
 
         except Exception as e:
             logger.exception(
-                f"[_select_best_action Seed: {episode.seed}] Error during action simulation/scoring: {e}"
+                f"[_select_best_action Seed: {episode.seed}] "
+                f"Error during action simulation/scoring: {e}"
             )
             default_action = next((a for a in actions if a != -1), -1)
             return default_action, [-10.0] * len(actions)
@@ -373,11 +379,13 @@ class BlackjackEnv(BaseEnv):
                             valid_indices, key=lambda i: token_lengths[i]
                         )
                         logger.debug(
-                            f"[_select_best_action Seed: {episode.seed}] Tie-breaking valid actions based on token length. Chosen index: {best_action_idx}"
+                            f"[_select_best_action Seed: {episode.seed}] "
+                            f"Tie-breaking valid actions based on token length. Chosen index: {best_action_idx}"
                         )
                     except IndexError:
                         logger.warning(
-                            f"[_select_best_action Seed: {episode.seed}] IndexError during token length tie-breaking. Defaulting to first valid index."
+                            f"[_select_best_action Seed: {episode.seed}] "
+                            f"IndexError during token length tie-breaking. Defaulting to first valid index."
                         )
                         best_action_idx = valid_indices[0]
                 else:
@@ -385,11 +393,13 @@ class BlackjackEnv(BaseEnv):
             elif potential_best_indices:
                 best_action_idx = potential_best_indices[0]
                 logger.debug(
-                    f"[_select_best_action Seed: {episode.seed}] All best scores correspond to invalid actions. Choosing first: index {best_action_idx}"
+                    f"[_select_best_action Seed: {episode.seed}] "
+                    f"All best scores correspond to invalid actions. Choosing first: index {best_action_idx}"
                 )
             else:
                 logger.error(
-                    f"[_select_best_action Seed: {episode.seed}] No potential best indices found despite scores existing. Returning default action -1."
+                    f"[_select_best_action Seed: {episode.seed}] "
+                    f"No potential best indices found despite scores existing. Returning default action -1."
                 )
                 best_action_idx = -1
 
@@ -399,7 +409,10 @@ class BlackjackEnv(BaseEnv):
                 best_action = -1
 
             logger.info(
-                f"[_select_best_action Seed: {episode.seed}] Selected action: {best_action} (Index: {best_action_idx}, Score: {scores[best_action_idx] if best_action_idx != -1 else 'N/A'}) from scores: {['{:.4f}'.format(s) for s in scores]}"
+                f"[_select_best_action Seed: {episode.seed}] Selected action: {best_action} "
+                f"(Index: {best_action_idx}, "
+                f"Score: {scores[best_action_idx] if best_action_idx != -1 else 'N/A'}) "
+                f"from scores: {['{:.4f}'.format(s) for s in scores]}"
             )
         else:
             logger.error(
@@ -448,7 +461,8 @@ class BlackjackEnv(BaseEnv):
                 )
             except Exception as api_error:
                 logger.exception(
-                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] API Error during self.server.completion: {api_error}"
+                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                    f"API Error during self.server.completion: {api_error}"
                 )
                 return self._ensure_trajectory_token_limit(ep.trajectory)
 
@@ -458,7 +472,10 @@ class BlackjackEnv(BaseEnv):
                 or len(completions.choices) != self.config.group_size
             ):
                 logger.error(
-                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] API did not return the expected number of choices ({self.config.group_size} vs {len(completions.choices) if completions else 0}). Aborting episode."
+                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                    f"API did not return the expected number of choices "
+                    f"({self.config.group_size} vs {len(completions.choices) if completions else 0}). "
+                    f"Aborting episode."
                 )
                 return self._ensure_trajectory_token_limit(ep.trajectory)
 
@@ -480,7 +497,8 @@ class BlackjackEnv(BaseEnv):
                 parsed_act = self._parse_tool_call(full_response)
                 alt_actions.append(parsed_act)
                 logger.debug(
-                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Choice {choice_idx}: Parsed Action={parsed_act}, Response Length={len(full_response)}"
+                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                    f"Choice {choice_idx}: Parsed Action={parsed_act}, Response Length={len(full_response)}"
                 )
 
             logger.debug(
@@ -501,28 +519,39 @@ class BlackjackEnv(BaseEnv):
                 if possible_indices:
                     best_action_idx = possible_indices[0]
                     logger.info(
-                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Best action selected: {best_action} (Index: {best_action_idx}), Score: {scores[best_action_idx]:.4f}"
+                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                        f"Best action selected: {best_action} "
+                        f"(Index: {best_action_idx}), "
+                        f"Score: {scores[best_action_idx]:.4f}"
                     )
                 else:
                     logger.warning(
-                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Could not find index for best action {best_action} with score {best_score_val}. Trying first occurrence of action."
+                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                        f"Could not find index for best action {best_action} with score {best_score_val}. "
+                        f"Trying first occurrence of action."
                     )
                     best_action_idx = alt_actions.index(best_action)
                     logger.info(
-                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Fallback - Best action selected: {best_action} (Index: {best_action_idx}), Score: {scores[best_action_idx]:.4f}"
+                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                        f"Fallback - Best action selected: {best_action} (Index: {best_action_idx}), "
+                        f"Score: {scores[best_action_idx]:.4f}"
                     )
 
                 best_response = alt_responses[best_action_idx]
             except (ValueError, IndexError) as e:
                 logger.error(
-                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Error finding index for best action {best_action}: {e}. Cannot proceed with episode."
+                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                    f"Error finding index for best action {best_action}: {e}. "
+                    f"Cannot proceed with episode."
                 )
                 if seed in self.episodes:
                     try:
                         self.episodes[seed].env.close()
                     except Exception as close_exc:
                         logger.warning(
-                            f"[Collect Trajectory Seed: {seed}] Exception closing env for aborted episode on best_action index error: {close_exc}"
+                            f"[Collect Trajectory Seed: {seed}] "
+                            f"Exception closing env for aborted episode on "
+                            f"best_action index error: {close_exc}"
                         )
                     del self.episodes[seed]
                 return self._ensure_trajectory_token_limit(ep.trajectory)
@@ -545,7 +574,9 @@ class BlackjackEnv(BaseEnv):
                     alt_messages.append(step_msgs)
                 except Exception as tokenization_error:
                     logger.exception(
-                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Critical tokenization error for response: {response[:100]}... Error: {tokenization_error}. Aborting episode."
+                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                        f"Critical tokenization error for response: {response[:100]}... "
+                        f"Error: {tokenization_error}. Aborting episode."
                     )
                     tokenization_failed_for_step = True
                     break
@@ -585,17 +616,22 @@ class BlackjackEnv(BaseEnv):
             env_action = 0 if best_action == -1 else best_action
             if best_action == -1:
                 logger.warning(
-                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Selected action was invalid format (-1). Stepping env with 'stick' (0)."
+                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                    f"Selected action was invalid format (-1). "
+                    f"Stepping env with 'stick' (0)."
                 )
 
             try:
                 obs, reward, term, trunc, info = ep.env.step(env_action)
                 logger.info(
-                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Stepped main env with action {env_action}. Reward: {reward}, Term: {term}, Trunc: {trunc}"
+                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                    f"Stepped main env with action {env_action}. "
+                    f"Reward: {reward}, Term: {term}, Trunc: {trunc}"
                 )
             except Exception as env_step_error:
                 logger.exception(
-                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Error stepping main environment with action {env_action}: {env_step_error}"
+                    f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                    f"Error stepping main environment with action {env_action}: {env_step_error}"
                 )
                 term = True
                 reward = -1.0
@@ -613,7 +649,8 @@ class BlackjackEnv(BaseEnv):
                         format_reward_chosen = format_rewards[0]
                 except Exception as e:
                     logger.error(
-                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] Error re-calculating format reward for chosen action: {e}"
+                        f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
+                        f"Error re-calculating format reward for chosen action: {e}"
                     )
 
             ep.total_env_reward += reward
@@ -629,8 +666,10 @@ class BlackjackEnv(BaseEnv):
 
             logger.info(
                 f"[Collect Trajectory Seed: {seed} Turn: {turn+1}] "
-                f"Step Rewards: Env={reward:.2f}, Format={format_reward_chosen:.2f}, Combined={combined_reward_step:.2f}. "
-                f"Running Totals: Env={ep.total_env_reward:.2f}, Format={ep.total_format_reward:.2f}, Combined={ep.total_combined_reward:.2f}"
+                f"Step Rewards: Env={reward:.2f}, Format={format_reward_chosen:.2f}, "
+                f"Combined={combined_reward_step:.2f}. "
+                f"Running Totals: Env={ep.total_env_reward:.2f}, "
+                f"Format={ep.total_format_reward:.2f}, Combined={ep.total_combined_reward:.2f}"
             )
 
             ep.trajectory.append(
@@ -647,18 +686,22 @@ class BlackjackEnv(BaseEnv):
 
             if term or trunc:
                 logger.info(
-                    f"[Collect Trajectory Seed: {seed}] Episode ended. Term={term}, Trunc={trunc}. Final Reward: {reward}"
+                    f"[Collect Trajectory Seed: {seed}] "
+                    f"Episode ended. Term={term}, Trunc={trunc}. "
+                    f"Final Reward: {reward}"
                 )
                 ep.message_history.append({"role": "agent", "content": best_response})
 
                 if obs is not None:
                     final_formatted_obs = self._format_observation(obs)
                     logger.debug(
-                        f"[Collect Trajectory Seed: {seed}] Final State: {final_formatted_obs} (Reward: {reward})"
+                        f"[Collect Trajectory Seed: {seed}] "
+                        f"Final State: {final_formatted_obs} (Reward: {reward})"
                     )
                 else:
                     logger.debug(
-                        f"[Collect Trajectory Seed: {seed}] Episode terminated with error. (Reward: {reward})"
+                        f"[Collect Trajectory Seed: {seed}] "
+                        f"Episode terminated with error. (Reward: {reward})"
                     )
 
                 break
@@ -678,13 +721,19 @@ class BlackjackEnv(BaseEnv):
                 )
 
         logger.info(
-            f"[Collect Trajectory Seed: {seed}] Finished episode after {len(ep.actions)} steps."
+            f"[Collect Trajectory Seed: {seed}] "
+            f"Finished episode after {len(ep.actions)} steps."
         )
         logger.info(
-            f"[Collect Trajectory Seed: {seed}] Final Totals: Env Reward={ep.total_env_reward:.2f}, Format Reward={ep.total_format_reward:.2f}, Combined Reward={ep.total_combined_reward:.2f}"
+            f"[Collect Trajectory Seed: {seed}] "
+            f"Final Totals: Env Reward={ep.total_env_reward:.2f}, "
+            f"Format Reward={ep.total_format_reward:.2f}, "
+            f"Combined Reward={ep.total_combined_reward:.2f}"
         )
         logger.info(
-            f"[Collect Trajectory Seed: {seed}] Action Accuracy: {ep.num_correct_actions}/{max(1, ep.num_total_actions)} ({ep.num_correct_actions/max(1, ep.num_total_actions):.2%})"
+            f"[Collect Trajectory Seed: {seed}] "
+            f"Action Accuracy: {ep.num_correct_actions}/{max(1, ep.num_total_actions)} "
+            f"({ep.num_correct_actions/max(1, ep.num_total_actions):.2%})"
         )
 
         final_env_reward_for_outcome = 0
@@ -713,11 +762,13 @@ class BlackjackEnv(BaseEnv):
                 self.episodes[seed].env.close()
             except Exception as e:
                 logger.warning(
-                    f"[Collect Trajectory Seed: {seed}] Exception closing env for episode: {e}"
+                    f"[Collect Trajectory Seed: {seed}] "
+                    f"Exception closing env for episode: {e}"
                 )
             del self.episodes[seed]
             logger.debug(
-                f"[Collect Trajectory Seed: {seed}] Cleared episode state from self.episodes."
+                f"[Collect Trajectory Seed: {seed}] "
+                f"Cleared episode state from self.episodes."
             )
 
         return self._ensure_trajectory_token_limit(ep.trajectory)
@@ -732,7 +783,9 @@ class BlackjackEnv(BaseEnv):
 
         if not traj:
             logger.warning(
-                f"[collect_trajectories] All steps for seed {seed} were filtered out due to token limit constraints. Returning empty trajectory."
+                f"[collect_trajectories] "
+                f"All steps for seed {seed} were filtered out due to token limit "
+                f"constraints. Returning empty trajectory."
             )
 
         return traj, []
@@ -755,7 +808,8 @@ class BlackjackEnv(BaseEnv):
             Returns a list containing None elements if input steps are invalid.
         """
         logger.info(
-            f"score: Received rollout_group_data with {len(rollout_group_data)} groups for scoring."
+            f"score: Received rollout_group_data with {len(rollout_group_data)} "
+            f"groups for scoring."
         )
 
         if not rollout_group_data:
@@ -769,7 +823,8 @@ class BlackjackEnv(BaseEnv):
             isinstance(rgd, dict) for rgd in rollout_group_data if rgd is not None
         ):
             logger.error(
-                "score: rollout_group_data contains non-dictionary elements. Cannot proceed."
+                "score: rollout_group_data contains non-dictionary elements. "
+                "Cannot proceed."
             )
             # Return a list of Nones matching input length or handle as error
             return [None] * len(rollout_group_data)
@@ -785,7 +840,8 @@ class BlackjackEnv(BaseEnv):
 
         if not first_valid_step_for_seed:
             logger.warning(
-                "score: Cannot determine game outcome, no valid step with seed found in rollout_group_data."
+                "score: Cannot determine game outcome, no valid step with seed found "
+                "in rollout_group_data."
             )
         else:
             seed_for_outcome = first_valid_step_for_seed["seed"]
@@ -801,7 +857,9 @@ class BlackjackEnv(BaseEnv):
                 ):
                     if step_group_for_outcome is None:
                         logger.warning(
-                            f"score [Seed: {seed_for_outcome}]: Encountered None step_group at index {step_idx_outcome} during outcome replay. Assuming non-win."
+                            f"score [Seed: {seed_for_outcome}]: "
+                            f"Encountered None step_group at index {step_idx_outcome} "
+                            f"during outcome replay. Assuming non-win."
                         )
                         final_env_reward_for_outcome = 0.0
                         break
@@ -812,14 +870,16 @@ class BlackjackEnv(BaseEnv):
 
                     if action_for_outcome_step is None or action_for_outcome_step == -1:
                         logger.warning(
-                            f"score [Seed: {seed_for_outcome}]: Invalid action ({action_for_outcome_step}) found at step {step_idx_outcome} "
+                            f"score [Seed: {seed_for_outcome}]: "
+                            f"Invalid action ({action_for_outcome_step}) found at step {step_idx_outcome} "
                             f"during game outcome replay. Assuming non-win outcome for scoring."
                         )
                         final_env_reward_for_outcome = 0.0  # Treat as non-win
                         break
 
                     logger.debug(
-                        f"score [Seed: {seed_for_outcome} Replay]: Step {step_idx_outcome}, Action: {action_for_outcome_step}"
+                        f"score [Seed: {seed_for_outcome} Replay]: "
+                        f"Step {step_idx_outcome}, Action: {action_for_outcome_step}"
                     )
                     (
                         temp_obs_outcome,
@@ -832,29 +892,42 @@ class BlackjackEnv(BaseEnv):
 
                     if term_outcome or trunc_outcome:
                         logger.info(
-                            f"score [Seed: {seed_for_outcome}]: Game outcome replay ended at step {step_idx_outcome} (action: {action_for_outcome_step}). Final env reward for outcome: {final_env_reward_for_outcome}"
+                            f"score [Seed: {seed_for_outcome}]: "
+                            f"Game outcome replay ended at step {step_idx_outcome} "
+                            f"(action: {action_for_outcome_step}). "
+                            f"Final env reward for outcome: {final_env_reward_for_outcome}"
                         )
                         break
                 else:  # Loop completed without break
                     logger.info(
-                        f"score [Seed: {seed_for_outcome}]: Game outcome replay completed all steps. Final env reward for outcome: {final_env_reward_for_outcome}"
+                        f"score [Seed: {seed_for_outcome}]: "
+                        f"Game outcome replay completed all steps. "
+                        f"Final env reward for outcome: {final_env_reward_for_outcome}"
                     )
 
                 temp_env_outcome.close()
             except Exception as e:
                 logger.exception(
-                    f"score [Seed: {seed_for_outcome}]: Error during game outcome replay: {e}. Assuming non-win."
+                    f"score [Seed: {seed_for_outcome}]: "
+                    f"Error during game outcome replay: {e}. "
+                    f"Assuming non-win."
                 )
                 final_env_reward_for_outcome = 0.0
 
             if final_env_reward_for_outcome > 0:
                 is_win = True
                 logger.info(
-                    f"score [Seed: {seed_for_outcome}]: Game outcome determined as WIN (Final Env Reward: {final_env_reward_for_outcome}). Win bonus (+1.0) will be applied to best alternative at each step."
+                    f"score [Seed: {seed_for_outcome}]: "
+                    f"Game outcome determined as WIN "
+                    f"(Final Env Reward: {final_env_reward_for_outcome}). "
+                    f"Win bonus (+1.0) will be applied to best alternative at each step."
                 )
             else:
                 logger.info(
-                    f"score [Seed: {seed_for_outcome}]: Game outcome determined as NON-WIN (Final Env Reward: {final_env_reward_for_outcome}). No win bonus from game outcome will be applied."
+                    f"score [Seed: {seed_for_outcome}]: "
+                    f"Game outcome determined as NON-WIN "
+                    f"(Final Env Reward: {final_env_reward_for_outcome}). "
+                    f"No win bonus from game outcome will be applied."
                 )
 
         processed_rollout_data: List[Optional[BlackjackScoredDataGroup]] = []
@@ -875,7 +948,8 @@ class BlackjackEnv(BaseEnv):
 
             if current_step_group.get("scores") is None:
                 logger.warning(
-                    f"score [Seed: {step_seed}, Step: {step_idx}]: Scores are missing. Cannot apply win bonus or tie-breaking."
+                    f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                    f"Scores are missing. Cannot apply win bonus or tie-breaking."
                 )
                 processed_rollout_data.append(
                     current_step_group
@@ -888,7 +962,9 @@ class BlackjackEnv(BaseEnv):
                 isinstance(s, (int, float)) for s in original_scores
             ):
                 logger.warning(
-                    f"score [Seed: {step_seed}, Step: {step_idx}]: 'scores' is not a list of numbers. Skipping scoring for this step. Scores: {original_scores}"
+                    f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                    f"'scores' is not a list of numbers. "
+                    f"Skipping scoring for this step. Scores: {original_scores}"
                 )
                 processed_rollout_data.append(current_step_group)
                 continue
@@ -905,7 +981,8 @@ class BlackjackEnv(BaseEnv):
                     ]
                     if not valid_scores_for_max:
                         logger.warning(
-                            f"score [Seed: {step_seed}, Step: {step_idx}]: No valid numeric scores found to determine best alternative for win bonus."
+                            f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                            f"No valid numeric scores found to determine best alternative for win bonus."
                         )
                     else:
                         max_score_in_step = max(valid_scores_for_max)
@@ -922,21 +999,32 @@ class BlackjackEnv(BaseEnv):
                                 best_alternative_idx_this_step
                             ] += win_bonus_amount
                             logger.info(
-                                f"score [Seed: {step_seed}, Step: {step_idx}]: Applied WIN bonus ({win_bonus_amount}) to alternative {best_alternative_idx_this_step} (Original score: {original_scores[best_alternative_idx_this_step]:.4f}, New: {modified_scores[best_alternative_idx_this_step]:.4f})."
+                                f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                                f"Applied WIN bonus ({win_bonus_amount}) to alternative "
+                                f"{best_alternative_idx_this_step} "
+                                f"(Original score: {original_scores[best_alternative_idx_this_step]:.4f}, "
+                                f"New: {modified_scores[best_alternative_idx_this_step]:.4f})."
                             )
                         else:
                             logger.warning(
-                                f"score [Seed: {step_seed}, Step: {step_idx}]: Could not find index of max score {max_score_in_step} for win bonus. This should not happen if scores exist."
+                                f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                                f"Could not find index of max score {max_score_in_step} for win bonus. "
+                                f"This should not happen if scores exist."
                             )
                 except (
                     ValueError
                 ):  # Should be caught by empty list check or valid_scores_for_max
-                    logger.warning(
-                        f"score [Seed: {step_seed}, Step: {step_idx}]: Error finding max score for win bonus (ValueError). Scores: {modified_scores}"
+                    # Split into two lines to avoid line length issues
+                    score_msg = (
+                        f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                        f"Error finding max score for win bonus."
                     )
+                    logger.warning(score_msg)
+                    logger.debug(f"Problematic scores: {modified_scores}")
                 except Exception as e_bonus:
                     logger.exception(
-                        f"score [Seed: {step_seed}, Step: {step_idx}]: Unexpected error applying win bonus: {e_bonus}"
+                        f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                        f"Unexpected error applying win bonus: {e_bonus}"
                     )
 
             # 3. Apply Tie-Breaking Logic (to potentially bonus-adjusted scores)
@@ -945,7 +1033,9 @@ class BlackjackEnv(BaseEnv):
                 step_messages
             ):
                 logger.warning(
-                    f"score [Seed: {step_seed}, Step: {step_idx}]: Mismatch between scores ({len(modified_scores)}) and messages ({len(step_messages) if isinstance(step_messages, list) else 'not a list'}) "
+                    f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                    f"Mismatch between scores ({len(modified_scores)}) and messages "
+                    f"({len(step_messages) if isinstance(step_messages, list) else 'not a list'}) "
                     f"lengths, or messages missing. Skipping tie-breaking for this step."
                 )
             elif modified_scores:  # Ensure scores list is not empty for tie-breaking
@@ -959,7 +1049,9 @@ class BlackjackEnv(BaseEnv):
                         or "content" not in alt_msg_list[-1]
                     ):
                         logger.warning(
-                            f"score [Seed: {step_seed}, Step: {step_idx}]: Invalid message structure for alternative {alt_msg_list_idx} during tie-breaking. Skipping tie-breaking for this step."
+                            f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                            f"Invalid message structure for alternative {alt_msg_list_idx} "
+                            f"during tie-breaking. Skipping tie-breaking for this step."
                         )
                         valid_messages_for_tiebreak = False
                         break
@@ -968,7 +1060,9 @@ class BlackjackEnv(BaseEnv):
                         token_lengths.append(len(self.tokenizer.encode(response_text)))
                     except Exception as e_tok:
                         logger.error(
-                            f"score [Seed: {step_seed}, Step: {step_idx}]: Tokenization error for tie-breaking on alt {alt_msg_list_idx}: {e_tok}. Defaulting token length to large value."
+                            f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                            f"Tokenization error for tie-breaking on alt {alt_msg_list_idx}: {e_tok}. "
+                            f"Defaulting token length to large value."
                         )
                         token_lengths.append(
                             float("inf")
@@ -994,7 +1088,11 @@ class BlackjackEnv(BaseEnv):
                                 for idx in indices_with_this_score
                             ):
                                 logger.warning(
-                                    f"score [Seed: {step_seed}, Step: {step_idx}]: Token length data incomplete for tied score {score_val}. Indices: {indices_with_this_score}, Token lengths count: {len(token_lengths)}. Skipping tie-break for this group."
+                                    f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                                    f"Token length data incomplete for tied score {score_val}. "
+                                    f"Indices: {indices_with_this_score}, "
+                                    f"Token lengths count: {len(token_lengths)}. "
+                                    f"Skipping tie-break for this group."
                                 )
                                 continue
 
@@ -1012,16 +1110,21 @@ class BlackjackEnv(BaseEnv):
                                     penalty = 0.0001 * rank
                                     scores_after_tiebreak[tied_idx] -= penalty
                                     logger.debug(
-                                        f"score [Seed: {step_seed}, Step: {step_idx}]: Applied tie-break penalty {-penalty:.5f} to alternative index {tied_idx} "
+                                        f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                                        f"Applied tie-break penalty {-penalty:.5f} to alternative index {tied_idx} "
                                         f"(original tied score {score_val:.4f}, token length rank {rank})."
                                     )
                             except IndexError:
                                 logger.warning(
-                                    f"score [Seed: {step_seed}, Step: {step_idx}]: IndexError during tie-breaking for score {score_val}. Indices: {indices_with_this_score}. Skipping tie-break for this group."
+                                    f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                                    f"IndexError during tie-breaking for score {score_val}. "
+                                    f"Indices: {indices_with_this_score}. "
+                                    f"Skipping tie-break for this group."
                                 )
                             except Exception as e_tiebreak:
                                 logger.exception(
-                                    f"score [Seed: {step_seed}, Step: {step_idx}]: Unexpected error during tie-breaking for score {score_val}: {e_tiebreak}"
+                                    f"score [Seed: {step_seed}, Step: {step_idx}]: "
+                                    f"Unexpected error during tie-breaking for score {score_val}: {e_tiebreak}"
                                 )
                     modified_scores = scores_after_tiebreak
 
@@ -1163,11 +1266,13 @@ class BlackjackEnv(BaseEnv):
                 if obs is not None:
                     final_formatted_obs = self._format_observation(obs)
                     logger.debug(
-                        f"[Eval Rollout Seed: {seed}] Final State: {final_formatted_obs} (Reward: {reward})"
+                        f"[Eval Rollout Seed: {seed}] "
+                        f"Final State: {final_formatted_obs} (Reward: {reward})"
                     )
                 else:
                     logger.debug(
-                        f"[Eval Rollout Seed: {seed}] Episode terminated with error. (Reward: {reward})"
+                        f"[Eval Rollout Seed: {seed}] "
+                        f"Episode terminated with error. (Reward: {reward})"
                     )
 
                 break
@@ -1456,7 +1561,8 @@ class BlackjackEnv(BaseEnv):
                 logger.info(f"Loaded config from {cfg_path}")
             else:
                 logger.warning(
-                    f"Config file not found at {cfg_path}, using default BlackjackEnvConfig settings and default server config."
+                    f"Config file not found at {cfg_path}, "
+                    "using default BlackjackEnvConfig settings and default server config."
                 )
 
             env_conf_data = raw_yaml_data.copy()
@@ -1468,7 +1574,8 @@ class BlackjackEnv(BaseEnv):
                     env_conf_data.update(blackjack_overrides)
                 else:
                     logger.warning(
-                        f"'blackjack' section in config YAML is not a dictionary (type: {type(blackjack_overrides)}), ignoring."
+                        f"'blackjack' section in config YAML is not a dictionary "
+                        f"(type: {type(blackjack_overrides)}), ignoring."
                     )
 
             env_conf = BlackjackEnvConfig(**env_conf_data)
@@ -1684,7 +1791,8 @@ class BlackjackEnv(BaseEnv):
                 continue
 
             logger.info(
-                f"[_ensure_trajectory_token_limit] Step {step_idx} (max tokens: {max_initial_tokens}) exceeds limit ({self.config.max_trajectory_tokens}). Attempting uniform truncation."
+                f"[_ensure_trajectory_token_limit] Step {step_idx} (max tokens: {max_initial_tokens}) exceeds limit "
+                f"({self.config.max_trajectory_tokens}). Attempting uniform truncation."
             )
 
             working_messages = [msgs.copy() for msgs in current_step_messages_orig]
@@ -1765,7 +1873,8 @@ class BlackjackEnv(BaseEnv):
                             working_messages[alt_idx].pop(1)
                         else:
                             logger.error(
-                                f"[_ensure_trajectory_token_limit] Critical error during pop for alt {alt_idx}, step {step_idx}."
+                                f"[_ensure_trajectory_token_limit] Critical error during "
+                                f"pop for alt {alt_idx}, step {step_idx}."
                             )
                             successfully_retokenized_all = False
                             break
@@ -1783,7 +1892,8 @@ class BlackjackEnv(BaseEnv):
                         )
                     except Exception as e:
                         logger.error(
-                            f"[_ensure_trajectory_token_limit] Error re-tokenizing alt {alt_idx} in step {step_idx} after truncation: {e}"
+                            f"[_ensure_trajectory_token_limit] Error re-tokenizing "
+                            f"alt {alt_idx} in step {step_idx} after truncation: {e}"
                         )
                         successfully_retokenized_all = False
                         break
@@ -1796,7 +1906,8 @@ class BlackjackEnv(BaseEnv):
                 working_masks = new_alt_masks_list
                 max_current_tokens = max_tokens_after_this_trunc
                 logger.debug(
-                    f"[_ensure_trajectory_token_limit] Step {step_idx}, after uniform pop of {min_pop_count}, max tokens: {max_current_tokens}"
+                    f"[_ensure_trajectory_token_limit] Step {step_idx}, after "
+                    f"uniform pop of {min_pop_count}, max tokens: {max_current_tokens}"
                 )
 
                 if max_current_tokens <= self.config.max_trajectory_tokens:
@@ -1810,19 +1921,24 @@ class BlackjackEnv(BaseEnv):
                 updated_step_data["masks"] = working_masks
                 filtered_trajectory.append(updated_step_data)
                 logger.info(
-                    f"[_ensure_trajectory_token_limit] Step {step_idx} successfully truncated. Final max tokens: {max_current_tokens}"
+                    f"[_ensure_trajectory_token_limit] Step {step_idx} successfully truncated. "
+                    f"Final max tokens: {max_current_tokens}"
                 )
             else:
                 if max_current_tokens > self.config.max_trajectory_tokens:
                     logger.warning(
-                        f"[_ensure_trajectory_token_limit] Discarding step {step_idx}. Max tokens ({max_current_tokens}) still exceed limit "
-                        f"({self.config.max_trajectory_tokens}) after maximum possible uniform truncation or re-tokenization error."
+                        f"[_ensure_trajectory_token_limit] Discarding step {step_idx}. "
+                        f"Max tokens ({max_current_tokens}) still exceed limit "
+                        f"({self.config.max_trajectory_tokens}) after maximum possible "
+                        f"uniform truncation or re-tokenization error."
                     )
 
         if len(filtered_trajectory) < len(trajectory):
             logger.warning(
-                f"[_ensure_trajectory_token_limit] Filtered out {len(trajectory) - len(filtered_trajectory)} steps "
-                f"due to token limit constraints. Original trajectory length: {len(trajectory)}, Filtered: {len(filtered_trajectory)}"
+                f"[_ensure_trajectory_token_limit] Filtered out "
+                f"{len(trajectory) - len(filtered_trajectory)} steps "
+                f"due to token limit constraints. Original trajectory length: {len(trajectory)}, "
+                f"Filtered: {len(filtered_trajectory)}"
             )
         return filtered_trajectory
 
