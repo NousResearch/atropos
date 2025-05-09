@@ -1,10 +1,10 @@
 import random
 import re
-from typing import List, Optional, Tuple, Union, Dict
+from typing import Dict, List, Optional, Tuple, Union
 
+import wandb
 from datasets import load_dataset
 from tqdm.asyncio import tqdm_asyncio
-import wandb
 
 from atroposlib.envs.base import (
     BaseEnv,
@@ -508,23 +508,31 @@ class FundamentalPredictionEnv(BaseEnv):
 
         # Calculate and log training direction accuracy
         try:
-            direction_accuracy = sum(self.percent_correct_buffer) / len(self.percent_correct_buffer)
+            direction_accuracy = sum(self.percent_correct_buffer) / len(
+                self.percent_correct_buffer
+            )
             wandb_metrics["train/direction_accuracy"] = direction_accuracy
         except ZeroDivisionError:
             pass  # Skip if buffer is empty
 
         # Calculate and log training magnitude accuracy
         try:
-            magnitude_accuracy = sum(self.magnitude_accuracy_buffer) / len(self.magnitude_accuracy_buffer)
+            magnitude_accuracy = sum(self.magnitude_accuracy_buffer) / len(
+                self.magnitude_accuracy_buffer
+            )
             wandb_metrics["train/magnitude_accuracy"] = magnitude_accuracy
         except ZeroDivisionError:
             pass  # Skip if buffer is empty
 
         # Calculate combined training score (direction + magnitude)
         try:
-            combined_score = direction_accuracy + magnitude_accuracy if 'direction_accuracy' in wandb_metrics else 0
+            combined_score = (
+                direction_accuracy + magnitude_accuracy
+                if "direction_accuracy" in wandb_metrics
+                else 0
+            )
             wandb_metrics["train/combined_score"] = combined_score
-        except:
+        except Exception:
             pass
 
         # Clear the buffers after logging
@@ -549,7 +557,7 @@ class FundamentalPredictionEnv(BaseEnv):
 
         # Get number of examples to keep
         num_keep = getattr(self.config, "num_rollouts_per_group_for_logging", -1)
-        
+
         if num_keep == -1:
             num_keep = self.config.group_size
 
@@ -577,23 +585,25 @@ class FundamentalPredictionEnv(BaseEnv):
 
     async def create_rollout_table(self, wandb_metrics):
         if hasattr(self, "rollouts_for_wandb") and len(self.rollouts_for_wandb) > 0:
-            table = wandb.Table(columns=[
-                "text", 
-                "score", 
-                "expected_direction", 
-                "expected_magnitude",
-                "fundamental_metric"
-            ])
-            
+            table = wandb.Table(
+                columns=[
+                    "text",
+                    "score",
+                    "expected_direction",
+                    "expected_magnitude",
+                    "fundamental_metric",
+                ]
+            )
+
             for group in self.rollouts_for_wandb:
                 for item in group:
                     table.add_data(item[0], item[1], item[2], item[3], item[4])
-                    
+
             wandb_metrics["train/rollouts"] = table
-            
+
         # Clear rollouts after logging
         self.rollouts_for_wandb = []
-        
+
         return wandb_metrics
 
 

@@ -396,8 +396,10 @@ class BaseEnv(ABC):
         # Now register the env...
         while True:
             data = await self._register_env()
-            if data['status'] != "success":
-                logging.warning(f"Waiting to register the env due to status {data['status']}")
+            if data["status"] != "success":
+                logging.warning(
+                    f"Waiting to register the env due to status {data['status']}"
+                )
                 await asyncio.sleep(1)
                 continue
             self.env_id = data["env_id"]
@@ -603,7 +605,9 @@ class BaseEnv(ABC):
             logger.debug("handle_send_to_api: scored_data is None, returning.")
             return
 
-        batches_to_process = scored_data if isinstance(scored_data, list) else [scored_data]
+        batches_to_process = (
+            scored_data if isinstance(scored_data, list) else [scored_data]
+        )
         valid_batches: List[ScoredDataGroup] = []
 
         for i, batch in enumerate(batches_to_process):
@@ -642,7 +646,9 @@ class BaseEnv(ABC):
             batch.setdefault("ref_logprobs", None)
             batch.setdefault("overrides", None)
             batch.setdefault("group_overrides", None)
-            batch.setdefault("messages", None) # Ensure messages key exists for later population
+            batch.setdefault(
+                "messages", None
+            )  # Ensure messages key exists for later population
 
             # Check if all mask sequences in the batch are empty
             all_masks_empty = True
@@ -652,19 +658,26 @@ class BaseEnv(ABC):
                     pass  # all_masks_empty remains true, batch will be skipped
                 else:
                     for mask_idx, mask_sequence in enumerate(masks_list):
-                        if hasattr(mask_sequence, '__iter__') and len(mask_sequence) > 0:
+                        if (
+                            hasattr(mask_sequence, "__iter__")
+                            and len(mask_sequence) > 0
+                        ):
                             all_masks_empty = False
                             break
-                        elif not hasattr(mask_sequence, '__iter__'):
-                            logger.warning(f"Mask sequence {mask_idx} in batch {i} is not iterable. Skipping batch.")
-                            all_masks_empty = True # Mark to ensure skip if loop finishes
-                            break # Cannot process this batch further
+                        elif not hasattr(mask_sequence, "__iter__"):
+                            logger.warning(
+                                f"Mask sequence {mask_idx} in batch {i} is not iterable. Skipping batch."
+                            )
+                            all_masks_empty = (
+                                True  # Mark to ensure skip if loop finishes
+                            )
+                            break  # Cannot process this batch further
             else:
                 logger.warning(
                     f"Skipping batch {i} due to missing or invalid 'masks' key (not a list or missing). "
                     f"Batch keys: {list(batch.keys())}"
                 )
-                continue # Skip this batch (all_masks_empty remains true by default or skip)
+                continue  # Skip this batch (all_masks_empty remains true by default or skip)
 
             if all_masks_empty:
                 logger.warning(
@@ -672,8 +685,8 @@ class BaseEnv(ABC):
                     f"Number of mask sequences: {len(masks_list) if isinstance(masks_list, list) else 'N/A'}. "
                     f"First few scores: {str(batch_scores[:3])}"
                 )
-                continue # Skip this batch
-            
+                continue  # Skip this batch
+
             # Check for max token length exceeded
             batch_tokens = batch.get("tokens", [])
             if abort_on_any_max_length_exceeded and any(
@@ -686,7 +699,7 @@ class BaseEnv(ABC):
                     f"Batch token lengths: {token_lengths}. "
                     f"First few scores: {str(batch_scores[:3])}"
                 )
-                return # Abort entire operation
+                return  # Abort entire operation
 
             valid_batches.append(batch)
 
@@ -696,13 +709,13 @@ class BaseEnv(ABC):
 
         for batch_idx, batch_data in enumerate(valid_batches):
             await self.add_rollouts_for_wandb(batch_data, item)
-            
+
             current_masks = batch_data.get("masks", [])
             if isinstance(current_masks, list):
                 for mask in current_masks:
-                    if hasattr(mask, '__iter__'): # Make sure mask is iterable
+                    if hasattr(mask, "__iter__"):  # Make sure mask is iterable
                         self.completion_lengths.append(len(mask))
-            
+
             if self.config.include_messages and batch_data.get("messages") is None:
                 tokens_for_messages = batch_data.get("tokens")
                 if isinstance(tokens_for_messages, list):
@@ -710,34 +723,58 @@ class BaseEnv(ABC):
                     for token_seq_idx, token_sequence in enumerate(tokens_for_messages):
                         if token_sequence is not None:
                             try:
-                                decoded_messages.append(self.tokenizer.decode(token_sequence))
+                                decoded_messages.append(
+                                    self.tokenizer.decode(token_sequence)
+                                )
                             except Exception as e:
-                                logger.error(f"Error decoding token sequence {token_seq_idx} for messages in valid batch {batch_idx}: {e}. Sequence (first 10 tokens): {str(token_sequence[:10])}")
-                                decoded_messages.append(f"DECODING_ERROR: {e}") # Placeholder for error
+                                logger.error(
+                                    f"Error decoding token sequence {token_seq_idx} for messages in valid batch {batch_idx}: {e}. Sequence (first 10 tokens): {str(token_sequence[:10])}"
+                                )
+                                decoded_messages.append(
+                                    f"DECODING_ERROR: {e}"
+                                )  # Placeholder for error
                         else:
-                            logger.warning(f"Token sequence {token_seq_idx} in valid batch {batch_idx} is None, cannot decode for messages.")
-                            decoded_messages.append(None) # Handle None token_sequence
+                            logger.warning(
+                                f"Token sequence {token_seq_idx} in valid batch {batch_idx} is None, cannot decode for messages."
+                            )
+                            decoded_messages.append(None)  # Handle None token_sequence
                     batch_data["messages"] = decoded_messages
                 else:
-                    logger.warning(f"Cannot generate messages for valid batch {batch_idx}: 'tokens' is missing or not a list.")
+                    logger.warning(
+                        f"Cannot generate messages for valid batch {batch_idx}: 'tokens' is missing or not a list."
+                    )
 
             if self.jsonl_writer is not None:
                 try:
                     self.jsonl_writer.write(batch_data)
-                    logger.debug(f"Wrote valid batch {batch_idx} to {self.config.data_path_to_save_groups}")
+                    logger.debug(
+                        f"Wrote valid batch {batch_idx} to {self.config.data_path_to_save_groups}"
+                    )
                 except Exception as e:
-                    logger.error(f"Failed to write valid batch {batch_idx} to JSONL: {e}")
+                    logger.error(
+                        f"Failed to write valid batch {batch_idx} to JSONL: {e}"
+                    )
 
         if do_send_to_api:
             try:
                 self.items_sent_this_step += len(valid_batches)
-                payload_to_send = valid_batches[0] if len(valid_batches) == 1 else valid_batches
-                logger.debug(f"Sending {len(valid_batches)} valid batch(es) to API. Payload type: {type(payload_to_send)}. First item keys (if list): {list(payload_to_send[0].keys()) if isinstance(payload_to_send, list) and payload_to_send else list(payload_to_send.keys()) if not isinstance(payload_to_send, list) else 'N/A'}")
+                payload_to_send = (
+                    valid_batches[0] if len(valid_batches) == 1 else valid_batches
+                )
+                logger.debug(
+                    f"Sending {len(valid_batches)} valid batch(es) to API. Payload type: {type(payload_to_send)}. First item keys (if list): {list(payload_to_send[0].keys()) if isinstance(payload_to_send, list) and payload_to_send else list(payload_to_send.keys()) if not isinstance(payload_to_send, list) else 'N/A'}"
+                )
                 await self._send_scored_data_to_api(payload_to_send)
-            except Exception as e: # Catching general Exception as _send_scored_data_to_api might raise various errors
-                logger.error(f"Failed to send {len(valid_batches)} scored batch(es) after retries: {e}")
+            except (
+                Exception
+            ) as e:  # Catching general Exception as _send_scored_data_to_api might raise various errors
+                logger.error(
+                    f"Failed to send {len(valid_batches)} scored batch(es) after retries: {e}"
+                )
         else:
-            logger.debug(f"Skipping API send for {len(valid_batches)} valid batch(es) because do_send_to_api is False.")
+            logger.debug(
+                f"Skipping API send for {len(valid_batches)} valid batch(es) because do_send_to_api is False."
+            )
         return
 
     async def handle_env(
@@ -748,7 +785,9 @@ class BaseEnv(ABC):
         """
         item = self.running_items.get(item_uuid)
         if item is None:
-            logger.error(f"handle_env: Item {item_uuid} not found in running_items! Returning None.")
+            logger.error(
+                f"handle_env: Item {item_uuid} not found in running_items! Returning None."
+            )
             return None
         start_time = time.time()
         logger.debug(f"handle_env: Starting with item: {item}")
@@ -756,7 +795,9 @@ class BaseEnv(ABC):
         try:
             to_postprocess, to_backlog = await self.collect_trajectories(item)
         except Exception as e:
-            logger.exception(f"handle_env: Exception during collect_trajectories for {item_uuid}: {e}")
+            logger.exception(
+                f"handle_env: Exception during collect_trajectories for {item_uuid}: {e}"
+            )
             to_postprocess = None
             to_backlog = []
         # add the items to the queue
@@ -866,7 +907,6 @@ class BaseEnv(ABC):
             // self.config.group_size
         )
         available_queue_slots = max(0, queue_capacity - self.status_dict["queue_size"])
-        original_max_workers = max_num_workers
         max_num_workers = min(max_num_workers, available_queue_slots)
 
         if (self.curr_step == 0) and (len(self.workers) == 0):
@@ -880,14 +920,14 @@ class BaseEnv(ABC):
         while len(self.workers) < max_num_workers:
             # Generate a UUID for tracking this item
             item_uuid = str(uuid.uuid4())
-            item = None # Initialize item to None
+            item = None  # Initialize item to None
             if len(self.backlog) > 0:
                 item = self.backlog.pop()
             else:
                 item = await self.get_next_item()
 
             if item is None:
-                break # Exit loop if no item is available
+                break  # Exit loop if no item is available
 
             self.running_items[item_uuid] = item
             worker = asyncio.create_task(self.handle_env(item_uuid))
@@ -942,10 +982,7 @@ class BaseEnv(ABC):
                     worker.cancel()
                 break
             if (
-                (
-                    queue_items
-                    >= queue_capacity
-                )
+                (queue_items >= queue_capacity)
                 and (self.config.max_batches_offpolicy > 0)
             ) or (self.config.batch_size == -1):
                 # We have too many, lets cleanup the tasks and wait a bit

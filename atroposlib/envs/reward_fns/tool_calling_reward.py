@@ -9,7 +9,7 @@ Tool calling reward function that validates:
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from atroposlib.envs.reward_fns.registry import registry
 from atroposlib.envs.reward_fns.reward_function import RewardFunction
@@ -21,26 +21,26 @@ logger = logging.getLogger(__name__)
 class ToolCallingReward(RewardFunction):
     """
     Reward function for checking tool calling format and validity.
-    
+
     Validates:
     1. Format: Response contains <tool_call> tags
     2. JSON: The content within the tags is valid parseable JSON
     3. Tool existence: The tool called exists in the provided list of tools
     4. Arguments: The arguments provided match the tool's expected parameters (optional)
     """
-    
+
     def __init__(
-        self, 
-        tools: List[Dict], 
+        self,
+        tools: List[Dict],
         preferred_tags: List[str] = None,
         check_arguments: bool = False,
-        weight: float = 1.0, 
-        name: Optional[str] = None, 
-        **kwargs
+        weight: float = 1.0,
+        name: Optional[str] = None,
+        **kwargs,
     ):
         """
         Initialize the ToolCallingReward function.
-        
+
         Args:
             tools: List of tool definitions with at least 'name' field
             preferred_tags: Tags to look for in the response (default: ['tool_call'])
@@ -53,31 +53,37 @@ class ToolCallingReward(RewardFunction):
         self.tools = tools
         self.preferred_tags = preferred_tags or ["tool_call"]
         self.check_arguments = check_arguments
-        
+
         # Extract valid tool names for quick lookup
         self.valid_tool_names = set()
         self.tool_parameters = {}
-        
+
         for tool in tools:
             # Handle different tool definition formats
             if isinstance(tool, dict):
                 if "name" in tool:
                     self.valid_tool_names.add(tool["name"])
-                    
+
                     # Store parameters for argument validation if needed
                     if check_arguments and "function" in tool:
                         if "parameters" in tool["function"]:
-                            self.tool_parameters[tool["name"]] = tool["function"]["parameters"]
-                
+                            self.tool_parameters[tool["name"]] = tool["function"][
+                                "parameters"
+                            ]
+
                 elif "function" in tool and "name" in tool["function"]:
                     self.valid_tool_names.add(tool["function"]["name"])
-                    
+
                     # Store parameters for argument validation if needed
                     if check_arguments and "parameters" in tool["function"]:
-                        self.tool_parameters[tool["function"]["name"]] = tool["function"]["parameters"]
-        
-        logger.info(f"Initialized ToolCallingReward with {len(self.valid_tool_names)} valid tools")
-    
+                        self.tool_parameters[tool["function"]["name"]] = tool[
+                            "function"
+                        ]["parameters"]
+
+        logger.info(
+            f"Initialized ToolCallingReward with {len(self.valid_tool_names)} valid tools"
+        )
+
     def _extract_tool_call(self, text: str) -> Optional[str]:
         """Extract the content within the tool call tags."""
         for tag in self.preferred_tags:
@@ -86,72 +92,88 @@ class ToolCallingReward(RewardFunction):
             if matches:
                 return matches[0].strip()
         return None
-    
+
     def _validate_arguments(self, tool_name: str, arguments: Dict) -> bool:
         """Validate that the arguments match the expected parameters for the tool."""
         if not self.check_arguments or tool_name not in self.tool_parameters:
             return True
-            
+
         params = self.tool_parameters[tool_name]
-        
+
         # Check required parameters
         if "required" in params:
             for required_param in params["required"]:
                 if required_param not in arguments:
-                    logger.debug(f"Missing required parameter: {required_param} for tool {tool_name}")
+                    logger.debug(
+                        f"Missing required parameter: {required_param} for tool {tool_name}"
+                    )
                     return False
-        
+
         # Check parameter types if properties are defined
         if "properties" in params:
             for param_name, param_value in arguments.items():
                 if param_name in params["properties"]:
                     prop = params["properties"][param_name]
-                    
+
                     # Type checking (simplified)
                     if "type" in prop:
-                        if prop["type"] == "string" and not isinstance(param_value, str):
+                        if prop["type"] == "string" and not isinstance(
+                            param_value, str
+                        ):
                             return False
-                        elif prop["type"] == "number" and not isinstance(param_value, (int, float)):
+                        elif prop["type"] == "number" and not isinstance(
+                            param_value, (int, float)
+                        ):
                             return False
-                        elif prop["type"] == "integer" and not isinstance(param_value, int):
+                        elif prop["type"] == "integer" and not isinstance(
+                            param_value, int
+                        ):
                             return False
-                        elif prop["type"] == "boolean" and not isinstance(param_value, bool):
+                        elif prop["type"] == "boolean" and not isinstance(
+                            param_value, bool
+                        ):
                             return False
-                        elif prop["type"] == "array" and not isinstance(param_value, list):
+                        elif prop["type"] == "array" and not isinstance(
+                            param_value, list
+                        ):
                             return False
-                        elif prop["type"] == "object" and not isinstance(param_value, dict):
+                        elif prop["type"] == "object" and not isinstance(
+                            param_value, dict
+                        ):
                             return False
-                    
+
                     # Enum validation
                     if "enum" in prop and param_value not in prop["enum"]:
                         return False
-        
+
         return True
-    
+
     def compute(self, completions: List[Any], **kwargs) -> List[float]:
         """
         Compute reward scores for the given completions.
-        
+
         Scores:
         - 1.0: Perfect format, valid JSON, existing tool, valid args (if checked)
         - 0.8: Valid tool but invalid arguments (if checked)
         - 0.7: Valid format and JSON, but tool doesn't exist
         - 0.5: Valid format but JSON parsing error
         - -1.0: No tool call format found (changed from 0.0 for stronger penalty)
-        
+
         Args:
             completions: List of completions to evaluate
-            
+
         Returns:
             List of reward scores (before weighting), one for each completion
         """
         results_unweighted = []
-        
+
         for idx, completion in enumerate(completions):
             content = self.get_content(completion)
-            logger.debug(f"[{self.name}] Checking completion {idx}: Content='{content[:100]}...'")
-            final_score_for_completion = -1.0 # Default score (no format)
-            
+            logger.debug(
+                f"[{self.name}] Checking completion {idx}: Content='{content[:100]}...'"
+            )
+            final_score_for_completion = -1.0  # Default score (no format)
+
             # 1. Check if tool call format exists
             tool_call_content = self._extract_tool_call(content)
             if not tool_call_content:
@@ -162,58 +184,75 @@ class ToolCallingReward(RewardFunction):
                 # 2. Try to parse the JSON
                 try:
                     # Safely handle single quotes or malformed JSON before parsing
-                    processed_content = tool_call_content.replace("\'", "\"") # Replace remaining single quotes
+                    processed_content = tool_call_content.replace(
+                        "'", '"'
+                    )  # Replace remaining single quotes
                     tool_call = json.loads(processed_content)
                     logger.debug(f"  -> JSON parsed successfully: {tool_call}")
-                    
+
                     # 3. Check if the tool exists
                     tool_name = tool_call.get("name", "")
                     if not tool_name or tool_name not in self.valid_tool_names:
-                        logger.debug(f"  -> Tool '{tool_name}' not found in valid tools {self.valid_tool_names}.")
-                        final_score_for_completion = 0.7 # Valid JSON but invalid tool
+                        logger.debug(
+                            f"  -> Tool '{tool_name}' not found in valid tools {self.valid_tool_names}."
+                        )
+                        final_score_for_completion = 0.7  # Valid JSON but invalid tool
                     else:
                         logger.debug(f"  -> Tool '{tool_name}' is valid.")
                         # 4. Check arguments if enabled
                         if self.check_arguments:
                             arguments = tool_call.get("arguments", {})
                             if not self._validate_arguments(tool_name, arguments):
-                                logger.debug(f"  -> Invalid arguments for tool {tool_name}: {arguments}")
-                                final_score_for_completion = 0.8 # Valid tool but invalid arguments
+                                logger.debug(
+                                    f"  -> Invalid arguments for tool {tool_name}: {arguments}"
+                                )
+                                final_score_for_completion = (
+                                    0.8  # Valid tool but invalid arguments
+                                )
                             else:
                                 logger.debug("  -> Arguments validated successfully.")
-                                final_score_for_completion = 1.0 # Everything is valid
-                        else: # Arguments not checked
-                            final_score_for_completion = 1.0 # Format, JSON, Tool Name are valid
+                                final_score_for_completion = 1.0  # Everything is valid
+                        else:  # Arguments not checked
+                            final_score_for_completion = (
+                                1.0  # Format, JSON, Tool Name are valid
+                            )
                 except json.JSONDecodeError as e:
-                    logger.debug(f"  -> JSON parsing error: {e} on content: '{processed_content[:100]}...'")
-                    final_score_for_completion = 0.5 # Valid format but JSON error
-            
-            logger.debug(f"  -> Determined score for completion {idx}: {final_score_for_completion}")
+                    logger.debug(
+                        f"  -> JSON parsing error: {e} on content: '{processed_content[:100]}...'"
+                    )
+                    final_score_for_completion = 0.5  # Valid format but JSON error
+
+            logger.debug(
+                f"  -> Determined score for completion {idx}: {final_score_for_completion}"
+            )
             results_unweighted.append(final_score_for_completion)
-        
+
         # Apply weight
         final_results = [r * self.weight for r in results_unweighted]
         # Format scores for logging
-        formatted_scores = [f'{r:.4f}' for r in final_results]
+        formatted_scores = [f"{r:.4f}" for r in final_results]
         logger.debug(f"[{self.name}] Final weighted scores: {formatted_scores}")
         return final_results
 
 
 # Legacy function for backward compatibility
 def tool_calling_reward(
-    completions: List[Any], tools: List[Dict], preferred_tags: List[str] = None, **kwargs
+    completions: List[Any],
+    tools: List[Dict],
+    preferred_tags: List[str] = None,
+    **kwargs,
 ) -> List[float]:
     """
     Check if model responses correctly use tool calling format and call valid tools.
-    
+
     Args:
         completions: List of completions to evaluate
         tools: List of tool definitions the model should be using
         preferred_tags: Tags to look for in the response (default: ['tool_call'])
         **kwargs: Additional parameters
-        
+
     Returns:
         List of rewards (1.0 for correct format and valid tool, lower for issues)
     """
     reward_fn = ToolCallingReward(tools=tools, preferred_tags=preferred_tags)
-    return reward_fn.compute(completions, **kwargs) 
+    return reward_fn.compute(completions, **kwargs)

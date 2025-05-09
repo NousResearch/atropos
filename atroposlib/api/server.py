@@ -2,7 +2,7 @@ import time
 import uuid
 from typing import Any, List, Optional
 
-from fastapi import FastAPI, status, HTTPException
+from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel

@@ -23,7 +23,7 @@ blackjack:
   max_turns: 100
   thinking_active: true
   debug_mode: false
-  
+
   # Reward function configuration
   reward_functions:
     - type: "format"
@@ -31,7 +31,7 @@ blackjack:
       params:
         preferred_tags: ["think", "tool_call"]
         require_all_tags: true
-  
+
   environment_reward_weight: 2
 
 # Server configuration

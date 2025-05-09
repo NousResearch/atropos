@@ -50,36 +50,52 @@ class CombinedReward(RewardFunction):
         if not completions:
             return []
 
-        logger.debug(f"[{self.name}] Computing combined reward for {len(completions)} completions.")
-        
+        logger.debug(
+            f"[{self.name}] Computing combined reward for {len(completions)} completions."
+        )
+
         # Initialize with zeros
         combined_rewards = [0.0] * len(completions)
 
         # Collect all sub-reward values
         all_rewards_dict: Dict[str, List[float]] = {}
         for reward_fn in self.reward_functions:
-            logger.debug(f"[{self.name}] Calling compute for sub-reward: {reward_fn.name} (Weight: {reward_fn.weight})")
+            logger.debug(
+                f"[{self.name}] Calling compute for sub-reward: {reward_fn.name} (Weight: {reward_fn.weight})"
+            )
             try:
                 # Pass kwargs down to sub-reward functions
-                rewards = reward_fn.compute(completions, **kwargs) 
+                rewards = reward_fn.compute(completions, **kwargs)
                 if len(rewards) != len(completions):
-                     logger.error(f"[{self.name}] Sub-reward {reward_fn.name} returned {len(rewards)} scores, expected {len(completions)}. Skipping.")
-                     rewards = [0.0] * len(completions) # Use zeros to avoid crashing aggregation
-                
-                logger.debug(f"[{self.name}]  -> Sub-reward {reward_fn.name} returned: {[f'{r:.4f}' for r in rewards]}")
+                    logger.error(
+                        f"[{self.name}] Sub-reward {reward_fn.name} returned {len(rewards)} scores, expected {len(completions)}. Skipping."
+                    )
+                    rewards = [0.0] * len(
+                        completions
+                    )  # Use zeros to avoid crashing aggregation
+
+                logger.debug(
+                    f"[{self.name}]  -> Sub-reward {reward_fn.name} returned: {[f'{r:.4f}' for r in rewards]}"
+                )
                 all_rewards_dict[reward_fn.name] = rewards
 
                 # Aggregate scores: sum the raw score from the sub-reward, multiplied by the sub-reward's own weight.
                 # This allows each sub-reward to contribute proportionally to the combined total before any overall normalization.
-                for i, r_raw in enumerate(rewards): # r_raw is the raw score from sub_reward_fn.compute()
+                for i, r_raw in enumerate(
+                    rewards
+                ):  # r_raw is the raw score from sub_reward_fn.compute()
                     combined_rewards[i] += r_raw * reward_fn.weight
             except Exception as e:
-                logger.error(f"[{self.name}] Error computing reward for {reward_fn.name}: {e}")
+                logger.error(
+                    f"[{self.name}] Error computing reward for {reward_fn.name}: {e}"
+                )
                 logger.exception(e)
                 # Ensure we have a placeholder if a sub-reward fails
                 all_rewards_dict[reward_fn.name] = [0.0] * len(completions)
 
-        logger.debug(f"[{self.name}]  -> Combined rewards before (any potential parent) weighting: {[f'{r:.4f}' for r in combined_rewards]}")
+        logger.debug(
+            f"[{self.name}]  -> Combined rewards before (any potential parent) weighting: {[f'{r:.4f}' for r in combined_rewards]}"
+        )
 
         # Normalization logic has been removed.
         # The combined_rewards now represent the sum of weighted raw scores from sub-rewards.

@@ -92,7 +92,6 @@ Reward functions are managed by a centralized registry (see `atroposlib/envs/rew
 - `reasoning_steps`: quality of step-by-step reasoning
 - `repetition_penalty`: penalizes repetition
 - `cosine_scaled`: semantic similarity scaled from embeddings
-- `crossword_format`: crossword-specific penalty
 - `r1`: combined accuracy + format
 
 To preview all available functions:

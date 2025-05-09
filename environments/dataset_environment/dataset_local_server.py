@@ -8,12 +8,13 @@ from dotenv import load_dotenv
 
 # Only need DatasetEnv now, as it handles config init
 from environments.dataset_environment.dataset_env import DatasetEnv
+
 # from atroposlib.envs.base import OpenaiConfig # Not needed here
 # from atroposlib.envs.reward_fns import registry # Not needed here
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO) # Keep base level INFO for the script itself
+logging.basicConfig(level=logging.INFO)  # Keep base level INFO for the script itself
 logger = logging.getLogger(__name__)
 # Note: DatasetEnv will set its own logger level based on debug_mode in its config
 
@@ -57,9 +58,10 @@ async def main():
         logger.debug(f"Loaded Env Config: {env_config}")
         logger.debug(f"Loaded Server Configs: {server_configs}")
     except Exception as e:
-        logger.exception(f"Failed to load configuration using DatasetEnv.config_init: {e}")
-        return # Cannot proceed without config
-
+        logger.exception(
+            f"Failed to load configuration using DatasetEnv.config_init: {e}"
+        )
+        return  # Cannot proceed without config
 
     # Create the environment using loaded configs
     logger.info("Creating dataset environment...")
@@ -67,8 +69,8 @@ async def main():
         env = DatasetEnv(
             config=env_config,
             server_configs=server_configs,
-            slurm=False, # Explicitly false for local testing
-            testing=False # Explicitly false unless needed for harness
+            slurm=False,  # Explicitly false for local testing
+            testing=False,  # Explicitly false unless needed for harness
         )
     except Exception as e:
         logger.exception(f"Failed to initialize DatasetEnv: {e}")
@@ -85,7 +87,7 @@ async def main():
 
     # --- Start Test Run --- #
     logger.info("\n=== Starting Local Test Run ===")
-    test_items_count = 5 # Number of dataset items to test
+    test_items_count = 5  # Number of dataset items to test
     successful_runs = 0
 
     for i in range(test_items_count):
@@ -137,8 +139,9 @@ async def main():
                     first_response = assistant_msgs[-1].get("content", "(No content)")
                 logger.info(f"First Response Content: {first_response[:300]}...")
             else:
-                 logger.warning(f"First trajectory data is empty or not a list: {trajectories_data[0]}")
-
+                logger.warning(
+                    f"First trajectory data is empty or not a list: {trajectories_data[0]}"
+                )
 
             # Score the collected trajectories
             logger.info("Scoring trajectories...")
@@ -148,17 +151,17 @@ async def main():
             if scored_data and "scores" in scored_data:
                 scores_list = scored_data["scores"]
                 if scores_list:
-                     logger.info(f"Scores: {scores_list}")
-                     logger.info(f"  Avg Score: {sum(scores_list)/len(scores_list):.4f}")
-                     successful_runs += 1
+                    logger.info(f"Scores: {scores_list}")
+                    logger.info(f"  Avg Score: {sum(scores_list)/len(scores_list):.4f}")
+                    successful_runs += 1
                 else:
-                     logger.warning("Scores list is empty in scored_data.")
+                    logger.warning("Scores list is empty in scored_data.")
             else:
                 logger.warning("No scores available in the scored data for this item.")
 
         except Exception as run_error:
             logger.error(f"Error during test item {i+1}")
-            logger.exception(run_error) # Log full traceback
+            logger.exception(run_error)  # Log full traceback
             # Optionally continue to the next item or break
             # break
 
