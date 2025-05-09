@@ -75,11 +75,10 @@ class CombinedReward(RewardFunction):
                 logger.debug(f"[{self.name}]  -> Sub-reward {reward_fn.name} returned: {[f'{r:.4f}' for r in rewards]}")
                 all_rewards_dict[reward_fn.name] = rewards
 
-                # Add to combined total (pre-normalization)
-                # The sub-reward's value should already be weighted internally by its own weight
-                # unless normalization="sum" is used later.
-                for i, r in enumerate(rewards):
-                    combined_rewards[i] += r 
+                # Aggregate scores: sum the raw score from the sub-reward, multiplied by the sub-reward's own weight.
+                # This allows each sub-reward to contribute proportionally to the combined total before any overall normalization.
+                for i, r_raw in enumerate(rewards): # r_raw is the raw score from sub_reward_fn.compute()
+                    combined_rewards[i] += r_raw * reward_fn.weight
             except Exception as e:
                 logger.error(f"[{self.name}] Error computing reward for {reward_fn.name}: {e}")
                 logger.exception(e)
