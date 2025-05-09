@@ -45,8 +45,7 @@ class DatasetEnvConfig(BaseEnvConfig):
         False, description="Whether to include messages in scoring"
     )
     reward_functions: Optional[List[Union[str, Dict[str, Any]]]] = Field(
-        default_factory=list,
-        description="List of reward functions to apply (string names or full configs)",
+        None, description="List of reward functions to apply (string names or full configs)"
     )
 
     temperature: float = Field(0.7, description="Temperature for generation")
@@ -88,14 +87,14 @@ class DatasetEnv(BaseEnv):
         self.reward_function = self._initialize_reward_function()
 
     def _initialize_reward_function(self):
-        if hasattr(self.config, "reward_functions") and self.config.reward_functions:
+        if self.config.reward_functions:
             if len(self.config.reward_functions) == 1:
                 return registry.create(self.config.reward_functions[0])
             else:
                 return CombinedReward(
                     rewards=self.config.reward_functions, normalization="sum"
                 )
-        logger.warning("No reward functions configured or reward_functions list is empty.")
+        logger.warning("No reward functions configured (field is None or list is empty).")
         return None
 
     async def setup(self):
