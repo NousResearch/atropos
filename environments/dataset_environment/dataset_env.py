@@ -96,16 +96,34 @@ class DatasetEnv(BaseEnv):
                 logger.setLevel(logging.WARNING) # Default to WARNING
 
         self.reward_function = self._initialize_reward_function()
+        logger.warning(f"DatasetEnv.__init__: Initialized reward_function type: {type(self.reward_function)}")
+        if hasattr(self.reward_function, 'rewards') and isinstance(self.reward_function.rewards, list): # Heuristic for CombinedReward
+            constituent_reward_types = [type(r).__name__ for r in self.reward_function.rewards]
+            logger.warning(f"DatasetEnv.__init__: Constituent reward function types (if combined): {constituent_reward_types}")
+            # Attempt to log individual reward configurations if they are dicts (as they might be in CombinedReward)
+            if self.config.reward_functions and isinstance(self.config.reward_functions, list):
+                logger.warning(f"DatasetEnv.__init__: Original reward_functions config: {self.config.reward_functions}")
+        elif self.reward_function is not None:
+            logger.warning(f"DatasetEnv.__init__: Single reward function type: {type(self.reward_function).__name__}")
+            if self.config.reward_functions and isinstance(self.config.reward_functions, list):
+                logger.warning(f"DatasetEnv.__init__: Original reward_functions config for single reward: {self.config.reward_functions}")
+        else:
+            logger.warning("DatasetEnv.__init__: self.reward_function is None.")
 
     def _initialize_reward_function(self):
         if self.config.reward_functions:
             if len(self.config.reward_functions) == 1:
+                # If it's a string, it's a name for the registry
+                # If it's a dict, it's a full config for the registry
                 return registry.create(self.config.reward_functions[0])
             else:
+                # This assumes reward_functions is a list of names or full configs
                 return CombinedReward(
                     rewards=self.config.reward_functions, normalization="sum"
                 )
-        logger.warning("No reward functions configured (field is None or list is empty).")
+        logger.warning(
+            "No reward functions configured (field 'reward_functions' is None or list is empty)."
+        )
         return None
 
     async def setup(self):
@@ -452,6 +470,7 @@ class DatasetEnv(BaseEnv):
                 with open(cfg_path) as f:
                     raw_from_yaml = yaml.safe_load(f) or {}
                 logger.info(f"Loaded config from {cfg_path}")
+                logger.warning(f"DatasetEnv.config_init: Raw reward_functions from YAML: {raw_from_yaml.get('reward_functions')}") # Added log line
             else:
                 # This case should ideally be handled by the fallback in the except block if it's critical
                 logger.warning(

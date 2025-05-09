@@ -91,10 +91,9 @@ class FormatReward(RewardFunction):
             rewards.append(current_reward)
             logger.debug(f"  -> Determined reward for completion {idx}: {current_reward}")
 
-        # Removed summary log: logger.info(f"Format reward results: {sum(rewards)}/{len(rewards)} completions match format")
-        # Apply weight - RewardFunction base class or CombinedReward handles weighting.
-        # The value returned should be the raw score (1.0 or -1.0 in this case).
-        return [r * self.weight for r in rewards] # Apply weight here
+        # Weight is applied by the RewardFunction base class __call__ method.
+        # This compute method should return raw scores.
+        return rewards
 
 
 # Legacy function for backward compatibility

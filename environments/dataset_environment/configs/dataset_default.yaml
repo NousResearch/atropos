@@ -38,7 +38,7 @@ reward_functions:
     weight: 0.2
     params:
       preferred_tags: ["think"]
-      require_all_tags: false
+      require_all_tags: true
 
 server_configs:
   - model_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
