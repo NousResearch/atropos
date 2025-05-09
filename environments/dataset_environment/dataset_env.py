@@ -121,20 +121,27 @@ class DatasetEnv(BaseEnv):
         if not self.dataset:
             await self.setup()
 
-        item = self.dataset[self.iter % len(self.dataset)]
+        item_data = self.dataset[self.iter % len(self.dataset)]
         self.iter += 1
 
-        user_msg = {"role": "user", "content": item[self.config.prompt_field]}
+        logger.warning(f"get_next_item: item_data.keys(): {list(item_data.keys())}")
+        logger.warning(f"get_next_item: config: prompt_field='{self.config.prompt_field}', answer_field='{self.config.answer_field}', ground_truth_field='{self.config.ground_truth_field}'")
+        logger.warning(f"get_next_item: raw_prompt_data: {item_data.get(self.config.prompt_field)}")
+        logger.warning(f"get_next_item: raw_answer_data: {item_data.get(self.config.answer_field)}")
+        logger.warning(f"get_next_item: raw_ground_truth_data: {item_data.get(self.config.ground_truth_field)}")
+
+        user_msg = {"role": "user", "content": item_data[self.config.prompt_field]}
         prompt = tuple([frozenset(user_msg.items())])
 
         answer = None
-        if self.config.answer_field and self.config.answer_field in item:
-            answer = item[self.config.answer_field]
+        if self.config.answer_field and self.config.answer_field in item_data:
+            answer = item_data[self.config.answer_field]
 
         ground_truth = None
-        if self.config.ground_truth_field and self.config.ground_truth_field in item:
-            ground_truth = item[self.config.ground_truth_field]
+        if self.config.ground_truth_field and self.config.ground_truth_field in item_data:
+            ground_truth = item_data[self.config.ground_truth_field]
 
+        logger.warning(f"get_next_item: returning: prompt_len={len(prompt)}, answer='{answer}', ground_truth='{ground_truth}'")
         return (prompt, answer, ground_truth)
 
     async def collect_trajectory(self, item: Item) -> Tuple[List, List]:
@@ -270,6 +277,9 @@ class DatasetEnv(BaseEnv):
     async def score(self, rollout_group_data: List) -> Optional[ScoredDataGroup]:
         logger.warning(f"Scoring {len(rollout_group_data)} rollout items")
 
+        logger.warning(f"score: self.current_item (type: {type(self.current_item)}): {self.current_item}")
+        logger.warning(f"score: config: answer_field='{self.config.answer_field}', ground_truth_field='{self.config.ground_truth_field}'")
+
         scores = ScoredDataGroup()
         scores["tokens"] = []
         scores["masks"] = []
@@ -283,6 +293,7 @@ class DatasetEnv(BaseEnv):
             if self.current_item and len(self.current_item) > 1
             else None
         )
+        logger.warning(f"score: Extracted answer from current_item: {answer}")
         logger.warning(f"Answer for current item: {answer}")
 
         ground_truth = (
@@ -290,6 +301,7 @@ class DatasetEnv(BaseEnv):
             if self.current_item and len(self.current_item) > 2
             else None
         )
+        logger.warning(f"score: Extracted ground_truth from current_item: {ground_truth}")
         logger.warning(f"Ground truth for current item: {ground_truth}")
 
         formatted_completions = []
@@ -307,6 +319,7 @@ class DatasetEnv(BaseEnv):
             logger.warning("No valid completions to score")
             return None
 
+        logger.warning(f"score: formatted_completions passed to reward_function: {formatted_completions}")
         try:
             reward_kwargs = {
                 "solution": answer,
