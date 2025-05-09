@@ -18,7 +18,7 @@ logger.setLevel(logging.INFO)
 
 
 class DatasetEnvConfig(BaseEnvConfig):
-    dataset_name: str = Field(..., description="HuggingFace dataset name")
+    dataset_name: Optional[str] = Field(None, description="HuggingFace dataset name")
     dataset_config: Optional[str] = Field(
         None, description="Dataset configuration name"
     )
@@ -26,7 +26,7 @@ class DatasetEnvConfig(BaseEnvConfig):
     dataset_path: Optional[str] = Field(
         None, description="Local path to dataset (alternative to dataset_name)"
     )
-    prompt_field: str = Field(..., description="Field in dataset to use as prompt")
+    prompt_field: Optional[str] = Field(None, description="Field in dataset to use as prompt")
     answer_field: Optional[str] = Field(
         None, description="Field in dataset to use as answer"
     )
@@ -430,6 +430,15 @@ class DatasetEnv(BaseEnv):
                  raw['debug_mode'] = False # Default if missing in YAML
 
             env_conf = DatasetEnvConfig(**raw)
+
+            # Validate that essential fields are loaded, even if Optional in type hint for Tyro
+            if env_conf.dataset_name is None:
+                raise ValueError("dataset_name is required but was not found or is null in the configuration.")
+            if env_conf.prompt_field is None:
+                raise ValueError("prompt_field is required but was not found or is null in the configuration.")
+            # reward_functions and reward_funcs default to [] via default_factory, so they should exist.
+            # If they needed to be non-empty, checks could be added here too.
+
             server_confs = []
 
             # Updated server config loading
