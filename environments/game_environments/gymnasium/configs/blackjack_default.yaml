@@ -24,10 +24,15 @@ blackjack:
   thinking_active: true
   debug_mode: false
   
-  # Reward function configuration (experimenting with no tool calling format reward)
-  reward_functions: ["format"]
-  format_reward_weight: 0.5
-  environment_reward_weight: 0.5
+  # Reward function configuration
+  reward_functions:
+    - type: "format"
+      weight: 0.5
+      params:
+        preferred_tags: ["think", "tool_call"]
+        require_all_tags: true
+  
+  environment_reward_weight: 2
 
 # Server configuration
 server_configs:

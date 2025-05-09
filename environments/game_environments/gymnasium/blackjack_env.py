@@ -30,7 +30,6 @@ class BlackjackEnvConfig(BaseEnvConfig):
     group_size: int = 16  # G for GRPO
     mc_samples: int = 3  # lowish K for MC value estimation
     reward_functions: List[Union[str, Dict[str, Any]]] = []
-    format_reward_weight: float = 0.5
     environment_reward_weight: float = 0.5
 
 class BlackjackScoredDataGroup(ScoredDataGroup):
@@ -97,56 +96,36 @@ class BlackjackEnv(BaseEnv):
         )
 
     def _initialize_reward_function(self):
-        """Initialize the combined reward function for scoring."""
+        """Initialize the reward function for scoring based on self.config.reward_functions."""
         if hasattr(self.config, "reward_functions") and self.config.reward_functions:
-            reward_configs = []
-            for reward_func_config_item in self.config.reward_functions:
-                if isinstance(reward_func_config_item, str):
-                    if reward_func_config_item == "format":
-                        format_config = {
-                            "type": "format",
-                            "weight": self.config.format_reward_weight,
-                            "params": {
-                                "preferred_tags": ["think", "tool_call"],
-                            },
-                        }
-                        reward_configs.append(format_config)
-                    elif reward_func_config_item == "tool_calling":
-                        tool_calling_config = {
-                            "type": "tool_calling",
-                            "weight": self.config.format_reward_weight,
-                            "params": {
-                                "tools": self.tools,
-                                "preferred_tags": ["tool_call"],
-                                "check_arguments": True,
-                            },
-                        }
-                        reward_configs.append(tool_calling_config)
-                    else:
-                        logger.warning(f"Unrecognized string reward function type: {reward_func_config_item}. Attempting to use directly.")
-                        reward_configs.append(reward_func_config_item) 
-                elif isinstance(reward_func_config_item, dict):
-                    reward_configs.append(reward_func_config_item)
-                else:
-                    logger.warning(f"Skipping invalid reward function configuration item: {reward_func_config_item}")
+            # The config directly provides the list of reward configurations (strings or dicts)
+            reward_configs = self.config.reward_functions
+            logger.info(f"[_initialize_reward_function] Initializing with reward_functions from config: {reward_configs}")
             
-            if not reward_configs:
-                logger.warning("Reward function configs were processed but resulted in an empty list. No reward function will be active.")
+            if not reward_configs: # Should be caught by the outer if, but as a safeguard
+                logger.warning("[_initialize_reward_function] reward_functions list is empty after access. No reward function will be active.")
                 return None
 
             if len(reward_configs) == 1:
                 try:
+                    logger.debug(f"[_initialize_reward_function] Creating single reward function from: {reward_configs[0]}")
+                    # If reward_configs[0] is a string like "format", the registry.create
+                    # will try to instantiate FormatReward. If it's a dict, it uses that directly.
+                    # The create method handles passing 'weight' and 'params' from the dict to the reward constructor.
                     return registry.create(reward_configs[0])
                 except Exception as e:
-                    logger.error(f"Failed to create single reward function from config {reward_configs[0]}: {e}")
+                    logger.error(f"[_initialize_reward_function] Failed to create single reward function from config {reward_configs[0]}: {e}", exc_info=True)
                     return None
             elif len(reward_configs) > 1:
                 try:
-                    return CombinedReward(rewards=reward_configs, normalization="none")
+                    logger.debug(f"[_initialize_reward_function] Creating CombinedReward function from: {reward_configs}")
+                    # CombinedReward will instantiate each item in reward_configs using registry.create
+                    return CombinedReward(rewards=reward_configs) # Normalization removed previously
                 except Exception as e:
-                    logger.error(f"Failed to create CombinedReward function from configs: {e}")
+                    logger.error(f"[_initialize_reward_function] Failed to create CombinedReward function from configs: {e}", exc_info=True)
                     return None
-        logger.info("No reward_functions specified in config or it's empty. No format/tool-call reward function will be active.")
+        else:
+            logger.info("[_initialize_reward_function] No 'reward_functions' key in config or it's empty. No specific reward function (like format/tool_call) will be active.")
         return None
 
     def _get_or_create_episode(self, seed: int) -> EpisodeState:
@@ -173,45 +152,40 @@ class BlackjackEnv(BaseEnv):
         """
         Calculates a combined score for a single agent response based on environment and format rewards.
         """
-        format_reward_component = 0.0
+        format_or_tool_call_reward_component = 0.0 # This will be the already weighted score from self.reward_function
         current_env_reward = env_reward # Start with the raw environment reward
 
         # Apply a penalty if the action parsing failed
         if parsed_action == -1:
             # This penalty is for not adhering to the tool call format that allows parsing.
-            # Specific tool argument errors might be handled by the ToolCallingReward function if configured.
             current_env_reward -= 0.5 
             logger.debug(f"[_score_response Seed: {episode_seed}] Penalty applied to env_reward for invalid action format (-0.5). Current env_reward: {current_env_reward}")
 
         if self.reward_function:
-            # The reward_function (e.g., CombinedReward) expects a list of lists of messages.
-            # We wrap the single response appropriately.
-            # The structure is [[{'role': 'agent', 'content': response_text}]]
-            messages_for_format_reward: List[List[Dict[str, str]]] = [[{"role": "agent", "content": response_text}]]
+            messages_for_reward_func: List[List[Dict[str, str]]] = [[{"role": "agent", "content": response_text}]]
             try:
-                # The reward_function should return a list of scores, one for each item in the outer list.
-                format_rewards_list = self.reward_function(messages_for_format_reward)
-                if format_rewards_list and len(format_rewards_list) > 0:
-                    format_reward_component = format_rewards_list[0] # We expect a single score back
-                    logger.debug(f"[_score_response Seed: {episode_seed}] Format/ToolCall reward calculated: {format_reward_component:.4f}")
+                reward_func_output_list = self.reward_function(messages_for_reward_func)
+                if reward_func_output_list and len(reward_func_output_list) > 0:
+                    format_or_tool_call_reward_component = reward_func_output_list[0]
+                    logger.debug(f"[_score_response Seed: {episode_seed}] Output from self.reward_function (e.g., format/tool_call): {format_or_tool_call_reward_component:.4f}")
                 else:
-                    logger.warning(f"[_score_response Seed: {episode_seed}] Format reward function returned empty or invalid result: {format_rewards_list}")
+                    logger.warning(f"[_score_response Seed: {episode_seed}] self.reward_function returned empty or invalid result: {reward_func_output_list}")
             except Exception as e:
-                logger.error(f"[_score_response Seed: {episode_seed}] Error calculating format/tool-call reward: {e}", exc_info=True)
+                logger.error(f"[_score_response Seed: {episode_seed}] Error calculating reward via self.reward_function: {e}", exc_info=True)
         else:
-            logger.debug(f"[_score_response Seed: {episode_seed}] No reward_function active, format_reward_component is 0.")
+            logger.debug(f"[_score_response Seed: {episode_seed}] No self.reward_function active, format_or_tool_call_reward_component is 0.")
 
-        # Get weights from config
         env_w = self.config.environment_reward_weight
-        fmt_w = self.config.format_reward_weight
+        # fmt_w = self.config.format_reward_weight # Removed, format_or_tool_call_reward_component is already weighted by its YAML config
         
         # Calculate the final combined score
-        combined_score = (env_w * current_env_reward) + (fmt_w * format_reward_component)
+        # The format_or_tool_call_reward_component is the output of self.reward_function(), which is already weighted.
+        combined_score = (env_w * current_env_reward) + format_or_tool_call_reward_component
 
         logger.debug(
             f"[_score_response Seed: {episode_seed}] Score Calculation: "
             f"EnvReward(raw): {env_reward:.4f}, EnvReward(adj): {current_env_reward:.4f} (w:{env_w:.2f}), "
-            f"FmtReward: {format_reward_component:.4f} (w:{fmt_w:.2f}), "
+            f"OutputFromRewardFunctions (already weighted): {format_or_tool_call_reward_component:.4f}, "
             f"==> CombinedScore: {combined_score:.4f}"
         )
         return combined_score

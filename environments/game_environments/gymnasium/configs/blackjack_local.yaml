@@ -25,9 +25,14 @@ blackjack:
   debug_mode: true
   
   # Reward function configuration
-  reward_functions: ["format", "tool_calling"]
-  format_reward_weight: 0.5
-  environment_reward_weight: 0.5
+  reward_functions:
+    - type: "format"
+      weight: 0.5
+      params:
+        preferred_tags: ["think", "tool_call"]
+        require_all_tags: true
+  
+  environment_reward_weight: 2
 
 # Server configuration
 server_configs:
