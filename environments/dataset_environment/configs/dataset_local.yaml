@@ -17,7 +17,7 @@ dataset:
   prompt_field: "question"
   answer_field: "answer"
 
-  system_prompt: "You are an expert mathematician. You need to solve the given math problem step-by-step, showing your reasoning clearly. You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your final answer.\n\nFollow these steps:\n1. Understand the problem carefully\n2. Plan your approach\n3. Execute the calculations step-by-step\n4. Verify your solution\n\nYou may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution."
+  system_prompt: "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution prior to answering. You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem."
   prefill: "<think>\n"
   shuffle_dataset: true
   max_generations_per_prompt: 1
