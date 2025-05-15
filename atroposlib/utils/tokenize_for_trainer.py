@@ -1,5 +1,6 @@
 import numpy as np
 from transformers import PreTrainedTokenizer
+from typing import Optional
 
 from atroposlib.type_definitions import Message
 
@@ -13,6 +14,7 @@ def tokenize_for_trainer(
     include_messages: bool = False,
     train_on_all_assistant_turns: bool = False,
     finish_reason: str = "",
+    unmasked_role: Optional[str] = None,
 ) -> dict:
     """
     Tokenize a list of chat messages for the trainer.
@@ -23,6 +25,7 @@ def tokenize_for_trainer(
         include_messages (bool): Whether to include the messages in the output.
         train_on_all_assistant_turns (bool): If True, mask out system/user/tool roles.
                                             If False, use the original prefix masking.
+        unmasked_role (Optional[str]): A specific custom role to leave unmasked.
     Returns:
         dict: A dictionary containing the tokenized chat messages.
     """
@@ -41,8 +44,12 @@ def tokenize_for_trainer(
 
         masks = np.ones(len(tokens), dtype=np.int64) * -100
 
+        current_unmasked_roles = list(UNMASKED_ROLES)
+        if unmasked_role:
+            current_unmasked_roles.append(unmasked_role)
+
         for i, msg in enumerate(chat):
-            if msg["role"] in UNMASKED_ROLES:
+            if msg["role"] in current_unmasked_roles:
                 prefix_tokens = tokenizer.apply_chat_template(
                     chat[:i], tokenize=True, add_generation_prompt=True
                 )
