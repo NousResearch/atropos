@@ -25,17 +25,17 @@ from textworld.generator import (  # Import compile_game
 )
 from textworld.generator.text_grammar import MissingTextGrammar
 
-from helpers.tool_call_parser import parse_tool_call
-from trajectoryhandler.envs.base import (
+from atroposlib.utils.tool_call_parser import parse_tool_call
+from atroposlib.envs.base import (
     BaseEnv,
     BaseEnvConfig,
-    OpenaiConfig,
+    APIServerConfig,
     ScoredDataGroup,
 )
-from trajectoryhandler.envs.reward_fns import registry
-from trajectoryhandler.envs.reward_fns.combined_reward import CombinedReward
-from trajectoryhandler.type_definitions import Message
-from trajectoryhandler.utils.tokenize_for_trainer import tokenize_for_trainer
+from atroposlib.envs.reward_fns import registry
+from atroposlib.envs.reward_fns.combined_reward import CombinedReward
+from atroposlib.type_definitions import Message
+from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 # Import the generation utility
 from environments.game_environments.textworld.generation_utils import generate_textworld_game
@@ -56,8 +56,8 @@ class TextWorldEnvConfig(BaseEnvConfig):
 
     # Challenge Specification
     challenge_name: str = "tw-simple" # Name of the challenge to generate (e.g., tw-simple)
-    challenge_rewards: str = "balanced" # Challenge-specific: dense, balanced, sparse
-    challenge_goal: str = "brief" # Challenge-specific: detailed, brief, none
+    challenge_rewards: str = "dense" # Challenge-specific: dense, balanced, sparse
+    challenge_goal: str = "detailed" # Challenge-specific: detailed, brief, none
     challenge_test_mode: bool = False # Challenge-specific: Use test distribution
 
     # Game Generation Parameters (Defaults used if not overridden by challenge)
@@ -79,6 +79,8 @@ class TextWorldEnvConfig(BaseEnvConfig):
     format_reward_weight: float = 0.3 # Weight for tool calling/format rewards
     environment_reward_weight: float = 0.7 # Weight for game score changes, winning, etc.
     invalid_action_penalty: float = -0.1 # Penalty for invalid/malformed actions
+    debug_mode: bool = False
+    max_trajectory_tokens: int = 24576
 
 
 # Placeholder for EpisodeState Class
@@ -114,7 +116,7 @@ class TextWorldEnv(BaseEnv):
     def __init__(
         self,
         config: TextWorldEnvConfig,
-        server_configs: List[OpenaiConfig],
+        server_configs: List[APIServerConfig],
         slurm: bool = True,
         testing: bool = False,
     ):
@@ -622,3 +624,71 @@ class TextWorldEnv(BaseEnv):
             # Suppress errors during __del__ as interpreter state is unpredictable.
             # print(f"Error during TextWorldEnv __del__: {e}") # Avoid logger
             pass
+
+    @classmethod
+    def config_init(cls) -> Tuple[TextWorldEnvConfig, List[APIServerConfig]]:
+        """
+        Initializes the environment and server configurations with hardcoded defaults.
+        This method provides a standard way to get a runnable configuration without
+        needing to parse external files.
+        """
+        env_config = TextWorldEnvConfig(
+            # BaseEnvConfig common parameters (inspired by Blackjack defaults)
+            tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+            group_size=16,
+            use_wandb=True,
+            max_num_workers=128,
+            rollout_server_url="http://localhost:8000", # Default if applicable
+            total_steps=2000,
+            batch_size=1024,
+            steps_per_eval=20,
+            max_token_length=1024 * 16, # Example: 16k
+            inference_weight=1.0,
+            wandb_name="textworld_rl_training", # Specific W&B project name
+            data_path_to_save_groups=None, # Default if not saving groups to disk
+            # eval_handling and eval_limit_ratio are not in BaseEnvConfig, omitting
+            debug_mode=False,
+            max_trajectory_tokens=24576,  # From Blackjack, seq_len of RL trainer
+
+            # TextWorldEnvConfig specific parameters (using existing class defaults)
+            env_name="TextWorld", # Default from TextWorldEnvConfig
+            temperature=0.7,      # Default from TextWorldEnvConfig & Blackjack
+            top_p=0.9,            # Default from TextWorldEnvConfig & Blackjack
+            max_steps=50,         # Default from TextWorldEnvConfig (max_turns in Blackjack was 5)
+
+            challenge_name="tw-simple",
+            challenge_rewards="balanced",
+            challenge_goal="brief",
+            challenge_test_mode=False,
+
+            nb_rooms=5,
+            nb_objects=10,
+            quest_min_length=3,
+            quest_max_length=3,
+            quest_max_depth=3,
+            grammar_theme="house",
+            grammar_include_adj=True,
+            game_seed=None, # Will be randomized per episode if None
+
+            thinking_active=True, # Default from TextWorldEnvConfig & Blackjack
+            thinking_prefill="<think>\\n",
+
+            reward_functions=["tool_calling"],
+            format_reward_weight=0.3,
+            environment_reward_weight=0.7,
+            invalid_action_penalty=-0.1,
+            
+        )
+
+        server_configs = [
+            APIServerConfig(
+                model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+                base_url="http://localhost:9004/v1", # Example, adjust if needed
+                api_key="x", # Placeholder
+                num_requests_for_eval=256 # From Blackjack (OpenaiConfig)
+            )
+        ]
+        return env_config, server_configs
+
+if __name__ == "__main__":
+    TextWorldEnv.cli()
