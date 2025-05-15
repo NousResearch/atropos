@@ -75,6 +75,16 @@ class AtroposAgent:
             logger.error(f"AtroposAgent[{self.player_id_for_logging}] LLM API (chat_completion) error: {e}. Last user message (start): {log_prompt_snippet}")
             return None, True # API error occurred
 
+    async def _generate_memory(
+        self,
+        observation_content: str, # The game-specific augmented observation from the environment
+        server_client: Any,
+    ) -> Tuple[Optional[str], bool, bool]:
+        """
+        Generates a memory based on the observation, managing history and LLM interaction.
+        """
+        pass
+
     async def generate_action(
         self,
         observation_content: str, # The game-specific augmented observation from the environment
