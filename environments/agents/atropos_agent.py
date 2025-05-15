@@ -2,9 +2,91 @@ import logging
 from typing import List, Optional, Tuple, Any
 from atroposlib.type_definitions import Message
 import numpy as np
-import faiss # For FAISS (vector similarity search)
-from transformers import PreTrainedTokenizer
+from transformers import PreTrainedTokenizer 
+
 logger = logging.getLogger(__name__)
+
+# Conditional imports for the memory system
+MEMORY_SYSTEM_PREREQUISITES_AVAILABLE = False
+try:
+    import torch
+    from sentence_transformers import SentenceTransformer
+    import faiss # For FAISS (vector similarity search)
+    MEMORY_SYSTEM_PREREQUISITES_AVAILABLE = True
+    logger.info("Memory system prerequisites (torch, sentence-transformers, faiss) found.")
+except ImportError as e:
+    logger.warning(
+        f"Memory system prerequisites not fully met (torch, sentence-transformers, or faiss missing: {e}). "
+        f"AtroposAgent memory features will be disabled."
+    )
+    torch = None
+    SentenceTransformer = None
+    faiss = None
+
+# --- Sentence Embedding Helper --- 
+class SentenceEmbeddingHelper:
+    _instance = None
+    _model = None
+    _device = None
+    _embedding_dim = 384 # Default for all-MiniLM-L6-v2
+
+    def __new__(cls, *args, **kwargs):
+        if not MEMORY_SYSTEM_PREREQUISITES_AVAILABLE: # Broader check now
+            # Logger warning already issued at import time
+            return None 
+
+        if cls._instance is None:
+            cls._instance = super(SentenceEmbeddingHelper, cls).__new__(cls)
+            try:
+                if torch.cuda.is_available():
+                    cls._device = "cuda"
+                elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                    cls._device = "mps"
+                else:
+                    cls._device = "cpu"
+                logger.info(f"SentenceEmbeddingHelper: Using device: {cls._device}")
+                
+                # 22M parameters - small enough to run on CPU with minimal overhead
+                model_name = 'sentence-transformers/all-MiniLM-L6-v2'
+                cls._model = SentenceTransformer(model_name, device=cls._device)
+                dummy_embedding = cls._model.encode(["test"], device=cls._device)
+                actual_dim = dummy_embedding.shape[1]
+                if actual_dim != cls._embedding_dim:
+                    logger.warning(
+                        f"SentenceEmbeddingHelper: Expected embedding dimension {cls._embedding_dim} "
+                        f"for {model_name}, but got {actual_dim}. Using {actual_dim}."
+                    )
+                    cls._embedding_dim = actual_dim
+                logger.info(f"SentenceEmbeddingHelper: Model {model_name} loaded successfully. Embedding dim: {cls._embedding_dim}")
+
+            except Exception as e:
+                logger.error(f"SentenceEmbeddingHelper: Error loading SentenceTransformer model: {e}", exc_info=True)
+                cls._instance = None
+        return cls._instance
+
+    def get_embeddings(self, texts: List[str]) -> Optional[np.ndarray]:
+        if self._model is None or not MEMORY_SYSTEM_PREREQUISITES_AVAILABLE:
+             # ... (as before)
+            logger.error("SentenceEmbeddingHelper: Model not loaded or prerequisites unavailable. Cannot get embeddings.")
+            return None
+        # ... (rest of get_embeddings as before, using self._model and np)
+        if not texts:
+            return np.array([]).reshape(0, self._embedding_dim)
+        try:
+            embeddings = self._model.encode(texts, convert_to_numpy=True, device=self.device, show_progress_bar=False)
+            return embeddings.astype(np.float32)
+        except Exception as e:
+            logger.error(f"SentenceEmbeddingHelper: Error encoding texts: {e}", exc_info=True)
+            return None
+
+    @property
+    def device(self):
+        return self._device
+
+    @property
+    def embedding_dim(self):
+        return self._embedding_dim
+# --- End Sentence Embedding Helper ---
 
 class AtroposAgent:
     """
@@ -14,13 +96,13 @@ class AtroposAgent:
     def __init__(
         self,
         system_prompt: str,
-        tokenizer: PreTrainedTokenizer, # Tokenizer instance (e.g., from HuggingFace) for token counting
+        tokenizer: PreTrainedTokenizer, 
         temperature: float,
-        max_context_token_length: int, # Overall maximum token length for the context window
-        max_tokens_for_llm_output: int = 256, # Max tokens the LLM should generate for its response
-        player_id_for_logging: Optional[int] = None, # Optional player ID for more specific logging
-        embedding_dim: int = 768, # Dimension of embeddings for FAISS
-        top_k_memories: int = 3, # Number of memories to retrieve
+        max_context_token_length: int, 
+        max_tokens_for_llm_output: int = 256, 
+        player_id_for_logging: Optional[int] = None, 
+        embedding_dim: int = 384, # Default, will be overridden if helper loads
+        top_k_memories: int = 3, 
         memory_generation_system_prompt: Optional[str] = None
     ):
         self.system_prompt_content = system_prompt
@@ -29,18 +111,40 @@ class AtroposAgent:
         self.max_context_token_length = max_context_token_length
         self.max_tokens_for_llm_output = max_tokens_for_llm_output
         self.player_id_for_logging = str(player_id_for_logging) if player_id_for_logging is not None else "Agent"
-
         self.current_game_messages: List[Message] = []
 
-        # Memory System Initialization
-        self.embedding_dim = embedding_dim
+        # --- Memory System Initialization ---
+        self.embedding_helper = None
+        self.faiss_index = None
+        self.embedding_dim = embedding_dim # Start with param, may be updated
+
+        if MEMORY_SYSTEM_PREREQUISITES_AVAILABLE:
+            self.embedding_helper = SentenceEmbeddingHelper()
+            if self.embedding_helper and self.embedding_helper._model is not None:
+                self.embedding_dim = self.embedding_helper.embedding_dim # Use actual dim
+                logger.info(f"AtroposAgent[{self.player_id_for_logging}] SentenceEmbeddingHelper active. Embedding dim set to {self.embedding_dim}.")
+                try:
+                    self.faiss_index = faiss.IndexFlatL2(self.embedding_dim)
+                    logger.info(f"AtroposAgent[{self.player_id_for_logging}] FAISS index initialized (dim={self.embedding_dim}). Memory system enabled.")
+                except Exception as e:
+                    logger.error(f"AtroposAgent[{self.player_id_for_logging}] Failed to initialize FAISS index (dim={self.embedding_dim}): {e}. Memory system will be disabled.", exc_info=True)
+                    self.faiss_index = None # Ensure it's None
+                    self.embedding_helper = None # If FAISS fails, disable helper too for consistency
+            else:
+                logger.warning(
+                    f"AtroposAgent[{self.player_id_for_logging}] SentenceEmbeddingHelper instantiated but model not loaded. "
+                    f"Memory system will be disabled."
+                )
+                self.embedding_helper = None # Ensure helper is None if its model isn't loaded
+                self.faiss_index = None
+        else:
+            logger.info(
+                f"AtroposAgent[{self.player_id_for_logging}] Memory system prerequisites not met. "
+                f"Memory features will be disabled."
+            )
+            # self.embedding_helper and self.faiss_index are already None or will remain so
+        
         self.top_k_memories = top_k_memories
-        try:
-            self.faiss_index = faiss.IndexFlatL2(self.embedding_dim)
-            logger.info(f"AtroposAgent[{self.player_id_for_logging}] FAISS index (IndexFlatL2, dim={self.embedding_dim}) initialized.")
-        except Exception as e:
-            logger.error(f"AtroposAgent[{self.player_id_for_logging}] Failed to initialize FAISS index: {e}", exc_info=True)
-            self.faiss_index = None # Ensure it's None if init fails
         self.memory_texts: List[str] = []
 
         if memory_generation_system_prompt is None:
@@ -73,35 +177,22 @@ class AtroposAgent:
         """Returns the complete dialogue history for the finished game."""
         return list(self.current_game_messages) # Return a copy
 
-    async def _get_embedding(self, text: str, server_client: Any) -> Optional[np.ndarray]:
-        """Helper method to get an embedding for a given text string."""
-        if not text or not hasattr(server_client, 'embedding'):
-            logger.warning(f"AtroposAgent[{self.player_id_for_logging}] _get_embedding: Empty text or server_client lacks embedding method.")
+    async def _get_embedding(self, text: str, server_client: Any = None) -> Optional[np.ndarray]: # server_client is no longer used here
+        """Helper method to get an embedding for a given text string using local SentenceEmbeddingHelper."""
+        if not self.embedding_helper or self.embedding_helper._model is None:
+            logger.warning(f"AtroposAgent[{self.player_id_for_logging}] _get_embedding: SentenceEmbeddingHelper not available. Cannot get embedding.")
             return None
-        try:
-            # Assuming server_client.embedding takes 'input' and 'model' (optional)
-            # and returns an OpenAI-like embedding response structure.
-            # Adjust if your server_client has a different API.
-            # For simplicity, model is not specified, assuming server_client uses a default.
-            response = await server_client.embedding(input=text)
-            
-            # Example for OpenAI-like response:
-            if response and response.data and len(response.data) > 0 and response.data[0].embedding:
-                embedding_list = response.data[0].embedding
-                embedding_np = np.array(embedding_list, dtype=np.float32).reshape(1, -1)
-                if embedding_np.shape[1] != self.embedding_dim:
-                    logger.error(
-                        f"AtroposAgent[{self.player_id_for_logging}] Embedding dimension mismatch. "
-                        f"Expected {self.embedding_dim}, got {embedding_np.shape[1]}."
-                    )
-                    return None
-                return embedding_np
-            else:
-                logger.error(f"AtroposAgent[{self.player_id_for_logging}] Unexpected embedding response structure: {response}")
-                return None
-        except Exception as e:
-            logger.error(f"AtroposAgent[{self.player_id_for_logging}] Error getting embedding for text '{text[:100]}...\': {e}", exc_info=True)
-            return None
+        if not text:
+            logger.warning(f"AtroposAgent[{self.player_id_for_logging}] _get_embedding: Empty text provided.")
+            # Return None, or an empty array of the correct shape if that's more useful downstream
+            return None 
+        
+        embeddings_batch = self.embedding_helper.get_embeddings([text])
+        if embeddings_batch is not None and embeddings_batch.shape[0] == 1:
+            return embeddings_batch[0].reshape(1, -1) # Ensure (1, dim) shape
+        elif embeddings_batch is not None: # Should not happen if only one text is passed
+             logger.error(f"AtroposAgent[{self.player_id_for_logging}] _get_embedding: Expected 1 embedding, got {embeddings_batch.shape[0]}.")
+        return None
 
     def _format_history_for_memory_prompt(self, history_window: List[Message]) -> str:
         """Formats a list of message dicts into a single string for the memory generation prompt."""
