@@ -52,7 +52,7 @@ class TextWorldEnvConfig(BaseEnvConfig):
     env_name: str = "TextWorld"
     temperature: float = 0.7
     top_p: float = 0.9
-    max_steps: int = 50  # Max turns per episode
+    max_steps: int = 100  # Max turns per episode
 
     # Challenge Specification
     challenge_name: str = "tw-simple" # Name of the challenge to generate (e.g., tw-simple)

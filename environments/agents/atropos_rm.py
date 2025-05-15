@@ -1,6 +1,8 @@
 import logging
 import re
 from typing import List, Optional, Tuple, Any, Dict
+import json
+from transformers import PreTrainedTokenizer
 
 # A common representation for chat messages
 Message = Dict[str, str]
@@ -18,20 +20,17 @@ class AtroposRM:
 
     def __init__(
         self,
-        system_prompt: str,
-        tokenizer: Any,  # Tokenizer instance (e.g., from HuggingFace)
+        tokenizer: PreTrainedTokenizer,  # Tokenizer instance (e.g., from HuggingFace)
         temperature: float,
         max_context_token_length: int, # Max tokens for the LLM's context window
         max_tokens_for_llm_output: int, # Max tokens the RM LLM should generate for one judgement
+        thinking: bool = True, # Whether the RM should use <thinking> tags
         rm_id_for_logging: Optional[str] = "RM"
     ):
         """
         Initializes the AtroposRM.
 
         Args:
-            system_prompt: The system prompt that instructs the RM on how to behave.
-                           It should guide the LLM to produce a thinking block and a
-                           \\boxed{Q_VALUE}.
             tokenizer: The tokenizer used for token counting if necessary (e.g., by a
                        client library or for context length checks, though context checks
                        are not explicitly implemented in this version of _sample_one_judgement).
@@ -39,54 +38,129 @@ class AtroposRM:
             max_context_token_length: The maximum token length for the LLM's context window.
             max_tokens_for_llm_output: The maximum number of tokens the LLM should generate
                                        for each of its G judgements.
+            thinking: If True, RM is instructed to use <thinking> tags. If False,
+                      it's instructed to output only the Q-value.
             rm_id_for_logging: An identifier for logging purposes.
         """
-        self.system_prompt_content = system_prompt
         self.tokenizer = tokenizer
         self.temperature = temperature
         self.max_context_token_length = max_context_token_length
         self.max_tokens_for_llm_output = max_tokens_for_llm_output
+        self.enable_thinking = thinking
         self.rm_id = rm_id_for_logging
         
+        # Construct the system prompt
+        base_prompt = (
+            "You are an expert reward model. Your task is to analyze a given trajectory of an "
+            "AI agent interacting with an environment and provide a numerical Q-value estimate "
+            "representing the expected future return from the current state-action pair. "
+            "The Q-value should be a single floating-point number."
+        )
+        
+        thinking_instructions = (
+            "Before providing your final Q-value, you should engage in a detailed chain of thought. "
+            "Enclose your entire reasoning process, step-by-step analysis, and any intermediate "
+            "calculations or considerations within <thinking> and </thinking> tags. This thinking "
+            "process can be as long and detailed as necessary to arrive at an accurate estimate. "
+            "After the </thinking> tag, you must provide your final Q-value estimate."
+        )
+        
+        no_thinking_instructions = (
+            "You must provide ONLY the Q-value estimate as a single floating-point number."
+        )
+
+        q_value_format_instruction = (
+            "Your final Q-value estimate must be a single floating-point number enclosed in "
+            "\\boxed{{}}, like so: \\boxed{{Q_ESTIMATE}}. For example: \\boxed{{17.35}}."
+        )
+
+        if self.enable_thinking:
+            self.system_prompt_content = f"{base_prompt}\\n\\n{thinking_instructions}\\n\\n{q_value_format_instruction}"
+        else:
+            self.system_prompt_content = f"{base_prompt}\\n\\n{no_thinking_instructions}\\n\\n{q_value_format_instruction}"
+        
         # Regex to extract Q-value, e.g., \\boxed{0.5} or \\boxed{-0.23}
-        # It looks for \\boxed{ possibly_whitespace optional_sign digits optional_decimal_part possibly_whitespace }
-        self.q_value_pattern = re.compile(r"\\boxed{\s*([+-]?\d*\.?\d+)\s*}")
+        self.q_value_pattern = re.compile(r"\\boxed{\\s*([+-]?\\d*\\.?\\d+)\\s*}")
         # Regex to extract content within <thinking>...</thinking> tags
         self.thinking_block_pattern = re.compile(r"<thinking>(.*?)</thinking>", re.DOTALL)
 
 
     def _construct_evaluation_user_prompt_content(
         self,
-        # game_history_for_rm: List[Message], # Full dialogue history of the game so far (turns by P0, P1)
-        current_game_observation_str: str,    # Text observation from environment for the current turn
-        policy_agent_thinking_str: Optional[str], # Policy agent's <thinking> block for its proposed action
-        policy_agent_action_str: str,             # Policy agent's proposed action (e.g., tool call string)
-        current_player_id: int                    # Player ID whose move is being evaluated by the RM
+        game_history_window: List[Message], # Window of game history, last message is action to evaluate
+        current_player_id: int
     ) -> str:
         """
         Constructs the content for the 'user' message that will be sent to the RM LLM.
-        This prompt asks the RM to evaluate the policy agent's proposed move.
+        This prompt asks the RM to evaluate the policy agent's proposed move, using provided game history.
 
         Args:
-            current_game_observation_str: The current observation from the game environment.
-            policy_agent_thinking_str: The thinking block generated by the policy agent.
-            policy_agent_action_str: The action string (e.g., tool call) proposed by the policy agent.
+            game_history_window: A list of Message dicts. The last message in this list
+                                 is assumed to be the policy agent's response (thinking + action)
+                                 that the RM must evaluate. Earlier messages provide context,
+                                 and may include system messages intended for the policy agent.
             current_player_id: The ID of the player whose move is being evaluated.
 
         Returns:
             A string representing the content of the user message for the RM.
         """
-        prompt_parts = [
-            f"You are evaluating a move for Player {current_player_id}.",
-            "CURRENT GAME SITUATION:",
-            current_game_observation_str,
-            "\nPOLICY AGENT'S PROPOSED MOVE:",
-        ]
-        if policy_agent_thinking_str:
-            prompt_parts.append(f"<thinking>\n{policy_agent_thinking_str}\n</thinking>")
-        prompt_parts.append(f"Action:\n{policy_agent_action_str}")
-        prompt_parts.append("\nPlease provide your detailed evaluation of this move, including your own thinking process and a final Q-value score in \\boxed{{Q_VALUE}} format.")
-        return "\\n\\n".join(prompt_parts)
+        env_system_prompt_contents = []
+        formatted_history_parts = []
+        action_to_evaluate_str = "Error: Action to evaluate not found or not in expected format in history window."
+
+        if not game_history_window:
+            logger.error(f"[{self.rm_id}] _construct_evaluation_user_prompt_content called with empty game_history_window.")
+            # Return a prompt that indicates an error, or handle as per desired strictness
+            return "Critical Error: No game history provided for evaluation. Cannot proceed."
+
+        # The last message is the action to be evaluated.
+        # Messages before the last one form the context (history and potential env system prompts).
+        history_context = game_history_window[:-1]
+        action_message = game_history_window[-1]
+
+        # Extract the content of the action to be evaluated
+        # We assume the policy agent's output (what the RM judges) has the role 'assistant'
+        # or contains the thinking/action structure we expect.
+        if action_message.get('role') == 'assistant': # Standard role for LLM agent responses
+            action_to_evaluate_str = action_message['content']
+        else:
+            logger.warning(
+                f"[{self.rm_id}] Last message in game_history_window (expected policy action) has role '{action_message.get('role')}' instead of 'assistant'. "
+                f"Using its content directly: {action_message.get('content', '')[:100]}..."
+            )
+            # Fallback: use the content of the last message directly, regardless of role, if it's not 'assistant'.
+            # This might happen if the environment uses different role conventions for the policy agent's turn.
+            action_to_evaluate_str = action_message.get('content', action_to_evaluate_str)
+
+        # Process the history context for environment system prompts and game turns
+        for msg in history_context:
+            if msg.get("role") == "system":
+                env_system_prompt_contents.append(msg.get("content", ""))
+            else:
+                role_display = msg.get("role", "unknown_role").capitalize()
+                content_display = msg.get("content", "[No content]")
+                formatted_history_parts.append(f"{role_display}: {content_display}")
+
+        # Build the final prompt string sections
+        prompt_sections = [f"You are evaluating a move for Player {current_player_id}."]
+
+        if env_system_prompt_contents:
+            prompt_sections.append("\n--- Environment System Prompt (Instructions for the Policy Agent) ---")
+            prompt_sections.append("\n\n".join(filter(None, env_system_prompt_contents))) # Join non-empty prompts
+            prompt_sections.append("--- End of Environment System Prompt ---")
+
+        if formatted_history_parts:
+            prompt_sections.append("\n--- Recent Game History (excluding the move to be evaluated) ---")
+            prompt_sections.append("\n".join(formatted_history_parts))
+            prompt_sections.append("--- End of Recent Game History ---")
+        
+        prompt_sections.append("\n--- Policy Agent's Proposed Move (to be evaluated) ---")
+        prompt_sections.append(action_to_evaluate_str)
+        prompt_sections.append("--- End of Proposed Move ---")
+
+        prompt_sections.append("\nPlease provide your detailed evaluation of this move, including your own thinking process and a final Q-value score in \\boxed{{Q_VALUE}} format.")
+        
+        return "\n\n".join(prompt_sections) # Join all major sections with double newlines
 
     def _parse_q_value_from_response(self, llm_response_content: str) -> Optional[float]:
         """
@@ -104,9 +178,9 @@ class AtroposRM:
             try:
                 return float(match.group(1))
             except ValueError:
-                logger.warning(f"[{self.rm_id}] Could not convert matched Q-value \'{match.group(1)}\' to float. Response: \'{llm_response_content[:200]}...\'")
+                logger.warning(f"[{self.rm_id}] Could not convert matched Q-value '{match.group(1)}' to float. Response: '{llm_response_content[:200]}...'")
                 return None
-        logger.debug(f"[{self.rm_id}] Q-value pattern not found in response: \'{llm_response_content[:200]}...\'")
+        logger.debug(f"[{self.rm_id}] Q-value pattern not found in response: '{llm_response_content[:200]}...'")
         return None
 
     def _extract_thinking_block(self, llm_response_content: str) -> Optional[str]:
@@ -122,7 +196,7 @@ class AtroposRM:
         match = self.thinking_block_pattern.search(llm_response_content)
         if match:
             return match.group(1).strip()
-        logger.debug(f"[{self.rm_id}] Thinking block pattern not found in response: \'{llm_response_content[:200]}...\'")
+        logger.debug(f"[{self.rm_id}] Thinking block pattern not found in response: '{llm_response_content[:200]}...'")
         return None
 
     async def _sample_one_judgement(
@@ -134,26 +208,39 @@ class AtroposRM:
     ) -> Tuple[Optional[str], bool]:
         """
         Makes a single call to the LLM to get one judgement.
+        Assumes messages_for_llm_call is correctly formatted by the caller (generate_g_judgements)
+        typically as [RM_system_prompt_message, fully_constructed_user_prompt_message].
 
         Args:
-            messages_for_llm_call: The list of messages (system, user) to send to the LLM.
+            messages_for_llm_call: The list of messages to send to the LLM.
             server_client: The API client for the LLM server.
             log_prefix_base: Base prefix for logging.
 
         Returns:
             A tuple: (raw_llm_content_or_none, api_error_occurred_flag)
         """
-        log_prompt_snippet = messages_for_llm_call[-1]['content'][:200] if messages_for_llm_call and messages_for_llm_call[-1]['role'] == 'user' else "PROMPT_SNIPPET_UNAVAILABLE"
-        logger.debug(f"{log_prefix_base} LLM Chat Prompt for RM (last user message snippet): {log_prompt_snippet}")
+        
+        if not messages_for_llm_call or not any(msg.get('role') == 'user' for msg in messages_for_llm_call):
+            logger.error(f"{log_prefix_base} RM LLM call attempted with no messages or no user message. Messages: {messages_for_llm_call}")
+            return None, True # Error
+
+        # Log a snippet of the first user message for context
+        log_prompt_snippet = "PROMPT_SNIPPET_UNAVAILABLE"
+        for msg in messages_for_llm_call:
+            if msg.get('role') == 'user':
+                log_prompt_snippet = msg.get('content', '')[:200]
+                break
+        
+        logger.debug(f"{log_prefix_base} LLM Chat Prompt for RM (first user message snippet): {log_prompt_snippet}")
+        # For very detailed debugging, you might log the full messages_for_llm_call, but be wary of verbosity.
+        # logger.debug(f"{log_prefix_base} Final messages being sent to LLM: {json.dumps(messages_for_llm_call, indent=2)}")
 
         try:
-            # Using chat completion endpoint
             chat_completions = await server_client.chat_completion(
                 messages=messages_for_llm_call,
-                n=1, # We want one judgement per call here
+                n=1,
                 max_tokens=self.max_tokens_for_llm_output,
                 temperature=self.temperature,
-                # Potentially add other parameters like top_p if needed
             )
             
             llm_generated_content = None
@@ -164,29 +251,21 @@ class AtroposRM:
                 llm_generated_content = chat_completions.choices[0].message.content.strip()
             
             if not llm_generated_content:
-                # This case might indicate an issue with the LLM or prompt if it consistently returns empty.
-                logger.warning(f"{log_prefix_base} RM LLM returned empty or None content. Last user message snippet: {log_prompt_snippet}")
-                # Depending on how GRPO handles "None" actions, this might need specific error propagation.
-                # For now, returning None, False implies a valid API call but problematic content.
+                logger.warning(f"{log_prefix_base} RM LLM returned empty or None content. User prompt snippet: {log_prompt_snippet}")
                 return None, False 
             
-            logger.debug(f"{log_prefix_base} RM raw content output: \'{llm_generated_content[:300]}...\'")
-            return llm_generated_content, False # No API error
+            logger.debug(f"{log_prefix_base} RM raw content output: '{llm_generated_content[:300]}...'")
+            return llm_generated_content, False
 
         except Exception as e:
-            logger.error(f"{log_prefix_base} RM LLM API (chat_completion) error: {e}. Last user message snippet: {log_prompt_snippet}")
-            return None, True # API error occurred
+            logger.error(f"{log_prefix_base} RM LLM API (chat_completion) error: {e}. User prompt snippet: {log_prompt_snippet}")
+            return None, True
 
     async def generate_g_judgements(
         self,
         num_judgements_g: int,
-        # game_history_for_rm: List[Message], # This is complex. The RM usually sees the policy's *current* attempt.
-                                            # The "history" it needs is the setup for *this specific evaluation*.
-                                            # The environment will manage the overall game history.
-        current_game_observation_str: str,
-        policy_agent_thinking_str: Optional[str], # The <thinking> block from the policy agent for this action
-        policy_agent_action_str: str,             # The action string (e.g. tool call) from the policy agent
-        current_player_id: int,                   # Player ID whose move is being evaluated
+        game_history_window: List[Message], # This includes env system prompts, history, and the action to be evaluated.
+        current_player_id: int,             # Player ID whose move is being evaluated
         server_client: Any,
         # Context for logging from the environment
         game_seed_for_logging: Optional[int] = None,
@@ -199,9 +278,9 @@ class AtroposRM:
 
         Args:
             num_judgements_g: The number of judgements (G) to generate.
-            current_game_observation_str: Current game observation for the policy agent.
-            policy_agent_thinking_str: The policy agent's thinking block for the action under evaluation.
-            policy_agent_action_str: The policy agent's action string for the action under evaluation.
+            game_history_window: A list of Message dicts representing the game context.
+                                 The last message is the policy agent's action to be evaluated.
+                                 May contain environment system prompts for the policy agent.
             current_player_id: The ID of the player whose action is being evaluated.
             server_client: The API client for the LLM server.
             game_seed_for_logging, turn_idx_for_logging, policy_action_candidate_idx_for_logging: For logging.
@@ -219,17 +298,12 @@ class AtroposRM:
         
         results: List[Dict[str, Any]] = []
 
-        # Construct the user prompt content once, as it's the same for all G judgement calls for this policy action.
-        # The RM is stateless for each call within this loop; diversity comes from LLM sampling (temperature).
         user_prompt_content = self._construct_evaluation_user_prompt_content(
-            current_game_observation_str=current_game_observation_str,
-            policy_agent_thinking_str=policy_agent_thinking_str,
-            policy_agent_action_str=policy_agent_action_str,
+            game_history_window=game_history_window,
             current_player_id=current_player_id
         )
 
         for i in range(num_judgements_g):
-            # Logging prefix for this specific judgement attempt
             log_prefix_parts = [f"RM[{self.rm_id}]"]
             if game_seed_for_logging is not None: log_prefix_parts.append(f"Seed {game_seed_for_logging}")
             if turn_idx_for_logging is not None: log_prefix_parts.append(f"Turn {turn_idx_for_logging}")

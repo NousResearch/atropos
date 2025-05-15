@@ -1,7 +1,7 @@
 # Plan
 - use Atropos agent.
     - each turn ScoredDataGroup is system prompt + observation (inc memories) + previous actions (summarised thoughts) + current FULL thoughts & memories
-    - Each turn has window of system prompt + previous trajectory, generates group_size alternatives 
+    - Each turn has window of system prompt + previous trajectory, generates group_size alternatives
 - use Atropos RM
     - for all group_size alternatives
         - Provide same input as agent
@@ -11,6 +11,8 @@ best-of-n selection (only 1 canonical trajectory, greedy selection, same as blac
     - for each alternative in G alternatives, get Q scores (includes plan implicitly)
     - Mean of all Q scores used for alternative
     - select best alternative action for actual play
+    - Generate memory for policy agent (faiss used for in-memory datastore)
+    - Play in env, and go to next turn
 
 Per-turn
     - get any rewards. Use as scores for policy, compute advantage for previous steps, with gamma factor for discounts
