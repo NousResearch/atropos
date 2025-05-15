@@ -36,7 +36,7 @@ class UltimateTicTacToeEnvConfig(BaseEnvConfig):
     num_players: int = 2
     group_size: int = 16
     # Add temperature if you want to configure it via config
-    # temperature: float = 0.5
+    temperature: float = 0.7
 
 
 class UltimateTicTacToeEnv(BaseEnv):
@@ -134,6 +134,7 @@ class UltimateTicTacToeEnv(BaseEnv):
             chat_template=LLAMA3_CUSTOM_CHAT_TEMPLATE,
             add_generation_prompt=True
         )
+        logger.debug(f"LLM Prompt (first 500 chars): {prompt_str[:500]}") # Log prompt
 
         max_tokens_for_llm_output = 512
         try:
@@ -203,22 +204,17 @@ class UltimateTicTacToeEnv(BaseEnv):
 
         # GRPO: For each prompt (item/initial_seed), generate K (group_size) responses (game rollouts)
         for i in range(self.config.group_size):
-            current_game_seed = initial_seed + i # Vary seed slightly for each game in the group, or rely on model stochasticity
+            current_game_seed = initial_seed + i 
             game_sft_messages: List[Message] = []
             current_game_rewards: Dict[int, float] = {0: 0.0, 1: 0.0}
             
             try:
                 current_ta_env = ta.make(env_id=self.config.env_id)
                 current_ta_env = LLMObservationWrapper(env=current_ta_env)
-                # Use current_game_seed for this specific rollout
                 _ = current_ta_env.reset(num_players=self.config.num_players, seed=current_game_seed) 
             except Exception as e:
-                logger.error(f"TextArena env make/reset failed (seed {current_game_seed}, group_idx {i}): {e}")
-                # If one game in the group fails, we might skip it or fill with placeholders.
-                # For now, let's skip. This means the resulting ScoredDataGroup might have fewer than group_size entries.
-                # Alternatively, fill with error markers / neutral scores if the trainer expects fixed size.
-                # For simplicity, we'll allow variable actual group sizes if errors occur.
-                continue # Skip this iteration of the group
+                logger.error(f"CRITICAL: TextArena env make/reset failed (seed {current_game_seed}, group_idx {i}): {e}. Failing entire group.")
+                return [[None],[None]], [] # Fail entire group
 
             done = False
             num_actions_taken = 0
@@ -228,7 +224,10 @@ class UltimateTicTacToeEnv(BaseEnv):
                     if current_sft_len > self.config.max_token_length - 700:
                         logger.warning(f"[Seed: {current_game_seed}, GroupIdx: {i}] SFT data approaching max token length. Truncating game.")
                         current_game_rewards = {0: 0.0, 1: 0.0}
-                        done = True; break
+                        done = True; # No break here, let it finish the current turn if possible, or get caught by outer loop
+                    
+                    if done: # Check if truncation above set done
+                        break
 
                     current_player_id, current_player_obs_str = current_ta_env.get_observation()
                     player_mark = 'O' if current_player_id == 0 else 'X'
@@ -238,6 +237,7 @@ class UltimateTicTacToeEnv(BaseEnv):
                         {"role": "system", "content": player_system_content},
                         {"role": "environment", "content": current_player_obs_str}
                     ]
+                    logger.debug(f"[Seed: {current_game_seed}, P{current_player_id}, GroupIdx: {i}, TurnActions: {num_actions_taken}] Getting LLM action. History len: {len(game_sft_messages)}")
                     
                     llm_action_response = await self._sample_llm_response(turn_messages_for_llm, server)
                     num_actions_taken +=1
@@ -245,42 +245,53 @@ class UltimateTicTacToeEnv(BaseEnv):
                     game_sft_messages.append({"role": "system", "content": player_system_content})
                     game_sft_messages.append({"role": "environment", "content": current_player_obs_str})
 
+                    logger.debug(f"[Seed: {current_game_seed}, P{current_player_id}, GroupIdx: {i}] LLM Raw Response: '{llm_action_response}'") # Log raw response
+
                     if not llm_action_response:
-                        logger.error(f"[Seed: {current_game_seed}, P{current_player_id}, GroupIdx: {i}] LLM failed. Player forfeits.")
-                        current_game_rewards[current_player_id] = -1.0
-                        current_game_rewards[1 - current_player_id] = 1.0
-                        game_sft_messages.append({"role": f"player_{current_player_id}", "content": "<LLM_ERROR_NO_RESPONSE>"})
-                        done = True; break
+                        logger.error(f"CRITICAL: [Seed: {current_game_seed}, P{current_player_id}, GroupIdx: {i}] LLM failed. Failing entire group.")
+                        # current_game_rewards set by TextArena or default to 0,0. This is a critical failure.
+                        return [[None],[None]], [] # Fail entire group
 
                     game_sft_messages.append({"role": f"player_{current_player_id}", "content": llm_action_response})
                     parsed_action_str = self._parse_action_from_llm(llm_action_response)
+                    logger.debug(f"[Seed: {current_game_seed}, P{current_player_id}, GroupIdx: {i}] Parsed Action: '{parsed_action_str}'") # Log parsed action
                     
                     try:
                         ta_player_rewards, truncated, terminated, info = current_ta_env.step(action=parsed_action_str or "[INVALID_PARSE]")
                         current_game_rewards = {pid: float(r) for pid, r in ta_player_rewards.items()}
+                        logger.debug(f"[Seed: {current_game_seed}, P{current_player_id}, GroupIdx: {i}] Step Rewards: {current_game_rewards}, Done: {done}") # Log step rewards
                         done = terminated or truncated
-                        if done: logger.debug(f"[Seed {current_game_seed}, GroupIdx: {i}] Game ended. Reason: {info.get('reason', 'N/A')}. P0: {current_game_rewards.get(0,0)}, P1: {current_game_rewards.get(1,0)}")
+                        if done: 
+                            logger.info(f"[Seed {current_game_seed}, GroupIdx: {i}] Game ended. Reason: {info.get('reason', 'N/A')}. P0: {current_game_rewards.get(0,0)}, P1: {current_game_rewards.get(1,0)}")
+                        # else: # Log non-terminal steps if needed for debugging
+                        #     logger.debug(f"[Seed {current_game_seed}, P{current_player_id}, GroupIdx {i}] Action: {parsed_action_str or '[INVALID_PARSE]'} -> Rewards: {current_game_rewards}")
+
                     except Exception as e:
-                        logger.error(f"[Seed: {current_game_seed}, P{current_player_id}, GroupIdx: {i}] TextArena step error: {e}")
-                        current_game_rewards[current_player_id] = -1.0; current_game_rewards[1 - current_player_id] = 0.0
-                        done = True; break
+                        logger.error(f"CRITICAL: [Seed: {current_game_seed}, P{current_player_id}, GroupIdx: {i}] TextArena step error: {e}. Failing entire group.")
+                        return [[None],[None]], [] # Fail entire group
                 
                 if not done and num_actions_taken >= self.config.max_episode_actions:
-                    logger.warning(f"[Seed {current_game_seed}, GroupIdx: {i}] Max actions ({self.config.max_episode_actions}) reached. Draw.")
+                    logger.warning(f"[Seed {current_game_seed}, GroupIdx: {i}] Max actions ({self.config.max_episode_actions}) reached. Game ended as draw.")
                     current_game_rewards = {0: 0.0, 1: 0.0}
+                    # done = True # This ensures it is marked done for the outer logic.
             
             current_ta_env.close()
-            # Store results for this game in the group
-            if game_sft_messages: # Only if game produced messages
-                all_game_messages.append(game_sft_messages)
-                all_game_rewards_p0.append(current_game_rewards.get(0, 0.0))
-                all_game_rewards_p1.append(current_game_rewards.get(1, 0.0))
-                # Log to buffer for overall training stats
-                self.episode_outcomes_buffer.append((current_game_rewards.get(0, 0.0), current_game_rewards.get(1, 0.0)))
+            if not game_sft_messages and not done : # If game somehow finished loop without messages and not marked done (e.g. all LLM calls failed before appending)
+                 logger.error(f"CRITICAL: [Seed {current_game_seed}, GroupIdx {i}] No messages generated and game not marked done. Failing group.")
+                 return [[None],[None]], []
+                 
+            all_game_messages.append(game_sft_messages)
+            all_game_rewards_p0.append(current_game_rewards.get(0, 0.0))
+            all_game_rewards_p1.append(current_game_rewards.get(1, 0.0))
+            self.episode_outcomes_buffer.append((current_game_rewards.get(0, 0.0), current_game_rewards.get(1, 0.0)))
 
-        if not all_game_messages: # All games in the group failed or produced no messages
-            logger.warning(f"[InitialSeed: {initial_seed}] No games in the group completed successfully.")
-            return [[None],[None]], [] # Return list of two None groups
+        logger.info(f"[InitialSeed: {initial_seed}] Group collection finished. Collected {len(all_game_messages)} games.") # Log group summary
+        logger.debug(f"[InitialSeed: {initial_seed}] All P0 Rewards for group: {all_game_rewards_p0}")
+        logger.debug(f"[InitialSeed: {initial_seed}] All P1 Rewards for group: {all_game_rewards_p1}")
+
+        if len(all_game_messages) != self.config.group_size: # Check if all games in the group completed
+            logger.error(f"CRITICAL: [InitialSeed: {initial_seed}] Group did not complete all {self.config.group_size} rollouts (completed {len(all_game_messages)}). Discarding group.")
+            return [[None],[None]], []
 
         # Tokenize for Player 0's perspective
         p0_tokens_list: List[List[int]] = []
