@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 def extract_boxed_content(text: str) -> Optional[str]:
     """
-    Extracts the content from the first \boxed{} expression found in the text.
+    Extracts the content from the first \\boxed{} expression found in the text.
 
     Args:
         text: The input string to parse.
@@ -19,6 +19,8 @@ def extract_boxed_content(text: str) -> Optional[str]:
         not found, parsing fails, or the content is not a simple string.
     """
     if not text or "\\boxed{" not in text: # Quick check to avoid unnecessary parsing
+        logger.debug(f"No \\boxed{{}} found in text: {text}")
+        input("Press Enter to continue...")
         return None
 
     try:

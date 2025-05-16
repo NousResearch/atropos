@@ -31,12 +31,10 @@ async def main():
         return
 
     gpt4_mini_server_config = APIServerConfig(
-        model_name="gpt-4.1-mini", # As requested
-        api_server_type="openai", # Assuming OpenAI compatible
-        base_url=os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),
+        model_name="gpt-4.1-mini",
+        base_url="https://api.openai.com/v1",
         api_key=api_key,
-        # num_requests_for_eval can be set if specific eval behavior is needed, default is fine
-        # request_timeout_seconds can also be adjusted if needed
+        num_requests_for_eval=0,
     )
 
     # Environment Configuration
@@ -93,14 +91,17 @@ async def main():
         # Get a new game/episode
         # episode_seed = 12345 # Optionally set a seed for reproducibility
         # episode_state = await env._get_or_create_episode(episode_seed=episode_seed)
-        episode_state = await env.get_next_item() # Uses env_config.game_seed or random
+        item = await env.get_next_item() # Uses env_config.game_seed or random
 
-        if not episode_state:
+        if not item or "episode_state" not in item:
             logger.error("Failed to get or create a new TextWorld episode.")
             await env.cleanup()
             return
 
-        logger.info(f"--- Starting Episode: {episode_state.episode_id} ---")
+        episode_state = item["episode_state"]
+        episode_id = item["episode_id"]
+
+        logger.info(f"--- Starting Episode: {episode_id} ---")
         logger.info(f"Game File: {episode_state.game_file}")
         game_objective = episode_state.initial_infos.get('objective', 'N/A')
         logger.info(f"Objective: {game_objective.strip() if game_objective else 'N/A'}")
@@ -125,27 +126,47 @@ async def main():
             
             if scored_data_group:
                 logger.info(f"--- Turn {current_turn_for_log} Policy Agent Output & RM Evaluation ---")
-                chosen_alternative_idx = scored_data_group.metadata.get("chosen_alternative_index", -1)
                 
-                if chosen_alternative_idx != -1 and chosen_alternative_idx < len(scored_data_group.messages):
-                    # The chosen alternative's history is in scored_data_group.messages[chosen_alternative_idx]
+                # Access metadata safely, handling both attribute and dictionary access
+                chosen_alternative_idx = -1
+                if hasattr(scored_data_group, 'metadata'):
+                    chosen_alternative_idx = scored_data_group.metadata.get("chosen_alternative_index", -1)
+                elif isinstance(scored_data_group, dict) and "metadata" in scored_data_group:
+                    chosen_alternative_idx = scored_data_group["metadata"].get("chosen_alternative_index", -1)
+                
+                # Access messages safely, handling both attribute and dictionary access
+                messages = []
+                if hasattr(scored_data_group, 'messages'):
+                    messages = scored_data_group.messages
+                elif isinstance(scored_data_group, dict) and "messages" in scored_data_group:
+                    messages = scored_data_group["messages"]
+                
+                # Access scores safely
+                scores = []
+                if hasattr(scored_data_group, 'scores'):
+                    scores = scored_data_group.scores
+                elif isinstance(scored_data_group, dict) and "scores" in scored_data_group:
+                    scores = scored_data_group["scores"]
+                
+                if chosen_alternative_idx != -1 and chosen_alternative_idx < len(messages):
+                    # The chosen alternative's history is in messages[chosen_alternative_idx]
                     # The last message is the agent's raw response.
-                    chosen_agent_raw_response = scored_data_group.messages[chosen_alternative_idx][-1]['content']
+                    chosen_agent_raw_response = messages[chosen_alternative_idx][-1]['content']
                     # Re-parse the command from the raw response for logging
                     parsed_command_executed = env._parse_action(chosen_agent_raw_response)
                     
                     logger.info(f"  Chosen Alternative Index: {chosen_alternative_idx}")
                     logger.info(f"  Agent's Raw Response (Chosen): '{chosen_agent_raw_response.strip()}'")
                     logger.info(f"  Parsed Command Executed: '{parsed_command_executed if parsed_command_executed else 'None/Error'}'")
-                    logger.info(f"  RM Score for Chosen: {scored_data_group.scores[chosen_alternative_idx]:.4f}")
+                    logger.info(f"  RM Score for Chosen: {scores[chosen_alternative_idx]:.4f}")
                 else:
                     logger.warning("  Could not determine chosen action details from ScoredDataGroup metadata.")
 
                 logger.info("  --- All Generated Policy Alternatives & RM Scores ---")
-                for i, alt_messages in enumerate(scored_data_group.messages):
+                for i, alt_messages in enumerate(messages):
                     alt_raw_response = alt_messages[-1]['content'] # Last message is agent's output for this alternative
                     alt_parsed_cmd = env._parse_action(alt_raw_response)
-                    alt_score = scored_data_group.scores[i]
+                    alt_score = scores[i]
                     is_chosen = "(CHOSEN)" if i == chosen_alternative_idx else ""
                     logger.info(f"    Alt {i} {is_chosen}: Command='{alt_parsed_cmd}', Raw='{alt_raw_response.strip()}', Score={alt_score:.4f}")
             else:
@@ -168,7 +189,7 @@ async def main():
 
 
         # End of episode
-        logger.info(f"\n<<< --- Episode Finished: {episode_state.episode_id} --- >>>")
+        logger.info(f"\n<<< --- Episode Finished: {episode_id} --- >>>")
         logger.info(f"  Final Status: Won={episode_state.won}, Lost={episode_state.lost}")
         logger.info(f"  Total Turns Taken: {episode_state.current_turn}")
         logger.info(f"  Final Score: {episode_state.last_score}")

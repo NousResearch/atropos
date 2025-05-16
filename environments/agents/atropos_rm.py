@@ -402,6 +402,8 @@ class AtroposRM:
             tb_parse_error_flag = False
 
             if not api_error_occurred and raw_response_content is not None:
+                logger.debug(f"{log_prefix_base} Raw response content: {raw_response_content}")
+                input("Press Enter to continue...")
                 q_value = self._parse_q_value_from_response(raw_response_content)
                 if q_value is None:
                     q_parse_error_flag = True

@@ -6,6 +6,7 @@ from transformers import PreTrainedTokenizer
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 # Conditional imports for the memory system
 MEMORY_SYSTEM_PREREQUISITES_AVAILABLE = False
@@ -24,7 +25,6 @@ except ImportError as e:
     SentenceTransformer = None
     faiss = None
 
-# --- Start of AtroposAgentConfig Definition ---
 class AtroposAgentConfig(BaseModel):
     """Configuration for AtroposAgent."""
     # General LLM parameters
@@ -36,8 +36,12 @@ class AtroposAgentConfig(BaseModel):
         description="Sampling temperature for the LLM."
     )
     max_tokens_per_completion: int = Field(
-        default=256,
+        default=16384,
         description="Maximum tokens to generate for the agent's action or LLM response."
+    )
+    max_tokens_for_llm_output: int = Field(
+        default=24576,
+        description="Maximum tokens to generate for the LLM output."
     )
     max_retries_on_error: int = Field(default=3, description="Maximum retries for LLM calls on failure.")
 
@@ -81,7 +85,14 @@ class AtroposAgentConfig(BaseModel):
         extra = 'forbid' # Ensure no unexpected fields are passed
         arbitrary_types_allowed = True # Needed if FAISS index or model objects are stored in instances with this config
 
-# --- End of AtroposAgentConfig Definition ---
+class AtroposAgentAction(BaseModel):
+    action_text: str
+    api_error: bool
+    score: float
+
+class AtroposAgentActionLog(BaseModel):
+    turn_number: int
+    alternatives: List[AtroposAgentAction]
 
 
 class SentenceEmbeddingHelper:
@@ -106,12 +117,7 @@ class SentenceEmbeddingHelper:
         if cls._instance is None:
             cls._instance = super(SentenceEmbeddingHelper, cls).__new__(cls)
             try:
-                if torch.cuda.is_available():
-                    cls._device = "cuda"
-                elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-                    cls._device = "mps"
-                else:
-                    cls._device = "cpu"
+                cls._device = "cpu"
                 logger.info(f"SentenceEmbeddingHelper: Using device: {cls._device}")
                 
                 # 22M parameters - small enough to run on CPU with minimal overhead
@@ -255,7 +261,7 @@ class AtroposAgent:
         """Returns the complete dialogue history for the finished game."""
         return list(self.current_game_messages) # Return a copy
 
-    async def _get_embedding(self, text: str) -> Optional[np.ndarray]: # server_client removed
+    async def _get_embedding(self, text: str) -> Optional[np.ndarray]:
         """Helper method to get an embedding for a given text string using local SentenceEmbeddingHelper."""
         if not self.embedding_helper or self.embedding_helper._model is None:
             logger.warning(f"AtroposAgent[{self.config.player_id_for_logging}] _get_embedding: SentenceEmbeddingHelper not available. Cannot get embedding.")
@@ -280,14 +286,14 @@ class AtroposAgent:
             formatted_lines.append(f"{role}: {content}")
         return "\n".join(formatted_lines)
 
-    async def _agent_sample_llm_response(
+    async def _sample_llm_response(
         self, 
         history_for_llm_call: List[Message],
-        # server_client: Any # Already have self.server_client
-    ) -> Tuple[Optional[str], bool]:
+        n: int = 1
+    ) -> List[AtroposAgentAction]:
         """
         Internal method to sample a response from the LLM using chat completions.
-        Returns a tuple: (llm_content_or_empty_tool_call, api_error_occurred_flag)
+        Returns a list of AtroposAgentAction objects.
         """
         log_prompt_snippet = history_for_llm_call[-1]['content'][:200] if history_for_llm_call else "EMPTY_HISTORY"
         logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] LLM Chat Prompt (last message content, first 200 chars): {log_prompt_snippet}")
@@ -295,28 +301,30 @@ class AtroposAgent:
         try:
             chat_completions = await self.server_client.chat_completion( # Use self.server_client
                 messages=history_for_llm_call,
-                n=1,
+                n=n,
                 max_tokens=self.config.max_tokens_for_llm_output, # Use from config
                 temperature=self.config.temperature # Use from config
             )
-            
-            llm_generated_content = ""
-            if chat_completions.choices and \
-               chat_completions.choices[0].message and \
-               hasattr(chat_completions.choices[0].message, 'content') and \
-               chat_completions.choices[0].message.content is not None:
-                llm_generated_content = chat_completions.choices[0].message.content.strip()
-            
-            if not llm_generated_content:
-                logger.warning(f"AtroposAgent[{self.config.player_id_for_logging}] returned empty or None content from chat_completion. Last user message (start): {log_prompt_snippet}")
-                return "<tool_call>\n\n</tool_call>", False # Expected to be parsed as an error by the environment
-            
-            logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] raw content output via chat_completion: '{llm_generated_content}'")
-            return llm_generated_content, False # No API error
-
+            llm_generated_content = []
+            # Error checks
+            for choice in chat_completions.choices:
+                if choice.message and \
+                hasattr(choice.message, 'content') and \
+                choice.message.content is not None:
+                    llm_generated_content.append(AtroposAgentAction(action_text=choice.message.content.strip(), api_error=False, score=0.0))
+                else:
+                    llm_generated_content.append(AtroposAgentAction(action_text="", api_error=True, score=0.0))
+                
+                if not llm_generated_content:
+                    logger.warning(f"AtroposAgent[{self.config.player_id_for_logging}] returned empty or None content from chat_completion. Last user message (start): {log_prompt_snippet}")
+                    llm_generated_content.append(AtroposAgentAction(action_text="<tool_call>\n\n</tool_call>", api_error=False, score=-1.0)) # Track error for scoring
+                
+                logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] raw content output via chat_completion: '{llm_generated_content}'")
         except Exception as e:
             logger.error(f"AtroposAgent[{self.config.player_id_for_logging}] LLM API (chat_completion) error: {e}. Last user message (start): {log_prompt_snippet}")
-            return None, True # API error occurred
+            llm_generated_content.append(AtroposAgentAction(action_text="<tool_call>\n\n</tool_call>", api_error=True, score=-1.0)) # API error occurred
+        
+        return llm_generated_content
 
     async def _generate_memory(
         self,
@@ -348,7 +356,7 @@ class AtroposAgent:
         try:
             # Potentially use a different temperature for memory generation if desired
             # self.config.temperature = 0.5 # Example: more factual memory summary
-            memory_text, error_occurred = await self._agent_sample_llm_response(
+            memory_text, error_occurred = await self._sample_llm_response(
                 history_for_llm_call=memory_prompt_messages,
                 # server_client=server_client # Handled by self.server_client
             )
@@ -365,39 +373,24 @@ class AtroposAgent:
     async def generate_action(
         self,
         observation_content: str, # The game-specific augmented observation from the environment
-        game_history_window: List[Message], # Pass the relevant history window
-        # server_client: Any, # Already have self.server_client
-        # Context for logging from the environment (optional, passed through if provided)
-        # These are not used by the agent logic itself but can be useful for richer logging if the calling env provides them
-        game_seed_for_logging: Optional[int] = None,
-        group_idx_for_logging: Optional[int] = None,
-        turn_idx_for_logging: Optional[int] = None,
+        game_history_window: List[Message], # Canonical history for the agent
         is_evaluation_context: bool = False, # Informs if this action is for evaluation (e.g., to disable learning/memory updates)
-        eval_episode_idx_for_logging: Optional[int] = None,
+        n: int = 1,
 
     ) -> Tuple[Optional[str], List[Message]]: # Returns (action_text, updated_game_messages_with_action)
                                               # API error flag removed as it's handled internally / by server_client
         """
-        Generates an action based on the current observation and dialogue history.
+        Generates actions based on the current observation and dialogue history.
         Optionally retrieves and uses memories.
         Updates its internal dialogue history with the observation and its action.
         Generates a new memory if the system is enabled and not in an evaluation context.
         """
         
-        # Ensure a clean copy for this turn's processing if needed, though current_game_messages is usually the source of truth
-        # For now, we assume game_history_window is the up-to-date history for this agent.
-        # self.current_game_messages should be aligned by the calling environment if managing multiple agents/perspectives.
-        # For a single agent scenario like in testing, game_history_window will be self.current_game_messages.
-        
-        # Ensure the passed game_history_window is what the agent should currently "know"
-        # This might be self.current_game_messages or a subset/specific view from an environment
-        # For the purpose of this agent, it uses this window to form its prompt.
-        
         # Step 1: Prepend memories if system is active
         final_observation_content = observation_content
         retrieved_memories_texts: List[str] = []
 
-        if self.config.enable_memory and self.faiss_index is not None and self.faiss_index.ntotal > 0:
+        if False and self.faiss_index is not None and self.faiss_index.ntotal > 0:
             logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] Attempting to retrieve memories for observation.")
             observation_embedding = await self._get_embedding(observation_content)
             
@@ -431,39 +424,17 @@ class AtroposAgent:
 
 
         # Step 2: Construct LLM prompt
-        # The game_history_window should be [system, user_obs1, assistant_action1, user_obs2, ...]
-        # We append the (potentially augmented by memories) current observation as a new user message.
-        
-        # Make a mutable copy of the history window for this turn's LLM call.
-        # This history should represent the state *before* the agent's current action.
         llm_call_history = list(game_history_window) # Ensure it's a copy
-        
-        # The last message in game_history_window should be the *previous* user observation/turn's end.
-        # We are now about to act on `final_observation_content`.
-        # If `game_history_window` already includes the current observation as its last user message,
-        # we might be duplicating. Let's assume `game_history_window` is the history *up to* the current observation.
-        # And `final_observation_content` is the *actual content* for the new user message.
-        
-        # Let's clarify: game_history_window should NOT contain the `observation_content`
-        # that the agent is currently reacting to.
-        # `observation_content` (potentially augmented to `final_observation_content`) is the NEW user message.
-
-        # Add the current observation (potentially augmented with memories) to the history for the LLM
         llm_call_history.append(Message(role="user", content=final_observation_content))
-        
-        # Token length check/truncation should ideally happen here or in _agent_sample_llm_response
-        # For now, relying on the server to handle if it's too long.
+
+        # TODO: Truncate here or env?
 
         # Step 3: Call LLM
-        action_text, api_error = await self._agent_sample_llm_response(
+        action_list, api_error = await self._sample_llm_response(
             history_for_llm_call=llm_call_history,
-            # server_client=server_client # Handled by self.server_client
+            n=n
         )
-
-        if api_error or action_text is None: # If API error, action_text might be None from _agent_sample_llm_response
-            logger.error(f"AtroposAgent[{self.config.player_id_for_logging}] Failed to get action from LLM due to API error.")
-            # Return None or a specific error indicator, and the history *before* this failed attempt
-            return "Error: LLM call failed.", llm_call_history # return original history before this action attempt
+        logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] LLM response: {action_text}")
 
         # Step 4: Update internal messages and prepare messages for RM/next turn
         # The history for the RM (and for the next turn's agent) should include the action taken.
@@ -477,7 +448,7 @@ class AtroposAgent:
 
         # Step 5: Generate and store memory for this turn (action + observation outcome)
         # Only generate memory if not in evaluation context and system is enabled.
-        if self.config.enable_memory and self.faiss_index is not None and not is_evaluation_context:
+        if False and self.faiss_index is not None and not is_evaluation_context:
             # The "outcome" is implicitly the next observation, but we generate memory based on action taken in current context
             # For memory generation, we use the history *including* the action just taken.
             memory_context_for_generation = history_after_action # History including the system prompt, user obs, and assistant action

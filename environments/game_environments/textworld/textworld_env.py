@@ -222,76 +222,28 @@ class TextWorldEnv(BaseEnv):
             "\\n</tool_call>\\n\\n" # Corrected example arguments to match tool schema
             "Your response MUST follow this format exactly: <think>...</think> followed by <tool_call>...</tool_call>."
         )
-
-        # Determine Policy Agent server configuration
-        effective_policy_agent_server_config = self.config.policy_agent_server_config or self.config.default_server_config
-        if not effective_policy_agent_server_config:
-            raise ValueError("No server configuration found for the Policy Agent (checked policy_agent_server_config and default_server_config).")
-        
-        policy_agent_client = None
-        if hasattr(self.server, 'servers') and isinstance(self.server.servers, list):
-            for client_instance in self.server.servers:
-                if hasattr(client_instance, 'config') and client_instance.config.model_name == effective_policy_agent_server_config.model_name:
-                    policy_agent_client = client_instance
-                    break
-        
-        if not policy_agent_client:
-            available_model_names = [c.config.model_name for c in self.server.servers if hasattr(self.server, 'servers') and hasattr(c, 'config')] if hasattr(self.server, 'servers') else 'N/A or attribute error'
-            raise ValueError(
-                f"LLM client for Policy Agent model '{effective_policy_agent_server_config.model_name}' not found in self.server.servers list. "
-                f"Available server model names from self.server.servers: {available_model_names}"
-            )
-
         # Ensure AtroposAgentConfig is instantiated
         agent_cfg = self.config.atropos_agent_config if self.config.atropos_agent_config is not None else AtroposAgentConfig()
         agent_cfg.system_prompt = constructed_system_prompt 
         
         self.agent = AtroposAgent(
-            server_client=policy_agent_client, 
+            server_client=self.server, 
             tokenizer=self.tokenizer, 
             config=agent_cfg
         )
         # Store the system prompt that will be used for the policy agent message history
-        # TODO: Remove
+        # TODO: Remove this?
         self.policy_agent_system_prompt_content = agent_cfg.system_prompt # Use the updated system_prompt
-        logger.info(f"TextWorldEnv: Policy Agent initialized with model '{effective_policy_agent_server_config.model_name}'. System Prompt (tool-aware) set, length: {len(self.policy_agent_system_prompt_content)} chars.")
-
-
-        # Determine RM server configuration
-        effective_rm_server_config = self.config.rm_agent_server_config or self.config.default_server_config
-        if not effective_rm_server_config:
-            raise ValueError("No server configuration found for the RM Agent (checked rm_agent_server_config and default_server_config).")
-
-        rm_agent_client = None
-        if hasattr(self.server, 'servers') and isinstance(self.server.servers, list):
-            for client_instance in self.server.servers:
-                if hasattr(client_instance, 'config') and client_instance.config.model_name == effective_rm_server_config.model_name:
-                    rm_agent_client = client_instance
-                    break
-        
-        if not rm_agent_client:
-            available_model_names_for_rm = [c.config.model_name for c in self.server.servers if hasattr(self.server, 'servers') and hasattr(c, 'config')] if hasattr(self.server, 'servers') else 'N/A or attribute error'
-            logger.warning(
-                f"LLM client for RM Agent model '{effective_rm_server_config.model_name}' not found directly in self.server.servers list. "
-                f"Available server model names: {available_model_names_for_rm}. "
-                f"Attempting to fall back to Policy Agent's client."
-            )
-            rm_agent_client = policy_agent_client # Fallback to policy agent's client
-            if rm_agent_client:
-                 logger.info(f"RM Agent will use the Policy Agent's LLM client (model: '{rm_agent_client.config.model_name}') as a fallback.") # Log the model name of the client being used.
-            else: # Should not happen if policy_agent_client was resolved
-                 raise ValueError(f"LLM client for RM Agent model '{effective_rm_server_config.model_name}' not found, and fallback to policy agent client also failed (policy_agent_client was None).")
-        
+ 
         # Ensure AtroposRMConfig is instantiated
         rm_cfg = self.config.atropos_rm_config if self.config.atropos_rm_config is not None else AtroposRMConfig()
 
         self.rm = AtroposRM(
-            server_client=rm_agent_client,
+            server_client=self.server,
             tokenizer=self.tokenizer,
             config=rm_cfg
         )
-        logger.info(f"TextWorldEnv: RM Agent initialized with model '{effective_rm_server_config.model_name}'.")
-
+ 
         if self.config.debug_mode:
             logger.setLevel(logging.DEBUG)
 
@@ -341,98 +293,47 @@ class TextWorldEnv(BaseEnv):
         
         current_game_seed = episode_seed if episode_seed is not None else random.randint(0, 0xFFFFFFFF)
 
-        game_options = {
-            "nb_rooms": self.config.nb_rooms,
-            "nb_objects": self.config.nb_objects,
-            "chaining.min_length": self.config.quest_min_length,
-            "chaining.max_length": self.config.quest_max_length,
-            "chaining.max_depth": self.config.quest_max_depth,
-            "grammar.theme": self.config.grammar_theme,
-            "grammar.include_adj": self.config.grammar_include_adj,
-            # Add challenge specific options if challenge_name is set
+        # Create a proper GameOptions object
+        options = GameOptions()
+        options.seeds = current_game_seed
+        options.nb_rooms = self.config.nb_rooms
+        options.nb_objects = self.config.nb_objects
+        options.chaining.min_length = self.config.quest_min_length
+        options.chaining.max_length = self.config.quest_max_length
+        options.chaining.max_depth = self.config.quest_max_depth
+        options.grammar.theme = self.config.grammar_theme
+        options.grammar.include_adj = self.config.grammar_include_adj
+
+        # Create settings dictionary as expected by generate_textworld_game
+        challenge_settings = {
+            'seed': current_game_seed,
+            'rewards': self.config.challenge_rewards,
+            'goal': self.config.challenge_goal,
+            'test': self.config.challenge_test_mode
         }
-        if self.config.challenge_name:
-            challenge_entry = textworld.challenges.CHALLENGES[self.config.challenge_name]
+
+        # Call generate_textworld_game with the correct parameters - EXACTLY as in the working code
+        try:
+            game_file_path, game_object = generate_textworld_game(
+                challenge_name=self.config.challenge_name,
+                settings=challenge_settings,
+                options=options,
+                output_folder=self._temp_dir,
+                filename_prefix=f"{self.config.challenge_name}_ep{current_game_seed}"
+            )
             
-            # Construct settings for the challenge's make function
-            # These settings align with common parameters for textworld.Challenge.make functions.
-            challenge_settings_for_make = {
-                'seed': current_game_seed, # Pass the seed to the challenge maker
-                'rewards': self.config.challenge_rewards,
-                'goal': self.config.challenge_goal,
-                'test': self.config.challenge_test_mode,
-                # Other potential settings based on specific challenge needs:
-                # 'level': some_level_if_applicable,
-                # 'nb_rooms': self.config.nb_rooms, # Challenges might use these too
-                # 'nb_objects': self.config.nb_objects,
-                # 'quest_length': self.config.quest_min_length, # if challenge uses quest_length
-            }
-
-            if hasattr(challenge_entry, 'make') and callable(challenge_entry.make):
-                try:
-                    # Some challenges might expect nb_rooms, nb_objects, etc. directly if they generate complex quests.
-                    # For `tw-simple`, it might not use all of these, but providing them doesn't hurt.
-                    # We prioritize settings from self.config if the challenge uses them.
-                    game_maker_settings = {
-                        'nb_rooms': self.config.nb_rooms,
-                        'nb_objects': self.config.nb_objects,
-                        'quest_length': self.config.quest_min_length, # Example if a challenge used this
-                        # Add other relevant structural params from self.config that a challenge might expect for its make() method
-                    }
-                    challenge_settings_for_make.update(game_maker_settings) # Merge general settings
-                    
-                    game_maker = challenge_entry.make(**challenge_settings_for_make)
-                    if hasattr(game_maker, 'options') and game_maker.options:
-                        logger.debug(f"Updating game_options with challenge-specific options from game_maker (type: {type(game_maker.options)}): {vars(game_maker.options) if hasattr(game_maker.options, '__dict__') else game_maker.options}")
-                        # Convert GameOptions object to dict before updating
-                        if isinstance(game_maker.options, textworld.GameOptions):
-                            game_options.update(vars(game_maker.options))
-                        elif isinstance(game_maker.options, dict): # If it's already a dict
-                            game_options.update(game_maker.options)
-                        else:
-                            logger.warning(f"game_maker.options is neither GameOptions nor dict (type: {type(game_maker.options)}). Cannot reliably update game_options dict.")
-                    else:
-                        logger.warning(f"Challenge '{self.config.challenge_name}' game_maker did not have 'options' or options were empty.")
-                except Exception as e_make:
-                    logger.error(f"Error calling challenge.make() for '{self.config.challenge_name}' with settings {challenge_settings_for_make}: {e_make}", exc_info=True)
-                    # Fallback or error handling if make fails
-            else:
-                logger.warning(f"Challenge entry for '{self.config.challenge_name}' does not have a callable 'make' attribute. Proceeding with default game_options.")
-
-            # Explicitly apply challenge-specific reward/goal settings from self.config
-            # This ensures that our TextWorldEnvConfig values for these are respected,
-            # potentially overriding or setting them if not covered by challenge.options.
-            game_options["rewards.dense"] = self.config.challenge_rewards == "dense"
-            game_options["rewards.balanced"] = self.config.challenge_rewards == "balanced"
-            game_options["rewards.sparse"] = self.config.challenge_rewards == "sparse"
-            game_options["goal.detailed"] = self.config.challenge_goal == "detailed"
-            game_options["goal.brief"] = self.config.challenge_goal == "brief"
-            game_options["goal.none"] = self.config.challenge_goal == "none"
-            if self.config.challenge_test_mode:
-                game_options["distributions.test"] = True # Use test distribution if specified
-        
-        # Ensure GameOptions is created before passing to generate_textworld_game
-        # The function generate_textworld_game expects a GameOptions object or a dict
-        # For clarity, let's create GameOptions explicitly if the utility expects it,
-        # otherwise, the dict `game_options` is fine if the utility handles dicts.
-        # Assuming generate_textworld_game can handle a dict for options for now.
-
-        game_file_path = generate_textworld_game(
-            output_dir=self._temp_dir,
-            game_options_dict=game_options,
-            game_seed=current_game_seed,
-            challenge_name=self.config.challenge_name or "custom" # Provide a default if no challenge
-        )
-
-        if not game_file_path:
-            logger.error(f"Failed to generate game file for episode {episode_id} with seed {current_game_seed}")
+            if not game_file_path or not os.path.exists(game_file_path):
+                logger.error(f"Failed to generate game file for episode {episode_id} with seed {current_game_seed}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error generating game for {self.config.challenge_name} challenge: {e}", exc_info=True)
             return None
 
-        # We want EVERYTHING!
         requested_infos = EnvInfos(
             description=True, inventory=True, objective=True, score=True, 
-            max_score=True, has_won=True, has_lost=True, facts=True, 
-            last_action=True, feedback=True, moves=True, inadmissible_commands=True
+            max_score=True, won=True, lost=True, facts=True, 
+            last_action=True, feedback=True, moves=True, admissible_commands=True
         )
         
         registered_env_id = textworld.gym.register_game(game_file_path, requested_infos, max_episode_steps=self.config.max_steps, name=episode_id)
@@ -561,16 +462,10 @@ class TextWorldEnv(BaseEnv):
         game_history_for_agent = ep_state.message_history[:-1]
 
         agent_action_tasks = []
-        for i in range(self.config.G_policy_alternatives):
-            # Each call to generate_action is independent for now. 
-            # Agent uses its internal history, which includes previous chosen actions and memories.
-            # For generating diverse alternatives, we might need to explore more advanced sampling techniques
-            # or have the agent itself support generating N diverse options from the same core history.
-            # Current AtroposAgent.generate_action produces one action.
-            agent_action_tasks.append(self.agent.generate_action(
-                observation_content=current_observation_content, 
-                game_history_window=list(game_history_for_agent) # Pass a copy
-            ))
+        agent_action_tasks.append(self.agent.generate_action(
+            game_history_window=game_history_for_agent,
+            n=self.config.G_policy_alternatives
+        ))
         
         try:
             generated_actions_results = await asyncio.gather(*agent_action_tasks)
@@ -695,8 +590,8 @@ class TextWorldEnv(BaseEnv):
         ep_state.done = done or ep_state.current_turn >= ep_state.max_turns
         ep_state.last_score = infos.get("score", ep_state.last_score)
         ep_state.moves = infos.get("moves", ep_state.moves)
-        ep_state.won = infos.get("has_won", False)
-        ep_state.lost = infos.get("has_lost", False)
+        ep_state.won = infos.get("won", False)
+        ep_state.lost = infos.get("lost", False)
         if ep_state.won or ep_state.lost:
             ep_state.done = True
 
@@ -922,7 +817,7 @@ class TextWorldEnv(BaseEnv):
                 # num_requests_for_eval can be set if needed
             ),
             APIServerConfig(
-                model_name="gpt-4.1-mini", # For Reward Model (example, could be same as agent)
+                model_name="gpt4.1-mini", # For Reward Model (example, could be same as agent)
                 base_url="http://localhost:9005/v1", # Example different endpoint for RM
                 api_key="EMPTY", 
             )
