@@ -463,8 +463,9 @@ class TextWorldEnv(BaseEnv):
 
         agent_action_tasks = []
         agent_action_tasks.append(self.agent.generate_action(
+            observation_content=current_observation_content,
             game_history_window=game_history_for_agent,
-            n=self.config.G_policy_alternatives
+            n=self.config.G_policy_alternatives,
         ))
         
         try:

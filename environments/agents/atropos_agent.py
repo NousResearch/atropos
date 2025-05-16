@@ -434,11 +434,11 @@ class AtroposAgent:
             history_for_llm_call=llm_call_history,
             n=n
         )
-        logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] LLM response: {action_text}")
+        logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] LLM response: {action_list}")
 
         # Step 4: Update internal messages and prepare messages for RM/next turn
         # The history for the RM (and for the next turn's agent) should include the action taken.
-        history_after_action = llm_call_history + [Message(role="assistant", content=action_text)]
+        history_after_action = llm_call_history + [Message(role="assistant", content=action_list)]
         
         # self.current_game_messages is the agent's own canonical history.
         # This might be updated more carefully by an environment managing multiple perspectives.
@@ -471,4 +471,4 @@ class AtroposAgent:
             elif mem_gen_error:
                  logger.error(f"AtroposAgent[{self.config.player_id_for_logging}] Error occurred during memory generation. Memory not added.")
 
-        return action_text, history_after_action 
+        return action_list, history_after_action 
