@@ -32,7 +32,7 @@ class AgentStep(TypedDict, total=False):
 AgentHistory = Dict[str, List[AgentStep]]
 
 
-class Observation(TypedDict):
+class Observation(TypedDict, total=False):
     """Represents an observation in a game history.
 
     Attributes:

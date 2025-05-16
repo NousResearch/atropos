@@ -1,14 +1,42 @@
 import logging
 import re
-from typing import List, Optional, Tuple, Any, Dict
+from typing import List, Optional, Tuple, Any, Dict, TypedDict
 import json
+import asyncio
 from transformers import PreTrainedTokenizer
 from pydantic import BaseModel, Field
+from atroposlib.type_definitions import Message
+from atroposlib.utils.boxed_parser import extract_boxed_content
 
 # A common representation for chat messages
-Message = Dict[str, str]
+# Message = Dict[str, str] # This local incorrect definition will be removed
 
 logger = logging.getLogger(__name__)
+
+# --- Define RMJudgementLog locally ---
+class RMJudgementLog(TypedDict):
+    """
+    Represents a single judgement made by the AtroposRM for one sample,
+    often one of G judgements for a specific policy agent's action.
+    """
+    # Contextual information
+    game_seed_for_logging: Optional[int]
+    turn_idx_for_logging: Optional[int]
+    policy_action_candidate_idx_for_logging: Optional[int]
+
+    # Input to the RM's LLM
+    rm_input_messages: List[Message]
+
+    # Output from the RM's LLM and parsing results
+    raw_rm_response_content: Optional[str]
+    parsed_q_value: Optional[float]
+    parsed_thinking_block: Optional[str]
+
+    # Status/Error Flags
+    api_error: bool
+    q_value_parse_error: bool
+    thinking_block_parse_error: bool
+# --- End of RMJudgementLog Definition ---
 
 # --- Start of AtroposRMConfig Definition ---
 class AtroposRMConfig(BaseModel):
@@ -30,10 +58,6 @@ class AtroposRMConfig(BaseModel):
     thinking: bool = Field(
         default=True,
         description="If True, RM is instructed to use <thinking> tags. If False, only Q-value."
-    )
-    q_value_extraction_pattern: str = Field(
-        default=r"\\boxed{\\s*([+-]?\\d*\\.?\\d+)\\s*}",
-        description="Regex pattern to extract the Q-value from the RM's response. Must capture the number."
     )
     thinking_block_extraction_pattern: str = Field(
         default=r"<thinking>(.*?)</thinking>",
@@ -84,30 +108,38 @@ class AtroposRM:
             "representing the expected future return from the current state-action pair. "
             "The Q-value should be a single floating-point number."
         )
+
+        policy_instruction_awareness_prompt = (
+            "The game history provided to you in the user message will contain the policy agent's own system "
+            "instructions, typically at the beginning of the dialogue history, clearly marked with "
+            "'--- Policy Agent System Instructions ---' and '--- End of Policy Agent System Instructions ---'. "
+            "You MUST consider these instructions when evaluating the policy agent's adherence, reasoning, and proposed action."
+        )
         
         thinking_instructions = (
             "Before providing your final Q-value, you should engage in a detailed chain of thought. "
             "Enclose your entire reasoning process, step-by-step analysis, and any intermediate "
             "calculations or considerations within <thinking> and </thinking> tags. This thinking "
             "process can be as long and detailed as necessary to arrive at an accurate estimate. "
-            "After the </thinking> tag, you must provide your final Q-value estimate."
+            "After the </thinking> tag, YOU MUST IMMEDIATELY provide your final Q-value estimate. No other text should follow the </thinking> tag before the Q-value."
         )
         
         no_thinking_instructions = (
-            "You must provide ONLY the Q-value estimate as a single floating-point number."
+            "You must provide ONLY the Q-value estimate as a single floating-point number. Nothing else."
         )
 
         q_value_format_instruction = (
-            f"Your final Q-value estimate must be a single floating-point number enclosed in "
-            f"'boxed{{}}', like so: {self.config.q_value_extraction_pattern.replace('(.*?)','Q_ESTIMATE')}. For example: boxed{{17.35}}."
+            "Your final Q-value estimate MUST be a single floating-point number. "
+            "This number MUST be enclosed in \\boxed{}. For example: \\boxed{17.35} or \\boxed{-2.5}. "
+            "This \\boxed{} expression is MANDATORY and MUST be the absolute final part of your response. "
+            "If thinking is enabled, it appears immediately after the </thinking> tag. If thinking is disabled, it is your entire response."
         )
 
         if self.config.thinking:
-            self.system_prompt_content = f"{base_prompt}\\n\\n{thinking_instructions}\\n\\n{q_value_format_instruction}"
+            self.system_prompt_content = f"{base_prompt}\n\n{policy_instruction_awareness_prompt}\n\n{thinking_instructions}\n\n{q_value_format_instruction}"
         else:
-            self.system_prompt_content = f"{base_prompt}\\n\\n{no_thinking_instructions}\\n\\n{q_value_format_instruction}"
+            self.system_prompt_content = f"{base_prompt}\n\n{policy_instruction_awareness_prompt}\n\n{no_thinking_instructions}\n\n{q_value_format_instruction}"
         
-        self.q_value_pattern = re.compile(self.config.q_value_extraction_pattern)
         self.thinking_block_pattern = re.compile(self.config.thinking_block_extraction_pattern, re.DOTALL)
 
 
@@ -129,7 +161,7 @@ class AtroposRM:
         Returns:
             A string representing the content of the user message for the RM.
         """
-        env_system_prompt_contents = []
+        # env_system_prompt_contents = [] # No longer needed as a separate list
         formatted_history_parts = []
         action_to_evaluate_str = "Error: Action to evaluate not found or not in expected format in history window."
 
@@ -149,23 +181,25 @@ class AtroposRM:
             )
             action_to_evaluate_str = action_message.get('content', action_to_evaluate_str)
 
-        for msg in history_context:
+        for msg in history_context: # This includes the policy agent's system prompt if it's first
+            role_display = msg.get("role", "unknown_role").capitalize()
+            content_display = msg.get("content", "[No content]")
             if msg.get("role") == "system":
-                env_system_prompt_contents.append(msg.get("content", ""))
+                # Embed the policy agent's system prompt with clear markers
+                formatted_history_parts.append(f"--- Policy Agent System Instructions ---\n{content_display}\n--- End of Policy Agent System Instructions ---")
             else:
-                role_display = msg.get("role", "unknown_role").capitalize()
-                content_display = msg.get("content", "[No content]")
                 formatted_history_parts.append(f"{role_display}: {content_display}")
 
-        prompt_sections = ["You are evaluating a policy agent's move based on the following context and proposed action."] # current_player_id removed for now
+        prompt_sections = ["You are evaluating a policy agent's move based on the following context and proposed action."]
 
-        if env_system_prompt_contents:
-            prompt_sections.append("\n--- Environment System Prompt (Instructions for the Policy Agent) ---")
-            prompt_sections.append("\n\n".join(filter(None, env_system_prompt_contents)))
-            prompt_sections.append("--- End of Environment System Prompt ---")
+        # The policy system prompt is now part of formatted_history_parts
+        # if env_system_prompt_contents:
+        #     prompt_sections.append("\n--- Environment System Prompt (Instructions for the Policy Agent) ---")
+        #     prompt_sections.append("\n\n".join(filter(None, env_system_prompt_contents)))
+        #     prompt_sections.append("--- End of Environment System Prompt ---")
 
         if formatted_history_parts:
-            prompt_sections.append("\n--- Recent Game History (excluding the move to be evaluated) ---")
+            prompt_sections.append("\n--- Recent Game History (including Policy Agent Instructions if provided, and excluding the move to be evaluated) ---")
             prompt_sections.append("\n".join(formatted_history_parts))
             prompt_sections.append("--- End of Recent Game History ---")
         
@@ -173,31 +207,33 @@ class AtroposRM:
         prompt_sections.append(action_to_evaluate_str)
         prompt_sections.append("--- End of Proposed Move ---")
 
-        # Use the q_value_extraction_pattern to inform the RM of the expected output format
-        example_q_value_format = self.config.q_value_extraction_pattern.replace("([+-]?\\d*\\.?\\d+)", "Q_VALUE")
-        prompt_sections.append(f"\nPlease provide your detailed evaluation of this move, including your own thinking process (if enabled in your setup) and a final Q-value score in {example_q_value_format} format.")
+        # Simplified instruction, as the exact format details are now handled by the parser and RM prompt.
+        prompt_sections.append(f"\nPlease provide your detailed evaluation of this move, including your own thinking process (if enabled in your setup) and a final Q-value score in \\boxed{{Q_VALUE}} format.")
         
         return "\n\n".join(prompt_sections)
 
     def _parse_q_value_from_response(self, llm_response_content: str) -> Optional[float]:
         """
-        Parses the Q-value from the LLM's response string using regex.
-        Looks for \\boxed{float_value}.
-
+        Parses the Q-value from the LLM's response string using the extract_boxed_content utility.
+        
         Args:
             llm_response_content: The raw text content from the LLM's response.
 
         Returns:
             The parsed float Q-value, or None if parsing fails.
         """
-        match = self.q_value_pattern.search(llm_response_content)
-        if match:
+        logger.debug(f"[{self.config.rm_id_for_logging}] Attempting to parse Q-value from raw response (repr): {repr(llm_response_content)}")
+        
+        boxed_content = extract_boxed_content(llm_response_content)
+        
+        if boxed_content is not None:
             try:
-                return float(match.group(1))
+                return float(boxed_content)
             except ValueError:
-                logger.warning(f"[{self.config.rm_id_for_logging}] Could not convert matched Q-value '{match.group(1)}' to float. Response: '{llm_response_content[:200]}...'")
+                logger.warning(f"[{self.config.rm_id_for_logging}] Could not convert extracted boxed content '{boxed_content}' to float. Response: '{llm_response_content[:200]}...'")
                 return None
-        logger.debug(f"[{self.config.rm_id_for_logging}] Q-value pattern not found in response: '{llm_response_content[:200]}...'")
+        
+        logger.debug(f"[{self.config.rm_id_for_logging}] No boxed Q-value found in response: '{llm_response_content[:200]}...'")
         return None
 
     def _extract_thinking_block(self, llm_response_content: str) -> Optional[str]:
@@ -281,51 +317,70 @@ class AtroposRM:
         self,
         num_judgements_g: int,
         game_history_window: List[Message],
-        # current_player_id: int, # Removed from here, _construct_evaluation_user_prompt_content doesn't use it now
-        # server_client: Any, # Already have self.server_client
-        # Context for logging from the environment
         game_seed_for_logging: Optional[int] = None,
         turn_idx_for_logging: Optional[int] = None,
-        policy_action_candidate_idx_for_logging: Optional[int] = None 
-    ) -> List[Tuple[Optional[str], Optional[float], Optional[str]]]:
+        policy_action_candidate_idx_for_logging: Optional[int] = None
+    ) -> List[RMJudgementLog]:
         """
         Generates G distinct judgements for a given policy agent's action.
-        Each judgement includes the RM's thinking (if enabled) and a Q-value.
+        Each judgement includes the RM's thinking (if enabled), a Q-value, and detailed logging info.
 
         Args:
             num_judgements_g: The number of judgements (G) to generate.
-            game_history_window: The history of the game so far, where the last message is
-                                 the policy agent's response (action) to be evaluated.
-            # server_client: The API client for LLM calls.
-            # Logging context arguments...
+            game_history_window: The history of the game so far.
+            # ... (other args remain the same)
 
         Returns:
-            A list of G tuples. Each tuple contains:
-            (raw_llm_response_content, q_value, thinking_block_content)
-            Values can be None if errors occur or content is not found.
+            A list of G RMJudgementLog dictionaries.
         """
         log_prefix_parts = []
         if game_seed_for_logging is not None: log_prefix_parts.append(f"Seed {game_seed_for_logging}")
         if turn_idx_for_logging is not None: log_prefix_parts.append(f"Turn {turn_idx_for_logging}")
-        if policy_action_candidate_idx_for_logging is not None: 
+        if policy_action_candidate_idx_for_logging is not None:
             log_prefix_parts.append(f"PolActIdx {policy_action_candidate_idx_for_logging}")
         log_prefix_base = f"[{self.config.rm_id_for_logging}] [{', '.join(log_prefix_parts)}] JudgementGen:"
 
+        results: List[RMJudgementLog] = []
+
         if not game_history_window:
             logger.error(f"{log_prefix_base} Called with empty game_history_window.")
-            return [(None, None, None)] * num_judgements_g # Return G error results
+            # Still return G items, but marked with errors
+            for _ in range(num_judgements_g):
+                results.append(RMJudgementLog(
+                    game_seed_for_logging=game_seed_for_logging,
+                    turn_idx_for_logging=turn_idx_for_logging,
+                    policy_action_candidate_idx_for_logging=policy_action_candidate_idx_for_logging,
+                    rm_input_messages=[], # No input messages could be formed
+                    raw_rm_response_content=None,
+                    parsed_q_value=None,
+                    parsed_thinking_block=None,
+                    api_error=True, # Treat as an API error equivalent
+                    q_value_parse_error=True,
+                    thinking_block_parse_error=self.config.thinking # True if thinking was expected
+                ))
+            return results
 
         rm_system_prompt_message = Message(role="system", content=self.system_prompt_content)
-        
-        # Construct the user prompt content once, as it's the same for all G judgements
-        # The current_player_id was removed from _construct_evaluation_user_prompt_content signature
         user_prompt_content = self._construct_evaluation_user_prompt_content(
             game_history_window=game_history_window,
-            # current_player_id=current_player_id 
         )
+
         if "Critical Error:" in user_prompt_content:
             logger.error(f"{log_prefix_base} Failed to construct user prompt content: {user_prompt_content}")
-            return [(None, None, None)] * num_judgements_g
+            for _ in range(num_judgements_g):
+                results.append(RMJudgementLog(
+                    game_seed_for_logging=game_seed_for_logging,
+                    turn_idx_for_logging=turn_idx_for_logging,
+                    policy_action_candidate_idx_for_logging=policy_action_candidate_idx_for_logging,
+                    rm_input_messages=[rm_system_prompt_message], # Only system prompt could be formed
+                    raw_rm_response_content=None,
+                    parsed_q_value=None,
+                    parsed_thinking_block=None,
+                    api_error=True, 
+                    q_value_parse_error=True,
+                    thinking_block_parse_error=self.config.thinking
+                ))
+            return results
         
         user_prompt_message = Message(role="user", content=user_prompt_content)
         messages_for_llm_call = [rm_system_prompt_message, user_prompt_message]
@@ -334,29 +389,54 @@ class AtroposRM:
         for i in range(num_judgements_g):
             current_log_prefix = f"{log_prefix_base} Sample {i+1}/{num_judgements_g}"
             tasks.append(self._sample_one_judgement(
-                messages_for_llm_call=messages_for_llm_call, 
-                # server_client=server_client, # Uses self.server_client
+                messages_for_llm_call=messages_for_llm_call,
                 log_prefix_base=current_log_prefix
             ))
         
-        llm_responses_with_errors = await asyncio.gather(*tasks)
+        llm_responses_with_errors_flags = await asyncio.gather(*tasks)
 
-        results: List[Tuple[Optional[str], Optional[float], Optional[str]]] = []
-        for raw_response_content, api_error in llm_responses_with_errors:
-            if api_error or raw_response_content is None:
-                logger.warning(f"{log_prefix_base} LLM call failed or returned None for a judgement sample.")
-                results.append((raw_response_content, None, None))
-                continue
-
-            q_value = self._parse_q_value_from_response(raw_response_content)
+        for raw_response_content, api_error_occurred in llm_responses_with_errors_flags:
+            q_value = None
             thinking_block = None
-            if self.config.thinking: # Only try to extract thinking if it was enabled
-                thinking_block = self._extract_thinking_block(raw_response_content)
+            q_parse_error_flag = False
+            tb_parse_error_flag = False
+
+            if not api_error_occurred and raw_response_content is not None:
+                q_value = self._parse_q_value_from_response(raw_response_content)
+                if q_value is None:
+                    q_parse_error_flag = True
+                    logger.warning(f"{log_prefix_base} Failed to parse Q-value for a judgement. Response snippet: {raw_response_content[:100]}...")
+
+                if self.config.thinking:
+                    thinking_block = self._extract_thinking_block(raw_response_content)
+                    if thinking_block is None:
+                        tb_parse_error_flag = True
+                        # Optional: log if thinking block parsing fails when expected
+                        logger.debug(f"{log_prefix_base} Thinking block expected but not found/parsed. Response snippet: {raw_response_content[:100]}...")
             
-            if q_value is None:
-                 logger.warning(f"{log_prefix_base} Failed to parse Q-value for a judgement. Response snippet: {raw_response_content[:100]}...")
+            elif api_error_occurred: # If API error, implies parsing errors for q-val and thinking
+                q_parse_error_flag = True
+                if self.config.thinking:
+                    tb_parse_error_flag = True
             
-            results.append((raw_response_content, q_value, thinking_block))
+            elif raw_response_content is None and not api_error_occurred: # LLM returned empty content
+                q_parse_error_flag = True # Cannot parse Q from None
+                if self.config.thinking:
+                    tb_parse_error_flag = True # Cannot parse thinking from None
+
+
+            results.append(RMJudgementLog(
+                game_seed_for_logging=game_seed_for_logging,
+                turn_idx_for_logging=turn_idx_for_logging,
+                policy_action_candidate_idx_for_logging=policy_action_candidate_idx_for_logging,
+                rm_input_messages=list(messages_for_llm_call), # Store a copy
+                raw_rm_response_content=raw_response_content,
+                parsed_q_value=q_value,
+                parsed_thinking_block=thinking_block,
+                api_error=api_error_occurred,
+                q_value_parse_error=q_parse_error_flag,
+                thinking_block_parse_error=tb_parse_error_flag and self.config.thinking # only true if thinking was on
+            ))
         
         return results
 
@@ -388,11 +468,11 @@ async def example_rm_usage(server_client: Any, tokenizer: PreTrainedTokenizer):
     effective_q_values_for_policy = []
     for i, judgement_result in enumerate(judgements):
         logger.info(f"Judgement {i+1}:")
-        logger.info(f"  RM Thinking: {judgement_result[2]}")
-        logger.info(f"  Parsed Q: {judgement_result[1]}")
-        logger.info(f"  API Error: {judgement_result[0] is None}")
-        if judgement_result[1] is not None and not judgement_result[0] is None:
-            effective_q_values_for_policy.append(judgement_result[1])
+        logger.info(f"  RM Thinking: {judgement_result['parsed_thinking_block']}")
+        logger.info(f"  Parsed Q: {judgement_result['parsed_q_value']}")
+        logger.info(f"  API Error: {judgement_result['api_error']}")
+        if judgement_result['parsed_q_value'] is not None and not judgement_result['api_error']:
+            effective_q_values_for_policy.append(judgement_result['parsed_q_value'])
 
     if effective_q_values_for_policy:
         mean_q_for_policy = sum(effective_q_values_for_policy) / len(effective_q_values_for_policy)

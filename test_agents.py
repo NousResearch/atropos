@@ -98,7 +98,7 @@ class TestAtroposEnv(BaseEnv):
             config=rm_config
         )
 
-        await self.agent.start_new_game_dialogue() # Resets agent's internal history and memory
+        self.agent.start_new_game_dialogue() # Resets agent's internal history and memory
 
         self.current_game_history = [
             Message(role="system", content=self.agent.system_prompt_content), # Use agent's actual system prompt
@@ -110,10 +110,11 @@ class TestAtroposEnv(BaseEnv):
         """Provides the current game history as an item for processing."""
         # Ensure the history given to collect_trajectory is what the agent should see *now*.
         # For this test, self.current_game_history is the canonical history.
-        return Item(convo=list(self.current_game_history)) # Pass a copy
+        # Since Item is Any, we pass a dictionary with the expected 'convo' key.
+        return {"convo": list(self.current_game_history)} # Pass a copy as a dict
 
     async def collect_trajectory(
-        self, item: Item
+        self, item: Item # Item is Any, will be a dict like {"convo": [...]
     ) -> Tuple[Optional[ScoredDataItem], List[Item]]:
         """
         Simulates one turn: agent action + RM evaluation.
@@ -121,9 +122,9 @@ class TestAtroposEnv(BaseEnv):
         if not self.agent or not self.rm:
             raise RuntimeError("Agents not initialized. Call setup() first.")
 
-        # The item.convo is the history leading UP TO this turn's action.
-        # The last message in item.convo should be the user/environment observation for the agent.
-        history_for_agent_action = item.convo 
+        # The item["convo"] is the history leading UP TO this turn's action.
+        # The last message in item["convo"] should be the user/environment observation for the agent.
+        history_for_agent_action = item["convo"] 
         
         if not history_for_agent_action or history_for_agent_action[-1]["role"] != "user":
             # This shouldn't happen if get_next_item and history updates are correct
@@ -140,9 +141,15 @@ class TestAtroposEnv(BaseEnv):
         # 1. Agent generates action
         # generate_action expects the history *before* the current observation is appended as a user message.
         # It internally appends observation_content to game_history_window to form its prompt.
+        
+        # history_for_agent_action (from item.convo) is [..., previous_messages, current_observation_message]
+        # observation_content_for_agent is the content of current_observation_message
+        # So, the game_history_window for the agent should be all messages *before* current_observation_message
+        history_base_for_agent = history_for_agent_action[:-1]
+
         action_text, history_after_action = await self.agent.generate_action(
             observation_content=observation_content_for_agent,
-            game_history_window=history_for_agent_action, # History up to and including current observation
+            game_history_window=history_base_for_agent, 
         )
         print(f"Agent Action: {action_text}")
         if self.agent.config.memory_system_enabled and self.agent.faiss_index:
@@ -262,7 +269,7 @@ async def main():
     print(f"\n===== Simulation Complete =====")
     print(f"Final game history after {env.curr_step} turns:")
     for i, msg in enumerate(env.current_game_history):
-        print(f"  {i}: Role: {msg.role}, Content: {msg.content}")
+        print(f"  {i}: Role: {msg['role']}, Content: {msg['content']}")
 
 
 if __name__ == "__main__":

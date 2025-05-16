@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Tuple, Any
+from typing import List, Optional, Tuple, Any, Dict
 from atroposlib.type_definitions import Message
 import numpy as np
 from transformers import PreTrainedTokenizer
@@ -27,61 +27,73 @@ except ImportError as e:
 # --- Start of AtroposAgentConfig Definition ---
 class AtroposAgentConfig(BaseModel):
     """Configuration for AtroposAgent."""
-    system_prompt: str = Field(
-        default="You are a helpful AI assistant navigating a text-based adventure game. "
-                "Describe your actions clearly and concisely. "
-                "If you need to think step-by-step, use <thinking>...</thinking> tags before your final action.",
-        description="The base system prompt for the agent."
-    )
-    thinking_enabled: bool = Field(
-        default=False,
-        description="If true, the system prompt will explicitly encourage thinking tags. "
-                    "The agent itself doesn't parse these currently but the LLM might use them."
-    )
+    # General LLM parameters
+    model_name: str = Field(default="gpt-4-turbo", description="LLM model name to use.")
     temperature: float = Field(
-        default=0.7,
-        ge=0.0,
+        default=0.7, 
+        ge=0.0, 
         le=2.0,
         description="Sampling temperature for the LLM."
     )
-    # max_context_token_length: int = Field(
-    #     default=2048, # This should align with the model, might be better managed by env
-    #     description="Maximum context token length the agent should consider (for LLM calls)."
-    # )
-    max_tokens_for_llm_output: int = Field(
+    max_tokens_per_completion: int = Field(
         default=256,
-        description="Maximum tokens to generate for the agent's action."
+        description="Maximum tokens to generate for the agent's action or LLM response."
     )
-    memory_system_enabled: bool = Field(
+    max_retries_on_error: int = Field(default=3, description="Maximum retries for LLM calls on failure.")
+
+    # Base system prompt (optional, can be a general persona)
+    # system_prompt: str = Field(
+    #     default="You are a helpful AI assistant.",
+    #     description="A general system prompt for the agent."
+    # )
+
+    # Memory System Configuration
+    enable_memory: bool = Field(
         default=True,
         description="Whether to enable the FAISS-based memory system. "
                     "Gracefully disables if prerequisites (faiss, sentence-transformers, torch) are missing."
     )
-    # embedding_model_name: str = Field( # This is internal to SentenceEmbeddingHelper
-    #     default="sentence-transformers/all-MiniLM-L6-v2",
-    #     description="The SentenceTransformer model to use for embeddings."
-    # )
     embedding_dim: int = Field(
-        default=384,
-        description="Dimension of embeddings. Default is for all-MiniLM-L6-v2. "
-                    "Will be updated by SentenceEmbeddingHelper if a different model/dim is used by it."
+        default=384, # Default for all-MiniLM-L6-v2
+        description="Dimension of embeddings. This will be updated by SentenceEmbeddingHelper upon its initialization "
+                    "based on the actual model loaded by it, so this value mainly serves as a placeholder/default."
     )
-    top_k_memories: int = Field(
+    memory_top_k: int = Field(
         default=3,
         description="Number of relevant memories to retrieve and prepend to the observation."
     )
-    memory_generation_prompt_template: Optional[str] = Field(
-        default=None,
-        description="Custom system prompt for the memory generation LLM call. "
-                    "If None, a default template is used."
+    memory_generation_system_prompt: str = Field(
+        default=(
+            "You are a helpful assistant. Based on the provided game history snippet, "
+            "summarize the key events, insights, player actions, and outcomes concisely. "
+            "This summary will be used as a memory for a game-playing agent. "
+            "Focus on information that would be useful for making future decisions in the game. "
+            "Output only the summary."
+        ),
+        description="System prompt for the LLM call to generate a memory summary."
     )
-    player_id_for_logging: str = Field( # Changed to str, as Optional[int] was cast to str anyway
-        default="Agent",
+    
+    # Task-Specific Prompt for TextWorld Action Generation (primarily used by TextWorldEnv)
+    action_generation_system_prompt: str = Field(
+        default=(
+            "You are an expert text adventure game player. You are playing a game in TextWorld. "
+            "Based on the game history and your current situation (observation), "
+            "determine the best single command to execute next to progress in the game and achieve the objective. "
+            "Output ONLY this command and nothing else. Do not add any conversational fluff, explanation, or formatting. "
+            "For example, if you decide to go north, output: go north"
+        ),
+        description="System prompt specifically for TextWorld action generation. "
+                    "This is typically passed by the TextWorld environment to the agent's history."
+    )
+    
+    player_id_for_logging: str = Field(
+        default="AtroposAgent", # Changed from "Agent" to be more specific
         description="Identifier for the agent in logs."
     )
 
     class Config:
         extra = 'forbid' # Ensure no unexpected fields are passed
+        arbitrary_types_allowed = True # Needed if FAISS index or model objects are stored in instances with this config
 
 # --- End of AtroposAgentConfig Definition ---
 
@@ -172,15 +184,17 @@ class AtroposAgent:
         self.tokenizer = tokenizer
         # self.max_context_token_length = max_context_token_length # Agent doesn't directly enforce this; relies on server/env for now
 
-        # System prompt construction based on thinking_enabled
-        # This specific logic for system_prompt modification is an example if needed;
-        # current default prompt already mentions thinking tags.
-        # If config.thinking_enabled and "<thinking>" not in self.config.system_prompt:
-        #    self.system_prompt_content = self.config.system_prompt + \
-        #        " If you need to think step-by-step, use <thinking>...</thinking> tags before your final action."
-        # else:
-        #    self.system_prompt_content = self.config.system_prompt
-        self.system_prompt_content = self.config.system_prompt # Simplified: config defines the full prompt
+        # Use the action_generation_system_prompt as the default system prompt for this agent's behavior
+        # if a more general 'system_prompt' field isn't specifically defined in the config.
+        if hasattr(self.config, 'system_prompt') and self.config.system_prompt:
+            self.system_prompt_content = self.config.system_prompt
+        elif hasattr(self.config, 'action_generation_system_prompt') and self.config.action_generation_system_prompt:
+            self.system_prompt_content = self.config.action_generation_system_prompt
+            logger.info(f"AtroposAgent using 'action_generation_system_prompt' as main system prompt.")
+        else:
+            # Fallback if neither is defined, though AtroposAgentConfig should provide one.
+            self.system_prompt_content = "You are a helpful AI assistant."
+            logger.warning("AtroposAgent falling back to a generic system prompt as none specific was found in config.")
 
         self.current_game_messages: List[Message] = []
 
