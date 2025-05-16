@@ -47,7 +47,7 @@ async def main():
         
         # Test-specific settings
         max_steps=10,  # Keep episodes short for testing
-        challenge_name="simple_home", # A simple, quick challenge
+        challenge_name="tw-simple", # A simple, quick challenge
         debug_mode=True,
 
         # Atropos Agent and RM settings

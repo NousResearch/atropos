@@ -41,11 +41,10 @@ class AtroposAgentConfig(BaseModel):
     )
     max_retries_on_error: int = Field(default=3, description="Maximum retries for LLM calls on failure.")
 
-    # Base system prompt (optional, can be a general persona)
-    # system_prompt: str = Field(
-    #     default="You are a helpful AI assistant.",
-    #     description="A general system prompt for the agent."
-    # )
+    system_prompt: str = Field(
+        default="You are a helpful AI assistant.",
+        description="A general system prompt for the agent."
+    )
 
     # Memory System Configuration
     enable_memory: bool = Field(
@@ -71,19 +70,6 @@ class AtroposAgentConfig(BaseModel):
             "Output only the summary."
         ),
         description="System prompt for the LLM call to generate a memory summary."
-    )
-    
-    # Task-Specific Prompt for TextWorld Action Generation (primarily used by TextWorldEnv)
-    action_generation_system_prompt: str = Field(
-        default=(
-            "You are an expert text adventure game player. You are playing a game in TextWorld. "
-            "Based on the game history and your current situation (observation), "
-            "determine the best single command to execute next to progress in the game and achieve the objective. "
-            "Output ONLY this command and nothing else. Do not add any conversational fluff, explanation, or formatting. "
-            "For example, if you decide to go north, output: go north"
-        ),
-        description="System prompt specifically for TextWorld action generation. "
-                    "This is typically passed by the TextWorld environment to the agent's history."
     )
     
     player_id_for_logging: str = Field(
@@ -182,20 +168,7 @@ class AtroposAgent:
         self.config = config if config is not None else AtroposAgentConfig()
         self.server_client = server_client
         self.tokenizer = tokenizer
-        # self.max_context_token_length = max_context_token_length # Agent doesn't directly enforce this; relies on server/env for now
-
-        # Use the action_generation_system_prompt as the default system prompt for this agent's behavior
-        # if a more general 'system_prompt' field isn't specifically defined in the config.
-        if hasattr(self.config, 'system_prompt') and self.config.system_prompt:
-            self.system_prompt_content = self.config.system_prompt
-        elif hasattr(self.config, 'action_generation_system_prompt') and self.config.action_generation_system_prompt:
-            self.system_prompt_content = self.config.action_generation_system_prompt
-            logger.info(f"AtroposAgent using 'action_generation_system_prompt' as main system prompt.")
-        else:
-            # Fallback if neither is defined, though AtroposAgentConfig should provide one.
-            self.system_prompt_content = "You are a helpful AI assistant."
-            logger.warning("AtroposAgent falling back to a generic system prompt as none specific was found in config.")
-
+        self.system_prompt_content = self.config.system_prompt
         self.current_game_messages: List[Message] = []
 
         # --- Memory System Initialization ---
@@ -204,7 +177,7 @@ class AtroposAgent:
         # Use embedding_dim from config as initial, SentenceEmbeddingHelper might update it
         self.embedding_dim = self.config.embedding_dim 
 
-        if self.config.memory_system_enabled and MEMORY_SYSTEM_PREREQUISITES_AVAILABLE:
+        if self.config.enable_memory and MEMORY_SYSTEM_PREREQUISITES_AVAILABLE:
             self.embedding_helper = SentenceEmbeddingHelper()
             if self.embedding_helper and self.embedding_helper._model is not None:
                 self.embedding_dim = self.embedding_helper.embedding_dim # Use actual dim from helper
@@ -232,7 +205,7 @@ class AtroposAgent:
                 )
                 self.embedding_helper = None 
                 self.faiss_index = None
-        elif self.config.memory_system_enabled and not MEMORY_SYSTEM_PREREQUISITES_AVAILABLE:
+        elif self.config.enable_memory and not MEMORY_SYSTEM_PREREQUISITES_AVAILABLE:
              logger.info(
                 f"AtroposAgent[{self.config.player_id_for_logging}] Memory system configured to be enabled, "
                 f"but prerequisites (torch, sentence-transformers, faiss) not met. "
@@ -246,8 +219,8 @@ class AtroposAgent:
         
         self.memory_texts: List[str] = []
 
-        # Use memory_generation_prompt_template from config, or the default
-        if self.config.memory_generation_prompt_template is None:
+        # Use memory_generation_system_prompt from config, or the default
+        if not hasattr(self.config, 'memory_generation_system_prompt') or self.config.memory_generation_system_prompt is None:
             self.memory_generation_system_prompt_content = ( # Renamed variable for clarity
                 "You are a memory creation assistant. Based on the provided game history window, "
                 "which includes an agent's thoughts, actions, and the resulting observations, "
@@ -259,7 +232,7 @@ class AtroposAgent:
                 "Provide only the summarized memory text. Do not include any other conversational filler or explanation."
             )
         else:
-            self.memory_generation_system_prompt_content = self.config.memory_generation_prompt_template
+            self.memory_generation_system_prompt_content = self.config.memory_generation_system_prompt # Corrected attribute name
         logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] Memory generation system prompt set.")
 
     def start_new_game_dialogue(self) -> None:
@@ -272,7 +245,7 @@ class AtroposAgent:
             self.faiss_index.reset()
             logger.info(f"AtroposAgent[{self.config.player_id_for_logging}] FAISS index reset for new game.")
         else: # Also log if memory was intended but not active
-            if self.config.memory_system_enabled:
+            if self.config.enable_memory:
                  logger.info(f"AtroposAgent[{self.config.player_id_for_logging}] New game started, memory system was intended but not active (no FAISS index).")
 
         self.memory_texts = []
@@ -354,7 +327,7 @@ class AtroposAgent:
         Uses an LLM call to generate a concise memory string from a window of game history.
         Returns the memory string if successful, otherwise None. Also returns error flag.
         """
-        if not self.config.memory_system_enabled or self.embedding_helper is None or self.faiss_index is None:
+        if not self.config.enable_memory or self.embedding_helper is None or self.faiss_index is None:
             logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] _generate_memory: Memory system not active. Skipping memory generation.")
             return None, False # Not an error, just skipped
 
@@ -424,7 +397,7 @@ class AtroposAgent:
         final_observation_content = observation_content
         retrieved_memories_texts: List[str] = []
 
-        if self.config.memory_system_enabled and self.faiss_index is not None and self.faiss_index.ntotal > 0:
+        if self.config.enable_memory and self.faiss_index is not None and self.faiss_index.ntotal > 0:
             logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] Attempting to retrieve memories for observation.")
             observation_embedding = await self._get_embedding(observation_content)
             
@@ -453,7 +426,7 @@ class AtroposAgent:
                     logger.error(f"AtroposAgent[{self.config.player_id_for_logging}] Error during FAISS search or memory formatting: {e}", exc_info=True)
             else:
                 logger.warning(f"AtroposAgent[{self.config.player_id_for_logging}] Could not get embedding for observation, skipping memory retrieval.")
-        elif self.config.memory_system_enabled and (self.faiss_index is None or self.faiss_index.ntotal == 0):
+        elif self.config.enable_memory and (self.faiss_index is None or self.faiss_index.ntotal == 0):
             logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] Memory system enabled, but no memories in FAISS index yet or index not initialized.")
 
 
@@ -504,7 +477,7 @@ class AtroposAgent:
 
         # Step 5: Generate and store memory for this turn (action + observation outcome)
         # Only generate memory if not in evaluation context and system is enabled.
-        if self.config.memory_system_enabled and self.faiss_index is not None and not is_evaluation_context:
+        if self.config.enable_memory and self.faiss_index is not None and not is_evaluation_context:
             # The "outcome" is implicitly the next observation, but we generate memory based on action taken in current context
             # For memory generation, we use the history *including* the action just taken.
             memory_context_for_generation = history_after_action # History including the system prompt, user obs, and assistant action
