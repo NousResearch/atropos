@@ -175,7 +175,8 @@ class AtroposAgent:
         self.server_client = server_client
         self.tokenizer = tokenizer
         self.system_prompt_content = self.config.system_prompt
-        self.current_game_messages: List[Message] = []
+        self.game_log: AtroposAgentActionLog = AtroposAgentActionLog(turn_number=0, alternatives=[])
+        self.canonical_game_log: List[Message] = []
 
         # --- Memory System Initialization ---
         self.embedding_helper = None
@@ -223,29 +224,17 @@ class AtroposAgent:
             )
             # self.embedding_helper and self.faiss_index are already None or will remain so
         
+        # stores CANONICAL memories only (not every alternative)
         self.memory_texts: List[str] = []
-
-        # Use memory_generation_system_prompt from config, or the default
-        if not hasattr(self.config, 'memory_generation_system_prompt') or self.config.memory_generation_system_prompt is None:
-            self.memory_generation_system_prompt_content = ( # Renamed variable for clarity
-                "You are a memory creation assistant. Based on the provided game history window, "
-                "which includes an agent's thoughts, actions, and the resulting observations, "
-                "create a concise memory summary. Focus on:\\n"
-                "1. The core of the agent's plan or intention during that turn.\\n"
-                "2. Key learnings or important observations from the outcome of the agent's action.\\n"
-                "3. Any critical changes to the agent's state (e.g., new inventory items, "
-                "significant score changes, new locations discovered that seemed important).\\n"
-                "Provide only the summarized memory text. Do not include any other conversational filler or explanation."
-            )
-        else:
-            self.memory_generation_system_prompt_content = self.config.memory_generation_system_prompt # Corrected attribute name
-        logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] Memory generation system prompt set.")
+        self.memory_generation_system_prompt = self.config.memory_generation_system_prompt
+    
+    def add_canonical_game_log(self, message: Message) -> None:
+        """Adds a message to the canonical game log."""
+        self.canonical_game_log.append(message)
 
     def start_new_game_dialogue(self) -> None:
         """Clears the current dialogue history and starts with the system prompt."""
-        self.current_game_messages = [
-            Message(role="system", content=self.system_prompt_content)
-        ]
+        self.game_log = AtroposAgentActionLog(turn_number=0, alternatives=[])
         # Clear memories for the new game
         if self.faiss_index is not None:
             self.faiss_index.reset()
@@ -345,7 +334,7 @@ class AtroposAgent:
             return None, False
 
         memory_prompt_messages = [
-            Message(role="system", content=self.memory_generation_system_prompt_content), # Use renamed var
+            Message(role="system", content=self.memory_generation_system_prompt), # Use renamed var
             Message(role="user", content=formatted_history)
         ]
         
@@ -443,7 +432,7 @@ class AtroposAgent:
         # self.current_game_messages is the agent's own canonical history.
         # This might be updated more carefully by an environment managing multiple perspectives.
         # For this standalone agent, we'll update it directly.
-        self.current_game_messages = history_after_action
+        self.game_log = history_after_action
 
 
         # Step 5: Generate and store memory for this turn (action + observation outcome)
