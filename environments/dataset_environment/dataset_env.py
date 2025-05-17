@@ -265,9 +265,10 @@ class DatasetEnv(BaseEnv):
                 response_content = self.config.prefill + completion_text
 
             full_messages.append({"role": "assistant", "content": response_content})
+            logger.warning(f"collect_trajectory: to_score: {to_score}")
 
             to_score.append((full_messages, answer, item[2] if len(item) > 2 else None))
-
+        
         return to_score, to_backlog
 
     async def postprocess_histories(
@@ -334,13 +335,14 @@ class DatasetEnv(BaseEnv):
                 response_content = self.config.prefill + completion_text
 
             full_messages.append({"role": "assistant", "content": response_content})
+            logger.warning(f"collect_trajectories: full_messages: {full_messages}")
 
             trajectories.append(full_messages)
 
         return trajectories, []
 
     async def score(self, rollout_group_data: List) -> Optional[ScoredDataGroup]:
-        logger.warning(f"Scoring {len(rollout_group_data)} rollout items")
+        logger.warning(f"score: Scoring {len(rollout_group_data)} rollout items")
 
         logger.warning(
             f"score: self.current_item (type: {type(self.current_item)}): {self.current_item}"
@@ -364,7 +366,6 @@ class DatasetEnv(BaseEnv):
             else None
         )
         logger.warning(f"score: Extracted answer from current_item: {answer}")
-        logger.warning(f"Answer for current item: {answer}")
 
         ground_truth = (
             self.current_item[2]
@@ -374,7 +375,7 @@ class DatasetEnv(BaseEnv):
         logger.warning(
             f"score: Extracted ground_truth from current_item: {ground_truth}"
         )
-        logger.warning(f"Ground truth for current item: {ground_truth}")
+        logger.warning(f"score: Ground truth for current item: {ground_truth}")
 
         formatted_completions = []
         for trajectory in rollout_group_data:
