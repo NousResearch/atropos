@@ -1,11 +1,13 @@
 import asyncio
 import logging
+import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import yaml
 from datasets import load_dataset
 from pydantic import Field
 
-from atroposlib.envs.base import BaseEnv, BaseEnvConfig, ScoredDataGroup
+from atroposlib.envs.base import BaseEnv, BaseEnvConfig, OpenaiConfig, ScoredDataGroup
 from atroposlib.envs.reward_fns import registry
 from atroposlib.envs.reward_fns.combined_reward import CombinedReward
 from atroposlib.type_definitions import Item
@@ -16,7 +18,7 @@ logger.setLevel(logging.INFO)
 
 
 class DatasetEnvConfig(BaseEnvConfig):
-    dataset_name: str = Field(..., description="HuggingFace dataset name")
+    dataset_name: Optional[str] = Field(None, description="HuggingFace dataset name")
     dataset_config: Optional[str] = Field(
         None, description="Dataset configuration name"
     )
@@ -24,7 +26,9 @@ class DatasetEnvConfig(BaseEnvConfig):
     dataset_path: Optional[str] = Field(
         None, description="Local path to dataset (alternative to dataset_name)"
     )
-    prompt_field: str = Field(..., description="Field in dataset to use as prompt")
+    prompt_field: Optional[str] = Field(
+        None, description="Field in dataset to use as prompt"
+    )
     answer_field: Optional[str] = Field(
         None, description="Field in dataset to use as answer"
     )
@@ -42,16 +46,11 @@ class DatasetEnvConfig(BaseEnvConfig):
     include_messages_in_scoring: bool = Field(
         False, description="Whether to include messages in scoring"
     )
-    reward_funcs: List[str] = Field(
-        default_factory=list,
-        description="List of reward function names to apply (legacy)",
-    )
-    reward_functions: List[Union[str, Dict[str, Any]]] = Field(
-        default_factory=list,
+    reward_functions: Optional[List[Union[str, Dict[str, Any]]]] = Field(
+        None,
         description="List of reward functions to apply (string names or full configs)",
     )
 
-    # Completion parameters
     temperature: float = Field(0.7, description="Temperature for generation")
     top_p: float = Field(0.9, description="Top-p for generation")
     max_tokens: int = Field(4096, description="Maximum tokens for generation")
@@ -65,35 +64,94 @@ class DatasetEnvConfig(BaseEnvConfig):
         None, description="Evaluation dataset config"
     )
     eval_split: Optional[str] = Field(None, description="Evaluation dataset split")
+    debug_mode: bool = Field(False, description="Enable debug logging")
 
 
 class DatasetEnv(BaseEnv):
+    name = "dataset"
+
     def __init__(
         self, config: DatasetEnvConfig, server_configs, slurm=True, testing=False
     ):
         super().__init__(config, server_configs, slurm, testing)
         self.config = config
+
+        # If ground_truth_field was configured as the literal string "None",
+        # interpret it as Python None (meaning no specific ground truth field is designated).
+        if self.config.ground_truth_field == "None":
+            logger.warning(
+                f"DatasetEnv.__init__: Configured 'ground_truth_field' was the string \"None\". "
+                f"Setting to Python None, so no specific ground truth field will be looked up by default. "
+                f"The 'answer_field' ('{self.config.answer_field}') "
+                f"will likely be used as fallback by reward functions."
+            )
+            self.config.ground_truth_field = None
+
         self.dataset = None
         self.iter = 0
         self.metric_buffer = {}
 
+        # Store debug mode and set logger level
+        self.debug_mode = config.debug_mode
+        if self.debug_mode:
+            logger.setLevel(logging.DEBUG)
+        else:
+            if logger.level == logging.NOTSET or logger.level > logging.WARNING:
+                logger.setLevel(logging.WARNING)  # Default to WARNING
+
         self.reward_function = self._initialize_reward_function()
+        logger.warning(
+            f"DatasetEnv.__init__: Initialized reward_function type: {type(self.reward_function)}"
+        )
+        if hasattr(self.reward_function, "rewards") and isinstance(
+            self.reward_function.rewards, list
+        ):  # Heuristic for CombinedReward
+            constituent_reward_types = [
+                type(r).__name__ for r in self.reward_function.rewards
+            ]
+            logger.warning(
+                f"DatasetEnv.__init__: Constituent reward function types (if combined): {constituent_reward_types}"
+            )
+            # Attempt to log individual reward configurations if they are dicts (as they might be in CombinedReward)
+            if self.config.reward_functions and isinstance(
+                self.config.reward_functions, list
+            ):
+                logger.warning(
+                    f"DatasetEnv.__init__: Original reward_functions config: {self.config.reward_functions}"
+                )
+        elif self.reward_function is not None:
+            logger.warning(
+                f"DatasetEnv.__init__: Single reward function type: {type(self.reward_function).__name__}"
+            )
+            if self.config.reward_functions and isinstance(
+                self.config.reward_functions, list
+            ):
+                logger.warning(
+                    f"DatasetEnv.__init__: Original reward_functions config for single reward: "
+                    f"{self.config.reward_functions}"
+                )
+        else:
+            logger.warning("DatasetEnv.__init__: self.reward_function is None.")
 
     def _initialize_reward_function(self):
-        if hasattr(self.config, "reward_functions") and self.config.reward_functions:
+        if self.config.reward_functions:
             if len(self.config.reward_functions) == 1:
+                # If it's a string, it's a name for the registry
+                # If it's a dict, it's a full config for the registry
                 return registry.create(self.config.reward_functions[0])
             else:
+                # This assumes reward_functions is a list of names or full configs
+                # The CombinedReward will now sum the weighted raw scores of its components.
+                # Its own weight defaults to 1.0 unless specified otherwise if CombinedReward
+                # were to be configured explicitly with a 'type: CombinedReward' in YAML.
                 return CombinedReward(
-                    rewards=self.config.reward_functions, normalization="sum"
+                    rewards=self.config.reward_functions
+                    # normalization="sum" # Removed, CombinedReward no longer uses normalization
                 )
-        elif hasattr(self.config, "reward_funcs") and self.config.reward_funcs:
-            if len(self.config.reward_funcs) == 1:
-                return registry.create(self.config.reward_funcs[0])
-            else:
-                return CombinedReward(
-                    rewards=self.config.reward_funcs, normalization="none"
-                )
+        logger.warning(
+            "No reward functions configured (field 'reward_functions' is None or list is empty)."
+        )
+        return None
 
     async def setup(self):
         if self.config.dataset_path:
@@ -119,42 +177,60 @@ class DatasetEnv(BaseEnv):
         if not self.dataset:
             await self.setup()
 
-        item = self.dataset[self.iter % len(self.dataset)]
+        item_data = self.dataset[self.iter % len(self.dataset)]
         self.iter += 1
 
-        user_msg = {"role": "user", "content": item[self.config.prompt_field]}
+        logger.warning(f"get_next_item: item_data.keys(): {list(item_data.keys())}")
+        logger.warning(
+            f"get_next_item: config: prompt_field='{self.config.prompt_field}', "
+            f"answer_field='{self.config.answer_field}', "
+            f"ground_truth_field='{self.config.ground_truth_field}'"
+        )
+        logger.warning(
+            f"get_next_item: raw_prompt_data: {item_data.get(self.config.prompt_field)}"
+        )
+        logger.warning(
+            f"get_next_item: raw_answer_data: {item_data.get(self.config.answer_field)}"
+        )
+        logger.warning(
+            f"get_next_item: raw_ground_truth_data: {item_data.get(self.config.ground_truth_field)}"
+        )
+
+        user_msg = {"role": "user", "content": item_data[self.config.prompt_field]}
         prompt = tuple([frozenset(user_msg.items())])
 
         answer = None
-        if self.config.answer_field and self.config.answer_field in item:
-            answer = item[self.config.answer_field]
+        if self.config.answer_field and self.config.answer_field in item_data:
+            answer = item_data[self.config.answer_field]
 
         ground_truth = None
-        if self.config.ground_truth_field and self.config.ground_truth_field in item:
-            ground_truth = item[self.config.ground_truth_field]
+        if (
+            self.config.ground_truth_field
+            and self.config.ground_truth_field in item_data
+        ):
+            ground_truth = item_data[self.config.ground_truth_field]
 
+        logger.warning(
+            f"get_next_item: returning: prompt_len={len(prompt)}, answer='{answer}', ground_truth='{ground_truth}'"
+        )
         return (prompt, answer, ground_truth)
 
     async def collect_trajectory(self, item: Item) -> Tuple[List, List]:
-        # Extract user prompt and answer from item
         user_content = dict(item[0][0])["content"]
         answer = item[1] if len(item) > 1 else None
 
-        # Create messages list
         messages = []
         if self.config.system_prompt:
             messages.append({"role": "system", "content": self.config.system_prompt})
 
         messages.append({"role": "user", "content": user_content})
 
-        # Add prefill as assistant message if configured
         if self.config.prefill:
             messages.append({"role": "assistant", "content": self.config.prefill})
 
-        # Convert messages to a prompt string using the tokenizer
         prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
+        logger.warning(f"collect_trajectory: prompt: {prompt}")
 
-        # Calculate max tokens for generation (with optional warmup)
         max_tokens = self.config.max_tokens
         if self.config.length_warmup_steps > 0:
             warmup_progress = min(1.0, self.curr_step / self.config.length_warmup_steps)
@@ -163,7 +239,6 @@ class DatasetEnv(BaseEnv):
                 + warmup_progress * (self.config.max_tokens - self.config.min_tokens)
             )
 
-        # Generate completion using completions API
         completions = await self.server.completion(
             prompt=prompt,
             n=self.config.max_generations_per_prompt,
@@ -175,16 +250,13 @@ class DatasetEnv(BaseEnv):
         to_score = []
         to_backlog = []
 
-        # Process completions
         for completion in completions.choices:
-            # Get the completion text
             completion_text = (
                 completion.text
                 if hasattr(completion, "text")
                 else completion.message.content
             )
 
-            # Build full message sequence for scoring
             full_messages = []
             if self.config.system_prompt:
                 full_messages.append(
@@ -193,45 +265,52 @@ class DatasetEnv(BaseEnv):
 
             full_messages.append({"role": "user", "content": user_content})
 
-            # Combine prefill with completion if prefill was used
             response_content = completion_text
             if self.config.prefill:
                 response_content = self.config.prefill + completion_text
 
             full_messages.append({"role": "assistant", "content": response_content})
 
-            # Add to scoring list with answer and ground truth
             to_score.append((full_messages, answer, item[2] if len(item) > 2 else None))
 
         return to_score, to_backlog
 
-    async def postprocess_histories(self, trajectories: List) -> Tuple[List, List]:
-        return trajectories, []
+    async def postprocess_histories(
+        self, trajectories: List[List[Dict[str, Any]]]
+    ) -> Optional[ScoredDataGroup]:
+        """
+        Postprocess the histories by scoring them.
+        The input 'trajectories' is expected to be a list of message lists,
+        which is suitable for the `score` method's `rollout_group_data` argument.
+        """
+        if not trajectories:
+            logger.warning(
+                "postprocess_histories: received empty or invalid trajectories, returning None."
+            )
+            return None
+        # The 'score' method expects List of trajectories, where each trajectory is List[Message]
+        # This matches the input 'trajectories' (which is rollout_group_data from collect_trajectories)
+        scored_data = await self.score(trajectories)
+        return scored_data
 
     async def collect_trajectories(self, item: Item) -> Tuple[List, List]:
         self.current_item = item
 
-        # Extract user prompt from item
         user_content = dict(item[0][0])["content"]
 
-        # Create messages list
         messages = []
         if self.config.system_prompt:
             messages.append({"role": "system", "content": self.config.system_prompt})
 
         messages.append({"role": "user", "content": user_content})
 
-        # Add prefill as assistant message if configured
         if self.config.prefill:
             messages.append({"role": "assistant", "content": self.config.prefill})
 
-        # Convert messages to a prompt string using the tokenizer
         prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
 
-        # Calculate max tokens for generation (with optional warmup)
         max_tokens = self.config.max_tokens
 
-        # Generate completions
         completions = await self.server.completion(
             prompt=prompt,
             n=self.config.group_size,
@@ -241,17 +320,14 @@ class DatasetEnv(BaseEnv):
         )
 
         print(f"Completions: {completions}")
-        # Process completions
         trajectories = []
         for completion in completions.choices:
-            # Get the completion text
             completion_text = (
                 completion.text
                 if hasattr(completion, "text")
                 else completion.message.content
             )
 
-            # Build complete message sequence
             full_messages = []
             if self.config.system_prompt:
                 full_messages.append(
@@ -260,7 +336,6 @@ class DatasetEnv(BaseEnv):
 
             full_messages.append({"role": "user", "content": user_content})
 
-            # Combine prefill with completion if prefill was used
             response_content = completion_text
             if self.config.prefill:
                 response_content = self.config.prefill + completion_text
@@ -273,6 +348,14 @@ class DatasetEnv(BaseEnv):
 
     async def score(self, rollout_group_data: List) -> Optional[ScoredDataGroup]:
         logger.warning(f"Scoring {len(rollout_group_data)} rollout items")
+
+        logger.warning(
+            f"score: self.current_item (type: {type(self.current_item)}): {self.current_item}"
+        )
+        logger.warning(
+            f"score: config: answer_field='{self.config.answer_field}', "
+            f"ground_truth_field='{self.config.ground_truth_field}'"
+        )
 
         scores = ScoredDataGroup()
         scores["tokens"] = []
@@ -287,12 +370,16 @@ class DatasetEnv(BaseEnv):
             if self.current_item and len(self.current_item) > 1
             else None
         )
+        logger.warning(f"score: Extracted answer from current_item: {answer}")
         logger.warning(f"Answer for current item: {answer}")
 
         ground_truth = (
             self.current_item[2]
             if self.current_item and len(self.current_item) > 2
             else None
+        )
+        logger.warning(
+            f"score: Extracted ground_truth from current_item: {ground_truth}"
         )
         logger.warning(f"Ground truth for current item: {ground_truth}")
 
@@ -311,6 +398,9 @@ class DatasetEnv(BaseEnv):
             logger.warning("No valid completions to score")
             return None
 
+        logger.warning(
+            f"score: formatted_completions passed to reward_function: {formatted_completions}"
+        )
         try:
             reward_kwargs = {
                 "solution": answer,
@@ -414,7 +504,154 @@ class DatasetEnv(BaseEnv):
 
         await super().wandb_log(metrics)
 
+    @classmethod
+    def config_init(
+        cls,
+        config_name: Optional[str] = None,
+        env_config_override: Optional[
+            DatasetEnvConfig
+        ] = None,  # Added to accept CLI overrides
+    ) -> Tuple[DatasetEnvConfig, List[OpenaiConfig]]:
+        """Load settings from the local configs directory, allowing for CLI overrides."""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        config_file = config_name or "dataset_default.yaml"
+        cfg_path = os.path.join(current_dir, "configs", config_file)
+
+        raw_from_yaml = {}
+        try:
+            if os.path.exists(cfg_path):
+                with open(cfg_path) as f:
+                    raw_from_yaml = yaml.safe_load(f) or {}
+                logger.info(f"Loaded config from {cfg_path}")
+                logger.warning(
+                    f"DatasetEnv.config_init: Raw reward_functions from YAML: {raw_from_yaml.get('reward_functions')}"
+                )  # Added log line
+            else:
+                # This case should ideally be handled by the fallback in the except block if it's critical
+                logger.warning(
+                    f"Config file not found at {cfg_path}. Will proceed with env_config_override or defaults."
+                )
+
+            # Merge CLI overrides: CLI values take precedence over YAML values
+            if env_config_override:
+                # Get non-default values from the override object provided by Tyro
+                override_dict = env_config_override.model_dump(
+                    exclude_none=True
+                )  # exclude_none to avoid overwriting with None if CLI arg wasn't set
+                raw_from_yaml.update(override_dict)  # Update YAML data with CLI data
+
+            # Ensure debug_mode exists before creating config if not set by CLI or YAML
+            if "debug_mode" not in raw_from_yaml:
+                raw_from_yaml["debug_mode"] = False  # Default if missing
+
+            env_conf = DatasetEnvConfig(**raw_from_yaml)
+
+            # Validate that essential fields are loaded (either from YAML or CLI override)
+            if env_conf.dataset_name is None:
+                raise ValueError(
+                    "dataset_name is required but was not provided by YAML or CLI."
+                )
+            if env_conf.prompt_field is None:
+                raise ValueError(
+                    "prompt_field is required but was not provided by YAML or CLI."
+                )
+
+            server_confs = []
+            # Server config loading from the potentially merged raw_from_yaml
+            for sc_data in raw_from_yaml.get("server_configs", []):
+                # Get values directly from YAML data
+                model_name = sc_data.get(
+                    "model_name",
+                    os.getenv(
+                        "OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+                    ),
+                )
+                base_url = sc_data.get(
+                    "base_url", os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1")
+                )
+                num_requests = sc_data.get("num_requests_for_eval", 256)
+
+                # Special handling for api_key: YAML -> Env Var -> "x"
+                api_key = sc_data.get("api_key")
+                if not api_key:
+                    api_key = os.getenv("OPENAI_API_KEY")
+                if not api_key:
+                    api_key = "x"
+                    logger.warning(
+                        "API key not found in config or OPENAI_API_KEY env var. Defaulting to 'x'."
+                    )
+                else:
+                    masked_key = (
+                        api_key[:4] + "****" + api_key[-4:]
+                        if api_key != "x" and len(api_key) > 8
+                        else api_key
+                    )
+                    logger.debug(f"Using API key: {masked_key}")
+
+                openai_config_args = {
+                    "model_name": model_name,
+                    "api_key": api_key,
+                    "num_requests_for_eval": num_requests,
+                    "base_url": base_url,
+                }
+                logger.info(
+                    f"Creating OpenaiConfig with args: model='{model_name}', "
+                    f"base_url='{base_url}', key_present={api_key != 'x'}, "
+                    f"requests={num_requests}"
+                )
+                server_confs.append(OpenaiConfig(**openai_config_args))
+
+            # Provide a default server config ONLY if server_configs was completely missing
+            if "server_configs" not in raw_from_yaml:
+                logger.warning(
+                    "No 'server_configs' section found in YAML, creating default server config."
+                )
+                default_api_key = os.getenv("OPENAI_API_KEY")
+                if not default_api_key:
+                    default_api_key = "x"
+                    logger.warning(
+                        "Defaulting API key to 'x' for default server config."
+                    )
+
+                server_confs = [
+                    OpenaiConfig(
+                        model_name=os.getenv(
+                            "OPENAI_MODEL",
+                            "NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+                        ),
+                        base_url=os.getenv(
+                            "OPENAI_API_BASE", "http://localhost:9004/v1"
+                        ),
+                        api_key=default_api_key,
+                        num_requests_for_eval=256,
+                    )
+                ]
+                logger.info(
+                    f"Created default OpenaiConfig: model='{server_confs[0].model_name}', "
+                    f"base_url='{server_confs[0].base_url}', "
+                    f"key_present={server_confs[0].api_key != 'x'}"
+                )
+
+            return env_conf, server_confs
+
+        except Exception as e:
+            logger.error(f"Error loading config: {e}. Using hardcoded fallback.")
+            # Fallback if any error occurs, including validation errors from missing essential fields
+            return DatasetEnvConfig(
+                dataset_name="default_dataset_on_error",
+                prompt_field="default_prompt_on_error",
+                debug_mode=False,
+            ), [
+                OpenaiConfig(
+                    model_name=os.getenv(
+                        "OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+                    ),
+                    base_url=os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1"),
+                    api_key=os.getenv("OPENAI_API_KEY", "x"),
+                    num_requests_for_eval=256,
+                )
+            ]
+
 
 if __name__ == "__main__":
-    # Launch the DatasetEnv via the BaseEnv CLI (serve or process)
     DatasetEnv.cli()
