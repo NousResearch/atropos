@@ -8,6 +8,7 @@ total_steps: 1000
 rollout_server_url: "http://localhost:8000"
 
 dataset_name: "nvidia/OpenMathReasoning"
+max_dataset_rows: 50
 
 prompt_field: "problem"
 answer_field: "expected_answer"
@@ -42,3 +43,7 @@ server_configs:
     base_url: "http://localhost:9004/v1"
     api_key: "x"
     num_requests_for_eval: 256
+
+dataset_config: null
+split: "cot"
+prefill: "<think>\n"
