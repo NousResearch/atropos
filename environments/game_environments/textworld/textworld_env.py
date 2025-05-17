@@ -141,7 +141,6 @@ class TextWorldEpisodeState:
         self.policy_step_data: List[ScoredDataGroup] = []
         
         self.cumulative_reward: float = 0.0
-        self.current_turn: int = 0
         self.max_turns: int = max_steps
         
         self.last_score: float = initial_infos.get("score", 0.0)
@@ -447,6 +446,7 @@ class TextWorldEnv(BaseEnv):
         Process one step/turn of a TextWorld episode using AtroposAgent and AtroposRM.
         Relies on agent for history management.
         """
+        # Log with 1-indexed turn number for human readability
         logger.info(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}/{ep_state.max_turns}] Starting step.")
 
         # 1. Determine current observation for the agent
@@ -457,23 +457,23 @@ class TextWorldEnv(BaseEnv):
         else:
             logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Missing last observation data. Cannot proceed.")
             return None, True # Critical error
+        logger.debug(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Observation for Agent: {current_observation_for_agent[:300]}...")
 
         # 2. Get Policy Agent Alternatives
-        # AtroposAgent.generate_action now manages its history and appends a new turn to its game_log.
         try:
             agent_action_alternatives: List[AtroposAgentAction] = await self.agent.generate_action(
                 observation_content=current_observation_for_agent,
                 n=self.config.G_policy_alternatives,
-                # is_evaluation_context can be passed if needed by agent
             )
         except Exception as e:
             logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error during agent.generate_action: {e}", exc_info=True)
-            return None, True # Critical error
+            return None, True 
 
         if not agent_action_alternatives:
             logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent generated no action alternatives. Ending episode.")
             return None, True
-            
+        logger.info(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent generated {len(agent_action_alternatives)} action alternatives.")
+
         # The agent has now added a turn to its self.agent.game_log.turn[-1]
         # This turn includes the observation_message and all alternatives, with selected_alternative = None
 
@@ -522,10 +522,9 @@ class TextWorldEnv(BaseEnv):
                 rm_judgement_log_groups = await asyncio.gather(*rm_evaluation_tasks)
             except Exception as e:
                 logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error during rm.generate_g_judgements: {e}", exc_info=True)
-                # Assign default low scores if RM fails
                 rm_judgement_log_groups = [[RMJudgementLog(api_error=True, parsed_q_value=0.0)] * self.config.G_rm_judgements] * len(policy_alternatives_for_rm_eval)
         else:
-            rm_judgement_log_groups = [] # Should not happen if policy_alternatives_for_rm_eval is populated
+            rm_judgement_log_groups = [] 
 
         for i, rm_judgements_for_this_alt in enumerate(rm_judgement_log_groups):
             all_rm_judgements_this_step.extend(rm_judgements_for_this_alt)
@@ -544,9 +543,10 @@ class TextWorldEnv(BaseEnv):
         ep_state.rm_judgement_history.extend(all_rm_judgements_this_step)
 
         # 4. Select Best Action
-        if not alternative_rm_scores: # Should be populated, even with default scores
+        if not alternative_rm_scores: 
             logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] No RM scores available. Ending episode.")
             return None, True
+        logger.debug(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] RM scores for alternatives: {alternative_rm_scores}")
             
         best_alternative_idx = alternative_rm_scores.index(max(alternative_rm_scores))
         chosen_policy_alt_data = policy_alternatives_for_rm_eval[best_alternative_idx]
@@ -562,9 +562,9 @@ class TextWorldEnv(BaseEnv):
         # 5. Record selected action with the Agent
         try:
             self.agent.record_selected_action(selected_action_index=best_alternative_idx)
+            logger.debug(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent logs updated with selected action index: {best_alternative_idx}")
         except Exception as e:
             logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error recording selected action with agent: {e}", exc_info=True)
-            # This might be critical as it desyncs agent's log from actual execution
             return None, True
 
 
@@ -578,8 +578,7 @@ class TextWorldEnv(BaseEnv):
 
         # 7. Update Episode State
         ep_state.cumulative_reward += score_from_env 
-        ep_state.current_turn += 1 # This was step_idx before, now current_turn is 0-indexed
-        ep_state.done = done_from_env or ep_state.current_turn >= ep_state.max_turns
+        ep_state.done = done_from_env # Max turns condition handled by the calling loop
         ep_state.last_score = infos_next.get("score", ep_state.last_score)
         ep_state.moves = infos_next.get("moves", ep_state.moves)
         ep_state.won = infos_next.get("won", False)
@@ -620,7 +619,12 @@ class TextWorldEnv(BaseEnv):
             messages=sg_messages,
             metadata={"turn_number": current_turn_num, "chosen_alternative_index": best_alternative_idx}
         )
-        ep_state.policy_step_data.append(current_step_scored_data) # Store it in ep_state
+        ep_state.policy_step_data.append(current_step_scored_data)
+        logger.debug(
+            f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Constructed ScoredDataGroup with "
+            f"{len(sg_tokens)} alternatives. Chosen Idx in metadata: {best_alternative_idx}. "
+            f"Scores: {current_step_scored_data.scores}"
+        )
         
         return current_step_scored_data, ep_state.done
 
@@ -672,7 +676,9 @@ class TextWorldEnv(BaseEnv):
             logger.error(f"[Episode: {ep_state.episode_id}] Unexpected error during trajectory collection: {e}", exc_info=True)
             ep_state.done = True # Mark as done to ensure cleanup and proper handling
         finally:
-            logger.info(f"[Episode: {ep_state.episode_id}] Finalizing episode. Score: {ep_state.last_score}, Won: {ep_state.won}, Lost: {ep_state.lost}, Turns: {ep_state.current_turn}")
+            # Use len(all_scored_data_groups_for_episode) for number of processed turns
+            processed_turns_count = len(all_scored_data_groups_for_episode)
+            logger.info(f"[Episode: {ep_state.episode_id}] Finalizing episode. Score: {ep_state.last_score}, Won: {ep_state.won}, Lost: {ep_state.lost}, Turns: {processed_turns_count}")
             if ep_state.textworld_env:
                 try:
                     ep_state.textworld_env.close()
@@ -779,19 +785,11 @@ class TextWorldEnv(BaseEnv):
             rm_reward_discount_factor=0.99,
             debug_mode=False
         )
-        # Define two server configs: one for agent, one for RM (can be the same model/endpoint)
-        # It's assumed server_clients in BaseEnv will be populated based on unique model_names.
         server_configs = [
             APIServerConfig(
-                model_name="NousResearch/Hermes-2-Pro-Llama-3-8B", # For Policy Agent
-                base_url="http://localhost:9004/v1", # Example endpoint
-                api_key="EMPTY",
-                # num_requests_for_eval can be set if needed
-            ),
-            APIServerConfig(
-                model_name="gpt4.1-mini", # For Reward Model (example, could be same as agent)
-                base_url="http://localhost:9005/v1", # Example different endpoint for RM
-                api_key="EMPTY", 
+                model_name="NousResearch/Hermes-2-Pro-Llama-3-8B",
+                base_url="http://localhost:9004/v1",
+                api_key="x",
             )
         ]
         return env_config, server_configs

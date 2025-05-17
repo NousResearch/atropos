@@ -106,22 +106,29 @@ async def main():
         game_objective = episode_state.initial_infos.get('objective', 'N/A')
         logger.info(f"Objective: {game_objective.strip() if game_objective else 'N/A'}")
         
-        # The initial message history in episode_state already contains:
-        # 1. System Prompt (from policy_agent_system_prompt_content)
-        # 2. User message with the initial observation
+        # Log system prompt from the agent's configuration
+        system_prompt_to_log = env.agent.system_prompt_content
         logger.info(f"""Policy Agent System Prompt:
-{episode_state.message_history[0]['content']}""")
-        logger.info(f"""Initial Observation (Turn {episode_state.current_turn + 1}):
-{episode_state.message_history[1]['content']}""")
+{system_prompt_to_log}""")
+        
+        # Log initial observation from episode_state
+        logger.info(f"""Initial Observation (Turn 1):
+{episode_state.initial_formatted_obs}""")
 
         # Main interaction loop
-        while not episode_state.done:
-            current_turn_for_log = episode_state.current_turn + 1
+        # turn_idx_0_based is 0-indexed for calls to _next_step
+        for turn_idx_0_based in range(episode_state.max_turns):
+            current_turn_for_log = turn_idx_0_based + 1 # 1-indexed for logging
             logger.info(f"\n<<< --- Turn: {current_turn_for_log}/{episode_state.max_turns} --- >>>")
             
-            scored_data_group, episode_done = await env._next_step(
+            # Check if episode became done in the previous iteration or before starting
+            if episode_state.done:
+                logger.info(f"Episode was already marked done. Ending loop before Turn {current_turn_for_log}.")
+                break
+
+            scored_data_group, episode_done_from_step = await env._next_step(
                 ep_state=episode_state, 
-                current_turn_num=episode_state.current_turn # _next_step expects 0-indexed current_turn
+                current_turn_num=turn_idx_0_based # _next_step expects 0-indexed 
             )
             
             if scored_data_group:
@@ -174,24 +181,35 @@ async def main():
 
 
             logger.info(f"--- Turn {current_turn_for_log} Environment Response ---")
-            if not episode_state.done and episode_state.message_history[-1]['role'] == 'user':
-                # The last message in ep_state.message_history is now the new user observation
-                logger.info(f"""Observation for Next Turn ({episode_state.current_turn + 1}):
-{episode_state.message_history[-1]['content']}""")
+            # Log the observation that will be used for the *next* turn, if the episode isn't done.
+            if not episode_state.done:
+                if episode_state.last_env_raw_observation and episode_state.last_env_infos:
+                    obs_for_next_turn_formatted = env._format_observation(
+                        episode_state.last_env_raw_observation,
+                        episode_state.last_env_infos
+                    )
+                    # Log the observation that will be processed by the agent in the *next* iteration of the loop.
+                    # current_turn_for_log is the turn that just finished.
+                    # So the observation is for (current_turn_for_log + 1).
+                    logger.info(f"""Observation for Next Turn ({current_turn_for_log + 1}):
+{obs_for_next_turn_formatted}""")
+                else:
+                    # This might happen if _next_step returned an error before env output was stored
+                    logger.info("Observation for next turn not available (ep_state.last_env_raw_observation or infos is None).")
             elif episode_state.done:
                  logger.info("Episode is now DONE.")
 
             logger.info(f"  State: Score={episode_state.last_score}, Moves={episode_state.moves}, Won={episode_state.won}, Lost={episode_state.lost}, Done={episode_state.done}")
 
-            if episode_done and not episode_state.done: # Should be consistent
-                logger.warning(f"  _next_step reported episode_done={episode_done} but ep_state.done={episode_state.done}. Syncing.")
+            if episode_done_from_step and not episode_state.done: # Should be consistent
+                logger.warning(f"  _next_step reported episode_done={episode_done_from_step} but ep_state.done={episode_state.done}. Syncing.")
                 episode_state.done = True
 
 
         # End of episode
         logger.info(f"\n<<< --- Episode Finished: {episode_id} --- >>>")
         logger.info(f"  Final Status: Won={episode_state.won}, Lost={episode_state.lost}")
-        logger.info(f"  Total Turns Taken: {episode_state.current_turn}")
+        logger.info(f"  Total Turns Taken: {len(episode_state.policy_step_data)}")
         logger.info(f"  Final Score: {episode_state.last_score}")
         logger.info(f"  Total Moves Reported by Env: {episode_state.moves}")
         

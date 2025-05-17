@@ -6,7 +6,8 @@ from transformers import PreTrainedTokenizer
 from pydantic import BaseModel, Field
 from environments.agents.atropos_agent_types import (
     AtroposAgentActionLog, 
-    AtroposAgentAction
+    AtroposAgentAction,
+    AtroposAgentTurn
 )
 
 logger = logging.getLogger(__name__)
