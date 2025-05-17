@@ -7,7 +7,12 @@ import yaml
 from datasets import load_dataset
 from pydantic import Field
 
-from atroposlib.envs.base import BaseEnv, BaseEnvConfig, APIServerConfig, ScoredDataGroup
+from atroposlib.envs.base import (
+    APIServerConfig,
+    BaseEnv,
+    BaseEnvConfig,
+    ScoredDataGroup,
+)
 from atroposlib.envs.reward_fns import registry
 from atroposlib.envs.reward_fns.combined_reward import CombinedReward
 from atroposlib.type_definitions import Item
@@ -19,25 +24,48 @@ logger.setLevel(logging.INFO)
 
 class DatasetEnvConfig(BaseEnvConfig):
     dataset_name: Optional[str] = Field(None, description="HuggingFace dataset name")
-    dataset_config: Optional[str] = Field(None, description="Dataset configuration name")
+    dataset_config: Optional[str] = Field(
+        None, description="Dataset configuration name"
+    )
     split: str = Field("train", description="Dataset split to use")
-    dataset_path: Optional[str] = Field(None, description="Local path to dataset (alternative to dataset_name)")
-    prompt_field: Optional[str] = Field(None, description="Field in dataset to use as prompt")
-    answer_field: Optional[str] = Field(None, description="Field in dataset to use as answer")
-    ground_truth_field: Optional[str] = Field(None, description="Field in dataset containing canonical correct answer")
+    dataset_path: Optional[str] = Field(
+        None, description="Local path to dataset (alternative to dataset_name)"
+    )
+    prompt_field: Optional[str] = Field(
+        None, description="Field in dataset to use as prompt"
+    )
+    answer_field: Optional[str] = Field(
+        None, description="Field in dataset to use as answer"
+    )
+    ground_truth_field: Optional[str] = Field(
+        None, description="Field in dataset containing canonical correct answer"
+    )
     system_prompt: Optional[str] = Field(None, description="System prompt to use")
-    prefill: Optional[str] = Field(None, description="Text to prefill the completion with (e.g. '<think>')")
+    prefill: Optional[str] = Field(
+        None, description="Text to prefill the completion with (e.g. '<think>')"
+    )
     shuffle_dataset: bool = Field(True, description="Whether to shuffle the dataset")
-    max_generations_per_prompt: int = Field(1, description="Number of generations per prompt for collection")
-    include_messages_in_scoring: bool = Field(False, description="Whether to include messages in scoring")
-    reward_functions: Optional[List[Union[str, Dict[str, Any]]]] = Field(None, description="List of reward functions to apply (string names or full configs)")
+    max_generations_per_prompt: int = Field(
+        1, description="Number of generations per prompt for collection"
+    )
+    include_messages_in_scoring: bool = Field(
+        False, description="Whether to include messages in scoring"
+    )
+    reward_functions: Optional[List[Union[str, Dict[str, Any]]]] = Field(
+        None,
+        description="List of reward functions to apply (string names or full configs)",
+    )
     temperature: float = Field(0.7, description="Temperature for generation")
     top_p: float = Field(0.9, description="Top-p for generation")
     max_tokens: int = Field(4096, description="Maximum tokens for generation")
     length_warmup_steps: int = Field(0, description="Steps for length warmup")
     min_tokens: int = Field(0, description="Minimum tokens for generation")
-    eval_dataset_name: Optional[str] = Field(None, description="Evaluation dataset name")
-    eval_dataset_config: Optional[str] = Field(None, description="Evaluation dataset config")
+    eval_dataset_name: Optional[str] = Field(
+        None, description="Evaluation dataset name"
+    )
+    eval_dataset_config: Optional[str] = Field(
+        None, description="Evaluation dataset config"
+    )
     eval_split: Optional[str] = Field(None, description="Evaluation dataset split")
     debug_mode: bool = Field(False, description="Enable debug logging")
 
@@ -45,19 +73,23 @@ class DatasetEnvConfig(BaseEnvConfig):
 class DatasetEnv(BaseEnv):
     name = "dataset"
 
-    def __init__(self, config: DatasetEnvConfig, server_configs, slurm=True, testing=False):
+    def __init__(
+        self, config: DatasetEnvConfig, server_configs, slurm=True, testing=False
+    ):
         super().__init__(config, server_configs, slurm, testing)
         self.config = config
 
         if self.config.ground_truth_field == "None":
-            logger.warning("DatasetEnv.__init__: Configured 'ground_truth_field' was the string \"None\". Setting to Python None.")
+            logger.warning(
+                "DatasetEnv.__init__: Configured 'ground_truth_field' was the string \"None\". Setting to Python None."
+            )
             self.config.ground_truth_field = None
 
         self.dataset = None
         self.iter = 0
         self.metric_buffer = {}
         self.debug_mode = config.debug_mode
-        
+
         if self.debug_mode:
             logger.setLevel(logging.DEBUG)
         else:
@@ -65,17 +97,35 @@ class DatasetEnv(BaseEnv):
                 logger.setLevel(logging.WARNING)
 
         self.reward_function = self._initialize_reward_function()
-        logger.warning(f"DatasetEnv.__init__: Initialized reward_function type: {type(self.reward_function)}")
-        
-        if hasattr(self.reward_function, "rewards") and isinstance(self.reward_function.rewards, list):
-            constituent_reward_types = [type(r).__name__ for r in self.reward_function.rewards]
-            logger.warning(f"DatasetEnv.__init__: Constituent reward function types: {constituent_reward_types}")
-            if self.config.reward_functions and isinstance(self.config.reward_functions, list):
-                logger.warning(f"DatasetEnv.__init__: Original reward_functions config: {self.config.reward_functions}")
+        logger.warning(
+            f"DatasetEnv.__init__: Initialized reward_function type: {type(self.reward_function)}"
+        )
+
+        if hasattr(self.reward_function, "rewards") and isinstance(
+            self.reward_function.rewards, list
+        ):
+            constituent_reward_types = [
+                type(r).__name__ for r in self.reward_function.rewards
+            ]
+            logger.warning(
+                f"DatasetEnv.__init__: Constituent reward function types: {constituent_reward_types}"
+            )
+            if self.config.reward_functions and isinstance(
+                self.config.reward_functions, list
+            ):
+                logger.warning(
+                    f"DatasetEnv.__init__: Original reward_functions config: {self.config.reward_functions}"
+                )
         elif self.reward_function is not None:
-            logger.warning(f"DatasetEnv.__init__: Single reward function type: {type(self.reward_function).__name__}")
-            if self.config.reward_functions and isinstance(self.config.reward_functions, list):
-                logger.warning(f"DatasetEnv.__init__: Original reward_functions config: {self.config.reward_functions}")
+            logger.warning(
+                f"DatasetEnv.__init__: Single reward function type: {type(self.reward_function).__name__}"
+            )
+            if self.config.reward_functions and isinstance(
+                self.config.reward_functions, list
+            ):
+                logger.warning(
+                    f"DatasetEnv.__init__: Original reward_functions config: {self.config.reward_functions}"
+                )
         else:
             logger.warning("DatasetEnv.__init__: self.reward_function is None.")
 
@@ -85,7 +135,9 @@ class DatasetEnv(BaseEnv):
                 return registry.create(self.config.reward_functions[0])
             else:
                 return CombinedReward(rewards=self.config.reward_functions)
-        logger.warning("No reward functions configured (field 'reward_functions' is None or list is empty).")
+        logger.warning(
+            "No reward functions configured (field 'reward_functions' is None or list is empty)."
+        )
         return None
 
     async def setup(self):
@@ -125,10 +177,19 @@ class DatasetEnv(BaseEnv):
         self.iter += 1
 
         logger.warning(f"get_next_item: item_data.keys(): {list(item_data.keys())}")
-        logger.warning(f"get_next_item: config: prompt_field='{self.config.prompt_field}', answer_field='{self.config.answer_field}', ground_truth_field='{self.config.ground_truth_field}'")
-        logger.warning(f"get_next_item: raw_prompt_data: {item_data.get(self.config.prompt_field)}")
-        logger.warning(f"get_next_item: raw_answer_data: {item_data.get(self.config.answer_field)}")
-        logger.warning(f"get_next_item: raw_ground_truth_data: {item_data.get(self.config.ground_truth_field)}")
+        logger.warning(
+            f"get_next_item: config: prompt_field='{self.config.prompt_field}', "
+            f"answer_field='{self.config.answer_field}', ground_truth_field='{self.config.ground_truth_field}'"
+        )
+        logger.warning(
+            f"get_next_item: raw_prompt_data: {item_data.get(self.config.prompt_field)}"
+        )
+        logger.warning(
+            f"get_next_item: raw_answer_data: {item_data.get(self.config.answer_field)}"
+        )
+        logger.warning(
+            f"get_next_item: raw_ground_truth_data: {item_data.get(self.config.ground_truth_field)}"
+        )
 
         user_msg = {"role": "user", "content": item_data[self.config.prompt_field]}
         prompt = tuple([frozenset(user_msg.items())])
@@ -138,10 +199,15 @@ class DatasetEnv(BaseEnv):
             answer = item_data[self.config.answer_field]
 
         ground_truth = None
-        if self.config.ground_truth_field and self.config.ground_truth_field in item_data:
+        if (
+            self.config.ground_truth_field
+            and self.config.ground_truth_field in item_data
+        ):
             ground_truth = item_data[self.config.ground_truth_field]
 
-        logger.warning(f"get_next_item: returning: prompt_len={len(prompt)}, answer='{answer}', ground_truth='{ground_truth}'")
+        logger.warning(
+            f"get_next_item: returning: prompt_len={len(prompt)}, answer='{answer}', ground_truth='{ground_truth}'"
+        )
         return (prompt, answer, ground_truth)
 
     async def collect_trajectory(self, item: Item) -> Tuple[List, List]:
@@ -163,7 +229,10 @@ class DatasetEnv(BaseEnv):
         max_tokens = self.config.max_tokens
         if self.config.length_warmup_steps > 0:
             warmup_progress = min(1.0, self.curr_step / self.config.length_warmup_steps)
-            max_tokens = int(self.config.min_tokens + warmup_progress * (self.config.max_tokens - self.config.min_tokens))
+            max_tokens = int(
+                self.config.min_tokens
+                + warmup_progress * (self.config.max_tokens - self.config.min_tokens)
+            )
 
         completions = await self.server.completion(
             prompt=prompt,
@@ -177,11 +246,17 @@ class DatasetEnv(BaseEnv):
         to_backlog = []
 
         for completion in completions.choices:
-            completion_text = completion.text if hasattr(completion, "text") else completion.message.content
+            completion_text = (
+                completion.text
+                if hasattr(completion, "text")
+                else completion.message.content
+            )
 
             full_messages = []
             if self.config.system_prompt:
-                full_messages.append({"role": "system", "content": self.config.system_prompt})
+                full_messages.append(
+                    {"role": "system", "content": self.config.system_prompt}
+                )
 
             full_messages.append({"role": "user", "content": user_content})
 
@@ -432,23 +507,23 @@ class DatasetEnv(BaseEnv):
     ) -> Tuple[DatasetEnvConfig, List[APIServerConfig]]:
         """Load settings from the local configs directory, allowing for CLI overrides."""
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        
+
         # Determine the full config file path
         if config_name:
             if os.path.isabs(config_name) and config_name.endswith(".yaml"):
-                cfg_path = config_name # Already an absolute path to a yaml
-            elif config_name.endswith(".yaml"): # Relative path to a yaml
+                cfg_path = config_name  # Already an absolute path to a yaml
+            elif config_name.endswith(".yaml"):  # Relative path to a yaml
                 # Try relative to CWD first, then relative to script's config dir
                 cfg_path_cwd = os.path.join(os.getcwd(), config_name)
                 if os.path.exists(cfg_path_cwd):
                     cfg_path = cfg_path_cwd
                 else:
                     cfg_path = os.path.join(current_dir, "configs", config_name)
-            else: # It's a name like 'dataset_local', assume it's in script's config dir
+            else:  # It's a name like 'dataset_local', assume it's in script's config dir
                 cfg_path = os.path.join(current_dir, "configs", config_name + ".yaml")
-        else: # Fallback to default
+        else:  # Fallback to default
             cfg_path = os.path.join(current_dir, "configs", "dataset_default.yaml")
-        
+
         logger.info(f"Attempting to load configuration from: {cfg_path}")
 
         raw_from_yaml = {}

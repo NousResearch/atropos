@@ -38,7 +38,7 @@ reward_functions:
     params:
       preferred_tags: ["think"]
       require_all_tags: true
-      
+
 server_configs:
   - model_name: "gpt-4.1-nano"
     base_url: "https://api.openai.com/v1"
