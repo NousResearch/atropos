@@ -1,6 +1,6 @@
 tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
 group_size: 1
-use_wandb: false
+use_wandb: true
 max_num_workers: 1
 rollout_server_url: "http://localhost:8000"
 total_steps: 1
