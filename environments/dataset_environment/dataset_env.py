@@ -232,12 +232,6 @@ class DatasetEnv(BaseEnv):
             logger.debug(f"collect_trajectory: messages: {messages}")
 
             max_tokens = self.config.max_tokens
-            if self.config.length_warmup_steps > 0 and self.curr_step is not None:
-                warmup_progress = min(1.0, self.curr_step / self.config.length_warmup_steps)
-                max_tokens = int(
-                    self.config.min_tokens
-                    + warmup_progress * (self.config.max_tokens - self.config.min_tokens)
-                )
 
             async with self.server.dedicated_server() as server:
                 completions_result = await server.chat_completion(
