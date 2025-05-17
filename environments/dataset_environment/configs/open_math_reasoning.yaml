@@ -25,7 +25,7 @@ reward_functions:
   - type: "format"
     weight: 0.2
     params:
-      preferred_tags: ["think", "reasoning"]
+      preferred_tags: ["think"]
       require_all_tags: false
 
 temperature: 0.7
