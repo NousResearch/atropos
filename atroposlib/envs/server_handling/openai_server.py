@@ -25,6 +25,9 @@ class OpenAIServer(APIServer):
         super().__init__(config)
 
     async def check_server_status_task(self):
+        if (self.config.base_url is None) or (self.config.base_url == ""):
+            self.server_healthy = True
+            return
         while True:
             try:
                 await self.openai.completions.create(
