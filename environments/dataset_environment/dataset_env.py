@@ -40,9 +40,6 @@ class DatasetEnvConfig(BaseEnvConfig):
     eval_dataset_config: Optional[str] = Field(None, description="Evaluation dataset config")
     eval_split: Optional[str] = Field(None, description="Evaluation dataset split")
     debug_mode: bool = Field(False, description="Enable debug logging")
-    max_dataset_rows: Optional[int] = Field(
-        None, description="Maximum number of rows to load from the dataset"
-    )
 
 
 class DatasetEnv(BaseEnv):
@@ -94,44 +91,28 @@ class DatasetEnv(BaseEnv):
     async def setup(self):
         if self.config.dataset_path:
             self.dataset = load_dataset(
-                self.config.dataset_path, split=self.config.split, streaming=True
+                self.config.dataset_path, split=self.config.split
             )
         else:
             self.dataset = load_dataset(
                 self.config.dataset_name,
                 self.config.dataset_config,
                 split=self.config.split,
-                streaming=True,
             )
 
-        # Shuffle before taking a subset if shuffle_dataset is true
         if self.config.shuffle_dataset:
-            logger.info("Shuffling dataset before taking subset.")
-            # Note: Shuffling a streamed dataset loads it into memory. This is acceptable here
-            # because we are about to take a small subset (max_dataset_rows).
-            # If max_dataset_rows was not set, shuffling a very large streamed dataset like this
-            # would be problematic. The config max_dataset_rows should be used for dev/testing.
-            self.dataset = self.dataset.shuffle(seed=42) # Adding a seed for reproducibility
+            logger.info("Shuffling dataset.")
+            self.dataset = self.dataset.shuffle(seed=42)
 
-        if self.config.max_dataset_rows is not None and self.config.max_dataset_rows > 0:
-            logger.info(
-                f"Streaming dataset, taking the first {self.config.max_dataset_rows} rows, and converting to list."
-            )
-            self.dataset = list(self.dataset.take(self.config.max_dataset_rows))
-            logger.info(f"Dataset now a list with {len(self.dataset)} items.")
-            if self.dataset:
+        if self.dataset:
+            logger.info(f"Dataset loaded. Number of rows: {len(self.dataset)}")
+            if len(self.dataset) > 0:
                 logger.info(f"Sample item keys: {list(self.dataset[0].keys())}")
-                logger.info("Feature inspection for list-converted streamed dataset might require alternative handling.")
             else:
-                logger.warning("Dataset is empty after .take() and conversion to list.")
+                logger.warning("Loaded dataset is empty.")
+            logger.info(f"Dataset features: {self.dataset.features}")
         else:
-            logger.info("Loading full dataset in streaming mode. Note: len() and direct indexing will not work.")
-            try:
-                first_item = next(iter(self.dataset))
-                logger.info(f"Sample item keys from full streamed dataset: {list(first_item.keys())}")
-                logger.info("Dataset features inspection for streamed datasets needs alternative handling.")
-            except Exception as e:
-                logger.warning(f"Could not inspect first item of full streamed dataset: {e}")
+            logger.error("Dataset could not be loaded.")
 
         self.iter = 0
         self.metric_buffer = {}
