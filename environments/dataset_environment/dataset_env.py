@@ -12,6 +12,7 @@ from atroposlib.envs.base import (
     BaseEnv,
     BaseEnvConfig,
     ScoredDataGroup,
+    ScoredDataItem,
 )
 from atroposlib.envs.reward_fns import registry
 from atroposlib.envs.reward_fns.combined_reward import CombinedReward
@@ -57,9 +58,7 @@ class DatasetEnvConfig(BaseEnvConfig):
     )
     temperature: float = Field(0.7, description="Temperature for generation")
     top_p: float = Field(0.9, description="Top-p for generation")
-    max_tokens: int = Field(4096, description="Maximum tokens for generation")
-    length_warmup_steps: int = Field(0, description="Steps for length warmup")
-    min_tokens: int = Field(0, description="Minimum tokens for generation")
+    max_tokens: int = Field(16384, description="Maximum tokens for generation")
     eval_dataset_name: Optional[str] = Field(
         None, description="Evaluation dataset name"
     )
@@ -210,231 +209,119 @@ class DatasetEnv(BaseEnv):
         )
         return (prompt, answer, ground_truth)
 
-    async def collect_trajectory(self, item: Item) -> Tuple[List, List]:
-        user_content = dict(item[0][0])["content"]
-        answer = item[1] if len(item) > 1 else None
-
-        messages = []
-        if self.config.system_prompt:
-            messages.append({"role": "system", "content": self.config.system_prompt})
-
-        messages.append({"role": "user", "content": user_content})
-
-        if self.config.prefill:
-            messages.append({"role": "assistant", "content": self.config.prefill})
-
-        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
-        logger.warning(f"collect_trajectory: prompt: {prompt}")
-
-        max_tokens = self.config.max_tokens
-        if self.config.length_warmup_steps > 0:
-            warmup_progress = min(1.0, self.curr_step / self.config.length_warmup_steps)
-            max_tokens = int(
-                self.config.min_tokens
-                + warmup_progress * (self.config.max_tokens - self.config.min_tokens)
-            )
-
-        completions = await self.server.completion(
-            prompt=prompt,
-            n=self.config.max_generations_per_prompt,
-            max_tokens=max_tokens,
-            temperature=self.config.temperature,
-            top_p=self.config.top_p,
-        )
-
-        to_score = []
-        to_backlog = []
-
-        for completion in completions.choices:
-            completion_text = (
-                completion.text
-                if hasattr(completion, "text")
-                else completion.message.content
-            )
-
-            full_messages = []
-            if self.config.system_prompt:
-                full_messages.append(
-                    {"role": "system", "content": self.config.system_prompt}
-                )
-
-            full_messages.append({"role": "user", "content": user_content})
-
-            response_content = completion_text
-            if self.config.prefill:
-                response_content = self.config.prefill + completion_text
-
-            full_messages.append({"role": "assistant", "content": response_content})
-            logger.warning(f"collect_trajectory: to_score: {to_score}")
-
-            to_score.append((full_messages, answer, item[2] if len(item) > 2 else None))
-        
-        return to_score, to_backlog
-
-    async def postprocess_histories(
-        self, trajectories: List[List[Dict[str, Any]]]
-    ) -> Optional[ScoredDataGroup]:
+    async def collect_trajectory(self, item: Item) -> Tuple[Optional[ScoredDataItem], List[Item]]:
         """
-        Postprocess the histories by scoring them.
-        The input 'trajectories' is expected to be a list of message lists,
-        which is suitable for the `score` method's `rollout_group_data` argument.
+        Collects a single trajectory, scores it, and returns it as a ScoredDataItem.
+        This method is called by the BaseEnv's collect_trajectories method.
         """
-        if not trajectories:
-            logger.warning(
-                "postprocess_histories: received empty or invalid trajectories, returning None."
-            )
-            return None
-        scored_data = await self.score(trajectories)
-        return scored_data
-
-    async def collect_trajectories(self, item: Item) -> Tuple[List, List]:
-        self.current_item = item
-
-        user_content = dict(item[0][0])["content"]
-
-        messages = []
-        if self.config.system_prompt:
-            messages.append({"role": "system", "content": self.config.system_prompt})
-
-        messages.append({"role": "user", "content": user_content})
-
-        if self.config.prefill:
-            messages.append({"role": "assistant", "content": self.config.prefill})
-
-        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
-
-        max_tokens = self.config.max_tokens
-
-        completions = await self.server.completion(
-            prompt=prompt,
-            n=self.config.group_size,
-            max_tokens=max_tokens,
-            temperature=self.config.temperature,
-            top_p=self.config.top_p,
-        )
-
-        print(f"Completions: {completions}")
-        trajectories = []
-        for completion in completions.choices:
-            completion_text = (
-                completion.text
-                if hasattr(completion, "text")
-                else completion.message.content
-            )
-
-            full_messages = []
-            if self.config.system_prompt:
-                full_messages.append(
-                    {"role": "system", "content": self.config.system_prompt}
-                )
-
-            full_messages.append({"role": "user", "content": user_content})
-
-            response_content = completion_text
-            if self.config.prefill:
-                response_content = self.config.prefill + completion_text
-
-            full_messages.append({"role": "assistant", "content": response_content})
-            logger.warning(f"collect_trajectories: full_messages: {full_messages}")
-
-            trajectories.append(full_messages)
-
-        return trajectories, []
-
-    async def score(self, rollout_group_data: List) -> Optional[ScoredDataGroup]:
-        logger.warning(f"score: Scoring {len(rollout_group_data)} rollout items")
-
-        logger.warning(
-            f"score: self.current_item (type: {type(self.current_item)}): {self.current_item}"
-        )
-        logger.warning(
-            f"score: config: answer_field='{self.config.answer_field}', "
-            f"ground_truth_field='{self.config.ground_truth_field}'"
-        )
-
-        scores = ScoredDataGroup()
-        scores["tokens"] = []
-        scores["masks"] = []
-        scores["scores"] = []
-        scores["advantages"] = None
-        scores["ref_logprobs"] = None
-        scores["messages"] = None if not self.config.include_messages_in_scoring else []
-
-        answer = (
-            self.current_item[1]
-            if self.current_item and len(self.current_item) > 1
-            else None
-        )
-        logger.warning(f"score: Extracted answer from current_item: {answer}")
-
-        ground_truth = (
-            self.current_item[2]
-            if self.current_item and len(self.current_item) > 2
-            else None
-        )
-        logger.warning(
-            f"score: Extracted ground_truth from current_item: {ground_truth}"
-        )
-        logger.warning(f"score: Ground truth for current item: {ground_truth}")
-
-        formatted_completions = []
-        for trajectory in rollout_group_data:
-            if trajectory and isinstance(trajectory, list):
-                assistant_messages = [
-                    msg
-                    for msg in trajectory
-                    if isinstance(msg, dict) and msg.get("role") == "assistant"
-                ]
-                if assistant_messages:
-                    formatted_completions.append([assistant_messages[-1]])
-
-        if not formatted_completions:
-            logger.warning("No valid completions to score")
-            return None
-
-        logger.warning(
-            f"score: formatted_completions passed to reward_function: {formatted_completions}"
-        )
         try:
-            reward_kwargs = {
-                "solution": answer,
-                "ground_truth": ground_truth,
-                "item": self.current_item,
-                "config": self.config,
-            }
+            user_content = dict(item[0][0])["content"]
+            answer = item[1] if len(item) > 1 and item[1] is not None else None
+            ground_truth = item[2] if len(item) > 2 and item[2] is not None else None
 
-            all_rewards = self.reward_function(formatted_completions, **reward_kwargs)
+            messages = []
+            if self.config.system_prompt:
+                messages.append({"role": "system", "content": self.config.system_prompt})
 
-            logger.info(f"Calculated rewards: {all_rewards}")
+            messages.append({"role": "user", "content": user_content})
+
+            if self.config.prefill:
+                # Add prefill as the last part of the prompt for the model to complete from
+                messages.append({"role": "assistant", "content": self.config.prefill})
+
+            logger.debug(f"collect_trajectory: messages: {messages}")
+
+            max_tokens = self.config.max_tokens
+            if self.config.length_warmup_steps > 0 and self.curr_step is not None:
+                warmup_progress = min(1.0, self.curr_step / self.config.length_warmup_steps)
+                max_tokens = int(
+                    self.config.min_tokens
+                    + warmup_progress * (self.config.max_tokens - self.config.min_tokens)
+                )
+
+            async with self.server.dedicated_server() as server:
+                completions_result = await server.chat_completion(
+                    messages=messages,
+                    n=1,  # Generate a single completion for this trajectory
+                    max_tokens=max_tokens,
+                    temperature=self.config.temperature,
+                    top_p=self.config.top_p,
+                )
+
+            if not completions_result.choices:
+                logger.warning("collect_trajectory: No choices returned from server.chat_completion.")
+                return None, []
+
+            completion = completions_result.choices[0]
+            # This is the text generated by the model AFTER any prefill provided in messages
+            model_output_text = completion.message.content
+
+            # Construct the full assistant response content
+            response_content = model_output_text
+            if self.config.prefill:
+                response_content = self.config.prefill + model_output_text
+
+            # Construct full messages list for this trajectory (for tokenization and reward func)
+            full_messages_for_trajectory = []
+            if self.config.system_prompt:
+                full_messages_for_trajectory.append({"role": "system", "content": self.config.system_prompt})
+            full_messages_for_trajectory.append({"role": "user", "content": user_content})
+            full_messages_for_trajectory.append({"role": "assistant", "content": response_content})
+
+            # Tokenize for trainer
+            tokenized_trajectory = tokenize_for_trainer(self.tokenizer, full_messages_for_trajectory)
+
+            # Prepare for reward calculation
+            # The reward function expects a list of "formatted completions".
+            # For a single trajectory, this is a list containing one item:
+            # that item is a list containing the assistant's message.
+            assistant_message_for_reward = {"role": "assistant", "content": response_content}
+            formatted_single_completion = [[assistant_message_for_reward]]
+
+            reward_value = 0.0
+            if self.reward_function:
+                try:
+                    reward_kwargs = {
+                        "solution": answer,
+                        "ground_truth": ground_truth,
+                        "item": item,
+                        "config": self.config,
+                    }
+                    rewards_list = self.reward_function(formatted_single_completion, **reward_kwargs)
+                    if rewards_list and isinstance(rewards_list, list):
+                        reward_value = float(rewards_list[0])
+                    else:
+                        logger.warning(f"collect_trajectory: Unexpected reward list format: {rewards_list}")
+                except Exception as e:
+                    logger.error(f"collect_trajectory: Error applying reward function: {e}")
+                    logger.exception(e)
+                    # Default to 0.0 if reward calculation fails
+            else:
+                logger.warning("collect_trajectory: No reward function configured. Defaulting reward to 0.0.")
+
+
+            messages_for_item = None
+            if self.config.include_messages_in_scoring: # This is from DatasetEnvConfig
+                 messages_for_item = full_messages_for_trajectory
+
+
+            scored_data_item = ScoredDataItem(
+                tokens=tokenized_trajectory["tokens"],
+                masks=tokenized_trajectory["masks"],
+                scores=reward_value,
+                advantages=None,  # Base class will handle aggregation if needed
+                ref_logprobs=None, # Base class will handle aggregation if needed
+                messages=messages_for_item,
+                group_overrides=None, # Not applicable for single item
+                overrides=None        # Not applicable for single item
+            )
+            logger.debug(f"collect_trajectory: Produced ScoredDataItem with score {reward_value}")
+            return scored_data_item, []
 
         except Exception as e:
-            logger.error(f"Error applying reward functions: {e}")
+            logger.error(f"collect_trajectory: Failed to collect trajectory for item {item}: {e}")
             logger.exception(e)
-            all_rewards = [0.0] * len(formatted_completions)
-
-        for i, (trajectory, reward) in enumerate(zip(rollout_group_data, all_rewards)):
-            try:
-                tokenized = tokenize_for_trainer(self.tokenizer, trajectory)
-
-                scores["tokens"].append(tokenized["tokens"])
-                scores["masks"].append(tokenized["masks"])
-                scores["scores"].append(reward)
-
-                if self.config.include_messages_in_scoring:
-                    if "messages" not in scores:
-                        scores["messages"] = []
-                    scores["messages"].append(trajectory)
-                logger.warning(f"Scores: {scores['scores']}")
-            except Exception as e:
-                logger.error(f"Error processing trajectory {i}: {e}")
-                logger.exception(e)
-
-        if not scores["tokens"]:
-            logger.warning("No valid scores generated")
-            return None
-
-        logger.info(f"Generated scores: {scores['scores']}")
-        return scores
+            return None, []
 
     async def evaluate(self):
         if (
