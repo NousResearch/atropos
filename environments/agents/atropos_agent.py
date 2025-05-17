@@ -4,6 +4,7 @@ from atroposlib.type_definitions import Message, AtroposAgentActionLog, AtroposA
 import numpy as np
 from transformers import PreTrainedTokenizer
 from pydantic import BaseModel, Field
+from atroposlib.envs.base import ServerManager
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -28,7 +29,7 @@ except ImportError as e:
 class AtroposAgentConfig(BaseModel):
     """Configuration for AtroposAgent."""
     # General LLM parameters
-    model_name: str = Field(default="gpt-4-turbo", description="LLM model name to use.")
+    model_name: str = Field(default="gpt-4.1-mini", description="LLM model name to use.")
     temperature: float = Field(
         default=0.7, 
         ge=0.0, 
@@ -157,7 +158,7 @@ class AtroposAgent:
     """
     def __init__(
         self,
-        server_client: Any, # LLM server client (e.g., APIServer instance)
+        server_client: ServerManager, # LLM server client (e.g., APIServer instance)
         tokenizer: PreTrainedTokenizer, # Tokenizer from the environment/BaseEnv
         config: Optional[AtroposAgentConfig] = None,
     ):

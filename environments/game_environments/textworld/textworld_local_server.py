@@ -35,6 +35,7 @@ async def main():
         base_url="https://api.openai.com/v1",
         api_key=api_key,
         num_requests_for_eval=0,
+        server_type="openai"
     )
 
     # Environment Configuration
