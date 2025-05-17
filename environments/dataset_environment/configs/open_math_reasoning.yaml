@@ -1,0 +1,44 @@
+tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+group_size: 8
+use_wandb: true
+max_num_workers: 256
+steps_per_eval: 100
+batch_size: 1024
+total_steps: 1000
+rollout_server_url: "http://localhost:8000"
+
+dataset_name: "nvidia/OpenMathReasoning"
+
+prompt_field: "problem"
+answer_field: "expected_answer"
+
+system_prompt: "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution prior to answering. You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem in the format \\boxed{...}`."
+shuffle_dataset: true
+max_generations_per_prompt: 1
+include_messages_in_scoring: false
+
+reward_functions:
+  - type: "accuracy"
+    weight: 1.0
+    params:
+      split_on_think_tag: true
+  - type: "format"
+    weight: 0.2
+    params:
+      preferred_tags: ["think", "reasoning"]
+      require_all_tags: false
+
+temperature: 0.7
+top_p: 0.9
+max_tokens: 16000
+length_warmup_steps: 100
+min_tokens: 2048
+
+eval_dataset_name: "nvidia/OpenMathReasoning"
+eval_split: "test"
+
+server_configs:
+  - model_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+    base_url: "http://localhost:9004/v1"
+    api_key: "x"
+    num_requests_for_eval: 256
