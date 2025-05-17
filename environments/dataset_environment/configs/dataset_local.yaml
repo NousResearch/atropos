@@ -1,6 +1,3 @@
-# Dataset Environment Local Testing Configuration
-
-# Base environment parameters
 tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
 group_size: 1
 use_wandb: false
@@ -13,40 +10,32 @@ max_token_length: 4096
 wandb_name: "dataset_test_local"
 ensure_scores_are_not_same: false
 
-# Dataset specific configuration
-dataset:
-  # Dataset parameters
-  dataset_name: "gsm8k"  # Example dataset
-  dataset_config: "main"
-  split: "train"
-  prompt_field: "question"
-  answer_field: "answer"
+# Flattened dataset fields
+dataset_name: "gsm8k"
+dataset_config: "main"
+split: "train"
+prompt_field: "question"
+answer_field: "answer"
+system_prompt: "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution prior to answering. You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem."
+prefill: "<think>\n"
+shuffle_dataset: true
+max_generations_per_prompt: 1
 
-  # Generation parameters
-  system_prompt: "You are an expert mathematician. You need to solve the given math problem step-by-step, showing your reasoning clearly. You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your final answer.\n\nFollow these steps:\n1. Understand the problem carefully\n2. Plan your approach\n3. Execute the calculations step-by-step\n4. Verify your solution\n\nYou may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution."
-  prefill: "<think>\n"
-  shuffle_dataset: true
-  max_generations_per_prompt: 1
+max_tokens: 4096 # This was also under dataset, assuming it's the generation max_tokens
+length_warmup_steps: 0
+min_tokens: 0
 
-  # Generation length parameters
-  max_tokens: 4096
-  length_warmup_steps: 0
-  min_tokens: 0
+temperature: 0.7
+top_p: 0.9
 
-  # Completion parameters
-  temperature: 0.7
-  top_p: 0.9
-
-  # Reward functions
-  reward_functions:
-    - "accuracy"
-    - "format"
-  accuracy_reward_weight: 1.0
-  format_reward_weight: 0.2
+reward_functions:
+  - "accuracy"
+  - "format"
+accuracy_reward_weight: 1.0 # Assuming these were meant to be top-level or consumed by reward fns
+format_reward_weight: 0.2  # Assuming these were meant to be top-level or consumed by reward fns
 
 
-# Server configuration
 server_configs:
   - model_name: "gpt-4.1-nano"
-    api_key: ${OPENAI_API_KEY}
-    timeout: 600
+    base_url: "https://api.openai.com/v1"
+    num_requests_for_eval: 256

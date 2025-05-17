@@ -418,8 +418,24 @@ class DatasetEnv(BaseEnv):
     ) -> Tuple[DatasetEnvConfig, List[APIServerConfig]]:
         """Load settings from the local configs directory, allowing for CLI overrides."""
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        config_file = config_name or "dataset_default.yaml"
-        cfg_path = os.path.join(current_dir, "configs", config_file)
+        
+        # Determine the full config file path
+        if config_name:
+            if os.path.isabs(config_name) and config_name.endswith(".yaml"):
+                cfg_path = config_name # Already an absolute path to a yaml
+            elif config_name.endswith(".yaml"): # Relative path to a yaml
+                # Try relative to CWD first, then relative to script's config dir
+                cfg_path_cwd = os.path.join(os.getcwd(), config_name)
+                if os.path.exists(cfg_path_cwd):
+                    cfg_path = cfg_path_cwd
+                else:
+                    cfg_path = os.path.join(current_dir, "configs", config_name)
+            else: # It's a name like 'dataset_local', assume it's in script's config dir
+                cfg_path = os.path.join(current_dir, "configs", config_name + ".yaml")
+        else: # Fallback to default
+            cfg_path = os.path.join(current_dir, "configs", "dataset_default.yaml")
+        
+        logger.info(f"Attempting to load configuration from: {cfg_path}")
 
         raw_from_yaml = {}
         try:
