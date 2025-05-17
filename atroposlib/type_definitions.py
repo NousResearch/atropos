@@ -1,18 +1,41 @@
 from typing import Any, Dict, List, Literal, Optional
 from typing_extensions import TypedDict
-
 from openai.types.chat import ChatCompletionContentPartParam
+
 
 Content = str | list[ChatCompletionContentPartParam]
 Item = Any
 number = int | float
 UUID = str
 
-
 class Message(TypedDict):
     role: Literal["system", "user", "assistant", "tool"]
     content: Content
     reward: Optional[float]
+
+
+class AtroposAgentAction(TypedDict):
+    """
+    Holds a raw sample, any errors and tracks the score for this alternative
+    """
+    action_text: str
+    api_error: bool
+    score: float
+
+class AtroposAgentTurn(TypedDict):
+    """
+    Holds the turn & all sampled alternatives for that turn
+    """
+    turn_number: int
+    observation_message: Message
+    alternatives: List[AtroposAgentAction]
+    selected_alternative: Optional[int] = None
+
+class AtroposAgentActionLog(TypedDict):
+    """
+    Log of all agent turns.
+    """
+    turn: List[AtroposAgentTurn]
 
 
 class AgentStep(TypedDict, total=False):

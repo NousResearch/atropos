@@ -37,7 +37,7 @@ from environments.game_environments.textworld.generation_utils import generate_t
 # Import agent and RM configurations
 from environments.agents.atropos_agent import AtroposAgent, AtroposAgentConfig
 from environments.agents.atropos_rm import AtroposRM, AtroposRMConfig, RMJudgementLog
-from environments.agents.atropos_agent_types import AtroposAgentAction
+from atroposlib.type_definitions import AtroposAgentAction
 
 import asyncio # Add asyncio for gather
 import textworld.gym.envs # Import the specific module
@@ -483,24 +483,26 @@ class TextWorldEnv(BaseEnv):
         # History up to *before* the current observation that led to these alternatives
         history_of_completed_turns = self.agent._reconstruct_canonical_history() # Ends with last selected assistant action
         
-        # The current observation message is stored in the agent's latest (incomplete) turn
-        if not self.agent.game_log.turn: # Should not happen if generate_action succeeded
-             logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent's game_log is empty after generate_action. Critical error.")
-             return None, True
-        current_observation_msg_from_agent_log = self.agent.game_log.turn[-1].observation_message
+        # This is the observation_message that was just added to the agent's log by generate_action.
+        # This ensures the RM gets the exact same observation the agent based its alternatives on.
+        if not self.agent.game_log['turn']: # Should not happen if generate_action succeeded
+            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent's game_log is empty after generate_action. Cannot get observation for RM.")
+            # Handle error or return early if critical
+            return None, True
+        current_observation_msg_from_agent_log = self.agent.game_log['turn'][-1]['observation_message'] # Corrected
 
 
-        for alt_action in agent_action_alternatives:
-            parsed_cmd = self._parse_action(alt_action.action_text)
+        for alt_idx, alt_action in enumerate(agent_action_alternatives):
+            parsed_cmd = self._parse_action(alt_action['action_text'])
             
             # Construct history for RM: completed history + current observation + this specific alternative action
             history_for_rm_alt = list(history_of_completed_turns) 
             history_for_rm_alt.append(current_observation_msg_from_agent_log)
-            history_for_rm_alt.append(Message(role="assistant", content=alt_action.action_text))
+            history_for_rm_alt.append(Message(role="assistant", content=alt_action['action_text'], reward=None))
             
             policy_alternatives_for_rm_eval.append({
                 "parsed_command": parsed_cmd,
-                "raw_agent_response": alt_action.action_text, # Full <think>...<tool_call>...</tool_call>
+                "raw_agent_response": alt_action['action_text'], # Full <think>...<tool_call>...</tool_call>
                 "agent_history_for_rm": history_for_rm_alt 
             })
 
