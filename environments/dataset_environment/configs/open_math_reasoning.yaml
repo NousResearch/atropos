@@ -30,9 +30,7 @@ reward_functions:
 
 temperature: 0.7
 top_p: 0.9
-max_tokens: 16000
-length_warmup_steps: 100
-min_tokens: 2048
+max_tokens: 16384
 
 eval_dataset_name: "nvidia/OpenMathReasoning"
 eval_split: "test"
