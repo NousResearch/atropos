@@ -1,9 +1,13 @@
 import logging
-from typing import List, Optional, Tuple, Any, Dict
+from typing import List, Optional, Tuple, Any
 from atroposlib.type_definitions import Message
 import numpy as np
 from transformers import PreTrainedTokenizer
 from pydantic import BaseModel, Field
+from environments.agents.atropos_agent_types import (
+    AtroposAgentActionLog, 
+    AtroposAgentAction
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -85,25 +89,6 @@ class AtroposAgentConfig(BaseModel):
         extra = 'forbid' # Ensure no unexpected fields are passed
         arbitrary_types_allowed = True # Needed if FAISS index or model objects are stored in instances with this config
 
-class AtroposAgentAction(BaseModel):
-    """
-    Holds a raw sample, any errors and tracks the score for this alternative
-    """
-    action_text: str
-    api_error: bool
-    score: float
-
-class AtroposAgentTurn(BaseModel):
-    """
-    Holds the turn & all sampled alternatives for that turn
-    """
-    turn_number: int
-    observation_message: Message
-    alternatives: List[AtroposAgentAction]
-    selected_alternative: Optional[int] = None
-
-class AtroposAgentActionLog(BaseModel):
-    turn: List[AtroposAgentTurn] = Field(default_factory=list)
 
 class SentenceEmbeddingHelper:
     """
@@ -235,7 +220,7 @@ class AtroposAgent:
             )
             # self.embedding_helper and self.faiss_index are already None or will remain so
         
-        # stores CANONICAL memories only (not every alternative)
+        # stores CANONICAL memories only (not every alternative), for use with FAISS
         self.memory_texts: List[str] = []
         self.memory_generation_system_prompt = self.config.memory_generation_system_prompt
     

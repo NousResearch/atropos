@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import List, Optional, Tuple, Any, Dict, TypedDict
+from typing import List, Optional, Tuple, Any, TypedDict
 import json
 import asyncio
 from transformers import PreTrainedTokenizer
@@ -316,7 +316,7 @@ class AtroposRM:
     async def generate_g_judgements(
         self,
         num_judgements_g: int,
-        game_history_window: List[Message],
+        game_history_window: List[Message], # from AtroposAgent
         game_seed_for_logging: Optional[int] = None,
         turn_idx_for_logging: Optional[int] = None,
         policy_action_candidate_idx_for_logging: Optional[int] = None
@@ -445,23 +445,34 @@ class AtroposRM:
 # Example Usage (Conceptual - would be called from the Environment)
 async def example_rm_usage(server_client: Any, tokenizer: PreTrainedTokenizer):
     # Dummy data for illustration
-    current_obs = "Player X to move. Board: ... (detailed UTTT board) ..."
-    policy_think = "I should try to win microboard 3, as it sets me up for a global win."
-    policy_action = '<tool_call>\n{"arguments": {"micro_board": 3, "row": 1, "col": 1}, "name": "submit_move"}\n</tool_call>'
-    player_id = 0 # Player X
-
     num_judgements = 3 # G value
     
     rm_config = AtroposRMConfig(thinking=True, temperature=0.2)
     rm_agent = AtroposRM(server_client=server_client, tokenizer=tokenizer, config=rm_config)
     
+    # Construct a sample game_history_window for the RM
+    # This history should reflect what the policy agent has seen and done,
+    # with the last message being the action the RM needs to evaluate.
+    # The RM's _construct_evaluation_user_prompt_content expects specific formatting
+    # if the policy agent's system prompt is included.
+
+    policy_agent_system_prompt = "You are a UTTT playing agent. Your goal is to win."
+    current_game_observation = "Player X to move. Board: ... (detailed UTTT board) ..."
+    # The policy agent's response, including any thought process and the action itself
+    policy_agent_response_content = (
+        "<thinking>I should try to win microboard 3, as it sets me up for a global win.</thinking>"
+        '<tool_call>\n{"arguments": {"micro_board": 3, "row": 1, "col": 1}, "name": "submit_move"}\n</tool_call>'
+    )
+
+    game_history_for_rm: List[Message] = [
+        Message(role="system", content=policy_agent_system_prompt), # Policy agent's system prompt
+        Message(role="user", content=current_game_observation),      # Observation from the environment
+        Message(role="assistant", content=policy_agent_response_content) # Agent's action to be evaluated
+    ]
+
     judgements = await rm_agent.generate_g_judgements(
         num_judgements_g=num_judgements,
-        current_game_observation_str=current_obs,
-        policy_agent_thinking_str=policy_think,
-        policy_agent_action_str=policy_action,
-        current_player_id=player_id,
-        server_client=server_client,
+        game_history_window=game_history_for_rm,
         game_seed_for_logging=123,
         turn_idx_for_logging=5,
         policy_action_candidate_idx_for_logging=1

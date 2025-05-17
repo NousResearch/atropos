@@ -37,6 +37,7 @@ from environments.game_environments.textworld.generation_utils import generate_t
 # Import agent and RM configurations
 from environments.agents.atropos_agent import AtroposAgent, AtroposAgentConfig
 from environments.agents.atropos_rm import AtroposRM, AtroposRMConfig, RMJudgementLog
+from environments.agents.atropos_agent_types import AtroposAgentAction
 
 import asyncio # Add asyncio for gather
 import textworld.gym.envs # Import the specific module
@@ -129,18 +130,13 @@ class TextWorldEpisodeState:
     Stores per-episode state for a TextWorld game when using AtroposAgent and AtroposRM.
     """
     def __init__(self, episode_id: str, game_file: str, textworld_env_instance: TextworldGymEnv, 
-                 initial_obs: str, initial_infos: Dict[str, Any], max_steps: int, 
-                 policy_system_prompt: str):
+                 initial_obs: str, initial_infos: Dict[str, Any], max_steps: int):
         self.episode_id: str = episode_id
         self.game_file: str = game_file
         self.textworld_env: TextworldGymEnv = textworld_env_instance
+        self.initial_formatted_obs: str = initial_obs
         self.initial_infos: Dict[str, Any] = initial_infos
         
-        # Initialize message_history with system prompt and initial observation
-        self.message_history: List[Message] = [
-            Message(role="system", content=policy_system_prompt),
-            Message(role="user", content=initial_obs)
-        ]
         self.rm_judgement_history: List[RMJudgementLog] = [] 
         self.policy_step_data: List[ScoredDataGroup] = []
         
@@ -153,6 +149,8 @@ class TextWorldEpisodeState:
         self.won: bool = False
         self.lost: bool = False
         self.done: bool = False
+        self.last_env_raw_observation: Optional[str] = None
+        self.last_env_infos: Optional[Dict[str, Any]] = None
 
 
 class TextWorldEnv(BaseEnv):
@@ -288,6 +286,7 @@ class TextWorldEnv(BaseEnv):
         """
         Generates a new TextWorld game, registers it, and initializes an episode state.
         If episode_seed is provided, it's used for game generation.
+        The agent's game state is reset here.
         """
         episode_id = f"textworld-episode-{uuid.uuid4().hex}"
         
@@ -345,16 +344,22 @@ class TextWorldEnv(BaseEnv):
             raw_obs, infos = env.reset() # Resets and provides initial state
             formatted_initial_obs = self._format_observation(raw_obs, infos)
             
+            # Agent's game state should be reset for a new episode
+            self.agent.new_game() # Ensures agent's internal game_log is cleared
+
             ep_state = TextWorldEpisodeState(
                 episode_id=episode_id,
                 game_file=game_file_path,
                 textworld_env_instance=env,
-                initial_obs=formatted_initial_obs,
+                initial_obs=formatted_initial_obs, # Pass formatted initial obs
                 initial_infos=infos,
                 max_steps=self.config.max_steps,
-                policy_system_prompt=self.policy_agent_system_prompt_content
+                # policy_system_prompt is handled by agent's config
             )
             self.episodes[episode_id] = ep_state
+            # Store initial raw obs and infos for the first step if needed outside _format_observation
+            ep_state.last_env_raw_observation = raw_obs 
+            ep_state.last_env_infos = infos
             return ep_state
         except Exception as e:
             logger.error(f"Failed to setup gym environment for {game_file_path} (episode {episode_id}): {e}", exc_info=True)
@@ -366,22 +371,16 @@ class TextWorldEnv(BaseEnv):
     async def get_next_item(self) -> Optional[Dict[str, Any]]:
         """
         Provides a new, initialized TextWorldEpisodeState for trajectory collection.
-        This now directly returns the episode state object.
+        This now directly returns the episode state object. Agent's new_game is called within _get_or_create_episode.
         """
-        # The 'item' from BaseEnv (seed, group_idx) is not directly used here as TextWorld
-        # game generation and episode ID are handled internally.
-        # We can use a random seed for game generation if self.config.game_seed is None.
         episode_state = await self._get_or_create_episode(episode_seed=self.config.game_seed)
         if episode_state is None:
             logger.error("Failed to get or create a new TextWorld episode.")
-            return None # Propagate failure
+            return None
         
-        # The agent's dialogue and memory should be reset at the start of a new episode/trajectory.
-        # This is handled by AtroposAgent.start_new_game_dialogue()
-        self.agent.start_new_game_dialogue()
-        # RM doesn't have explicit per-episode state that needs resetting in the same way currently.
+        # self.agent.new_game() is now called in _get_or_create_episode
 
-        return {"episode_state": episode_state, "episode_id": episode_state.episode_id} # Wrap in a dict, conform to Item type
+        return {"episode_state": episode_state, "episode_id": episode_state.episode_id}
 
     def _parse_action(self, agent_response_text: str) -> Optional[str]:
         """
@@ -446,189 +445,162 @@ class TextWorldEnv(BaseEnv):
     ) -> Tuple[Optional[ScoredDataGroup], bool]: # Returns (ScoredDataGroup for this turn, is_episode_done)
         """
         Process one step/turn of a TextWorld episode using AtroposAgent and AtroposRM.
+        Relies on agent for history management.
         """
         logger.info(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}/{ep_state.max_turns}] Starting step.")
 
-        # 1. Get Policy Agent Alternatives (G_policy_alternatives)
-        #    The agent's current message_history is in ep_state.message_history[-1] (user role with current observation)
-        #    The agent manages its own memory and full dialogue history internally.
-        
-        policy_alternatives: List[Dict[str, Any]] = [] # To store {action_text: str, full_history: List[Message], raw_agent_response: str}
-        
-        # The observation content for the agent is the last user message in its history
-        # This was set by _get_or_create_episode or the previous _next_step
-        current_observation_content = ep_state.message_history[-1]["content"]
-        # The game_history_window for the agent is everything *before* the current observation
-        game_history_for_agent = ep_state.message_history[:-1]
+        # 1. Determine current observation for the agent
+        if current_turn_num == 0:
+            current_observation_for_agent = ep_state.initial_formatted_obs
+        elif ep_state.last_env_raw_observation is not None and ep_state.last_env_infos is not None:
+            current_observation_for_agent = self._format_observation(ep_state.last_env_raw_observation, ep_state.last_env_infos)
+        else:
+            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Missing last observation data. Cannot proceed.")
+            return None, True # Critical error
 
-        agent_action_tasks = []
-        agent_action_tasks.append(self.agent.generate_action(
-            observation_content=current_observation_content,
-            game_history_window=game_history_for_agent,
-            n=self.config.G_policy_alternatives,
-        ))
-        
+        # 2. Get Policy Agent Alternatives
+        # AtroposAgent.generate_action now manages its history and appends a new turn to its game_log.
         try:
-            generated_actions_results = await asyncio.gather(*agent_action_tasks)
-            logger.info(f"Generated actions results: {generated_actions_results}")
+            agent_action_alternatives: List[AtroposAgentAction] = await self.agent.generate_action(
+                observation_content=current_observation_for_agent,
+                n=self.config.G_policy_alternatives,
+                # is_evaluation_context can be passed if needed by agent
+            )
         except Exception as e:
-            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error during agent.generate_action calls: {e}", exc_info=True)
-            return None, True # Critical error, end episode
+            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error during agent.generate_action: {e}", exc_info=True)
+            return None, True # Critical error
 
-        for raw_agent_response_text, agent_history_after_action in generated_actions_results:
-            if raw_agent_response_text is None:
-                logger.warning(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent returned None action. Skipping alternative.")
-                # Potentially add a placeholder or handle this by reducing G for this step
-                continue 
-            parsed_action_command = self._parse_action(raw_agent_response_text)
-            policy_alternatives.append({
-                "parsed_command": parsed_action_command, # This is the string like "go north" or None
-                "raw_agent_response": raw_agent_response_text, # Full <think>...<tool_call>...</tool_call>
-                "agent_history_for_rm": agent_history_after_action # History for RM to evaluate this action
+        if not agent_action_alternatives:
+            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent generated no action alternatives. Ending episode.")
+            return None, True
+            
+        # The agent has now added a turn to its self.agent.game_log.turn[-1]
+        # This turn includes the observation_message and all alternatives, with selected_alternative = None
+
+        # 3. Evaluate Alternatives with RM
+        policy_alternatives_for_rm_eval = [] # Stores {parsed_command, raw_agent_response, history_for_rm}
+        
+        # History up to *before* the current observation that led to these alternatives
+        history_of_completed_turns = self.agent._reconstruct_canonical_history() # Ends with last selected assistant action
+        
+        # The current observation message is stored in the agent's latest (incomplete) turn
+        if not self.agent.game_log.turn: # Should not happen if generate_action succeeded
+             logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent's game_log is empty after generate_action. Critical error.")
+             return None, True
+        current_observation_msg_from_agent_log = self.agent.game_log.turn[-1].observation_message
+
+
+        for alt_action in agent_action_alternatives:
+            parsed_cmd = self._parse_action(alt_action.action_text)
+            
+            # Construct history for RM: completed history + current observation + this specific alternative action
+            history_for_rm_alt = list(history_of_completed_turns) 
+            history_for_rm_alt.append(current_observation_msg_from_agent_log)
+            history_for_rm_alt.append(Message(role="assistant", content=alt_action.action_text))
+            
+            policy_alternatives_for_rm_eval.append({
+                "parsed_command": parsed_cmd,
+                "raw_agent_response": alt_action.action_text, # Full <think>...<tool_call>...</tool_call>
+                "agent_history_for_rm": history_for_rm_alt 
             })
 
-        if not policy_alternatives:
-            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] No valid policy alternatives generated. Ending episode.")
-            return None, True
-
-        # 2. Evaluate Alternatives with RM
         alternative_rm_scores: List[float] = []
         all_rm_judgements_this_step: List[RMJudgementLog] = []
-
         rm_evaluation_tasks = []
-        for i, policy_alt in enumerate(policy_alternatives):
-            # game_history_window for RM is the agent's history *including* the action it just proposed.
-            # This is policy_alt["agent_history_for_rm"]
-            if not policy_alt["agent_history_for_rm"]:
-                logger.warning(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1} Alt: {i}] Missing agent_history_for_rm. Skipping RM eval for this alt.")
-                # We'll need a score for this alternative later, assign a penalty or handle missing.
-                # For now, this path means it won't be added to rm_evaluation_tasks.
-                continue
 
+        for i, policy_alt_data in enumerate(policy_alternatives_for_rm_eval):
             rm_evaluation_tasks.append(self.rm.generate_g_judgements(
                 num_judgements_g=self.config.G_rm_judgements,
-                game_history_window=policy_alt["agent_history_for_rm"],
-                game_seed_for_logging=self.config.game_seed, # Or a per-episode seed if available
+                game_history_window=policy_alt_data["agent_history_for_rm"],
+                game_seed_for_logging=self.config.game_seed, # Or a per-episode seed
                 turn_idx_for_logging=current_turn_num,
                 policy_action_candidate_idx_for_logging=i
             ))
         
-        if rm_evaluation_tasks: # Only gather if there are tasks
+        if rm_evaluation_tasks:
             try:
                 rm_judgement_log_groups = await asyncio.gather(*rm_evaluation_tasks)
             except Exception as e:
-                logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error during rm.generate_g_judgements calls: {e}", exc_info=True)
-                # This is a critical error for RM evaluation, affects scoring of all alternatives.
-                # We might decide to assign a default low score to all, or end the episode.
-                # For now, let's assume alternatives without RM scores get a penalty.
-                rm_judgement_log_groups = [[RMJudgementLog(api_error=True)] * self.config.G_rm_judgements] * len(policy_alternatives) # Dummy error logs
-        else: # No tasks were created (e.g. all policy_alt["agent_history_for_rm"] were None)
-            rm_judgement_log_groups = []
+                logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error during rm.generate_g_judgements: {e}", exc_info=True)
+                # Assign default low scores if RM fails
+                rm_judgement_log_groups = [[RMJudgementLog(api_error=True, parsed_q_value=0.0)] * self.config.G_rm_judgements] * len(policy_alternatives_for_rm_eval)
+        else:
+            rm_judgement_log_groups = [] # Should not happen if policy_alternatives_for_rm_eval is populated
 
-        current_alt_idx = 0
-        for i, policy_alt in enumerate(policy_alternatives):
-            if not policy_alt["agent_history_for_rm"]:
-                # This alternative was skipped for RM evaluation
-                alternative_rm_scores.append(-float('inf')) # Assign a very low score
-                logger.warning(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num+1} Alt: {i}] Alternative had no history for RM, assigned bad score.")
-                continue
-            
-            # Check if we have results for this alternative (in case of errors in gather)
-            if current_alt_idx >= len(rm_judgement_log_groups):
-                logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num+1} Alt: {i}] Mismatch between policy_alternatives and rm_judgement_log_groups. Assigning bad score.")
-                alternative_rm_scores.append(-float('inf'))
-                continue
-
-            rm_judgements_for_this_alt = rm_judgement_log_groups[current_alt_idx]
-            current_alt_idx += 1
+        for i, rm_judgements_for_this_alt in enumerate(rm_judgement_log_groups):
             all_rm_judgements_this_step.extend(rm_judgements_for_this_alt)
-            
-            valid_q_values = []
-            for rm_log in rm_judgements_for_this_alt:
-                if not rm_log["api_error"] and not rm_log["q_value_parse_error"] and rm_log["parsed_q_value"] is not None:
-                    valid_q_values.append(rm_log["parsed_q_value"])
-                else:
-                    # Optionally, add a default or penalty for errored RM judgements to the average
-                    valid_q_values.append(0.0) # Defaulting errored/missing Q to 0 for the mean
-            
-            if valid_q_values:
+            valid_q_values = [
+                j["parsed_q_value"] for j in rm_judgements_for_this_alt 
+                if not j["api_error"] and not j["q_value_parse_error"] and j["parsed_q_value"] is not None
+            ]
+            if not valid_q_values: # If all RM judgements for an alt failed, or no Q values parsed
+                 # Use a default low score (e.g. 0 or a penalty)
+                logger.warning(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1} Alt: {i}] No valid Q-values from RM. Assigning 0.0.")
+                alternative_rm_scores.append(0.0) 
+            else:
                 mean_q_value = sum(valid_q_values) / len(valid_q_values)
                 alternative_rm_scores.append(mean_q_value)
-            else:
-                # This case should ideally be covered by the default 0.0 above, but as a fallback:
-                logger.warning(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1} Alt: {i}] No valid Q-values from RM. Assigning default score.")
-                alternative_rm_scores.append(0.0) # Default score if RM completely failed for an alt
 
         ep_state.rm_judgement_history.extend(all_rm_judgements_this_step)
 
-        # 3. Select Best Action
-        if not alternative_rm_scores:
-            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] No RM scores available for any alternative. Ending episode.")
+        # 4. Select Best Action
+        if not alternative_rm_scores: # Should be populated, even with default scores
+            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] No RM scores available. Ending episode.")
             return None, True
             
         best_alternative_idx = alternative_rm_scores.index(max(alternative_rm_scores))
-        chosen_policy_alt = policy_alternatives[best_alternative_idx]
-        chosen_action_command = chosen_policy_alt["parsed_command"]
-        chosen_agent_raw_response = chosen_policy_alt["raw_agent_response"]
+        chosen_policy_alt_data = policy_alternatives_for_rm_eval[best_alternative_idx]
+        chosen_action_command = chosen_policy_alt_data["parsed_command"]
+        # chosen_agent_raw_response = chosen_policy_alt_data["raw_agent_response"] # raw response of chosen action
 
         if chosen_action_command is None:
             logger.warning(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Best alternative (idx {best_alternative_idx}) had a None parsed command. Using 'look' as fallback.")
-            chosen_action_command = "look" # Fallback action
+            chosen_action_command = "look"
 
         logger.info(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Chosen action: '{chosen_action_command}' (from Alt {best_alternative_idx} with RM score {alternative_rm_scores[best_alternative_idx]:.2f})")
 
-        # 4. Execute Chosen Action in TextWorld
+        # 5. Record selected action with the Agent
         try:
-            obs, score_from_env, done, infos = ep_state.textworld_env.step(chosen_action_command)
+            self.agent.record_selected_action(selected_action_index=best_alternative_idx)
         except Exception as e:
-            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error stepping TextWorld environment with action '{chosen_action_command}': {e}", exc_info=True)
-            ep_state.done = True
-            return None, True # Critical error, end episode
+            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error recording selected action with agent: {e}", exc_info=True)
+            # This might be critical as it desyncs agent's log from actual execution
+            return None, True
 
-        # 5. Update Episode State
-        ep_state.cumulative_reward += score_from_env # TextWorld score is often cumulative
-        ep_state.current_turn += 1
-        ep_state.done = done or ep_state.current_turn >= ep_state.max_turns
-        ep_state.last_score = infos.get("score", ep_state.last_score)
-        ep_state.moves = infos.get("moves", ep_state.moves)
-        ep_state.won = infos.get("won", False)
-        ep_state.lost = infos.get("lost", False)
+
+        # 6. Execute Chosen Action in TextWorld
+        try:
+            raw_obs_next, score_from_env, done_from_env, infos_next = ep_state.textworld_env.step(chosen_action_command)
+        except Exception as e:
+            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error stepping TextWorld environment: {e}", exc_info=True)
+            ep_state.done = True
+            return None, True 
+
+        # 7. Update Episode State
+        ep_state.cumulative_reward += score_from_env 
+        ep_state.current_turn += 1 # This was step_idx before, now current_turn is 0-indexed
+        ep_state.done = done_from_env or ep_state.current_turn >= ep_state.max_turns
+        ep_state.last_score = infos_next.get("score", ep_state.last_score)
+        ep_state.moves = infos_next.get("moves", ep_state.moves)
+        ep_state.won = infos_next.get("won", False)
+        ep_state.lost = infos_next.get("lost", False)
         if ep_state.won or ep_state.lost:
             ep_state.done = True
-
-        # Add chosen agent response and new observation to the main message history for next turn
-        ep_state.message_history.append(Message(role="assistant", content=chosen_agent_raw_response)) 
-        formatted_new_obs = self._format_observation(obs, infos)
-        ep_state.message_history.append(Message(role="user", content=formatted_new_obs))
         
-        # Agent memory update is handled internally by AtroposAgent.generate_action
-        # based on the chosen_agent_raw_response and its preceding history.
-        # However, AtroposAgent.generate_action was called G times. We only want memory for the CHOSEN action.
-        # This requires a slight refactor in how memory is committed OR we pass the chosen path back to agent.
-        # For now, let's assume AtroposAgent might generate memory for each of G, and we might log it,
-        # but its internal FAISS index is what matters for *its next turn*. The current design of 
-        # AtroposAgent.generate_action updates its own memory upon generation. This might mean the 
-        # agent has memories from unchosen paths. This needs refinement.
-        # A potential fix: agent.generate_action returns thought/action but doesn't commit to memory.
-        # A new agent method agent.commit_action_and_memory(chosen_history) is called here.
-        # For now, this is a known issue with current agent design vs. best-of-N.
+        # Store the raw observation and infos for the next step's _format_observation call
+        ep_state.last_env_raw_observation = raw_obs_next
+        ep_state.last_env_infos = infos_next
+        
+        # message_history update is now implicitly handled by agent and reconstruction for RM/ScoredDataGroup
 
-        # 6. Prepare ScoredDataGroup for Policy Agent
-        #    Tokens and masks need to be generated for each policy alternative's history.
-        #    The `agent_history_for_rm` is suitable for this. It ends with the assistant's action.
+        # 8. Prepare ScoredDataGroup for Policy Agent
         sg_tokens: List[List[int]] = []
         sg_masks: List[List[int]] = []
-        sg_messages: List[List[Message]] = [] # Full message histories for each policy alt
+        sg_messages: List[List[Message]] = [] 
 
-        for policy_alt in policy_alternatives:
-            # policy_alt["agent_history_for_rm"] is [system_prompt, user_obs, assistant_action_N]
-            # This is the trajectory to tokenize for the policy trainer for this alternative.
-            history_to_tokenize = policy_alt["agent_history_for_rm"]
-            if not history_to_tokenize: # Should not happen if policy_alternatives were generated
-                sg_tokens.append([])
-                sg_masks.append([])
-                sg_messages.append([])
-                continue
+        for policy_alt_data in policy_alternatives_for_rm_eval:
+            history_to_tokenize = policy_alt_data["agent_history_for_rm"]
+            # This history_to_tokenize is [SysPrompt, UserObs1, ..., PrevSelectedAssistAction, CurrentUserObs, CurrentAssistAlternative]
             
             try:
                 tokenized_output = tokenize_for_trainer(self.tokenizer, history_to_tokenize)
@@ -636,20 +608,19 @@ class TextWorldEnv(BaseEnv):
                 sg_masks.append(tokenized_output["masks"])
                 sg_messages.append(history_to_tokenize)
             except Exception as e:
-                logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error tokenizing policy alternative: {e}", exc_info=True)
+                logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error tokenizing history for ScoredDataGroup: {e}", exc_info=True)
                 sg_tokens.append([])
                 sg_masks.append([])
-                sg_messages.append(history_to_tokenize) # Still save messages if tokenization fails
+                sg_messages.append(history_to_tokenize) 
         
-        # Scores are the mean Q-values from RM for now. Will be updated at episode end.
         current_step_scored_data = ScoredDataGroup(
             tokens=sg_tokens,
             masks=sg_masks,
-            scores=list(alternative_rm_scores), # Make a copy
+            scores=list(alternative_rm_scores), 
             messages=sg_messages,
-            # Add metadata that might be useful for end-of-episode reward calculation
             metadata={"turn_number": current_turn_num, "chosen_alternative_index": best_alternative_idx}
         )
+        ep_state.policy_step_data.append(current_step_scored_data) # Store it in ep_state
         
         return current_step_scored_data, ep_state.done
 
