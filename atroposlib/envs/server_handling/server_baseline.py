@@ -152,7 +152,7 @@ class APIServer(ABC):
         self.eval_sem.update_weight(weight)
 
     @abstractmethod
-    async def check_server_status_task(self):
+    async def check_server_status_task(self, chat_completion: bool = True):
         """
         Check the status of the server. Should be overridden by the child class.
         Set self.server_healthy to True if the server is healthy.
@@ -320,7 +320,9 @@ class APIServer(ABC):
             if (
                 self.config.base_url is not None
             ):  # skip health check if using OpenAI API
-                self.check_task = asyncio.create_task(self.check_server_status_task())
+                self.check_task = asyncio.create_task(
+                    self.check_server_status_task(chat_completion=False)
+                )
             else:
                 self.server_healthy = True
             self.initialized = True
