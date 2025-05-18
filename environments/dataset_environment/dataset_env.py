@@ -11,7 +11,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    ScoredDataGroup,
     ScoredDataItem,
 )
 from atroposlib.envs.reward_fns import registry
@@ -20,7 +19,7 @@ from atroposlib.type_definitions import Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 class DatasetEnvConfig(BaseEnvConfig):
@@ -229,7 +228,7 @@ class DatasetEnv(BaseEnv):
                 # Add prefill as the last part of the prompt for the model to complete from
                 messages.append({"role": "assistant", "content": self.config.prefill})
 
-            logger.debug(f"collect_trajectory: messages: {messages}")
+            logger.warning(f"collect_trajectory: messages: {messages}")
 
             max_tokens = self.config.max_tokens
 
