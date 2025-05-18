@@ -43,19 +43,24 @@ class Atropos2048Env(BaseEnv):
     @classmethod
     def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = BaseEnvConfig(
-            tokenizer_name="Qwen/Qwen2.5-1.5B-Instruct",
+            tokenizer_name="Qwen/Qwen3-4B",
             group_size=16,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
+            total_steps=1000,
+            batch_size=12,
+            steps_per_eval=100,
             max_token_length=4096,
             wandb_name="atropos_2048",
+            max_batches_offpolicy=5,
         )
         server_configs = [
             APIServerConfig(
-                model_name="Qwen/Qwen2.5-1.5B-Instruct",
-                base_url="http://localhost:9001/v1",
+                model_name="Qwen/Qwen3-4B",
+                base_url="http://localhost:9001",
                 api_key="x",
                 num_requests_for_eval=64,
+                server_type="trl",
             ),
         ]
 
