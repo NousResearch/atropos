@@ -717,6 +717,7 @@ class BaseEnv(ABC):
         """
         Handle the rollout of an item
         """
+        logger.setLevel(logging.DEBUG)
         item = self.running_items.get(item_uuid)
         if item is None:
             print(f"item {item_uuid} not found... returning")
