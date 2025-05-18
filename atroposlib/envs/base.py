@@ -720,7 +720,7 @@ class BaseEnv(ABC):
             print(f"item {item_uuid} not found... returning")
             return None
         start_time = time.time()
-        rprint(f"handle_env: Starting with item: {item}")
+        logger.debug(f"handle_env: Starting with item: {item}")
         # do a rollout with item
         try:
             to_postprocess, to_backlog = await self.collect_trajectories(item)
@@ -745,7 +745,7 @@ class BaseEnv(ABC):
         if to_postprocess is not None:
             self.task_successful.append(1)
             self.succeeded_task_duration.append(duration)
-            rprint(f"handle_env: Collected {len(to_postprocess)} trajectories")
+            logger.debug(f"handle_env: Collected {len(to_postprocess)} trajectories")
             await self.handle_send_to_api(to_postprocess, item)
         else:
             self.task_successful.append(0)
@@ -815,7 +815,6 @@ class BaseEnv(ABC):
                 await self.wandb_log({})
 
     async def add_train_workers(self):
-        rprint(f"Adding train workers, max_num_workers: {self.max_num_workers}")
         if (self.eval_runner is not None) and (not self.eval_runner.done()):
             if self.config.eval_handling == EvalHandlingEnum.STOP_TRAIN:
                 return
@@ -873,9 +872,7 @@ class BaseEnv(ABC):
         """
         Rollout manager
         """
-        rprint(f"env_manager: Starting setup")
         await self.setup()
-        rprint(f"env_manager: Setup complete")
         await self.setup_wandb()
         await self.register_env()
         await self.get_server_info()
@@ -890,7 +887,7 @@ class BaseEnv(ABC):
             self.last_loop_time = time.time()
             await self.get_status()
             await self.env_step_checks()
-            rprint(f"env_manager: Status dict: {self.status_dict}")
+            logger.info(f"env_manager: Status dict: {self.status_dict}")
             if (
                 self.status_dict["current_step"]
                 + (
@@ -1171,10 +1168,9 @@ class BaseEnv(ABC):
                 )
                 rprint(env_config)
                 rprint(openai_configs)
-                rprint(f"before: Starting env_manager")
+
                 # Run the environment
                 asyncio.run(env.env_manager())
-                rprint(f"after: env_manager")
 
         return CliServeConfig
 
@@ -1247,10 +1243,6 @@ class BaseEnv(ABC):
 
             def run(self) -> None:
                 """The logic to execute for the 'process' command."""
-                rprint("--- self.model_dump() at start of run --- ")
-                rprint(self.model_dump(exclude_unset=False))
-                rprint("-----------------------------------------")
-
                 # Set default wandb name if not provided and class has a name
                 wandb_name_attr = f"{ENV_NAMESPACE}{NAMESPACE_SEP}wandb_name"
                 if (
@@ -1267,85 +1259,66 @@ class BaseEnv(ABC):
                 else:
                     yaml_config = {}
 
-                # --- Extract CLI arguments directly from self (populated by pydantic-cli) ---
-                env_namespace_cli_args = {}
-                openai_namespace_cli_args = {}
-                server_manager_cli_args = {}
+                # Get CLI flags passed with double dashes
+                cli_passed_flags = get_double_dash_flags()
 
-                # Pydantic uses double underscore for nested model paths in field names
-                # env_pydantic_prefix = env_full_prefix.replace(NAMESPACE_SEP, "__")
-                # openai_pydantic_prefix = openai_full_prefix.replace(NAMESPACE_SEP, "__")
-                rprint(f"env_pydantic_prefix: {env_full_prefix}")
-                rprint(f"openai_pydantic_prefix: {openai_full_prefix}")
-                
-                # Iterate over all model fields to capture CLI args or their defaults
-                # (which are the PROCESS_MODE defaults for this Pydantic model)
-                for field_name in self.model_fields:
-                    value = getattr(self, field_name) # Gets CLI value or Pydantic default
-                    rprint(f"  Looping: field_name='{field_name}', value='{value}'") # DEBUG PRINT
-                    if field_name.startswith(env_full_prefix):
-                        original_key = field_name[len(env_full_prefix) :]
-                        env_namespace_cli_args[original_key] = value
-                    elif field_name.startswith(openai_full_prefix):
-                        original_key = field_name[len(openai_full_prefix) :]
-                        openai_namespace_cli_args[original_key] = value
-                    elif field_name in server_manager_config_cls_new_defaults.model_fields:
-                        # Check against the specific ServerManagerConfig used for CliProcessConfig defaults
-                        if hasattr(self, field_name): # Ensure field exists on self
-                            server_manager_cli_args[field_name] = value
-                rprint(f"env_namespace_cli_args: {env_namespace_cli_args}")
-                rprint(f"openai_namespace_cli_args: {openai_namespace_cli_args}")
-                rprint(f"server_manager_cli_args: {server_manager_cli_args}")
                 # --- Configuration Merging ---
                 # Priority: CLI > YAML > Process Mode Defaults > `config_init` defaults
 
                 # 1. Environment Configuration
                 env_config_dict = merge_dicts(
-                    default_env_config.model_dump(),  # Class Defaults from config_init
+                    default_env_config.model_dump(),  # Class Defaults
                     PROCESS_MODE_ENV_DEFAULT_CONFIG.model_dump(),  # Process Mode Defaults
                     yaml_config.get(ENV_NAMESPACE, {}),  # YAML config
-                    env_namespace_cli_args,  # CLI args from self
+                    extract_namespace(cli_passed_flags, env_full_prefix),  # CLI args
                 )
 
                 # 2. OpenAI Configuration
+                oai_cli_passed_args = extract_namespace(
+                    cli_passed_flags, openai_full_prefix
+                )  # CLI args
+
+                rprint(f"oai_cli_passed_args: {oai_cli_passed_args}")
                 yaml_oai_config = yaml_config.get(OPENAI_NAMESPACE, {})
                 if isinstance(default_server_configs, ServerBaseline) and (
-                    openai_namespace_cli_args or yaml_oai_config # Check extracted CLI args
+                    oai_cli_passed_args or yaml_oai_config
                 ):
                     raise ValueError(
-                        "ServerBaseline is not compatible with OpenAI-namespaced CLI arguments or YAML. Please edit `config_init` directly or use APIServerConfig."  # noqa: E501
+                        "ServerBaseline is not compatible with OpenAI-namespaced CLI arguments. Please edit `config_init` directly or use APIServerConfig."  # noqa: E501
                     )
 
                 if (
                     isinstance(default_server_configs, list)
                     and len(default_server_configs) == 1
                 ):
+                    # can't use the same var name because it shadows the class variable and we get an error
                     default_openai_config_ = default_server_configs[0]
                 else:
-                    default_openai_config_ = default_server_configs # Could be ServerBaseline or list
-
+                    default_openai_config_ = default_server_configs
                 if isinstance(yaml_oai_config, list) and len(yaml_oai_config) == 1:
                     yaml_oai_config = yaml_oai_config[0]
+                if isinstance(default_openai_config_, APIServerConfig) and isinstance(
+                    yaml_oai_config, dict
+                ):
+                    openai_config_dict = merge_dicts(
+                        default_openai_config_.model_dump(),  # Default APIServerConfig (or from class init)
+                        PROCESS_MODE_OPENAI_DEFAULT_CONFIG.model_dump(),  # Process Mode Defaults
+                        yaml_oai_config,
+                        oai_cli_passed_args,
+                    )
+                else:
+                    openai_config_dict = {}
 
-                # Prepare the base for merging: either default from config_init or an empty dict
-                base_openai_model_dump = {}
-                if isinstance(default_openai_config_, APIServerConfig):
-                    base_openai_model_dump = default_openai_config_.model_dump()
-                
-                rprint("--- base_openai_model_dump (from config_init) --- ")
-                rprint(base_openai_model_dump)
-                rprint("--------------------------------------------------")
-                rprint("--- openai_namespace_cli_args (from self) --- ")
-                rprint(openai_namespace_cli_args)
-                rprint("----------------------------------------------")
-
-                openai_config_dict = merge_dicts(
-                    base_openai_model_dump,  # Default APIServerConfig (from class init) or {}
-                    yaml_oai_config if isinstance(yaml_oai_config, dict) else {}, # YAML
-                    openai_namespace_cli_args,  # CLI args from self (already includes process defaults as fallbacks)
-                )
-                rprint(f"openai_config_dict: {openai_config_dict}")
                 # 3. Server Manager Configuration
+                # Extract only relevant CLI flags
+                server_manager_cli_passed_flags = {}
+                if "slurm" in cli_passed_flags:
+                    server_manager_cli_passed_flags["slurm"] = cli_passed_flags["slurm"]
+                if "testing" in cli_passed_flags:
+                    server_manager_cli_passed_flags["testing"] = cli_passed_flags[
+                        "testing"
+                    ]
+
                 server_manager_yaml_dict = {}
                 if "slurm" in yaml_config:
                     server_manager_yaml_dict["slurm"] = yaml_config["slurm"]
@@ -1355,8 +1328,8 @@ class BaseEnv(ABC):
                 server_manager_config_dict = merge_dicts(
                     ServerManagerConfig().model_dump(),  # Base defaults
                     PROCESS_MODE_SERVER_MANAGER_DEFAULT_CONFIG.model_dump(),  # Process Mode Defaults
-                    server_manager_yaml_dict, # YAML
-                    server_manager_cli_args,  # CLI args from self
+                    server_manager_yaml_dict,
+                    server_manager_cli_passed_flags,  # CLI args
                 )
 
                 # --- Instantiate Final Config Objects ---
@@ -1372,8 +1345,8 @@ class BaseEnv(ABC):
                 openai_configs = resolve_openai_configs(
                     default_server_configs=default_server_configs,
                     openai_config_dict=openai_config_dict,
-                    yaml_config=yaml_config, # Pass the original yaml_config
-                    cli_passed_flags=openai_namespace_cli_args, # Pass the extracted CLI args
+                    yaml_config=yaml_config,
+                    cli_passed_flags=cli_passed_flags,
                     logger=logger,
                 )
 
