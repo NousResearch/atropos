@@ -1,5 +1,6 @@
 import random
 from typing import Dict, List, Optional, Tuple, Any
+import numpy as np
 
 from atroposlib.envs.base import (
     APIServerConfig,
@@ -11,7 +12,7 @@ from atroposlib.type_definitions import Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 # Import our game implementations
-from .env_2048 import Environment2048
+from env_2048 import Environment2048
 
 
 class Atropos2048Env(BaseEnv):
@@ -273,8 +274,5 @@ class Atropos2048Env(BaseEnv):
 
 
 if __name__ == "__main__":
-    # Add numpy to imports if missing
-    import numpy as np
-    
     # Run the environment from command line
     Atropos2048Env.cli() 

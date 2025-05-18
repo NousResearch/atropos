@@ -4,12 +4,12 @@ import asyncio
 import json
 from typing import Dict, Any, List, Tuple, Optional, Literal
 
-try:
-    # If using in atropos
-    from atropos.environments.hack0.env_2048 import Environment2048
-except ImportError:
-    # Fallback if running directly
-    from env_2048 import Environment2048
+# Direct import instead of the try/except block
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from game_2048 import Game2048
+from env_2048 import Environment2048
 
 class RandomAgent:
     """A simple agent that makes random moves in the 2048 game."""
