@@ -52,7 +52,7 @@ class OpenMathReasoningEnv(BaseEnv):
         self,
         config: BaseEnvConfig,
         server_configs: List[APIServerConfig],
-        slurm=True,
+        slurm=False,
         testing=False,
     ):
         super().__init__(config, server_configs, slurm, testing)
@@ -65,7 +65,7 @@ class OpenMathReasoningEnv(BaseEnv):
     @classmethod
     def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = BaseEnvConfig(
-            tokenizer_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
+            tokenizer_name="Qwen/Qwen3-4B",
             group_size=8,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
@@ -73,14 +73,16 @@ class OpenMathReasoningEnv(BaseEnv):
             batch_size=12,
             steps_per_eval=100,
             max_token_length=2048,
-            wandb_name="try-nv",
+            wandb_name="train-open-math-reasoning",
+            max_batches_offpolicy=5,
         )
         server_configs = [
             APIServerConfig(
-                model_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
-                base_url="http://localhost:9001/v1",
+                model_name="Qwen/Qwen3-4B",
+                base_url="http://localhost:9001",
                 api_key="x",
                 num_requests_for_eval=256,
+                server_type="trl",
             ),
         ]
 
