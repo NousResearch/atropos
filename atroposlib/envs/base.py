@@ -1247,6 +1247,10 @@ class BaseEnv(ABC):
 
             def run(self) -> None:
                 """The logic to execute for the 'process' command."""
+                rprint("--- self.model_dump() at start of run --- ")
+                rprint(self.model_dump(exclude_unset=False))
+                rprint("-----------------------------------------")
+
                 # Set default wandb name if not provided and class has a name
                 wandb_name_attr = f"{ENV_NAMESPACE}{NAMESPACE_SEP}wandb_name"
                 if (
@@ -1288,7 +1292,9 @@ class BaseEnv(ABC):
                         # Check against the specific ServerManagerConfig used for CliProcessConfig defaults
                         if hasattr(self, field_name): # Ensure field exists on self
                             server_manager_cli_args[field_name] = value
-                
+                rprint(f"env_namespace_cli_args: {env_namespace_cli_args}")
+                rprint(f"openai_namespace_cli_args: {openai_namespace_cli_args}")
+                rprint(f"server_manager_cli_args: {server_manager_cli_args}")
                 # --- Configuration Merging ---
                 # Priority: CLI > YAML > Process Mode Defaults > `config_init` defaults
 
@@ -1325,6 +1331,13 @@ class BaseEnv(ABC):
                 if isinstance(default_openai_config_, APIServerConfig):
                     base_openai_model_dump = default_openai_config_.model_dump()
                 
+                rprint("--- base_openai_model_dump (from config_init) --- ")
+                rprint(base_openai_model_dump)
+                rprint("--------------------------------------------------")
+                rprint("--- openai_namespace_cli_args (from self) --- ")
+                rprint(openai_namespace_cli_args)
+                rprint("----------------------------------------------")
+
                 openai_config_dict = merge_dicts(
                     base_openai_model_dump,  # Default APIServerConfig (from class init) or {}
                     yaml_oai_config if isinstance(yaml_oai_config, dict) else {}, # YAML
