@@ -137,7 +137,7 @@ class DatasetEnv(BaseEnv):
 
     async def collect_trajectory(self, item: Item) -> Tuple[Optional[ScoredDataItem], List[Item]]:
         logger.setLevel(logging.DEBUG)
-        logger.warning(f"collect_trajectory: item: {item}")
+        # logger.warning(f"collect_trajectory: item: {item}")
         try:
             user_content = dict(item[0][0])["content"]
             answer = item[1] if len(item) > 1 and item[1] is not None else None
@@ -152,7 +152,7 @@ class DatasetEnv(BaseEnv):
             if self.config.prefill:
                 messages.append({"role": "assistant", "content": self.config.prefill})
 
-            logger.warning(f"collect_trajectory: messages: {messages}")
+            # logger.warning(f"collect_trajectory: messages: {messages}")
 
             max_tokens = self.config.max_tokens
 
