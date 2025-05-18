@@ -1271,19 +1271,21 @@ class BaseEnv(ABC):
                 # Pydantic uses double underscore for nested model paths in field names
                 env_pydantic_prefix = env_full_prefix.replace(NAMESPACE_SEP, "__")
                 openai_pydantic_prefix = openai_full_prefix.replace(NAMESPACE_SEP, "__")
-
-                for field_name in self.model_fields_set:
-                    value = getattr(self, field_name)
+                
+                # Iterate over all model fields to capture CLI args or their defaults
+                # (which are the PROCESS_MODE defaults for this Pydantic model)
+                for field_name in self.model_fields:
+                    value = getattr(self, field_name) # Gets CLI value or Pydantic default
                     if field_name.startswith(env_pydantic_prefix):
                         original_key = field_name[len(env_pydantic_prefix) :]
                         env_namespace_cli_args[original_key] = value
                     elif field_name.startswith(openai_pydantic_prefix):
                         original_key = field_name[len(openai_pydantic_prefix) :]
                         openai_namespace_cli_args[original_key] = value
-                    # ServerManagerConfig fields (slurm, testing) are direct attributes
-                    # on the CliProcessConfig model as defined by its MRO.
-                    elif field_name in ServerManagerConfig.model_fields:
-                        server_manager_cli_args[field_name] = value
+                    elif field_name in server_manager_config_cls_new_defaults.model_fields:
+                        # Check against the specific ServerManagerConfig used for CliProcessConfig defaults
+                        if hasattr(self, field_name): # Ensure field exists on self
+                            server_manager_cli_args[field_name] = value
                 
                 # --- Configuration Merging ---
                 # Priority: CLI > YAML > Process Mode Defaults > `config_init` defaults
