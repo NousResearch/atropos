@@ -1282,6 +1282,7 @@ class BaseEnv(ABC):
                 # (which are the PROCESS_MODE defaults for this Pydantic model)
                 for field_name in self.model_fields:
                     value = getattr(self, field_name) # Gets CLI value or Pydantic default
+                    rprint(f"  Looping: field_name='{field_name}', value='{value}'") # DEBUG PRINT
                     if field_name.startswith(env_pydantic_prefix):
                         original_key = field_name[len(env_pydantic_prefix) :]
                         env_namespace_cli_args[original_key] = value
