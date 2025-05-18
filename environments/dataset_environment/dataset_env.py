@@ -264,10 +264,10 @@ class DatasetEnv(BaseEnv):
                         "config": self.config,
                     }
                     rewards_list = self.reward_function(formatted_single_completion, **reward_kwargs)
-                    if rewards_list and isinstance(rewards_list, list):
+                    if rewards_list and isinstance(rewards_list, list) and rewards_list:
                         reward_value = float(rewards_list[0])
                     else:
-                        logger.warning(f"collect_trajectory: Unexpected reward list format: {rewards_list}")
+                        logger.warning(f"collect_trajectory: Unexpected reward list format or empty list: {rewards_list}")
                 except Exception as e:
                     logger.error(f"collect_trajectory: Error applying reward function: {e}")
                     logger.exception(e)
@@ -275,11 +275,10 @@ class DatasetEnv(BaseEnv):
             else:
                 logger.warning("collect_trajectory: No reward function configured. Defaulting reward to 0.0.")
 
-
-            messages_for_item = None
-            if self.config.include_messages_in_scoring: # This is from DatasetEnvConfig
-                 messages_for_item = full_messages_for_trajectory
-
+            # Always populate messages_for_item with the full trajectory for consistency.
+            # Downstream consumers (like the trainer via BaseEnvConfig.include_messages
+            # or HTML generator) can then decide what to do with them.
+            messages_for_item = full_messages_for_trajectory
 
             scored_data_item = ScoredDataItem(
                 tokens=tokenized_trajectory["tokens"],
