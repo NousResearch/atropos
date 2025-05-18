@@ -13,6 +13,14 @@ import random
 import re
 from typing import Dict, List, Optional, Tuple, Union
 
+# Load environment variables from .env file if present
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    logger = logging.getLogger(__name__)
+    logger.warning("python-dotenv not installed, environment variables must be set manually")
+
 import wandb
 from tqdm.asyncio import tqdm_asyncio
 
@@ -62,16 +70,20 @@ Final Step: ```markdown
 [Your complete article in markdown format]
 ```
 
-For tool calls, use <tool_call> </tool_call> tags with the following JSON format:
+For tool calls, you MUST use <tool_call> </tool_call> tags with valid JSON inside. Always format exactly as shown:
+
+For web search:
 <tool_call>
 {"name": "web_search", "arguments": {"query": "example search query", "num_results": 5}}
 </tool_call>
 
-OR
-
+For webpage visits:
 <tool_call>
 {"name": "visit_page", "arguments": {"url": "https://example.com/page"}}
 </tool_call>
+
+The JSON structure is critical - it must be valid JSON with double quotes around all keys and string values.
+Always enclose your tool calls between <tool_call> and </tool_call> tags, and make sure the JSON is correctly formatted.
 """
 
 
@@ -273,8 +285,20 @@ class WikipediaArticleCreatorEnv(BaseEnv):
     @classmethod
     def config_init(cls) -> Tuple[WikipediaArticleCreatorConfig, List[APIServerConfig]]:
         """Initialize default configuration"""
+        # Read environment variables (with defaults if not present)
+        model_name = os.environ.get("MODEL_NAME", "gpt-4o")
+        max_steps = int(os.environ.get("MAX_STEPS", "10"))
+        temperature = float(os.environ.get("TEMPERATURE", "0.7"))
+        
+        # Determine if we're using an OpenAI model or a local model
+        is_openai_model = model_name.startswith(("gpt-", "text-"))
+        
+        # Always use a standard HuggingFace tokenizer that's available
+        # gpt2 is a good option for estimating OpenAI tokens
+        tokenizer_name = "gpt2"
+        
         env_config = WikipediaArticleCreatorConfig(
-            tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+            tokenizer_name=tokenizer_name,
             group_size=8,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
@@ -286,28 +310,45 @@ class WikipediaArticleCreatorEnv(BaseEnv):
             wandb_name="wikipedia_article_creator",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
-            max_steps=10,
-            temperature=0.7,
+            max_steps=max_steps,
+            temperature=temperature,
             thinking_active=True,
             eval_topics=5,
             tool_timeout=15.0,
-            tavily_api_key=None,
+            tavily_api_key=os.environ.get("TAVILY_API_KEY"),  # Load from environment
             min_article_sections=3,
             max_article_tokens=2048,
             topics_file="topics.json",
             logging_active=True,
         )
         
-        # Configure servers
-        server_configs = [
-            APIServerConfig(
-                model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
-                base_url="http://localhost:9004/v1",
-                api_key="x",
-                num_max_requests_at_once=8,
-                num_requests_for_eval=64,
-            ),
-        ]
+        # Configure servers based on model type
+        if is_openai_model:
+            # OpenAI API configuration
+            openai_api_key = os.environ.get("OPENAI_API_KEY")
+            if not openai_api_key:
+                logger.warning("OPENAI_API_KEY not found in environment variables.")
+                
+            server_configs = [
+                APIServerConfig(
+                    model_name=model_name,
+                    base_url=None,  # Use default OpenAI base URL
+                    api_key=openai_api_key,
+                    num_max_requests_at_once=4,
+                    num_requests_for_eval=16,
+                ),
+            ]
+        else:
+            # Local model configuration
+            server_configs = [
+                APIServerConfig(
+                    model_name=model_name,
+                    base_url="http://localhost:9004/v1",
+                    api_key="x",
+                    num_max_requests_at_once=8,
+                    num_requests_for_eval=64,
+                ),
+            ]
         
         return env_config, server_configs
     
@@ -336,18 +377,51 @@ class WikipediaArticleCreatorEnv(BaseEnv):
         """Extract tool calls from model response"""
         tool_calls = []
         
-        for tool in self.tools:
-            name = tool["function"]["name"]
-            parsed_name, parsed_args, is_error = parse_tool_call(
-                response, [tool], ["tool_call"]
-            )
-            
-            if not is_error and parsed_name == name:
-                tool_calls.append({
-                    "name": name,
-                    "arguments": parsed_args
-                })
+        logger.info("\n==== PARSING TOOL CALLS ====")
         
+        # Try to find tool calls using regex first
+        tool_call_pattern = r"<tool_call>\s*(.*?)\s*</tool_call>"
+        raw_tool_calls = re.findall(tool_call_pattern, response, re.DOTALL)
+        
+        logger.info(f"Found {len(raw_tool_calls)} tool call tags in response")
+        
+        if raw_tool_calls:
+            for raw_call in raw_tool_calls:
+                logger.info(f"Raw tool call content: {raw_call}")
+                try:
+                    # Try to parse as JSON
+                    call_data = json.loads(raw_call)
+                    name = call_data.get("name")
+                    args = call_data.get("arguments", {})
+                    
+                    # Validate that the tool exists
+                    if any(tool["function"]["name"] == name for tool in self.tools):
+                        logger.info(f"Parsed tool call: {name}, {args}")
+                        tool_calls.append({"name": name, "arguments": args})
+                    else:
+                        logger.warning(f"Unknown tool name: {name}")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse tool call JSON: {e}")
+        
+        # Fallback to the library parser if no tool calls were found
+        if not tool_calls:
+            logger.info("No tool calls found with regex, falling back to library parser")
+            for tool in self.tools:
+                name = tool["function"]["name"]
+                parsed_name, parsed_args, is_error = parse_tool_call(
+                    response, [tool], ["tool_call"]
+                )
+                
+                if not is_error and parsed_name == name:
+                    logger.info(f"Parsed tool call with library: {name}, {parsed_args}")
+                    tool_calls.append({
+                        "name": name,
+                        "arguments": parsed_args
+                    })
+                elif parsed_name:
+                    logger.info(f"Failed tool call parse: {parsed_name}, error: {is_error}")
+        
+        logger.info(f"Final parsed tool calls: {len(tool_calls)}")
         return tool_calls
     
     def _extract_final_article(self, response: str) -> Optional[str]:
@@ -365,7 +439,7 @@ class WikipediaArticleCreatorEnv(BaseEnv):
         if not tool_results:
             return "No results found."
         
-        formatted_results = ["Tool Results:"]
+        formatted_results = ["==== TOOL RESULTS ===="]
         
         for result in tool_results:
             tool_name = result.get("name", "unknown_tool")
@@ -375,7 +449,7 @@ class WikipediaArticleCreatorEnv(BaseEnv):
             if tool_name == "web_search":
                 query = args.get("query", "")
                 num_results = args.get("num_results", 5)
-                formatted_results.append(f'web_search(query="{query}", num_results={num_results})\n')
+                formatted_results.append(f'[WEB SEARCH] query="{query}", num_results={num_results}\n')
                 
                 if isinstance(data, list):
                     formatted_results.append(json.dumps(data, indent=2))
@@ -384,7 +458,7 @@ class WikipediaArticleCreatorEnv(BaseEnv):
             
             elif tool_name == "visit_page":
                 url = args.get("url", "")
-                formatted_results.append(f'visit_page(url="{url}")\n')
+                formatted_results.append(f'[PAGE EXTRACT] url="{url}"\n')
                 
                 if isinstance(data, dict):
                     content = data.get("content", "")
@@ -402,6 +476,7 @@ class WikipediaArticleCreatorEnv(BaseEnv):
                 else:
                     formatted_results.append("Failed to retrieve page content.")
         
+        formatted_results.append("==== END TOOL RESULTS ====")
         return "\n\n".join(formatted_results)
     
     def _extract_research_facts(self, tool_results: List[Dict], facts: List[str]):
@@ -469,17 +544,34 @@ class WikipediaArticleCreatorEnv(BaseEnv):
     
     async def _get_model_response(self, messages: List[Dict]) -> str:
         """Get a response from the model for the current conversation state"""
-        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
         try:
-            completion = await self.server.completion(
-                prompt=prompt,
-                n=1,
-                max_tokens=self.config.max_token_length,
-                temperature=self.config.temperature,
-            )
-            return completion.choices[0].text
+            # Try to use chat_completion first (which works with OpenAI models)
+            try:
+                logger.info("Attempting to use chat_completion API")
+                completion = await self.server.chat_completion(
+                    messages=messages,
+                    temperature=self.config.temperature,
+                    max_tokens=min(4096, self.config.max_token_length),  # Ensure within OpenAI limits
+                )
+                return completion.choices[0].message.content
+            except (AttributeError, TypeError) as e:
+                # If chat_completion fails, fall back to standard completion
+                logger.info(f"Chat completion failed: {e}, falling back to standard completion")
+                
+                # For non-OpenAI models (local), use the standard completion API with tokenized prompt
+                prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
+                completion = await self.server.completion(
+                    prompt=prompt,
+                    n=1,
+                    max_tokens=self.config.max_token_length,
+                    temperature=self.config.temperature,
+                )
+                return completion.choices[0].text
+                
         except Exception as e:
             logger.error(f"Error getting model response: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return ""
 
     async def _next_step(self, episode: EpisodeState) -> Tuple[bool, Dict]:
@@ -490,16 +582,23 @@ class WikipediaArticleCreatorEnv(BaseEnv):
         # Get current conversation history
         messages = episode.message_history.copy()
         
+        logger.info("\n==== REQUESTING MODEL RESPONSE ====")
         # Generate model response
         response = await self._get_model_response(messages)
         
         if not response:
             episode.is_terminal = True
+            logger.info("No response received from model")
             return True, {"response": "", "tool_calls": [], "tool_results": []}
+        
+        logger.info("\n==== MODEL RESPONSE ====")
+        logger.info(response)
+        logger.info("==== END MODEL RESPONSE ====")
         
         # Check for final article
         final_article = self._extract_final_article(response)
         if final_article:
+            logger.info("\n==== FINAL ARTICLE DETECTED ====")
             episode.is_terminal = True
             episode.final_article = final_article
             # Add response to history
@@ -509,9 +608,14 @@ class WikipediaArticleCreatorEnv(BaseEnv):
         # Extract tool calls for research
         tool_calls = self._parse_tool_calls(response)
         
+        if tool_calls:
+            logger.info(f"\n==== EXECUTING {len(tool_calls)} TOOL CALLS ====")
+        
         # Execute research tool calls
         tool_results = []
-        for tool_call in tool_calls:
+        for i, tool_call in enumerate(tool_calls):
+            tool_name = tool_call.get("name", "unknown")
+            logger.info(f"Executing tool call {i+1}: {tool_name}")
             result = await self._execute_tool_call(tool_call)
             tool_results.append(result)
         
@@ -532,6 +636,7 @@ class WikipediaArticleCreatorEnv(BaseEnv):
         
         # Check if max steps reached
         if episode.steps_taken >= self.config.max_steps:
+            logger.info(f"\n==== MAX STEPS REACHED ({self.config.max_steps}) ====")
             episode.is_terminal = True
         
         return episode.is_terminal, {
