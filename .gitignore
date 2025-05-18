@@ -184,3 +184,4 @@ wandb
 .gradio/
 
 example_trainer/trained_model_checkpoints/
+environments/hack0/recursive_tool_improvement/.env
