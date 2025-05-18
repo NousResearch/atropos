@@ -13,6 +13,7 @@ from atroposlib.envs.base import (
     BaseEnv,
     BaseEnvConfig,
     ScoredDataItem,
+    ScoredDataGroup,
 )
 from atroposlib.envs.reward_fns import registry
 from atroposlib.envs.reward_fns.combined_reward import CombinedReward
@@ -135,99 +136,144 @@ class DatasetEnv(BaseEnv):
 
         return (prompt, answer, ground_truth)
 
-    async def collect_trajectory(self, item: Item) -> Tuple[Optional[ScoredDataItem], List[Item]]:
-        logger.setLevel(logging.DEBUG)
-        # logger.warning(f"collect_trajectory: item: {item}")
+    async def collect_trajectories(self, item: Item) -> Tuple[Optional[ScoredDataGroup], List[Item]]:
+        logger.debug(f"collect_trajectories: Starting for item: {item}")
         try:
-            user_content = dict(item[0][0])["content"]
-            answer = item[1] if len(item) > 1 and item[1] is not None else None
-            ground_truth = item[2] if len(item) > 2 and item[2] is not None else None
+            self.current_item = item  # Used by self.score()
+
+            user_content_dict = dict(item[0][0])
+            user_content = user_content_dict["content"]
 
             messages = []
             if self.config.system_prompt:
                 messages.append({"role": "system", "content": self.config.system_prompt})
-
             messages.append({"role": "user", "content": user_content})
-
             if self.config.prefill:
                 messages.append({"role": "assistant", "content": self.config.prefill})
 
-            # logger.warning(f"collect_trajectory: messages: {messages}")
+            logger.debug(f"collect_trajectories: Calling chat_completion with messages: {messages}, n={self.config.group_size}, max_tokens={self.config.max_tokens}")
 
-            max_tokens = self.config.max_tokens
+            completions_result = await self.server.chat_completion(
+                messages=messages,
+                n=self.config.group_size,
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature,
+                top_p=self.config.top_p,
+            )
+            logger.debug(f"collect_trajectories: Received completions_result: {completions_result}")
 
-            async with self.server.dedicated_server() as server:
-                # logger.warning(f"collect_trajectory: calling chat_completion with messages: {messages}")
-                completions_result = await server.chat_completion(
-                    messages=messages,
-                    n=1,
-                    max_tokens=max_tokens,
-                    temperature=self.config.temperature,
-                    top_p=self.config.top_p,
-                )
-                logger.warning(f"collect_trajectory: completions_result: {completions_result}")
-
-            if not completions_result.choices:
-                logger.warning("collect_trajectory: No choices returned from server.chat_completion.")
+            if not completions_result or not completions_result.choices:
+                logger.warning("collect_trajectories: No choices returned from server.chat_completion.")
                 return None, []
 
-            completion = completions_result.choices[0]
-            model_output_text = completion.message.content
+            processed_trajectories = []
+            for choice in completions_result.choices:
+                model_output_text = choice.message.content
 
-            response_content = model_output_text
-            if self.config.prefill:
-                response_content = self.config.prefill + model_output_text
+                full_messages_for_this_trajectory = []
+                if self.config.system_prompt:
+                    full_messages_for_this_trajectory.append({"role": "system", "content": self.config.system_prompt})
+                full_messages_for_this_trajectory.append({"role": "user", "content": user_content})
 
-            full_messages_for_trajectory = []
-            if self.config.system_prompt:
-                full_messages_for_trajectory.append({"role": "system", "content": self.config.system_prompt})
-            full_messages_for_trajectory.append({"role": "user", "content": user_content})
-            full_messages_for_trajectory.append({"role": "assistant", "content": response_content})
+                response_content = model_output_text
+                if self.config.prefill:
+                    response_content = self.config.prefill + model_output_text
 
-            tokenized_trajectory = tokenize_for_trainer(self.tokenizer, full_messages_for_trajectory)
+                full_messages_for_this_trajectory.append({"role": "assistant", "content": response_content})
+                processed_trajectories.append(full_messages_for_this_trajectory)
 
-            assistant_message_for_reward = {"role": "assistant", "content": response_content}
-            formatted_single_completion = [[assistant_message_for_reward]]
+            if not processed_trajectories:
+                logger.warning("collect_trajectories: No trajectories were processed.")
+                return None, []
 
-            reward_value = 0.0
-            if self.reward_function:
-                try:
-                    reward_kwargs = {
-                        "solution": answer,
-                        "ground_truth": ground_truth,
-                        "item": item,
-                        "config": self.config,
-                    }
-                    rewards_list = self.reward_function(formatted_single_completion, **reward_kwargs)
-                    if rewards_list and isinstance(rewards_list, list) and rewards_list:
-                        reward_value = float(rewards_list[0])
-                    else:
-                        logger.warning(f"collect_trajectory: Unexpected reward list format or empty list: {rewards_list}")
-                except Exception as e:
-                    logger.error(f"collect_trajectory: Error applying reward function: {e}")
-                    logger.exception(e)
+            logger.debug(f"collect_trajectories: Scoring {len(processed_trajectories)} trajectories.")
+            scored_data_group: Optional[ScoredDataGroup] = await self.score(processed_trajectories)
+
+            if scored_data_group:
+                logger.debug(f"collect_trajectories: Produced ScoredDataGroup with scores: {scored_data_group.get('scores')}")
             else:
-                logger.warning("collect_trajectory: No reward function configured. Defaulting reward to 0.0.")
+                logger.warning("collect_trajectories: self.score returned None.")
 
-            messages_for_item = full_messages_for_trajectory
-
-            scored_data_item = ScoredDataItem(
-                tokens=tokenized_trajectory["tokens"],
-                masks=tokenized_trajectory["masks"],
-                scores=reward_value,
-                advantages=None,
-                ref_logprobs=None,
-                messages=messages_for_item,
-                group_overrides=None,
-                overrides=None
-            )
-            logger.debug(f"collect_trajectory: Produced ScoredDataItem with score {reward_value}")
-            return scored_data_item, []
+            return scored_data_group, []
 
         except Exception as e:
-            logger.error(f"collect_trajectory: Failed to collect trajectory for item {item}: {e}")
+            logger.error(f"collect_trajectories: Failed to collect trajectories for item {item}: {e}")
             logger.exception(e)
             return None, []
+
+    async def score(self, rollout_group_data: List[List[Dict[str, Any]]]) -> Optional[ScoredDataGroup]:
+        logger.warning(f"Scoring {len(rollout_group_data)} rollout items")
+
+        scores = ScoredDataGroup()
+        scores["tokens"] = []
+        scores["masks"] = []
+        scores["scores"] = []
+        scores["advantages"] = None
+        scores["ref_logprobs"] = None
+        scores["messages"] = None if not self.config.include_messages_in_scoring else []
+
+        answer = None
+        if self.current_item and len(self.current_item) > 1 and self.current_item[1] is not None:
+            answer = self.current_item[1]
+        logger.warning(f"Answer for current item: {answer}")
+
+        ground_truth = None
+        if self.current_item and len(self.current_item) > 2 and self.current_item[2] is not None:
+            ground_truth = self.current_item[2]
+        logger.warning(f"Ground truth for current item: {ground_truth}")
+
+        formatted_completions = []
+        for trajectory in rollout_group_data:
+            if trajectory and isinstance(trajectory, list):
+                assistant_messages = [
+                    msg
+                    for msg in trajectory
+                    if isinstance(msg, dict) and msg.get("role") == "assistant"
+                ]
+                if assistant_messages:
+                    formatted_completions.append([assistant_messages[-1]])
+
+        if not formatted_completions:
+            logger.warning("No valid completions to score")
+            return None
+
+        try:
+            reward_kwargs = {
+                "solution": answer,
+                "ground_truth": ground_truth,
+                "item": self.current_item,
+                "config": self.config,
+            }
+            all_rewards = self.reward_function(formatted_completions, **reward_kwargs)
+            logger.info(f"Calculated rewards: {all_rewards}")
+
+        except Exception as e:
+            logger.error(f"Error applying reward functions: {e}")
+            logger.exception(e)
+            all_rewards = [0.0] * len(formatted_completions)
+
+        for i, (trajectory, reward) in enumerate(zip(rollout_group_data, all_rewards)):
+            try:
+                tokenized = tokenize_for_trainer(self.tokenizer, trajectory)
+
+                scores["tokens"].append(tokenized["tokens"])
+                scores["masks"].append(tokenized["masks"])
+                scores["scores"].append(float(reward))
+
+                if self.config.include_messages_in_scoring:
+                    if scores["messages"] is not None:
+                        scores["messages"].append(trajectory)
+                logger.warning(f"Scores: {scores['scores']}")
+            except Exception as e:
+                logger.error(f"Error processing trajectory {i}: {e}")
+                logger.exception(e)
+
+        if not scores["tokens"]:
+            logger.warning("No valid scores generated")
+            return None
+
+        logger.info(f"Generated scores: {scores['scores']}")
+        return scores
 
     async def evaluate(self):
         if (
@@ -258,7 +304,7 @@ class DatasetEnv(BaseEnv):
             if self.config.answer_field and self.config.answer_field in item:
                 answer = item[self.config.answer_field]
 
-            eval_tasks.append(self.collect_trajectory((prompt, answer)))
+            eval_tasks.append(self.collect_trajectories((prompt, answer)))
 
         eval_results = await asyncio.gather(*eval_tasks)
 
