@@ -10,7 +10,7 @@ env:
   steps_per_eval: 20
   max_token_length: 16384
   wandb_name: "wikipedia_article_creator"
-  include_messages: true  # Include message history for wandb
+  include_messages: true  # Include message history for HTML rendering and wandb
   num_rollouts_to_keep: 32
   data_path_to_save_groups: "data/wikipedia_articles.jsonl"  # Output path
   ensure_scores_are_not_same: false  # Needed for process mode

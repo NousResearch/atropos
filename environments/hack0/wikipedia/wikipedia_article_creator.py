@@ -890,11 +890,60 @@ class WikipediaArticleCreatorEnv(BaseEnv):
                 step_score["masks"] = [tokenized["masks"]]
                 step_score["scores"] = [-0.5]  # Slight negative score
             
-            # Add messages to the step_score to make them available for wandb logging
-            # We do this through the messages key which is supported in ScoredDataGroup
+            # Add messages to the step_score to make them available for wandb logging and HTML rendering
+            # We do this through the messages key which is supported in ScoredDataGroup and HTML rendering
             if self.config.include_messages:
-                step_score.setdefault("messages", [])
-                step_score["messages"].append(episode.message_history)
+                # For HTML rendering, we need to combine all messages into a single markdown string
+                # This ensures the entire conversation appears as a single content item
+                
+                # First, create the complete conversation as one big markdown document
+                # This is what will be shown in the HTML output
+                complete_conversation = []
+                
+                # Add the topic
+                complete_conversation.append(f"# Wikipedia Article: {episode.topic}\n")
+                
+                # Include tool calls and research steps
+                for i, msg in enumerate(episode.message_history):
+                    role = msg.get('role', 'unknown')
+                    content = msg.get('content', '')
+                    
+                    # Skip system messages for cleaner output
+                    if role == "system":
+                        continue
+                    
+                    # Handle normal messages
+                    complete_conversation.append(f"## {role.upper()}")
+                    
+                    # Special handling for final article
+                    if role == "assistant" and "Final Step: ```markdown" in content:
+                        article_content = self._extract_final_article(content)
+                        if article_content:
+                            complete_conversation.append(content.split("Final Step: ```markdown")[0])  # Add thinking/research
+                            complete_conversation.append("### FINAL ARTICLE")
+                            complete_conversation.append(f"```markdown\n{article_content}\n```")
+                        else:
+                            complete_conversation.append(content)
+                    else:
+                        complete_conversation.append(content)
+                    
+                    # If this is an assistant message that triggered tools, add the tool calls
+                    if role == "assistant" and i < len(episode.message_history) - 1:
+                        next_msg = episode.message_history[i+1]
+                        if next_msg.get('role') == 'user' and "==== TOOL RESULTS ====" in next_msg.get('content', ''):
+                            # Extract tool name from the message
+                            tool_content = next_msg.get('content', '')
+                            if '[WEB SEARCH]' in tool_content:
+                                complete_conversation.append("### 🔍 SEARCH RESULTS")
+                            elif '[PAGE EXTRACT]' in tool_content:
+                                complete_conversation.append("### 📄 PAGE EXTRACT")
+                            complete_conversation.append("```\n" + tool_content + "\n```")
+                
+                # Join everything into a single string with double newlines between sections
+                full_conversation_markdown = "\n\n".join(complete_conversation)
+                
+                # Store the full conversation as a single message (for HTML rendering)
+                step_score["messages"] = [full_conversation_markdown]
             
             trajectory_data.append(step_score)
         
