@@ -177,7 +177,7 @@ class GSM8kEnv(BaseEnv):
 
         chat_completions = await self.server.chat_completion(
             messages=[{"role": "system", "content": system_prompt}, user_message],
-            n=self.config.group_size,
+            n=1,
             max_tokens=self.config.max_token_length,
         )
         to_score = list()
