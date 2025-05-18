@@ -282,7 +282,7 @@ class BaseEnv(ABC):
         to_postprocess["messages"] = []
         to_postprocess["group_overrides"] = {}
         to_postprocess["overrides"] = []
-        print("Processing results")
+        print(f"Processing results: {len(results)}")
         for result in results:
             to_postprocess["tokens"].append(result[0]["tokens"])
             to_postprocess["masks"].append(result[0]["masks"])
