@@ -177,7 +177,7 @@ class GSM8kEnv(BaseEnv):
         print(f"collect_trajectories: Starting with item: {item}")
         chat_completions = await self.server.chat_completion(
             messages=[{"role": "system", "content": system_prompt}, user_message],
-            n=1,
+            n=self.config.group_size,
             max_tokens=self.config.max_token_length,
         )
         print(f"collect_trajectories: Chat completions: {chat_completions}")
