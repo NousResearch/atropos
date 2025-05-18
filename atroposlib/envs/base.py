@@ -1170,9 +1170,10 @@ class BaseEnv(ABC):
                 )
                 rprint(env_config)
                 rprint(openai_configs)
-                logger.debug(f"before: Starting env_manager")
+                rprint(f"before: Starting env_manager")
                 # Run the environment
                 asyncio.run(env.env_manager())
+                rprint(f"after: env_manager")
 
         return CliServeConfig
 
