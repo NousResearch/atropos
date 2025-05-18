@@ -266,6 +266,7 @@ class BaseEnv(ABC):
         for _ in range(self.config.group_size):
             tasks.append(self.collect_trajectory(item))
         results = await asyncio.gather(*tasks)
+        logger.warning(f"collect_trajectories base: results: {results}")
         if any(not isinstance(result[0], dict) for result in results):
             logging.error("something wasn't a ScoredDataItem")
             raise ValueError(
@@ -635,6 +636,7 @@ class BaseEnv(ABC):
             do_send_to_api: Whether to send the data to the API
             abort_on_any_max_length_exceeded: Whether to abort if any token length exceeds the max
         """
+        logger.warning(f"handle_send_to_api: scored_data: {scored_data}")
         original_was_list = isinstance(scored_data, list)  # not sure if this is needed
         data_to_process = scored_data if original_was_list else [scored_data]
 
