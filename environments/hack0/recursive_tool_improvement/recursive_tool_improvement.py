@@ -222,12 +222,17 @@ class TrajectoryState:
         self.current_iteration = 0
         self.execution_results: List[ExecutionResult] = []
         self.rewards: List[float] = []
+        self.critiques: List[str] = []  # Store extracted critiques for analysis
         self.metadata: Dict[str, Any] = {
             "problem_id": problem.problem_id,
             "iterations": 0,
             "final_reward": 0.0,
             "converged": False,
-            "improvement_trend": []
+            "improvement_trend": [],
+            "execution_times": [],  # Track execution times across iterations
+            "tool_call_counts": [],  # Track number of tool calls across iterations
+            "error_counts": 0,  # Count of execution errors
+            "early_stop_reason": None  # Why the trajectory stopped (max_iterations, convergence, perfect_score)
         }
     
     def add_message(self, role: str, content: str) -> None:
@@ -265,6 +270,39 @@ class TrajectoryState:
         
         # Update final reward
         self.metadata["final_reward"] = self.rewards[-1]
+        
+    def add_critique(self, critique: Optional[str]) -> None:
+        """Add a critique for tracking and analysis"""
+        if critique:
+            self.critiques.append(critique)
+        else:
+            self.critiques.append("")  # Empty string if no critique found
+            
+    def update_execution_metrics(self, result: ExecutionResult) -> None:
+        """Update execution metrics based on the latest execution result"""
+        # Track execution time
+        self.metadata["execution_times"].append(result.execution_time)
+        
+        # Track tool call count
+        self.metadata["tool_call_counts"].append(len(result.tool_calls))
+        
+        # Track errors
+        if not result.success:
+            self.metadata["error_counts"] += 1
+            
+        # Update detailed metrics for the current iteration
+        iteration_metrics = {
+            "iteration": self.current_iteration,
+            "success": result.success,
+            "execution_time": result.execution_time,
+            "tool_calls": len(result.tool_calls),
+            "error": result.error if not result.success else None
+        }
+        
+        if "iteration_details" not in self.metadata:
+            self.metadata["iteration_details"] = []
+            
+        self.metadata["iteration_details"].append(iteration_metrics)
 
 
 class RecursiveToolImprovementEnv(BaseEnv):
@@ -924,6 +962,10 @@ class RecursiveToolImprovementEnv(BaseEnv):
                 response, problem.input_data
             )
             trajectory.add_execution_result(execution_result)
+            trajectory.update_execution_metrics(execution_result)
+            
+            # Update state to INITIAL_SOLUTION (tracking the state more explicitly)
+            trajectory.update_state(ConversationState.INITIAL_SOLUTION)
             
             # Generate execution result prompt
             execution_prompt = self._generate_execution_result_prompt(
@@ -937,6 +979,18 @@ class RecursiveToolImprovementEnv(BaseEnv):
             
             # Update state to execution result
             trajectory.update_state(ConversationState.EXECUTION_RESULT)
+            
+            # Check if we got a perfect solution on the first try
+            if reward >= 1.0:
+                logger.info(f"Perfect solution on first attempt for {conversation_id}")
+                trajectory.metadata["early_stop_reason"] = "perfect_solution"
+                trajectory.metadata["converged"] = True
+                trajectory.update_state(ConversationState.FINAL_RESULT)
+                self.success_rate_buffer.append(1.0)
+                self.convergence_speed_buffer.append(0)  # 0 iterations needed
+                
+                # Create ScoredDataItem from the trajectory
+                return self._create_scored_data(trajectory), []
             
             # Request critique
             critique_prompt = self._generate_critique_prompt()
@@ -960,6 +1014,9 @@ class RecursiveToolImprovementEnv(BaseEnv):
             critique = self._extract_critique(response)
             composition = self._extract_composition(response)
             
+            # Store critique for analysis
+            trajectory.add_critique(critique)
+            
             if composition:
                 # We already have an improved composition in the critique response
                 # Execute the improved composition
@@ -967,6 +1024,7 @@ class RecursiveToolImprovementEnv(BaseEnv):
                     response, problem.input_data
                 )
                 trajectory.add_execution_result(execution_result)
+                trajectory.update_execution_metrics(execution_result)
                 
                 # Generate execution result prompt
                 execution_prompt = self._generate_execution_result_prompt(
@@ -981,11 +1039,18 @@ class RecursiveToolImprovementEnv(BaseEnv):
                 # Update state to improved solution
                 trajectory.update_state(ConversationState.IMPROVED_SOLUTION)
                 
-                # Check if we should continue with more iterations
-                if (
-                    trajectory.current_iteration < self.config.max_iterations and
-                    (trajectory.rewards[-1] < 1.0 or len(trajectory.rewards) < 2)
-                ):
+                # Determine if we should continue iterations based on:
+                # 1. Haven't reached max iterations
+                # 2. Haven't achieved perfect score (unless this is the first iteration)
+                # 3. Making sufficient improvement or still on early iterations
+                continue_iteration = (
+                    trajectory.current_iteration < self.config.max_iterations and  # Max iterations not reached
+                    (trajectory.rewards[-1] < 1.0 or len(trajectory.rewards) < 2) and  # Not perfect or first iteration
+                    (len(trajectory.rewards) < 3 or  # Still in early iterations (always try at least 2 improvements)
+                     trajectory.rewards[-1] - trajectory.rewards[-2] >= self.config.improvement_threshold)  # Sufficient improvement
+                )
+                
+                if continue_iteration:
                     # Request another improvement
                     improvement_prompt = self._generate_improvement_prompt(
                         trajectory.current_iteration,
@@ -996,9 +1061,21 @@ class RecursiveToolImprovementEnv(BaseEnv):
                     # Update state to critique for next iteration
                     trajectory.update_state(ConversationState.CRITIQUE)
                     
+                    # Log progress
+                    logger.info(f"Continuing to iteration {trajectory.current_iteration+1} for {conversation_id}. "
+                               f"Current reward: {trajectory.rewards[-1]:.3f}")
+                    
                     # Add to backlog to continue the trajectory
                     return None, [item]
                 else:
+                    # Set appropriate early stop reason
+                    if trajectory.current_iteration >= self.config.max_iterations:
+                        trajectory.metadata["early_stop_reason"] = "max_iterations"
+                    elif trajectory.rewards[-1] >= 1.0:
+                        trajectory.metadata["early_stop_reason"] = "perfect_solution"
+                    else:
+                        trajectory.metadata["early_stop_reason"] = "insufficient_improvement"
+                    
                     # Reached maximum iterations or achieved perfect score
                     trajectory.update_state(ConversationState.FINAL_RESULT)
                     trajectory.metadata["converged"] = trajectory.rewards[-1] >= 1.0
@@ -1015,6 +1092,12 @@ class RecursiveToolImprovementEnv(BaseEnv):
                     # Calculate final success rate
                     self.success_rate_buffer.append(1.0 if trajectory.rewards[-1] >= 1.0 else 0.0)
                     
+                    # Log completion
+                    logger.info(f"Trajectory {conversation_id} completed after {trajectory.current_iteration} iterations. "
+                               f"Final reward: {trajectory.rewards[-1]:.3f}, "
+                               f"Converged: {trajectory.metadata['converged']}, "
+                               f"Stop reason: {trajectory.metadata['early_stop_reason']}")
+                    
                     # Create ScoredDataItem from the trajectory
                     return self._create_scored_data(trajectory), []
             else:
@@ -1024,6 +1107,10 @@ class RecursiveToolImprovementEnv(BaseEnv):
                     self.config.max_iterations
                 )
                 trajectory.add_message("user", improvement_prompt)
+                
+                # Log the missing composition
+                logger.warning(f"No composition found in critique response for {conversation_id}. "
+                              f"Requesting explicit improvement.")
                 
                 # Keep the state as critique to get an improved solution
                 return None, [item]
@@ -1050,6 +1137,7 @@ class RecursiveToolImprovementEnv(BaseEnv):
                 response, problem.input_data
             )
             trajectory.add_execution_result(execution_result)
+            trajectory.update_execution_metrics(execution_result)
             
             # Generate execution result prompt
             execution_prompt = self._generate_execution_result_prompt(
@@ -1064,12 +1152,26 @@ class RecursiveToolImprovementEnv(BaseEnv):
             # Update state to improved solution (increments iteration counter)
             trajectory.update_state(ConversationState.IMPROVED_SOLUTION)
             
-            # Check if we should continue with more iterations
-            if (
-                trajectory.current_iteration < self.config.max_iterations and
-                (trajectory.rewards[-1] < 1.0 or len(trajectory.rewards) < 2) and
-                (len(trajectory.rewards) < 2 or trajectory.rewards[-1] - trajectory.rewards[-2] >= self.config.improvement_threshold)
-            ):
+            # Determine if we should continue iterations with more sophisticated logic
+            max_iterations_reached = trajectory.current_iteration >= self.config.max_iterations
+            achieved_perfect_score = trajectory.rewards[-1] >= 1.0
+            
+            # Only check improvement if we have enough iterations
+            making_sufficient_improvement = True
+            if len(trajectory.rewards) >= 2:
+                latest_improvement = trajectory.rewards[-1] - trajectory.rewards[-2]
+                making_sufficient_improvement = latest_improvement >= self.config.improvement_threshold
+            
+            # Always allow at least 2 improvement attempts unless we achieve a perfect score
+            still_in_early_iterations = trajectory.current_iteration < 2 and not achieved_perfect_score
+            
+            continue_iteration = (
+                not max_iterations_reached and
+                (making_sufficient_improvement or still_in_early_iterations) and
+                not achieved_perfect_score
+            )
+            
+            if continue_iteration:
                 # Request another critique
                 critique_prompt = self._generate_critique_prompt()
                 trajectory.add_message("user", critique_prompt)
@@ -1077,17 +1179,39 @@ class RecursiveToolImprovementEnv(BaseEnv):
                 # Update state to critique for next iteration
                 trajectory.update_state(ConversationState.CRITIQUE)
                 
+                # Log progress
+                logger.info(f"Moving to iteration {trajectory.current_iteration+1} for {conversation_id}. "
+                           f"Current reward: {trajectory.rewards[-1]:.3f}, "
+                           f"Last improvement: {trajectory.metadata['improvement_trend'][-1] if trajectory.metadata['improvement_trend'] else 'N/A'}")
+                
                 # Add to backlog to continue the trajectory
                 return None, [item]
             else:
+                # Set appropriate early stop reason
+                if max_iterations_reached:
+                    trajectory.metadata["early_stop_reason"] = "max_iterations"
+                    logger.info(f"Stopping trajectory {conversation_id} due to max iterations ({self.config.max_iterations})")
+                elif achieved_perfect_score:
+                    trajectory.metadata["early_stop_reason"] = "perfect_solution"
+                    logger.info(f"Stopping trajectory {conversation_id} due to perfect solution (reward: {trajectory.rewards[-1]:.3f})")
+                else:
+                    trajectory.metadata["early_stop_reason"] = "insufficient_improvement"
+                    logger.info(f"Stopping trajectory {conversation_id} due to insufficient improvement "
+                               f"(last improvement: {trajectory.metadata['improvement_trend'][-1] if trajectory.metadata['improvement_trend'] else 'N/A'})")
+                
                 # Reached maximum iterations, achieved perfect score, or no improvement
                 trajectory.update_state(ConversationState.FINAL_RESULT)
                 trajectory.metadata["converged"] = trajectory.rewards[-1] >= 1.0
                 
                 # Calculate improvement metrics
                 if len(trajectory.rewards) > 1:
-                    improvement = trajectory.rewards[-1] - trajectory.rewards[0]
-                    self.improvement_rate_buffer.append(improvement)
+                    total_improvement = trajectory.rewards[-1] - trajectory.rewards[0]
+                    trajectory.metadata["total_improvement"] = total_improvement
+                    self.improvement_rate_buffer.append(total_improvement)
+                    
+                    # Calculate average improvement per iteration
+                    if trajectory.current_iteration > 0:
+                        trajectory.metadata["avg_improvement_per_iteration"] = total_improvement / trajectory.current_iteration
                 
                 # Calculate convergence speed
                 if trajectory.rewards[-1] >= 1.0:
@@ -1095,6 +1219,14 @@ class RecursiveToolImprovementEnv(BaseEnv):
                 
                 # Calculate final success rate
                 self.success_rate_buffer.append(1.0 if trajectory.rewards[-1] >= 1.0 else 0.0)
+                
+                # Log detailed completion information
+                tool_calls_trend = trajectory.metadata.get("tool_call_counts", [])
+                times_trend = trajectory.metadata.get("execution_times", [])
+                logger.info(f"Trajectory {conversation_id} completed after {trajectory.current_iteration} iterations. "
+                          f"Final reward: {trajectory.rewards[-1]:.3f}, "
+                          f"Tool calls trend: {tool_calls_trend}, "
+                          f"Execution times trend: {times_trend}")
                 
                 # Create ScoredDataItem from the trajectory
                 return self._create_scored_data(trajectory), []
@@ -1193,11 +1325,16 @@ class RecursiveToolImprovementEnv(BaseEnv):
         """
         Create a ScoredDataItem from a completed trajectory.
         
+        This method transforms a trajectory into the format expected by the Atropos
+        trainer, including tokenization, reward calculation, and metadata preservation.
+        The scored data includes rich information about the multi-iteration improvement
+        process to enable detailed analysis and effective training.
+        
         Args:
-            trajectory: The completed trajectory
+            trajectory: The completed trajectory with all iterations
             
         Returns:
-            ScoredDataItem with tokens, masks, scores, and messages
+            ScoredDataItem with tokens, masks, scores, messages, and rich metadata
         """
         # Use the entire conversation history
         messages = trajectory.message_history.copy()
@@ -1221,18 +1358,70 @@ class RecursiveToolImprovementEnv(BaseEnv):
         # Use final reward as the score
         score = trajectory.rewards[-1] if trajectory.rewards else 0.0
         
-        # Create the scored data item
+        # Calculate additional metrics for training signal
+        reward_trend = trajectory.rewards.copy()
+        improvement_from_initial = score - trajectory.rewards[0] if trajectory.rewards else 0.0
+        
+        # Calculate efficiency metrics
+        avg_execution_time = (
+            sum(trajectory.metadata.get("execution_times", [])) / 
+            len(trajectory.metadata.get("execution_times", [1])) 
+            if trajectory.metadata.get("execution_times") else 0.0
+        )
+        
+        # Calculate tool usage efficiency
+        tool_calls = trajectory.metadata.get("tool_call_counts", [])
+        tool_efficiency_trend = []
+        if len(tool_calls) > 1:
+            for i in range(1, len(tool_calls)):
+                # Positive if using fewer tools (more efficient)
+                efficiency_change = tool_calls[i-1] - tool_calls[i]
+                tool_efficiency_trend.append(efficiency_change)
+        
+        # Create comprehensive metadata
+        enhanced_metadata = {
+            # Basic identification
+            "problem_id": trajectory.problem.problem_id,
+            "problem_difficulty": trajectory.problem.difficulty,
+            "problem_domain": trajectory.problem.domain,
+            
+            # Iteration data
+            "iterations": trajectory.current_iteration,
+            "max_iterations": self.config.max_iterations,
+            "early_stop_reason": trajectory.metadata.get("early_stop_reason"),
+            
+            # Reward data
+            "reward_trend": reward_trend,
+            "initial_reward": trajectory.rewards[0] if trajectory.rewards else 0.0,
+            "final_reward": score,
+            "improvement": improvement_from_initial,
+            "improvement_trend": trajectory.metadata.get("improvement_trend", []),
+            "avg_improvement_per_iteration": trajectory.metadata.get(
+                "avg_improvement_per_iteration", 
+                improvement_from_initial / max(1, trajectory.current_iteration)
+            ),
+            
+            # Convergence data
+            "converged": trajectory.metadata.get("converged", False),
+            
+            # Execution metrics
+            "execution_times": trajectory.metadata.get("execution_times", []),
+            "avg_execution_time": avg_execution_time,
+            "tool_call_counts": trajectory.metadata.get("tool_call_counts", []),
+            "tool_efficiency_trend": tool_efficiency_trend,
+            "error_counts": trajectory.metadata.get("error_counts", 0),
+            
+            # Detailed iteration data
+            "iteration_details": trajectory.metadata.get("iteration_details", [])
+        }
+        
+        # Create the scored data item with enhanced metadata
         scored_data = {
             "tokens": tokens,
             "masks": masks,
             "scores": score,
             "messages": messages if self.config.include_messages else None,
-            "overrides": {
-                "problem_id": trajectory.problem.problem_id,
-                "iterations": trajectory.current_iteration,
-                "rewards": trajectory.rewards,
-                "converged": trajectory.metadata.get("converged", False)
-            }
+            "overrides": enhanced_metadata
         }
         
         return scored_data
