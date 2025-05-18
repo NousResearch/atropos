@@ -403,7 +403,6 @@ class BaseEnv(ABC):
                         group=self.wandb_group,
                         config=self.config.model_dump(),
                     )
-                    self.wandb = wandb
                     break
 
     @retry(
@@ -935,7 +934,6 @@ class BaseEnv(ABC):
                 group=self.wandb_group,
                 config=self.config.model_dump(),
             )
-            self.wandb = wandb
 
         # Initialize the processing
         self.curr_step = 0
