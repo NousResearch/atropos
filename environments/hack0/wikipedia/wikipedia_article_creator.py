@@ -829,6 +829,9 @@ class WikipediaArticleCreatorEnv(BaseEnv):
         # Get or create episode state
         episode = self._get_or_create_episode(episode_id, topic)
         
+        # Detect if we're in process mode
+        is_process_mode = hasattr(self, 'process_mode') and self.process_mode
+        
         trajectory_data: List[ScoredDataGroup] = []
         
         # Run episode until terminal state
@@ -945,7 +948,18 @@ class WikipediaArticleCreatorEnv(BaseEnv):
                 # Store the full conversation as a single message (for HTML rendering)
                 step_score["messages"] = [full_conversation_markdown]
             
-            trajectory_data.append(step_score)
+            # For process mode, we only want to keep the final state
+            # This ensures we get a single group in the HTML output
+            if is_process_mode:
+                if is_terminal:
+                    # For terminal steps, keep only this step which has the full conversation
+                    trajectory_data = [step_score]
+                else:
+                    # For intermediate steps in process mode, don't add to trajectory_data
+                    pass
+            else:
+                # Normal training mode - add all steps
+                trajectory_data.append(step_score)
         
         # Don't delete the episode yet - we need it for wandb logging
         # Instead, mark it for deletion after wandb logging is complete
