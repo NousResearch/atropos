@@ -173,22 +173,6 @@ class DatasetEnv(BaseEnv):
 
         item_data = self.dataset[self.iter % len(self.dataset)]
         self.iter += 1
-
-        logger.warning(f"get_next_item: item_data.keys(): {list(item_data.keys())}")
-        logger.warning(
-            f"get_next_item: config: prompt_field='{self.config.prompt_field}', "
-            f"answer_field='{self.config.answer_field}', ground_truth_field='{self.config.ground_truth_field}'"
-        )
-        logger.warning(
-            f"get_next_item: raw_prompt_data: {item_data.get(self.config.prompt_field)}"
-        )
-        logger.warning(
-            f"get_next_item: raw_answer_data: {item_data.get(self.config.answer_field)}"
-        )
-        logger.warning(
-            f"get_next_item: raw_ground_truth_data: {item_data.get(self.config.ground_truth_field)}"
-        )
-
         user_msg = {"role": "user", "content": item_data[self.config.prompt_field]}
         prompt = tuple([frozenset(user_msg.items())])
 
@@ -203,9 +187,6 @@ class DatasetEnv(BaseEnv):
         ):
             ground_truth = item_data[self.config.ground_truth_field]
 
-        logger.warning(
-            f"get_next_item: returning: prompt_len={len(prompt)}, answer='{answer}', ground_truth='{ground_truth}'"
-        )
         return (prompt, answer, ground_truth)
 
     async def collect_trajectory(self, item: Item) -> Tuple[Optional[ScoredDataItem], List[Item]]:
