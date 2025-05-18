@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import yaml
 from datasets import load_dataset
 from pydantic import Field
+import wandb
 
 from atroposlib.envs.base import (
     APIServerConfig,
@@ -66,6 +67,7 @@ class DatasetEnvConfig(BaseEnvConfig):
     )
     eval_split: Optional[str] = Field(None, description="Evaluation dataset split")
     debug_mode: bool = Field(False, description="Enable debug logging")
+    use_wandb: bool = Field(False, description="Whether to use wandb for logging")
 
 
 class DatasetEnv(BaseEnv):
@@ -354,9 +356,18 @@ class DatasetEnv(BaseEnv):
 
         self.metric_buffer = {k: [] for k in self.metric_buffer}
 
-        if hasattr(self, "reward_function") and self.wandb:
-            if hasattr(self.reward_function, "set_wandb_logger"):
-                self.reward_function.set_wandb_logger(self.wandb)
+        # If using wandb and a reward function exists that can accept a wandb logger
+        if self.config.use_wandb and hasattr(self, "reward_function") and \
+           hasattr(self.reward_function, "set_wandb_logger"):
+            # BaseEnv.process_manager (or setup_wandb in serve mode) is responsible for wandb.init()
+            # We directly use the wandb module if it has an active run.
+            if wandb.run:
+                self.reward_function.set_wandb_logger(wandb) # Pass the wandb module
+            else:
+                logger.warning(
+                    "DatasetEnv.wandb_log: Wandb configured (use_wandb=True) and reward_function has "
+                    "set_wandb_logger, but wandb.run is not active. Skipping."
+                )
 
         await super().wandb_log(metrics)
 
