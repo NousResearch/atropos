@@ -5,6 +5,7 @@ import json
 import sys
 import textwrap
 from pathlib import Path
+import functools
 
 try:
     import fire
@@ -60,9 +61,7 @@ def create_html_for_group(group_data, index):
 
     items_html = ""
     for i, (msg, score) in enumerate(zip(messages, scores)):
-        rendered_markdown = markdown.markdown(
-            msg, extensions=["fenced_code", "tables", "nl2br"]
-        )
+        rendered_markdown = render_msg(msg)
         score_class = get_score_class(score)
         item_id = f"group-{index}-item-{i}"
         items_html += textwrap.dedent(
@@ -97,6 +96,40 @@ def create_html_for_group(group_data, index):
     """
     )
     return group_html
+
+def render_msg(msg):
+    """
+    Turn *whatever* a “message” happens to be into safe HTML:
+      • str  -> markdown-rendered str
+      • dict -> show role + markdown-rendered content
+      • list -> recursively render each element and wrap in a container
+      This prevents markdown.markdown() from ever receiving a list object.
+    """
+    # 1️⃣ plain string --------------------------------------------------------
+    if isinstance(msg, str):
+        return markdown.markdown(msg, extensions=["fenced_code", "tables", "nl2br"])
+
+    # 2️⃣ dict with `role` / `content` ---------------------------------------
+    if isinstance(msg, dict):
+        role = html.escape(str(msg.get("role", "unknown")).title())
+        content_raw = msg.get("content", "")
+        content_html = render_msg(content_raw)  # recurse (content may be list!)
+        return textwrap.dedent(
+            f"""
+            <div class="chat-line chat-{role.lower()}">
+                <span class="chat-role">{role}:</span>
+                <div class="chat-content">{content_html}</div>
+            </div>
+        """
+        )
+
+    # 3️⃣ list (nested turns) -------------------------------------------------
+    if isinstance(msg, list):
+        inner = "".join(render_msg(m) for m in msg)
+        return f'<div class="chat-turn">{inner}</div>'
+
+    # 4️⃣ fallback -----------------------------------------------------------
+    return f"<pre>{html.escape(str(msg))}</pre>"
 
 
 # --- Main Function ---
