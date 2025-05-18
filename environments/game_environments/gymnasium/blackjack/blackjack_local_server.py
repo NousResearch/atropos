@@ -5,7 +5,7 @@ import random
 
 from dotenv import load_dotenv
 
-from atroposlib.envs.base import EvalHandlingEnum, OpenaiConfig
+from atroposlib.envs.base import APIServerConfig, EvalHandlingEnum
 from environments.game_environments.gymnasium.blackjack.blackjack_env_thinking import (
     BlackjackEnv,
     BlackjackEnvConfig,
@@ -47,7 +47,7 @@ async def main():
         mc_samples=1,
     )
     server_configs = [
-        OpenaiConfig(
+        APIServerConfig(
             model_name="gpt-4.1-nano",
             base_url="https://api.openai.com/v1",
             api_key=os.getenv("OPENAI_API_KEY"),

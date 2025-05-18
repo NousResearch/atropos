@@ -1,6 +1,6 @@
 [project]
 name = "atroposlib"
-version = "0.2.0"
+version = "0.2.1"
 description = "Atropos: An Environment and Rollout handler for LLM RL"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -55,7 +55,8 @@ dev = [
 ]
 examples = [
     "gradio",
-    "atroposlib[rewardfns]"
+    "atroposlib[rewardfns]",
+    "langdetect"
 ]
 
 [build-system]
