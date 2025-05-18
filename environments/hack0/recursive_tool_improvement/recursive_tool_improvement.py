@@ -27,6 +27,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+# Load environment variables from .env file if it exists
+from dotenv import load_dotenv
+load_dotenv()
+
 import wandb
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
