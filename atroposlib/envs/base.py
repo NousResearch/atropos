@@ -815,6 +815,7 @@ class BaseEnv(ABC):
                 await self.wandb_log({})
 
     async def add_train_workers(self):
+        logger.info(f"Adding train workers, max_num_workers: {self.max_num_workers}")
         if (self.eval_runner is not None) and (not self.eval_runner.done()):
             if self.config.eval_handling == EvalHandlingEnum.STOP_TRAIN:
                 return
