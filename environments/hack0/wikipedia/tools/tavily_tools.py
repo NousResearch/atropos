@@ -47,38 +47,64 @@ class TavilyExtractTool(Tool):
         Note: This function returns the extracted content without printing it.
         """
         try:
+            print(f"\n🌐 VISIT PAGE: {url}")
             response = self.client.extract(
                 urls=url, include_images=False, extract_depth="basic"
             )
 
-            if not response["results"]:
-                print(f"\n🌐 VISIT PAGE: {url}\nError: Failed to extract content")
+            if not response or not response.get("results"):
+                error_msg = f"No results in Tavily extraction response for {url}"
+                print(f"Error: {error_msg}")
+                print(f"Full response: {response}")
+                
+                # Provide user-friendly content with the error
                 return {
                     "url": url,
-                    "title": "Unknown",
-                    "content": "",
+                    "title": "Content Extraction Failed",
+                    "content": "The content extraction service couldn't retrieve information from this page. This can happen with certain websites that have access restrictions or complex layouts. Try using a different source for this information.",
                     "success": False,
-                    "error": f"Failed to extract content from {url}",
+                    "error": error_msg,
                 }
 
-            content = response["results"][0]["raw_content"]
-            title = response["results"][0].get("title", "Unknown title")
+            # Extract content, handle potential missing fields
+            try:
+                content = response["results"][0]["raw_content"]
+                content_length = len(content)
+                print(f"Successfully extracted {content_length} characters")
+            except (KeyError, IndexError) as ke:
+                error_msg = f"Missing data in Tavily response for {url}: {str(ke)}"
+                print(f"Error: {error_msg}")
+                print(f"Response structure: {response.keys()}")
+                if "results" in response and response["results"]:
+                    print(f"Result keys: {response['results'][0].keys()}")
+                
+                # Return partial data if available
+                content = response.get("results", [{}])[0].get("raw_content", "")
+                if not content:
+                    content = "The extraction service was able to access the page but returned incomplete content."
+            
+            title = response.get("results", [{}])[0].get("title", "Unknown title")
 
             # Format the content as a structured object
             return {
                 "url": url,
                 "title": title,
                 "content": content,
-                "success": True,
-                "error": None,
+                "success": bool(content),  # Only mark as successful if we have content
+                "error": None if content else "Extracted content was empty",
             }
         except Exception as e:
+            import traceback
             error_msg = f"Error extracting content from {url}: {str(e)}"
-            print(f"\n🌐 VISIT PAGE: {url}\nError: {error_msg}")
+            trace = traceback.format_exc()
+            print(f"Error: {error_msg}")
+            print(f"Traceback: {trace}")
+            
+            # Provide a user-friendly error message
             return {
                 "url": url,
-                "title": "Unknown",
-                "content": "",
+                "title": "Page Access Error",
+                "content": "There was a technical problem accessing this page. This might be due to the website blocking automated access or requiring authentication. Try using a different source for this information.",
                 "success": False,
                 "error": error_msg,
             }

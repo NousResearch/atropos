@@ -17,6 +17,8 @@ import argparse
 import asyncio
 import logging
 import os
+import re
+import json
 from dotenv import load_dotenv
 
 # Import the environment class
@@ -63,6 +65,12 @@ def parse_args():
         type=float, 
         default=float(os.environ.get("TEMPERATURE", "0.7")),
         help="Temperature setting (default: 0.7 or TEMPERATURE from .env)"
+    )
+    parser.add_argument(
+        "--debug-output",
+        type=str,
+        default="",
+        help="Path to save raw model responses for debugging (optional)"
     )
     return parser.parse_args()
 

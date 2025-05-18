@@ -55,6 +55,7 @@ Follow these guidelines when creating your article:
 4. Cite reliable sources for factual claims
 5. Use formal, encyclopedic language
 6. Format your article in Markdown
+7. IMPORTANT: Do not try to visit Wikipedia pages directly - they are blocked. Instead, search for information from other reputable sources
 
 During your work, you may:
 1. Think through your research strategy and article planning
@@ -299,7 +300,7 @@ class WikipediaArticleCreatorEnv(BaseEnv):
         
         env_config = WikipediaArticleCreatorConfig(
             tokenizer_name=tokenizer_name,
-            group_size=8,
+            group_size=1,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
             total_steps=1000,
@@ -320,6 +321,8 @@ class WikipediaArticleCreatorEnv(BaseEnv):
             max_article_tokens=2048,
             topics_file="topics.json",
             logging_active=True,
+            include_messages=True,  # Enable message history in the output for wandb logging
+            num_rollouts_to_keep=32,  # Keep enough conversations for good logging samples
         )
         
         # Configure servers based on model type
@@ -386,11 +389,29 @@ class WikipediaArticleCreatorEnv(BaseEnv):
         logger.info(f"Found {len(raw_tool_calls)} tool call tags in response")
         
         if raw_tool_calls:
-            for raw_call in raw_tool_calls:
-                logger.info(f"Raw tool call content: {raw_call}")
+            for i, raw_call in enumerate(raw_tool_calls):
+                # Print with line numbers to see where newlines and other issues might be
+                lines = raw_call.split('\n')
+                logger.info(f"RAW TOOL CALL #{i+1} (multiline format):")
+                for line_num, line in enumerate(lines):
+                    logger.info(f"    Line {line_num+1}: {repr(line)}")
+                
+                # Also print the raw string representation
+                logger.info(f"RAW TOOL CALL #{i+1} (repr): {repr(raw_call)}")
                 try:
-                    # Try to parse as JSON
-                    call_data = json.loads(raw_call)
+                    # Clean up the raw call string - fix known issues from GPT-4 responses
+                    # 1. Remove extra closing braces that sometimes appear
+                    clean_call = re.sub(r'\}\s*\}', '}', raw_call)
+                    
+                    # 2. Try to extract just the valid JSON using regex if there are still issues
+                    json_pattern = r'(\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]+\}\s*\})'
+                    json_match = re.search(json_pattern, clean_call)
+                    if json_match:
+                        clean_call = json_match.group(1)
+                        logger.info(f"Extracted cleaner JSON: {clean_call}")
+                    
+                    # Try to parse the cleaned JSON
+                    call_data = json.loads(clean_call)
                     name = call_data.get("name")
                     args = call_data.get("arguments", {})
                     
@@ -520,17 +541,88 @@ class WikipediaArticleCreatorEnv(BaseEnv):
                 num_results = min(arguments.get("num_results", 5), 10)  # Limit to 10 max
                 filter_year = arguments.get("filter_year", None)
                 
-                search_results = self.search_tool.forward(
-                    query=query,
-                    num_results=num_results,
-                    filter_year=filter_year
-                )
-                result["data"] = search_results
+                # If query is about Wikipedia, provide a helpful message
+                if "wikipedia" in query.lower():
+                    logger.info("Query contains 'wikipedia' - providing guidance message")
+                    wikipedia_message = [
+                        {
+                            "title": "Wikipedia Research Notice",
+                            "url": "https://example.com/wikipedia-notice",
+                            "content": "Instead of searching for Wikipedia articles directly, try searching for the actual topic or subject. The goal is to create a Wikipedia-style article using information from various reliable sources.",
+                            "snippet": "Instead of searching for Wikipedia articles directly, try searching for the actual topic or subject.",
+                            "date": None
+                        }
+                    ]
+                    result["data"] = wikipedia_message
+                else:
+                    search_results = self.search_tool.forward(
+                        query=query,
+                        num_results=num_results,
+                        filter_year=filter_year
+                    )
+                    
+                    # Filter out Wikipedia URLs from search results
+                    filtered_results = []
+                    for item in search_results:
+                        url = item.get("url", "").lower()
+                        if "wikipedia.org" not in url:
+                            filtered_results.append(item)
+                        else:
+                            logger.info(f"Filtered out Wikipedia URL from search results: {url}")
+                    
+                    # Add a notice if results were filtered
+                    if len(filtered_results) < len(search_results):
+                        logger.info(f"Filtered out {len(search_results) - len(filtered_results)} Wikipedia results")
+                        # Add a notice as the last result if we filtered anything
+                        if filtered_results:
+                            filtered_results.append({
+                                "title": "Search Results Notice",
+                                "url": "https://example.com/search-notice",
+                                "content": "Some Wikipedia results were automatically filtered out. Please focus on using other reliable sources for your research.",
+                                "snippet": "Wikipedia results were filtered. Use other reliable sources for your research.",
+                                "date": None
+                            })
+                    
+                    result["data"] = filtered_results
                 
             elif tool_name == "visit_page":
                 url = arguments.get("url", "")
-                page_data = self.extract_tool.forward(url=url)
-                result["data"] = page_data
+                
+                # Check if the URL is from Wikipedia and block it
+                if "wikipedia.org" in url.lower():
+                    logger.info(f"Blocking Wikipedia URL: {url}")
+                    result["data"] = {
+                        "url": url,
+                        "title": "Page Not Found",
+                        "content": "Wikipedia pages are not available in this environment. Please search for information from other sources.",
+                        "success": False,
+                        "error": "Wikipedia pages are blocked in this environment."
+                    }
+                else:
+                    try:
+                        logger.info(f"Attempting to extract content from URL: {url}")
+                        page_data = self.extract_tool.forward(url=url)
+                        
+                        # Log success or partial success
+                        if page_data.get("success", False):
+                            content_length = len(page_data.get("content", ""))
+                            logger.info(f"Successfully extracted {content_length} characters from {url}")
+                        else:
+                            error_msg = page_data.get("error", "Unknown error")
+                            logger.error(f"Extraction reported failure: {error_msg} for URL: {url}")
+                            
+                        result["data"] = page_data
+                    except Exception as e:
+                        logger.error(f"Exception during content extraction from {url}: {str(e)}")
+                        import traceback
+                        logger.error(f"Extraction error traceback: {traceback.format_exc()}")
+                        result["data"] = {
+                            "url": url,
+                            "title": "Page Extraction Failed",
+                            "content": f"Failed to extract content from the page due to an error: {str(e)}",
+                            "success": False,
+                            "error": f"Exception during extraction: {str(e)}"
+                        }
                 
             else:
                 logger.warning(f"Unknown tool: {tool_name}")
@@ -592,6 +684,12 @@ class WikipediaArticleCreatorEnv(BaseEnv):
             return True, {"response": "", "tool_calls": [], "tool_results": []}
         
         logger.info("\n==== MODEL RESPONSE ====")
+        # Print the raw response with repr to see exactly what's in it, including newlines and special chars
+        print(f"\n\n==== RAW MODEL RESPONSE (repr) ====")
+        print(repr(response))
+        print("==== END RAW MODEL RESPONSE ====\n\n")
+        
+        # Also log it normally
         logger.info(response)
         logger.info("==== END MODEL RESPONSE ====")
         
@@ -792,11 +890,17 @@ class WikipediaArticleCreatorEnv(BaseEnv):
                 step_score["masks"] = [tokenized["masks"]]
                 step_score["scores"] = [-0.5]  # Slight negative score
             
+            # Add messages to the step_score to make them available for wandb logging
+            # We do this through the messages key which is supported in ScoredDataGroup
+            if self.config.include_messages:
+                step_score.setdefault("messages", [])
+                step_score["messages"].append(episode.message_history)
+            
             trajectory_data.append(step_score)
         
-        # Clean up episode data
-        if episode_id in self.episodes:
-            del self.episodes[episode_id]
+        # Don't delete the episode yet - we need it for wandb logging
+        # Instead, mark it for deletion after wandb logging is complete
+        # We'll actually clean it up after handle_send_to_api in handle_env
         
         return trajectory_data, []
     
@@ -897,6 +1001,114 @@ class WikipediaArticleCreatorEnv(BaseEnv):
             ("eval/avg_comprehensiveness", eval_metrics["avg_comprehensiveness"]),
             ("eval/avg_fact_usage", eval_metrics["avg_fact_usage"]),
         ]
+    
+    async def add_rollouts_for_wandb(
+        self,
+        scored_data: Union[ScoredDataGroup, List[ScoredDataGroup]],
+        item: Item = None,
+    ):
+        """
+        Save complete conversation histories to wandb
+        
+        This captures the full research and article creation process,
+        including all tool calls and intermediate steps
+        """
+        # Use the base implementation first for basic text and scores
+        await super().add_rollouts_for_wandb(scored_data, item)
+        
+        # Now also save the complete conversation history if we have it
+        if item is not None and isinstance(item, tuple) and len(item) > 0:
+            episode_id = item[0]
+            episode = self.episodes.get(episode_id)
+            
+            if episode and hasattr(episode, 'message_history'):
+                # Format the conversation with relevant metadata
+                num_keep = self.config.num_rollouts_per_group_for_logging
+                if num_keep == -1:
+                    num_keep = self.config.group_size
+                
+                # Add detailed conversation data to rollouts
+                # We'll extract this in create_rollout_table to create a more detailed table
+                for i in range(min(num_keep, len(scored_data["tokens"]))):
+                    # Add chat history to the most recent entry in rollouts_for_wandb
+                    if len(self.rollouts_for_wandb) > 0 and i < len(self.rollouts_for_wandb[-1]):
+                        entry = list(self.rollouts_for_wandb[-1][i])
+                        # Append the message history to the existing tuple
+                        entry.append({
+                            "topic": episode.topic,
+                            "steps_taken": episode.steps_taken,
+                            "is_terminal": episode.is_terminal,
+                            "message_history": episode.message_history,
+                            "tool_calls": episode.tool_calls,
+                            "tool_results": episode.tool_results,
+                        })
+                        # Replace the tuple with our updated entry
+                        self.rollouts_for_wandb[-1][i] = tuple(entry)
+    
+    async def create_rollout_table(self, wandb_metrics):
+        """
+        Create a detailed wandb table with complete conversation histories
+        
+        This expands on the base implementation to include full chat histories
+        and research steps in a structured format
+        """
+        if len(self.rollouts_for_wandb) > 0:
+            # First create the basic table with text and scores
+            basic_table = wandb.Table(columns=["text", "score"])
+            for group in self.rollouts_for_wandb:
+                for item in group:
+                    # Check if this is a basic entry (just text and score) or has chat history
+                    if len(item) == 2:
+                        basic_table.add_data(item[0], item[1])
+                    else:
+                        basic_table.add_data(item[0], item[1])
+            
+            wandb_metrics["train/rollouts"] = basic_table
+            
+            # Create a detailed table with conversation histories
+            # This will only include entries that have chat history
+            detailed_table = wandb.Table(columns=[
+                "topic", 
+                "steps_taken", 
+                "score", 
+                "full_conversation",
+                "tool_calls_count",
+                "has_final_article"
+            ])
+            
+            for group in self.rollouts_for_wandb:
+                for item in group:
+                    # Check if this entry has chat history
+                    if len(item) > 2:
+                        conversation_data = item[2]
+                        
+                        # Extract conversation metadata
+                        topic = conversation_data.get("topic", "Unknown")
+                        steps_taken = conversation_data.get("steps_taken", 0)
+                        tool_calls = conversation_data.get("tool_calls", [])
+                        message_history = conversation_data.get("message_history", [])
+                        
+                        # Format full conversation as a string
+                        conversation_text = "\n\n".join([
+                            f"[{msg.get('role', 'unknown')}]\n{msg.get('content', '')}"
+                            for msg in message_history
+                        ])
+                        
+                        # Check if there's a final article
+                        has_final_article = "Final Step: ```markdown" in conversation_text
+                        
+                        detailed_table.add_data(
+                            topic,
+                            steps_taken,
+                            item[1],  # Score
+                            conversation_text,
+                            len(tool_calls),
+                            has_final_article
+                        )
+            
+            wandb_metrics["train/detailed_conversations"] = detailed_table
+        
+        return wandb_metrics
     
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
         """Log metrics to wandb"""
