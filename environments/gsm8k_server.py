@@ -174,12 +174,13 @@ class GSM8kEnv(BaseEnv):
         gold_answer = (
             "\\boxed{" + item["answer"].split("#")[-1].strip().replace(",", "") + "}"
         )
-
+        print(f"collect_trajectories: Starting with item: {item}")
         chat_completions = await self.server.chat_completion(
             messages=[{"role": "system", "content": system_prompt}, user_message],
             n=1,
             max_tokens=self.config.max_token_length,
         )
+        print(f"collect_trajectories: Chat completions: {chat_completions}")
         to_score = list()
         to_backlog = list()
         for i, chat_completion in enumerate(chat_completions.choices):

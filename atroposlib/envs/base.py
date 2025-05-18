@@ -961,7 +961,7 @@ class BaseEnv(ABC):
             if to_postprocess:
                 # Post-process the trajectories
                 processed_data = await self.postprocess_histories(to_postprocess)
-
+        
                 # Save to output file (don't send to API)
                 await self.handle_send_to_api(
                     processed_data,
