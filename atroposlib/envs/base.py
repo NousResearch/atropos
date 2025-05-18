@@ -1323,9 +1323,8 @@ class BaseEnv(ABC):
                 
                 openai_config_dict = merge_dicts(
                     base_openai_model_dump,  # Default APIServerConfig (from class init) or {}
-                    PROCESS_MODE_OPENAI_DEFAULT_CONFIG.model_dump(),  # Process Mode Defaults
                     yaml_oai_config if isinstance(yaml_oai_config, dict) else {}, # YAML
-                    openai_namespace_cli_args,  # CLI args from self
+                    openai_namespace_cli_args,  # CLI args from self (already includes process defaults as fallbacks)
                 )
                 rprint(f"openai_config_dict: {openai_config_dict}")
                 # 3. Server Manager Configuration
