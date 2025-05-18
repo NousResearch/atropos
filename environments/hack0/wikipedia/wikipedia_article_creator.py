@@ -36,6 +36,10 @@ from atroposlib.utils.message_history_utils import truncate_thinking
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 from atroposlib.utils.tool_call_parser import parse_tool_call
 
+# Suppress logging from tool_call_parser module
+import logging
+logging.getLogger("atroposlib.utils.tool_call_parser").setLevel(logging.ERROR)
+
 from environments.hack0.wikipedia.tools.tavily_tools import TavilySearchTool, TavilyExtractTool
 
 # Set up logging
@@ -422,7 +426,11 @@ class WikipediaArticleCreatorEnv(BaseEnv):
                     else:
                         logger.warning(f"Unknown tool name: {name}")
                 except json.JSONDecodeError as e:
-                    logger.warning(f"Failed to parse tool call JSON: {e}")
+                    # Only log this at INFO level to reduce verbosity in normal output
+                    if self.config.logging_active and hasattr(self, 'process_mode') and not self.process_mode:
+                        logger.warning(f"Failed to parse tool call JSON: {e}")
+                    else:
+                        logger.debug(f"Failed to parse tool call JSON: {e}")
         
         # Fallback to the library parser if no tool calls were found
         if not tool_calls:
@@ -434,13 +442,17 @@ class WikipediaArticleCreatorEnv(BaseEnv):
                 )
                 
                 if not is_error and parsed_name == name:
-                    logger.info(f"Parsed tool call with library: {name}, {parsed_args}")
+                    # Only log detailed parsing in non-process mode to reduce verbosity
+                    if not hasattr(self, 'process_mode') or not self.process_mode:
+                        logger.debug(f"Parsed tool call with library: {name}, {parsed_args}")
                     tool_calls.append({
                         "name": name,
                         "arguments": parsed_args
                     })
-                elif parsed_name:
-                    logger.info(f"Failed tool call parse: {parsed_name}, error: {is_error}")
+                elif parsed_name and parsed_name != "-ERROR-":
+                    # Only log parsing failures for non-obvious errors in non-process mode
+                    if not hasattr(self, 'process_mode') or not self.process_mode:
+                        logger.debug(f"Failed tool call parse: {parsed_name}, error: {is_error}")
         
         logger.info(f"Final parsed tool calls: {len(tool_calls)}")
         return tool_calls
@@ -706,8 +718,14 @@ class WikipediaArticleCreatorEnv(BaseEnv):
         # Extract tool calls for research
         tool_calls = self._parse_tool_calls(response)
         
+        # Hide detailed tool call logging in process mode
         if tool_calls:
-            logger.info(f"\n==== EXECUTING {len(tool_calls)} TOOL CALLS ====")
+            if hasattr(self, 'process_mode') and self.process_mode:
+                # In process mode, just show a summary
+                logger.info(f"Found {len(tool_calls)} tool calls")
+            else:
+                # In normal mode, show more detailed logging
+                logger.info(f"\n==== EXECUTING {len(tool_calls)} TOOL CALLS ====")
         
         # Execute research tool calls
         tool_results = []
@@ -867,6 +885,91 @@ class WikipediaArticleCreatorEnv(BaseEnv):
                 quality_metrics["steps_taken"] = episode.steps_taken
                 self.article_quality_metrics.append(quality_metrics)
                 
+                # If we're in process mode, perform factual accuracy evaluation
+                if is_process_mode:
+                    try:
+                        # Import here to avoid circular imports
+                        from environments.hack0.wikipedia.article_evaluator import ArticleEvaluator
+                        import json
+                        
+                        # Check if OpenAI API key is available
+                        openai_api_key = os.environ.get("OPENAI_API_KEY")
+                        if openai_api_key:
+                            # Initialize article evaluator
+                            evaluator = ArticleEvaluator(openai_api_key)
+                            
+                            # Load reference articles
+                            articles_path = os.path.join(os.path.dirname(__file__), "wikipedia_articles.json")
+                            if os.path.exists(articles_path):
+                                with open(articles_path, 'r') as f:
+                                    articles_data = json.load(f)
+                                
+                                topic = episode.topic
+                                generated_article = episode.final_article
+                                
+                                # Retrieve reference article content
+                                reference_content = evaluator.get_reference_article(articles_data, topic)
+                                
+                                if reference_content:
+                                    # Evaluate article factual accuracy - changed from async to sync
+                                    evaluation_results = evaluator.evaluate_article_accuracy(
+                                        reference_content=reference_content,
+                                        generated_article=generated_article
+                                    )
+                                    
+                                    # Calculate accuracy score
+                                    accuracy_score = evaluator.calculate_accuracy_score(evaluation_results)
+                                    
+                                    # Print statistics for this evaluation
+                                    if evaluation_results and "statistics" in evaluation_results:
+                                        stats = evaluation_results["statistics"]
+                                        print("\n" + "="*80)
+                                        print(f"FACTUAL ACCURACY EVALUATION FOR: {topic}")
+                                        print("="*80)
+                                        print(f"CORRECT:   {stats.get('correct_count', 0)} statements ({stats.get('pct_correct', 0):.1f}%)")
+                                        print(f"INCORRECT: {stats.get('incorrect_count', 0)} statements ({stats.get('pct_incorrect', 0):.1f}%)")
+                                        print(f"UNKNOWN:   {stats.get('unknown_count', 0)} statements ({stats.get('pct_unknown', 0):.1f}%)")
+                                        print(f"TOTAL:     {stats.get('total_count', 0)} statements evaluated")
+                                        print("-"*80)
+                                        # Remove duplicate raw scores since we're keeping everything in [-1, 1] now
+                                        
+                                        # Keep original scores in their native ranges
+                                        # Original quality_score is in [0,1] range
+                                        # Convert to [-1,1] range for consistency with accuracy score
+                                        quality_score_scaled = quality_metrics["overall_quality"] * 2 - 1
+                                        
+                                        # Accuracy score is already in [-1,1] range
+                                        
+                                        # Calculate combined score (simple average of the two scores)
+                                        combined_score = (quality_score_scaled + accuracy_score) / 2
+                                        
+                                        # This is already in [-1,1] range for ScoredDataGroup
+                                        scaled_score = combined_score
+                                        
+                                        print(f"Original Quality Score: {quality_score_scaled:.4f} (range [-1, 1])")
+                                        print(f"Factual Accuracy Score: {accuracy_score:.4f} (range [-1, 1])")
+                                        print(f"Combined Final Score:   {combined_score:.4f} (range [-1, 1])")
+                                        print("="*80 + "\n")
+                                        
+                                        # Update the score in step_score
+                                        step_score["scores"] = [scaled_score]
+                                    
+                                    # Add accuracy metrics to article_quality_metrics for wandb logging
+                                    if evaluation_results and "statistics" in evaluation_results:
+                                        stats = evaluation_results["statistics"]
+                                        accuracy_metrics = {
+                                            "pct_correct": stats.get("pct_correct", 0),
+                                            "pct_incorrect": stats.get("pct_incorrect", 0),
+                                            "pct_unknown": stats.get("pct_unknown", 0),
+                                            "accuracy_score": accuracy_score
+                                        }
+                                        # Update the last added quality metrics entry
+                                        self.article_quality_metrics[-1].update(accuracy_metrics)
+                    except Exception as e:
+                        print(f"Error evaluating article factual accuracy: {e}")
+                        import traceback
+                        print(traceback.format_exc())
+                
             elif tool_calls:
                 # Non-terminal step with tool usage - score based on usefulness
                 step_score["tokens"] = [tokenized["tokens"]]
@@ -971,11 +1074,114 @@ class WikipediaArticleCreatorEnv(BaseEnv):
         self, rollout_group_data: List[ScoredDataGroup]
     ) -> List[ScoredDataGroup]:
         """
-        Pass through the scored data from collect_trajectories
+        Enhanced scoring function that incorporates factual accuracy evaluation.
         
-        This method is simpler than usual because scoring is done inline during collection,
-        since the model's "actions" (tool use and article writing) are evaluated directly.
+        Uses OpenAI models to evaluate the factual accuracy of the generated articles
+        against reference articles from Wikipedia.
         """
+        try:
+            # Import here to avoid circular imports
+            from environments.hack0.wikipedia.article_evaluator import ArticleEvaluator
+            import json
+            
+            # Check if OpenAI API key is available
+            openai_api_key = os.environ.get("OPENAI_API_KEY")
+            if not openai_api_key:
+                logger.warning("OPENAI_API_KEY not found. Skipping factual accuracy evaluation.")
+                return rollout_group_data
+                
+            # Initialize article evaluator
+            evaluator = ArticleEvaluator(openai_api_key)
+            
+            # Load reference articles
+            articles_path = os.path.join(os.path.dirname(__file__), "wikipedia_articles.json")
+            if not os.path.exists(articles_path):
+                logger.warning(f"Wikipedia articles file not found at {articles_path}. Skipping factual accuracy evaluation.")
+                return rollout_group_data
+                
+            with open(articles_path, 'r') as f:
+                articles_data = json.load(f)
+            
+            # Process each ScoredDataGroup
+            for group in rollout_group_data:
+                for i in range(len(group["tokens"])):
+                    # Check if this is a terminal step with a final article
+                    episode_id = i  # Use index as a proxy for episode_id
+                    episode = self.episodes.get(episode_id)
+                    
+                    if episode and episode.is_terminal and episode.final_article:
+                        topic = episode.topic
+                        generated_article = episode.final_article
+                        
+                        # Retrieve reference article content
+                        reference_content = evaluator.get_reference_article(articles_data, topic)
+                        
+                        if reference_content:
+                            # Evaluate article factual accuracy
+                            evaluation_results = await evaluator.evaluate_article_accuracy(
+                                reference_content=reference_content,
+                                generated_article=generated_article
+                            )
+                            
+                            # Calculate accuracy score
+                            accuracy_score = evaluator.calculate_accuracy_score(evaluation_results)
+                            
+                            # Combine with existing quality metrics
+                            quality_metrics = self._assess_article_quality(
+                                final_article=generated_article,
+                                research_facts=episode.research_facts
+                            )
+                            
+                            # Adjust the overall quality to include factual accuracy
+                            # Original score is in [0,1], we'll combine it with accuracy_score [-1,1]
+                            combined_score = (quality_metrics["overall_quality"] + (accuracy_score + 1) / 2) / 2
+                            
+                            # Scale to [-1, 1] for compatibility with existing scoring
+                            scaled_score = combined_score * 2 - 1
+                            
+                            # Update the score in the ScoredDataGroup
+                            group["scores"][i] = scaled_score
+                            
+                            # Print statistics for this evaluation
+                            if evaluation_results and "statistics" in evaluation_results:
+                                stats = evaluation_results["statistics"]
+                                print("\n" + "="*80)
+                                print(f"FACTUAL ACCURACY EVALUATION FOR: {topic}")
+                                print("="*80)
+                                print(f"CORRECT:   {stats.get('correct_count', 0)} statements ({stats.get('pct_correct', 0):.1f}%)")
+                                print(f"INCORRECT: {stats.get('incorrect_count', 0)} statements ({stats.get('pct_incorrect', 0):.1f}%)")
+                                print(f"UNKNOWN:   {stats.get('unknown_count', 0)} statements ({stats.get('pct_unknown', 0):.1f}%)")
+                                print(f"TOTAL:     {stats.get('total_count', 0)} statements evaluated")
+                                print("-"*80)
+                                print(f"Factual Accuracy Score: {accuracy_score:.4f} (range [-1, 1])")
+                                print(f"Original Quality Score: {quality_metrics['overall_quality']:.4f} (range [0, 1])")
+                                print(f"Combined Final Score:   {scaled_score:.4f} (range [-1, 1])")
+                                print("="*80 + "\n")
+                            
+                            # Add accuracy metrics to article_quality_metrics for wandb logging
+                            if evaluation_results and "statistics" in evaluation_results:
+                                stats = evaluation_results["statistics"]
+                                
+                                accuracy_metrics = {
+                                    "pct_correct": stats.get("pct_correct", 0),
+                                    "pct_incorrect": stats.get("pct_incorrect", 0),
+                                    "pct_unknown": stats.get("pct_unknown", 0),
+                                    "accuracy_score": accuracy_score
+                                }
+                                
+                                # Find the corresponding metrics entry and update it
+                                for metrics in self.article_quality_metrics:
+                                    if metrics.get("topic") == topic:
+                                        metrics.update(accuracy_metrics)
+                                        break
+                        else:
+                            logger.warning(f"No reference article found for topic: {topic}")
+            
+        except Exception as e:
+            logger.error(f"Error during factual accuracy evaluation: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+        
         return rollout_group_data
     
     async def setup(self):
@@ -1194,20 +1400,53 @@ class WikipediaArticleCreatorEnv(BaseEnv):
             wandb_metrics["train/avg_article_quality"] = avg_quality
             wandb_metrics["train/avg_steps_per_article"] = avg_steps
             
+            # Add factual accuracy metrics if available
+            if any("accuracy_score" in m for m in self.article_quality_metrics):
+                # Calculate average accuracy metrics
+                accuracy_metrics = [m for m in self.article_quality_metrics if "accuracy_score" in m]
+                if accuracy_metrics:
+                    avg_accuracy = sum(m["accuracy_score"] for m in accuracy_metrics) / len(accuracy_metrics)
+                    avg_pct_correct = sum(m.get("pct_correct", 0) for m in accuracy_metrics) / len(accuracy_metrics)
+                    avg_pct_incorrect = sum(m.get("pct_incorrect", 0) for m in accuracy_metrics) / len(accuracy_metrics)
+                    avg_pct_unknown = sum(m.get("pct_unknown", 0) for m in accuracy_metrics) / len(accuracy_metrics)
+                    
+                    wandb_metrics["train/avg_factual_accuracy"] = avg_accuracy
+                    wandb_metrics["train/avg_pct_correct"] = avg_pct_correct
+                    wandb_metrics["train/avg_pct_incorrect"] = avg_pct_incorrect
+                    wandb_metrics["train/avg_pct_unknown"] = avg_pct_unknown
+            
             # Create a table of article metrics
             if wandb.run is not None:
-                table = wandb.Table(columns=["topic", "steps", "overall_quality", 
-                                            "structure", "comprehensiveness", "fact_usage"])
+                # Add factual accuracy columns if available
+                columns = ["topic", "steps", "overall_quality", 
+                        "structure", "comprehensiveness", "fact_usage"]
+                
+                # Check if we have factual accuracy metrics
+                if any("accuracy_score" in m for m in self.article_quality_metrics):
+                    columns.extend(["factual_accuracy", "pct_correct", "pct_incorrect", "pct_unknown"])
+                
+                table = wandb.Table(columns=columns)
                 
                 for metric in self.article_quality_metrics:
-                    table.add_data(
+                    row_data = [
                         metric["topic"],
                         metric["steps_taken"],
                         metric["overall_quality"],
                         metric["structure_score"],
                         metric["comprehensiveness_score"],
                         metric["fact_usage_score"]
-                    )
+                    ]
+                    
+                    # Add factual accuracy metrics if available
+                    if "accuracy_score" in metric:
+                        row_data.extend([
+                            metric.get("accuracy_score", 0),
+                            metric.get("pct_correct", 0),
+                            metric.get("pct_incorrect", 0),
+                            metric.get("pct_unknown", 0)
+                        ])
+                        
+                    table.add_data(*row_data)
                 
                 wandb_metrics["train/article_quality"] = table
             

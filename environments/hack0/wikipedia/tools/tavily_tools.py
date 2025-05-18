@@ -163,6 +163,8 @@ class TavilySearchTool(Tool):
             - date: The date of the content if available
         """
         try:
+            # Add search emoji
+            print(f"\n🔍 WEB SEARCH: {query} (max results: {num_results})")
             search_params = {
                 "query": query,
                 "search_depth": "advanced",

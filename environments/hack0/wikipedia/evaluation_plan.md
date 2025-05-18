@@ -2,194 +2,120 @@
 
 ## Overview
 
-This document outlines the plan to implement an evaluation system that uses OpenAI models to assess AI-generated Wikipedia articles against reference articles from the actual Wikipedia. This system will provide detailed, line-by-line factual accuracy assessments and overall article quality metrics.
+This document outlines the plan to implement an evaluation system that uses OpenAI models to assess AI-generated Wikipedia articles against reference articles from the existing JSON data. This system will be integrated directly into the `score()` function of the `WikipediaArticleCreatorEnv` class.
 
 ## Core Components
 
-### 1. Data Collection Module
+### 1. Data Access Module
 
-**Purpose**: Fetch both reference Wikipedia articles and AI-generated articles for comparison.
+**Purpose**: Access reference Wikipedia articles from the existing JSON data.
 
 **Implementation Details**:
-- Use Wikipedia's API to fetch reference articles based on titles
-- Load AI-generated articles from the environment's output
-- Support batch processing of multiple article pairs
-- Handle caching of reference articles to reduce API calls
+- Utilize the existing JSON loading functionality in `wikipedia_article_creator.py`
+- Access reference article content via the "plain_text" key already available in the JSON
+- Match generated articles to reference articles by title
 
 ```python
-class WikipediaReferenceCollector:
-    """Fetches reference articles from Wikipedia's API"""
-    
-    def fetch_reference_article(self, title: str) -> Dict:
-        """
-        Fetches a Wikipedia article by title.
-        Returns full article content and metadata.
-        """
-        pass
-        
-    def preprocess_reference(self, content: str) -> str:
-        """
-        Cleans and formats Wikipedia content for comparison.
-        Removes irrelevant sections, templates, etc.
-        """
-        pass
+def get_reference_article(self, topic: str) -> str:
+    """
+    Retrieves the reference article text for a given topic from the loaded JSON data.
+    """
+    # Access the article JSON that's already loaded by _load_topics()
+    # Return the "plain_text" content for the matching article
+    pass
 ```
 
 ### 2. Content Preparation Module
 
-**Purpose**: Prepare both articles for fair comparison by standardizing formats, segmenting content, and implementing necessary preprocessing.
+**Purpose**: Prepare AI-generated articles for evaluation against reference content.
 
 **Implementation Details**:
-- Break AI-generated article into numbered lines for granular assessment
-- Extract key sections from both articles (intro, main content, references)
-- Normalize formatting differences between the two sources
-- Implement content chunking for very large articles (to handle model context limitations)
+- Split AI-generated article into numbered lines for granular assessment
+- No need to normalize reference text - the OpenAI model can work with raw text
 
 ```python
-class ArticlePreprocessor:
-    """Prepares articles for evaluation"""
-    
-    def segment_article(self, article_content: str) -> Dict[str, List[str]]:
-        """
-        Segments article into introduction, main sections, and references.
-        Returns dict with all segments.
-        """
-        pass
-        
-    def number_lines(self, content: str) -> Tuple[str, List[str]]:
-        """
-        Numbers each line in the article for reference in the evaluation.
-        Returns both the numbered version and a list of original lines.
-        """
-        pass
-        
-    def chunk_content(self, content: str, max_chunk_size: int = 8000) -> List[str]:
-        """
-        Splits content into chunks that fit within model context limits.
-        Preserves paragraph and section boundaries where possible.
-        """
-        pass
+def prepare_article_for_evaluation(self, article_content: str) -> Tuple[str, List[str]]:
+    """
+    Prepares an AI-generated article for evaluation.
+    Returns both the numbered version (for the prompt) and the original lines (for scoring).
+    """
+    # Split article into lines
+    # Add line numbers
+    # Return both formatted text and original lines
+    pass
 ```
 
 ### 3. Evaluation Engine
 
-**Purpose**: Core system that compares the AI article against the reference, analyzing factual accuracy line by line.
+**Purpose**: Compare AI-generated article against the reference using OpenAI models.
 
 **Implementation Details**:
-- Design a robust prompt template for the OpenAI model
-- Process articles in manageable chunks if necessary
+- Create a focused prompt for the OpenAI model
 - Generate YAML-formatted assessment of each line
 - Categorize statements as CORRECT, INCORRECT, or UNKNOWN
 - Include brief justification for each classification
 
 ```python
-class ArticleEvaluator:
-    """Core evaluation engine using OpenAI models"""
-    
-    def __init__(self, model: str = "gpt-4", temperature: float = 0.2):
-        """Initialize with preferred model and settings"""
-        pass
-        
-    def create_evaluation_prompt(
-        self, 
-        reference_content: str, 
-        generated_content: str
-    ) -> str:
-        """
-        Creates the prompt for the evaluation model with both articles.
-        Includes instructions for analysis and output format.
-        """
-        pass
-        
-    async def evaluate_chunk(self, prompt: str) -> Dict:
-        """
-        Sends a chunk of content to OpenAI for evaluation.
-        Returns the parsed YAML response.
-        """
-        pass
-        
-    async def evaluate_full_article(
-        self, 
-        reference_article: str, 
-        generated_article: str
-    ) -> Dict:
-        """
-        Evaluates the entire article, potentially in chunks.
-        Combines results into a complete evaluation report.
-        """
-        pass
+async def evaluate_article_accuracy(
+    self,
+    reference_content: str,
+    generated_article: str
+) -> Dict:
+    """
+    Evaluates the factual accuracy of a generated article against a reference.
+    Returns structured accuracy data.
+    """
+    # Format the prompt with reference and generated content
+    # Call the OpenAI API
+    # Parse YAML response
+    # Return structured accuracy data
+    pass
 ```
 
-### 4. Results Processing and Reporting
+### 4. Scoring Integration
 
-**Purpose**: Analyze evaluation results and generate insightful reports on article quality.
+**Purpose**: Calculate accuracy score and integrate with existing scoring mechanism.
 
 **Implementation Details**:
-- Parse YAML results into structured data (pandas DataFrame)
-- Calculate accuracy statistics (percentage of correct/incorrect/unknown statements)
-- Generate visualizations of accuracy distribution
-- Create summary reports with key metrics and recommendations
-- Support for Weights & Biases integration for experiment tracking
+- Convert evaluation results into a normalized score
+- Integrate with existing article quality metrics
+- Add accuracy metrics to wandb logging
 
 ```python
-class EvaluationAnalyzer:
-    """Processes and analyzes evaluation results"""
-    
-    def parse_results(self, evaluation_data: Dict) -> pd.DataFrame:
-        """
-        Converts raw evaluation data to a structured DataFrame.
-        """
-        pass
-        
-    def calculate_accuracy_metrics(self, df: pd.DataFrame) -> Dict[str, float]:
-        """
-        Calculates accuracy metrics including:
-        - Overall accuracy percentage
-        - Section-by-section accuracy
-        - Distribution of CORRECT/INCORRECT/UNKNOWN
-        """
-        pass
-        
-    def generate_report(
-        self, 
-        df: pd.DataFrame, 
-        metrics: Dict[str, float], 
-        format: str = "markdown"
-    ) -> str:
-        """
-        Generates a comprehensive report with all metrics and sample issues.
-        """
-        pass
-        
-    def log_to_wandb(self, results: Dict, article_title: str):
-        """
-        Logs evaluation results to Weights & Biases.
-        Creates tables, plots, and aggregated metrics.
-        """
-        pass
+def calculate_accuracy_score(self, evaluation_data: Dict) -> float:
+    """
+    Calculates a normalized accuracy score from evaluation data.
+    Returns a score between -1 and 1 for compatibility with existing scoring.
+    """
+    # Calculate percentage of CORRECT, INCORRECT, and UNKNOWN statements
+    # Convert to a normalized score in the range [-1, 1]
+    # More CORRECT = higher score, more INCORRECT = lower score
+    pass
 ```
 
-## Implementation Stages
+## Integration with Existing Environment
 
-### Phase 1: Core Functionality
-1. Implement Wikipedia API integration for reference article collection
-2. Build basic article preprocessing and line numbering
-3. Create initial OpenAI prompt design and evaluation framework
-4. Develop simple results parser and basic metrics
+### Updating the `score()` Function
 
-### Phase 2: Enhanced Evaluation
-1. Improve prompt engineering based on initial results
-2. Add support for chunking large articles
-3. Implement more sophisticated content preprocessing
-4. Expand evaluation categories and granularity
+```python
+async def score(self, rollout_group_data: List[ScoredDataGroup]) -> List[ScoredDataGroup]:
+    """
+    Enhanced scoring function that incorporates factual accuracy evaluation.
+    """
+    # For each terminal step with a final article:
+    #   1. Get the corresponding topic
+    #   2. Retrieve reference article from JSON data
+    #   3. Evaluate article accuracy
+    #   4. Calculate accuracy score
+    #   5. Combine with existing quality metrics
+    #   6. Update the score in the ScoredDataGroup
+    
+    # Add accuracy metrics to article_quality_metrics for wandb logging
+    
+    return rollout_group_data
+```
 
-### Phase 3: Reporting and Integration
-1. Develop comprehensive metrics and visualizations
-2. Create formatted reports (Markdown, HTML, PDF)
-3. Integrate with Weights & Biases for experiment tracking
-4. Build batch processing for multiple articles
-
-## Prompt Design (Initial Draft)
+## OpenAI Prompt Design
 
 ```
 You are an expert fact-checker comparing an AI-generated article with a reference Wikipedia article.
@@ -216,53 +142,62 @@ You must produce valid YAML with this exact structure for each numbered line:
 {numbered_ai_content}
 ```
 
-## Integration with Existing Environment
+## Implementation Steps
 
-This evaluation system will complement the existing `WikipediaArticleCreatorEnv` by:
+1. Implement the `get_reference_article()` function to extract reference text from JSON
+2. Create the `prepare_article_for_evaluation()` function to number article lines
+3. Develop the `evaluate_article_accuracy()` function with OpenAI integration
+4. Implement the `calculate_accuracy_score()` function
+5. Update the `score()` method to incorporate accuracy evaluation
+6. Extend `_assess_article_quality()` to include the new accuracy metrics
+7. Update wandb logging to include accuracy statistics
 
-1. Adding a new method to the environment for article evaluation
-2. Extending the wandb logging to include evaluation metrics
-3. Creating an evaluation pipeline that can be run as part of the training process or independently
+## Accuracy Scoring Formula
+
+The accuracy score will be calculated as follows:
 
 ```python
-# Addition to WikipediaArticleCreatorEnv class
-async def evaluate_article_quality(
-    self, 
-    topic: str,
-    generated_article: str
-) -> Dict:
-    """
-    Evaluates an AI-generated article against the Wikipedia reference.
-    Returns detailed quality metrics and factual accuracy assessment.
-    """
-    # Implementation will use the modules described above
-    pass
+# Example scoring formula
+def calculate_accuracy_score(evaluation_data):
+    total_lines = len(evaluation_data)
+    correct_count = sum(1 for item in evaluation_data.values() if item['accuracy'] == 'CORRECT')
+    incorrect_count = sum(1 for item in evaluation_data.values() if item['accuracy'] == 'INCORRECT')
+    
+    # Calculate percentages
+    pct_correct = correct_count / total_lines if total_lines > 0 else 0
+    pct_incorrect = incorrect_count / total_lines if total_lines > 0 else 0
+    
+    # Convert to score between -1 and 1
+    # Formula: correct% * 2 - 1 with adjustment for incorrect%
+    score = pct_correct * 2 - 1 - (pct_incorrect * 0.5)
+    
+    # Ensure score is within [-1, 1] range
+    return max(-1, min(1, score))
 ```
 
-## Questions and Considerations
+## Updates to wandb Logging
 
-1. **API Rate Limiting**: How should we handle Wikipedia API rate limits for fetching reference articles?
-2. **Cost Management**: What strategies can we implement to minimize OpenAI API costs while maintaining evaluation quality?
-3. **Baseline Establishment**: Should we evaluate multiple AI models to establish a quality baseline?
-4. **Evaluation Scope**: Should we evaluate only factual accuracy, or expand to other dimensions like clarity, structure, and neutrality?
-5. **Handling Missing References**: How should we score statements that can't be verified because the reference article lacks coverage on that specific aspect?
+The existing wandb logging will be extended to include:
 
-## Next Steps
+```python
+# Add to article_quality_metrics
+accuracy_metrics = {
+    "pct_correct": percentage_correct,
+    "pct_incorrect": percentage_incorrect,
+    "pct_unknown": percentage_unknown,
+    "accuracy_score": accuracy_score
+}
+self.article_quality_metrics[-1].update(accuracy_metrics)
 
-1. Create a prototype implementation of the Wikipedia reference collector
-2. Develop and test the article preprocessing module
-3. Design and test the initial evaluation prompt with a small sample of articles
-4. Implement basic results processing and metrics calculation
-5. Integrate with the existing environment for initial testing
+# Add to wandb metrics table
+wandb_metrics["train/article_quality"] = table.add_column("factual_accuracy", [
+    m["accuracy_score"] for m in self.article_quality_metrics
+])
+```
 
-## Resources Needed
+## Expected Benefits
 
-1. OpenAI API access with sufficient quota for model calls
-2. Wikipedia API access (no authentication required for basic access)
-3. Development environment with required Python packages
-   - openai
-   - pandas
-   - wandb
-   - pyyaml
-   - aiohttp
-   - wikipediaapi
+1. More comprehensive evaluation of generated articles
+2. Better feedback for the model on factual accuracy
+3. Improved ability to detect hallucinations or fabricated information
+4. Enhanced scoring mechanism that values factual correctness
