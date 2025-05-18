@@ -978,6 +978,7 @@ class BaseEnv(ABC):
                     f"Successfully processed group {self.curr_step}/{self.n_groups_to_process}"
                 )
             else:
+                rprint("wtf")
                 print("Failed to process group, retrying...")
 
         print(f"Completed processing {self.curr_step} groups")
