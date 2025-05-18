@@ -875,12 +875,12 @@ class BaseEnv(ABC):
         """
         rprint(f"env_manager: Starting setup")
         await self.setup()
+        rprint(f"env_manager: Setup complete")
         await self.setup_wandb()
         await self.register_env()
         await self.get_server_info()
         # Wait for other instances to get setup :)
         await asyncio.sleep(5)
-        rprint(f"env_manager: Setup complete")
         while True:
             if self.last_loop_time is not None:
                 self.mainloop_timings.append(
