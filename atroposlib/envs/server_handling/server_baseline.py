@@ -10,7 +10,11 @@ from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.completion import Completion
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_random_exponential
+import logging
+from logging import getLogger
 
+logger = getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class AsyncSemWithAdaptiveWeight(asyncio.Semaphore):
     def __init__(self, value: int):
@@ -258,6 +262,7 @@ class APIServer(ABC):
         """
         Chat completion handler, waits for the server to be healthy and then calls the chat completion wrapper.
         """
+        logger.warning(f"chat_completion called: kwargs: {kwargs}")
         if not self.initialized:
             if self.config.health_check:
                 if (
