@@ -262,7 +262,6 @@ class APIServer(ABC):
         """
         Chat completion handler, waits for the server to be healthy and then calls the chat completion wrapper.
         """
-        logger.warning(f"chat_completion called: kwargs: {kwargs}")
         if not self.initialized:
             if self.config.health_check:
                 if (

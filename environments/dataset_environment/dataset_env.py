@@ -438,7 +438,7 @@ class DatasetEnv(BaseEnv):
                 "num_requests_for_eval": num_requests,
                 "base_url": base_url,
             }
-            logger.info(
+            logger.warning(
                 f"Creating APIServerConfig with args: model='{model_name}', "
                 f"base_url='{base_url}', key_present={api_key != 'x'}, "
                 f"requests={num_requests}"
@@ -469,7 +469,7 @@ class DatasetEnv(BaseEnv):
                     num_requests_for_eval=256,
                 )
             ]
-            logger.info(
+            logger.warning(
                 f"Created default APIServerConfig: model='{server_confs[0].model_name}', "
                 f"base_url='{server_confs[0].base_url}', "
                 f"key_present={server_confs[0].api_key != 'x'}"
