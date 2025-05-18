@@ -1327,7 +1327,7 @@ class BaseEnv(ABC):
                     yaml_oai_config if isinstance(yaml_oai_config, dict) else {}, # YAML
                     openai_namespace_cli_args,  # CLI args from self
                 )
-
+                rprint(f"openai_config_dict: {openai_config_dict}")
                 # 3. Server Manager Configuration
                 server_manager_yaml_dict = {}
                 if "slurm" in yaml_config:
