@@ -851,6 +851,7 @@ class BaseEnv(ABC):
                 item = self.backlog.pop()
             else:
                 item = await self.get_next_item()
+            logger.warning(f"add_train_workers: item: {item}")
             if item is None:
                 break
             self.running_items[item_uuid] = item

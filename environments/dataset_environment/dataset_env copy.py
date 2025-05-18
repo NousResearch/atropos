@@ -1,0 +1,482 @@
+import asyncio
+import logging
+import os
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import yaml
+from datasets import load_dataset
+from pydantic import Field
+import wandb
+
+from atroposlib.envs.base import (
+    APIServerConfig,
+    BaseEnv,
+    BaseEnvConfig,
+    ScoredDataItem,
+    ScoredDataGroup,
+)
+from atroposlib.envs.reward_fns import registry
+from atroposlib.envs.reward_fns.combined_reward import CombinedReward
+from atroposlib.type_definitions import Item
+from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+
+class DatasetEnvConfig(BaseEnvConfig):
+    dataset_name: Optional[str] = Field(None, description="HuggingFace dataset name")
+    dataset_config: Optional[str] = Field(None, description="Dataset configuration name")
+    split: str = Field("train", description="Dataset split to use")
+    dataset_path: Optional[str] = Field(None, description="Local path to dataset (alternative to dataset_name)")
+    prompt_field: Optional[str] = Field(None, description="Field in dataset to use as prompt")
+    answer_field: Optional[str] = Field(None, description="Field in dataset to use as answer")
+    ground_truth_field: Optional[str] = Field(None, description="Field in dataset containing canonical correct answer")
+    system_prompt: Optional[str] = Field(None, description="System prompt to use")
+    prefill: Optional[str] = Field(None, description="Text to prefill the completion with (e.g. '<think>')")
+    shuffle_dataset: bool = Field(True, description="Whether to shuffle the dataset")
+    max_generations_per_prompt: int = Field(1, description="Number of generations per prompt for collection")
+    include_messages_in_scoring: bool = Field(False, description="Whether to include messages in scoring")
+    reward_functions: Optional[List[Union[str, Dict[str, Any]]]] = Field(None, description="List of reward functions to apply (string names or full configs)")
+    temperature: float = Field(0.7, description="Temperature for generation")
+    top_p: float = Field(0.9, description="Top-p for generation")
+    max_tokens: int = Field(16384, description="Maximum tokens for generation")
+    eval_dataset_name: Optional[str] = Field(None, description="Evaluation dataset name")
+    eval_dataset_config: Optional[str] = Field(None, description="Evaluation dataset config")
+    eval_split: Optional[str] = Field(None, description="Evaluation dataset split")
+    debug_mode: bool = Field(False, description="Enable debug logging")
+    use_wandb: bool = Field(False, description="Whether to use wandb for logging")
+
+
+class DatasetEnv(BaseEnv):
+    name = "dataset"
+
+    def __init__(self, config: DatasetEnvConfig, server_configs, slurm=True, testing=False):
+        super().__init__(config, server_configs, slurm, testing)
+        self.config = config
+
+        if self.config.ground_truth_field == "None":
+            logger.warning("DatasetEnv.__init__: Configured 'ground_truth_field' was the string \"None\". Setting to Python None.")
+            self.config.ground_truth_field = None
+
+        self.dataset = None
+        self.iter = 0
+        self.metric_buffer = {}
+        self.debug_mode = config.debug_mode
+
+        if self.debug_mode:
+            logger.setLevel(logging.DEBUG)
+        else:
+            if logger.level == logging.NOTSET or logger.level > logging.WARNING:
+                logger.setLevel(logging.WARNING)
+
+        self.reward_function = self._initialize_reward_function()
+        logger.warning(f"DatasetEnv.__init__: Initialized reward_function type: {type(self.reward_function)}")
+
+        if hasattr(self.reward_function, "rewards") and isinstance(self.reward_function.rewards, list):
+            constituent_reward_types = [type(r).__name__ for r in self.reward_function.rewards]
+            logger.warning(f"DatasetEnv.__init__: Constituent reward function types: {constituent_reward_types}")
+            if self.config.reward_functions and isinstance(self.config.reward_functions, list):
+                logger.warning(f"DatasetEnv.__init__: Original reward_functions config: {self.config.reward_functions}")
+        elif self.reward_function is not None:
+            logger.warning(f"DatasetEnv.__init__: Single reward function type: {type(self.reward_function).__name__}")
+            if self.config.reward_functions and isinstance(self.config.reward_functions, list):
+                logger.warning(f"DatasetEnv.__init__: Original reward_functions config: {self.config.reward_functions}")
+        else:
+            logger.warning("DatasetEnv.__init__: self.reward_function is None.")
+
+    def _initialize_reward_function(self):
+        if self.config.reward_functions:
+            if len(self.config.reward_functions) == 1:
+                return registry.create(self.config.reward_functions[0])
+            else:
+                return CombinedReward(rewards=self.config.reward_functions)
+        logger.warning("No reward functions configured (field 'reward_functions' is None or list is empty).")
+        return None
+
+    async def setup(self):
+        if self.config.dataset_path:
+            self.dataset = load_dataset(self.config.dataset_path, split=self.config.split)
+        else:
+            self.dataset = load_dataset(self.config.dataset_name, self.config.dataset_config, split=self.config.split)
+
+        if self.config.shuffle_dataset:
+            logger.info("Shuffling dataset.")
+            self.dataset = self.dataset.shuffle(seed=42)
+
+        if self.dataset:
+            logger.info(f"Dataset loaded. Number of rows: {len(self.dataset)}")
+            if len(self.dataset) > 0:
+                logger.info(f"Sample item keys: {list(self.dataset[0].keys())}")
+            else:
+                logger.warning("Loaded dataset is empty.")
+            logger.info(f"Dataset features: {self.dataset.features}")
+        else:
+            logger.error("Dataset could not be loaded.")
+
+        self.iter = 0
+        self.metric_buffer = {}
+
+    async def get_next_item(self) -> Item:
+        if not self.dataset:
+            await self.setup()
+
+        item_data = self.dataset[self.iter % len(self.dataset)]
+        self.iter += 1
+        user_msg = {"role": "user", "content": item_data[self.config.prompt_field]}
+        prompt = tuple([frozenset(user_msg.items())])
+
+        answer = None
+        if self.config.answer_field and self.config.answer_field in item_data:
+            answer = item_data[self.config.answer_field]
+
+        ground_truth = None
+        if self.config.ground_truth_field and self.config.ground_truth_field in item_data:
+            ground_truth = item_data[self.config.ground_truth_field]
+
+        return (prompt, answer, ground_truth)
+
+    async def collect_trajectories(self, item: Item) -> Tuple[Optional[ScoredDataGroup], List[Item]]:
+        logger.setLevel(logging.DEBUG)
+        logger.debug(f"collect_trajectories: Starting for item: {item}")
+        try:
+            self.current_item = item  # Used by self.score()
+
+            user_content_dict = dict(item[0][0])
+            user_content = user_content_dict["content"]
+
+            messages = []
+            if self.config.system_prompt:
+                messages.append({"role": "system", "content": self.config.system_prompt})
+            messages.append({"role": "user", "content": user_content})
+            if self.config.prefill:
+                messages.append({"role": "assistant", "content": self.config.prefill})
+
+            logger.debug(f"collect_trajectories: Calling chat_completion with messages: {messages}, n={self.config.group_size}, max_tokens={self.config.max_tokens}")
+
+            completions_result = await self.server.chat_completion(
+                messages=messages,
+                n=self.config.group_size,
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature,
+                top_p=self.config.top_p,
+            )
+            logger.debug(f"collect_trajectories: Received completions_result: {completions_result}")
+
+            if not completions_result or not completions_result.choices:
+                logger.warning("collect_trajectories: No choices returned from server.chat_completion.")
+                return None, []
+
+            processed_trajectories = []
+            for choice in completions_result.choices:
+                model_output_text = choice.message.content
+
+                full_messages_for_this_trajectory = []
+                if self.config.system_prompt:
+                    full_messages_for_this_trajectory.append({"role": "system", "content": self.config.system_prompt})
+                full_messages_for_this_trajectory.append({"role": "user", "content": user_content})
+
+                response_content = model_output_text
+                if self.config.prefill:
+                    response_content = self.config.prefill + model_output_text
+
+                full_messages_for_this_trajectory.append({"role": "assistant", "content": response_content})
+                processed_trajectories.append(full_messages_for_this_trajectory)
+
+            if not processed_trajectories:
+                logger.warning("collect_trajectories: No trajectories were processed.")
+                return None, []
+
+            logger.debug(f"collect_trajectories: Scoring {len(processed_trajectories)} trajectories.")
+            scored_data_group: Optional[ScoredDataGroup] = await self.score(processed_trajectories)
+
+            if scored_data_group:
+                logger.debug(f"collect_trajectories: Produced ScoredDataGroup with scores: {scored_data_group.get('scores')}")
+            else:
+                logger.warning("collect_trajectories: self.score returned None.")
+
+            return scored_data_group, []
+
+        except Exception as e:
+            logger.error(f"collect_trajectories: Failed to collect trajectories for item {item}: {e}")
+            logger.exception(e)
+            return None, []
+
+    async def score(self, rollout_group_data: List[List[Dict[str, Any]]]) -> Optional[ScoredDataGroup]:
+        logger.warning(f"Scoring {len(rollout_group_data)} rollout items")
+
+        scores = ScoredDataGroup()
+        scores["tokens"] = []
+        scores["masks"] = []
+        scores["scores"] = []
+        scores["advantages"] = None
+        scores["ref_logprobs"] = None
+        scores["messages"] = None if not self.config.include_messages_in_scoring else []
+
+        answer = None
+        if self.current_item and len(self.current_item) > 1 and self.current_item[1] is not None:
+            answer = self.current_item[1]
+        logger.warning(f"Answer for current item: {answer}")
+
+        ground_truth = None
+        if self.current_item and len(self.current_item) > 2 and self.current_item[2] is not None:
+            ground_truth = self.current_item[2]
+        logger.warning(f"Ground truth for current item: {ground_truth}")
+
+        formatted_completions = []
+        for trajectory in rollout_group_data:
+            if trajectory and isinstance(trajectory, list):
+                assistant_messages = [
+                    msg
+                    for msg in trajectory
+                    if isinstance(msg, dict) and msg.get("role") == "assistant"
+                ]
+                if assistant_messages:
+                    formatted_completions.append([assistant_messages[-1]])
+
+        if not formatted_completions:
+            logger.warning("No valid completions to score")
+            return None
+
+        try:
+            reward_kwargs = {
+                "solution": answer,
+                "ground_truth": ground_truth,
+                "item": self.current_item,
+                "config": self.config,
+            }
+            all_rewards = self.reward_function(formatted_completions, **reward_kwargs)
+            logger.info(f"Calculated rewards: {all_rewards}")
+
+        except Exception as e:
+            logger.error(f"Error applying reward functions: {e}")
+            logger.exception(e)
+            all_rewards = [0.0] * len(formatted_completions)
+
+        for i, (trajectory, reward) in enumerate(zip(rollout_group_data, all_rewards)):
+            try:
+                tokenized = tokenize_for_trainer(self.tokenizer, trajectory)
+
+                scores["tokens"].append(tokenized["tokens"])
+                scores["masks"].append(tokenized["masks"])
+                scores["scores"].append(float(reward))
+
+                if self.config.include_messages_in_scoring:
+                    if scores["messages"] is not None:
+                        scores["messages"].append(trajectory)
+                logger.warning(f"Scores: {scores['scores']}")
+            except Exception as e:
+                logger.error(f"Error processing trajectory {i}: {e}")
+                logger.exception(e)
+
+        if not scores["tokens"]:
+            logger.warning("No valid scores generated")
+            return None
+
+        logger.info(f"Generated scores: {scores['scores']}")
+        return scores
+
+    async def evaluate(self):
+        if (
+            not hasattr(self.config, "eval_dataset_name")
+            or not self.config.eval_dataset_name
+        ):
+            return
+
+        if not hasattr(self, "eval_dataset"):
+            self.eval_dataset = load_dataset(
+                self.config.eval_dataset_name,
+                self.config.eval_dataset_config,
+                split=self.config.eval_split,
+            )
+            self.eval_dataset = self.eval_dataset.select(
+                range(min(100, len(self.eval_dataset)))
+            )
+
+        eval_metrics = {}
+        eval_tasks = []
+
+        for i in range(min(self.config.max_eval_workers, len(self.eval_dataset))):
+            item = self.eval_dataset[i]
+            user_msg = {"role": "user", "content": item[self.config.prompt_field]}
+            prompt = tuple([frozenset(user_msg.items())])
+
+            answer = None
+            if self.config.answer_field and self.config.answer_field in item:
+                answer = item[self.config.answer_field]
+
+            eval_tasks.append(self.collect_trajectories((prompt, answer)))
+
+        eval_results = await asyncio.gather(*eval_tasks)
+
+        eval_scores = []
+        for result in eval_results:
+            if result[0]:
+                scored_data = await self.score(result[0])
+                if scored_data and "scores" in scored_data:
+                    eval_scores.extend(scored_data["scores"])
+
+        if eval_scores:
+            eval_metrics["eval/mean_score"] = sum(eval_scores) / len(eval_scores)
+            eval_metrics["eval/max_score"] = max(eval_scores)
+            eval_metrics["eval/min_score"] = min(eval_scores)
+
+        await self.wandb_log(eval_metrics)
+
+    async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
+        metrics = wandb_metrics or {}
+
+        for key, values in self.metric_buffer.items():
+            if values:
+                metrics[f"train/{key}"] = sum(values) / len(values)
+
+        self.metric_buffer = {k: [] for k in self.metric_buffer}
+
+        if self.config.use_wandb and hasattr(self, "reward_function") and \
+           hasattr(self.reward_function, "set_wandb_logger"):
+            if wandb.run:
+                self.reward_function.set_wandb_logger(wandb)
+            else:
+                logger.warning(
+                    "DatasetEnv.wandb_log: Wandb configured (use_wandb=True) and reward_function has "
+                    "set_wandb_logger, but wandb.run is not active. Skipping."
+                )
+
+        await super().wandb_log(metrics)
+
+    @classmethod
+    def config_init(
+        cls,
+        config_name: Optional[str] = None,
+        env_config_override: Optional[
+            DatasetEnvConfig
+        ] = None,
+    ) -> Tuple[DatasetEnvConfig, List[APIServerConfig]]:
+        """Load settings from the local configs directory, allowing for CLI overrides."""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+
+        if config_name:
+            if os.path.isabs(config_name) and config_name.endswith(".yaml"):
+                cfg_path = config_name
+            elif config_name.endswith(".yaml"):
+                cfg_path_cwd = os.path.join(os.getcwd(), config_name)
+                if os.path.exists(cfg_path_cwd):
+                    cfg_path = cfg_path_cwd
+                else:
+                    cfg_path = os.path.join(current_dir, "configs", config_name)
+            else:
+                cfg_path = os.path.join(current_dir, "configs", config_name + ".yaml")
+        else:
+            cfg_path = os.path.join(current_dir, "configs", "dataset_default.yaml")
+
+        logger.info(f"Attempting to load configuration from: {cfg_path}")
+
+        raw_from_yaml = {}
+        if os.path.exists(cfg_path):
+            with open(cfg_path) as f:
+                raw_from_yaml = yaml.safe_load(f) or {}
+            logger.info(f"Loaded config from {cfg_path}")
+            logger.warning(
+                f"DatasetEnv.config_init: Raw reward_functions from YAML: {raw_from_yaml.get('reward_functions')}"
+            )
+        else:
+            logger.warning(
+                f"Config file not found at {cfg_path}. Will proceed with env_config_override or defaults."
+            )
+
+        if env_config_override:
+            override_dict = env_config_override.model_dump(
+                exclude_none=True
+            )
+            raw_from_yaml.update(override_dict)
+
+        if "debug_mode" not in raw_from_yaml:
+            raw_from_yaml["debug_mode"] = True
+
+        env_conf = DatasetEnvConfig(**raw_from_yaml)
+
+        if env_conf.dataset_name is None:
+            raise ValueError(
+                "dataset_name is required but was not provided by YAML or CLI."
+            )
+        if env_conf.prompt_field is None:
+            raise ValueError(
+                "prompt_field is required but was not provided by YAML or CLI."
+            )
+
+        server_confs = []
+        for sc_data in raw_from_yaml.get("server_configs", []):
+            model_name = sc_data.get(
+                "model_name",
+                os.getenv(
+                    "OPENAI_MODEL", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+                ),
+            )
+            base_url = sc_data.get(
+                "base_url", os.getenv("OPENAI_API_BASE", "http://localhost:9004/v1")
+            )
+            num_requests = sc_data.get("num_requests_for_eval", 256)
+
+            api_key = sc_data.get("api_key")
+            if not api_key:
+                api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                api_key = "x"
+                logger.warning(
+                    "API key not found in config or OPENAI_API_KEY env var. Defaulting to 'x'."
+                )
+            else:
+                masked_key = (
+                    api_key[:4] + "****" + api_key[-4:]
+                    if api_key != "x" and len(api_key) > 8
+                    else api_key
+                )
+                logger.debug(f"Using API key: {masked_key}")
+
+            openai_config_args = {
+                "model_name": model_name,
+                "api_key": api_key,
+                "num_requests_for_eval": num_requests,
+                "base_url": base_url,
+            }
+            logger.warning(
+                f"Creating APIServerConfig with args: model='{model_name}', "
+                f"base_url='{base_url}', key_present={api_key != 'x'}, "
+                f"requests={num_requests}"
+            )
+            server_confs.append(APIServerConfig(**openai_config_args))
+
+        if "server_configs" not in raw_from_yaml:
+            logger.warning(
+                "No 'server_configs' section found in YAML, creating default server config."
+            )
+            default_api_key = os.getenv("OPENAI_API_KEY")
+            if not default_api_key:
+                default_api_key = "x"
+                logger.warning(
+                    "Defaulting API key to 'x' for default server config."
+                )
+
+            server_confs = [
+                APIServerConfig(
+                    model_name=os.getenv(
+                        "OPENAI_MODEL",
+                        "NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+                    ),
+                    base_url=os.getenv(
+                        "OPENAI_API_BASE", "http://localhost:9004/v1"
+                    ),
+                    api_key=default_api_key,
+                    num_requests_for_eval=256,
+                )
+            ]
+            logger.warning(
+                f"Created default APIServerConfig: model='{server_confs[0].model_name}', "
+                f"base_url='{server_confs[0].base_url}', "
+                f"key_present={server_confs[0].api_key != 'x'}"
+            )
+
+        return env_conf, server_confs
+
+if __name__ == "__main__":
+    DatasetEnv.cli()
