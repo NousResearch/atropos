@@ -954,7 +954,9 @@ class BaseEnv(ABC):
             # Collect trajectories with the specified group size
             # Override the group_size temporarily
             self.config.group_size = self.group_size_to_process
-
+            rprint(f"Processing group {self.curr_step + 1}/{self.n_groups_to_process}")
+            rprint(f"Group size: {self.config.group_size}")
+            rprint(f"Item: {item}")
             # Collect and process the trajectories
             to_postprocess, _ = await self.collect_trajectories(item)
 
