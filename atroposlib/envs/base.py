@@ -873,7 +873,7 @@ class BaseEnv(ABC):
         """
         Rollout manager
         """
-        logger.info(f"env_manager: Starting setup")
+        logger.debug(f"env_manager: Starting setup")
         await self.setup()
         await self.setup_wandb()
         await self.register_env()
