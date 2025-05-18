@@ -3,7 +3,12 @@ Unit tests for the tool registry component.
 """
 
 import unittest
-from ..tool_registry import Tool, ToolRegistry, default_registry
+import sys
+import os
+
+# Fix path to allow importing modules from parent directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from tool_registry import Tool, ToolRegistry, default_registry
 
 
 class TestToolRegistry(unittest.TestCase):
