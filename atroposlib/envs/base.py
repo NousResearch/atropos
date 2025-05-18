@@ -1273,21 +1273,21 @@ class BaseEnv(ABC):
                 server_manager_cli_args = {}
 
                 # Pydantic uses double underscore for nested model paths in field names
-                env_pydantic_prefix = env_full_prefix.replace(NAMESPACE_SEP, "__")
-                openai_pydantic_prefix = openai_full_prefix.replace(NAMESPACE_SEP, "__")
-                rprint(f"env_pydantic_prefix: {env_pydantic_prefix}")
-                rprint(f"openai_pydantic_prefix: {openai_pydantic_prefix}")
+                # env_pydantic_prefix = env_full_prefix.replace(NAMESPACE_SEP, "__")
+                # openai_pydantic_prefix = openai_full_prefix.replace(NAMESPACE_SEP, "__")
+                rprint(f"env_pydantic_prefix: {env_full_prefix}")
+                rprint(f"openai_pydantic_prefix: {openai_full_prefix}")
                 
                 # Iterate over all model fields to capture CLI args or their defaults
                 # (which are the PROCESS_MODE defaults for this Pydantic model)
                 for field_name in self.model_fields:
                     value = getattr(self, field_name) # Gets CLI value or Pydantic default
                     rprint(f"  Looping: field_name='{field_name}', value='{value}'") # DEBUG PRINT
-                    if field_name.startswith(env_pydantic_prefix):
-                        original_key = field_name[len(env_pydantic_prefix) :]
+                    if field_name.startswith(env_full_prefix):
+                        original_key = field_name[len(env_full_prefix) :]
                         env_namespace_cli_args[original_key] = value
-                    elif field_name.startswith(openai_pydantic_prefix):
-                        original_key = field_name[len(openai_pydantic_prefix) :]
+                    elif field_name.startswith(openai_full_prefix):
+                        original_key = field_name[len(openai_full_prefix) :]
                         openai_namespace_cli_args[original_key] = value
                     elif field_name in server_manager_config_cls_new_defaults.model_fields:
                         # Check against the specific ServerManagerConfig used for CliProcessConfig defaults
