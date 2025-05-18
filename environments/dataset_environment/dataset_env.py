@@ -194,6 +194,8 @@ class DatasetEnv(BaseEnv):
         Collects a single trajectory, scores it, and returns it as a ScoredDataItem.
         This method is called by the BaseEnv's collect_trajectories method.
         """
+        logger.setLevel(logging.DEBUG)
+        logger.warning(f"collect_trajectory: item: {item}")
         try:
             user_content = dict(item[0][0])["content"]
             answer = item[1] if len(item) > 1 and item[1] is not None else None
