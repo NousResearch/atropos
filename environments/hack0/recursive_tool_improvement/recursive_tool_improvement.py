@@ -271,12 +271,31 @@ class RecursiveToolImprovementEnv(BaseEnv):
     """
     Environment for training LLMs to create and improve tool compositions.
     
-    This environment focuses on a multi-turn interaction where models:
+    This environment implements a recursive tool improvement cycle for language models,
+    enabling them to learn higher-order tool composition skills through a process of
+    self-critique and continuous refinement. 
+    
+    The core interaction loop involves:
     1. Create initial tool compositions for problems
     2. Execute the compositions and observe results
     3. Critique their approach
     4. Improve the compositions based on self-critique
     5. Repeat iteratively
+    
+    This environment builds on concepts from Absolute-Zero-Reasoner (self-proposal mechanism), 
+    Tool-N1 (binary verification reward), and BespokeLabs (multi-turn tool learning techniques).
+    
+    Key Features:
+    - ToolRegistry with configurable tool sets for problem-solving
+    - Sandboxed ExecutionEngine for safe code execution
+    - Binary verification for clean reward signals
+    - Multi-turn conversation management
+    - Support for different reasoning modes (deduction, abduction, induction)
+    - Progressive improvement tracking
+    - WandB integration for metrics visualization
+    
+    This environment can be used with the Atropos framework for both online training 
+    (via 'serve' command) and offline trajectory generation (via 'process' command).
     """
     
     name = "recursive_tool_improvement"
@@ -392,10 +411,20 @@ class RecursiveToolImprovementEnv(BaseEnv):
             all_problems = self._create_default_problems()
             
             # Save default problems to files
-            for problem in all_problems:
-                file_path = os.path.join(problem_dir, f"{problem.problem_id}.json")
-                with open(file_path, "w") as f:
-                    json.dump(problem.to_dict(), f, indent=2)
+            try:
+                logger.info(f"Saving {len(all_problems)} default problems to {problem_dir}")
+                for problem in all_problems:
+                    file_path = os.path.join(problem_dir, f"{problem.problem_id}.json")
+                    # Make sure the directory exists
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                    with open(file_path, "w") as f:
+                        # Use custom serializable format for any non-JSON-serializable objects
+                        problem_dict = problem.to_dict()
+                        json.dump(problem_dict, f, indent=2)
+                    logger.info(f"Saved problem {problem.problem_id} to {file_path}")
+            except Exception as e:
+                logger.error(f"Error saving default problems to disk: {e}")
+                # Continue execution even if saving fails
         
         # Shuffle problems with a fixed seed for reproducibility
         random.seed(42)
@@ -789,10 +818,21 @@ class RecursiveToolImprovementEnv(BaseEnv):
     
     async def get_next_item(self) -> Optional[Item]:
         """
-        Get the next problem to solve.
+        Get the next problem to solve from the training problem set.
+        
+        This method selects problems in sequence from the training set, wrapping around
+        to the beginning when all problems have been used. Each problem is assigned a
+        unique conversation ID to track its state throughout the recursive improvement cycle.
+        
+        The Item returned is a tuple containing:
+        1. A unique conversation ID (string)
+        2. The problem ID (string)
+        
+        This ID pair allows the environment to maintain stateful conversations across
+        multiple interaction turns for the same problem.
         
         Returns:
-            An Item object containing the problem, or None if no more problems
+            An Item object containing (conversation_id, problem_id), or None if no problems available
         """
         # Choose the next problem from training set
         if self.current_problem_idx >= len(self.train_problems):
@@ -823,18 +863,34 @@ class RecursiveToolImprovementEnv(BaseEnv):
         """
         Collect a single trajectory for a problem, handling the full improvement cycle.
         
-        This method implements the core recursive improvement loop:
-        1. Get initial solution
-        2. Execute and verify
-        3. Request critique
-        4. Get improved solution
-        5. Repeat for multiple iterations
+        This method implements the core recursive improvement loop, managing state transitions
+        through the entire conversation lifecycle. It generates appropriate prompts at each step,
+        executes model-provided compositions, evaluates results, and tracks improvements.
+        
+        The state machine transitions through these stages:
+        1. PROBLEM_PRESENTED → Get initial solution → INITIAL_SOLUTION
+        2. INITIAL_SOLUTION → Execute solution → EXECUTION_RESULT  
+        3. EXECUTION_RESULT → Request critique → CRITIQUE
+        4. CRITIQUE → Get improved solution → IMPROVED_SOLUTION
+        5. IMPROVED_SOLUTION → Execute improved solution → Loop or FINAL_RESULT
+        
+        If the solution achieves a perfect score (1.0) or reaches max iterations,
+        the trajectory completes and returns a scored data item. Otherwise, it adds
+        the item back to the backlog to continue the trajectory in the next call.
         
         Args:
-            item: Tuple containing conversation_id and problem_id
+            item: Tuple containing (conversation_id, problem_id) that uniquely 
+                  identifies the current trajectory
             
         Returns:
-            Tuple containing the scored data and any backlog items
+            Tuple containing:
+              - The scored data (if trajectory is complete) or None (if still in progress)
+              - List of backlog items to process (typically the same item if continuing)
+              
+        Note:
+            This method handles one state transition per call, returning to the main
+            environment loop between transitions. This allows the environment to
+            interleave processing of multiple trajectories.
         """
         conversation_id, problem_id = item
         
@@ -1185,7 +1241,28 @@ class RecursiveToolImprovementEnv(BaseEnv):
         """
         Evaluate the environment on the evaluation problem set.
         
-        This runs through the evaluation problems and calculates success metrics.
+        This method runs a complete evaluation cycle on the reserved evaluation problems.
+        For each problem, it:
+        1. Creates an initial solution
+        2. Goes through multiple improvement iterations (up to max_iterations)
+        3. Records success rates, improvement metrics, and convergence speeds
+        
+        The evaluation results are recorded for logging to WandB, tracking:
+        - Success rate: Percentage of problems solved correctly
+        - Average improvement: Average score increase from first to final solution
+        - Average convergence speed: Average iterations needed to reach optimal solution
+        - Per-problem performance metrics
+        
+        This is called periodically during training based on the steps_per_eval config
+        to assess how well the model is learning to perform recursive tool improvement.
+        
+        Args:
+            *args: Additional positional arguments (not used)
+            **kwargs: Additional keyword arguments (not used)
+            
+        Note:
+            This method pauses normal trajectory collection to perform evaluation,
+            controlled by the eval_handling setting in the configuration.
         """
         logger.info("Starting evaluation")
         

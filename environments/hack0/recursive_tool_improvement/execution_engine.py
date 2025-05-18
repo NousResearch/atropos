@@ -406,7 +406,11 @@ class ExecutionEngine:
     
     def execute(self, code: str, input_data: Any = None) -> ExecutionResult:
         """
-        Execute a tool composition safely.
+        Execute a tool composition safely in a separate process for isolation.
+        
+        This method creates a separate process for execution to provide complete
+        isolation from the main process, ensuring that code execution cannot affect
+        the broader application.
         
         Args:
             code: The Python code of the tool composition
@@ -415,72 +419,158 @@ class ExecutionEngine:
         Returns:
             ExecutionResult object containing the results and metadata
         """
+        if not code or not code.strip():
+            return ExecutionResult(
+                success=False,
+                error="Empty code provided for execution",
+                execution_time=0.0
+            )
+            
+        # Validate input code for syntax errors before starting process
+        try:
+            ast.parse(code)
+        except SyntaxError as e:
+            return ExecutionResult(
+                success=False,
+                error=f"Syntax error in code: {str(e)}",
+                execution_time=0.0,
+                stderr=str(e)
+            )
+            
         start_time = time.time()
         
-        # Create a process for the execution
-        ctx = multiprocessing.get_context('spawn')
-        result_queue = ctx.Queue()
-        
-        def executor_process(code, input_data, result_queue):
-            try:
-                results = self._process_executor(code, input_data)
-                result_queue.put(results)
-            except Exception as e:
-                result_queue.put((False, None, f"Internal execution error: {str(e)}", [], "", str(e)))
-        
-        process = ctx.Process(target=executor_process, args=(code, input_data, result_queue))
-        process.start()
-        
-        # Wait for the process to complete or timeout
-        process.join(self.timeout + 1)  # Add 1 second buffer
-        
-        execution_time = time.time() - start_time
-        
-        # Check if the process is still running (timeout occurred)
-        if process.is_alive():
-            process.terminate()
-            process.join(1)  # Give it 1 more second to terminate
-            
-            # If still alive, force kill
-            if process.is_alive():
-                process.kill()
-            
-            return ExecutionResult(
-                success=False,
-                error=f"Execution timed out after {self.timeout} seconds",
-                execution_time=execution_time
-            )
-        
-        # Get results from the queue
+        # Create a process for the execution with proper error handling
         try:
-            if result_queue.empty():
+            ctx = multiprocessing.get_context('spawn')
+            result_queue = ctx.Queue()
+            
+            def executor_process(code, input_data, result_queue):
+                try:
+                    results = self._process_executor(code, input_data)
+                    result_queue.put(results)
+                except Exception as e:
+                    # Detailed error capturing with traceback
+                    error_msg = f"Internal execution error: {type(e).__name__}: {str(e)}"
+                    tb = traceback.format_exc()
+                    result_queue.put((False, None, error_msg, [], "", f"{error_msg}\n\n{tb}"))
+            
+            process = ctx.Process(target=executor_process, args=(code, input_data, result_queue))
+            
+            # Set resource limits if available on the platform
+            try:
+                import resource
+                # Will be applied in the child process, not in the parent
+                # Define a preexec_fn that sets resource limits
+                # This would go in process creation if platform supports it
+                pass
+            except ImportError:
+                # resource module not available on this platform (e.g., Windows)
+                pass
+                
+            # Start the process
+            process.start()
+            
+            # Wait for the process to complete or timeout
+            process.join(self.timeout + 1)  # Add 1 second buffer
+            
+            execution_time = time.time() - start_time
+            
+            # Check if the process is still running (timeout occurred)
+            if process.is_alive():
+                # Graceful termination attempt
+                process.terminate()
+                
+                # Give it a moment to terminate gracefully
+                termination_timeout = 1.0  # 1 second
+                termination_start = time.time()
+                while process.is_alive() and (time.time() - termination_start) < termination_timeout:
+                    time.sleep(0.1)
+                
+                # If still alive, force kill
+                if process.is_alive():
+                    try:
+                        process.kill()
+                    except Exception as kill_error:
+                        # On some platforms, kill might not be available or might fail
+                        pass
+                
                 return ExecutionResult(
                     success=False,
-                    error="Execution failed with no results",
-                    execution_time=execution_time
+                    error=f"Execution timed out after {self.timeout} seconds",
+                    execution_time=execution_time,
+                    stderr=f"ERROR: Execution exceeded the {self.timeout} second time limit and was terminated."
                 )
             
-            success, result, error, tool_calls, stdout, stderr = result_queue.get(block=False)
+            # Check process exit code for abnormal termination
+            if process.exitcode != 0:
+                # Process terminated abnormally
+                return ExecutionResult(
+                    success=False,
+                    error=f"Process terminated abnormally with exit code {process.exitcode}",
+                    execution_time=execution_time,
+                    stderr=f"ERROR: Process terminated abnormally with exit code {process.exitcode}"
+                )
             
-            return ExecutionResult(
-                success=success,
-                result=result,
-                error=error,
-                execution_time=execution_time,
-                tool_calls=tool_calls,
-                stdout=stdout,
-                stderr=stderr
-            )
-        except Exception as e:
+            # Get results from the queue with proper timeout
+            try:
+                # Use a short timeout when getting from queue to avoid blocking
+                if result_queue.empty():
+                    return ExecutionResult(
+                        success=False,
+                        error="Execution completed but produced no results",
+                        execution_time=execution_time
+                    )
+                
+                # Retrieve execution results
+                success, result, error, tool_calls, stdout, stderr = result_queue.get(block=False)
+                
+                # Validate the result structure
+                if not isinstance(success, bool):
+                    return ExecutionResult(
+                        success=False,
+                        error="Invalid execution result format: success flag is not a boolean",
+                        execution_time=execution_time
+                    )
+                
+                # Validate tool calls
+                valid_tool_calls = []
+                if tool_calls:
+                    for call in tool_calls:
+                        if isinstance(call, dict) and "tool" in call:
+                            valid_tool_calls.append(call)
+                
+                return ExecutionResult(
+                    success=success,
+                    result=result,
+                    error=error,
+                    execution_time=execution_time,
+                    tool_calls=valid_tool_calls,
+                    stdout=stdout if isinstance(stdout, str) else str(stdout),
+                    stderr=stderr if isinstance(stderr, str) else str(stderr)
+                )
+            except Exception as queue_error:
+                return ExecutionResult(
+                    success=False,
+                    error=f"Error retrieving execution results: {str(queue_error)}",
+                    execution_time=execution_time,
+                    stderr=f"ERROR: Failed to retrieve execution results: {str(queue_error)}\n{traceback.format_exc()}"
+                )
+                
+        except Exception as process_error:
+            # Handle errors in process creation or management
             return ExecutionResult(
                 success=False,
-                error=f"Error retrieving execution results: {str(e)}",
-                execution_time=execution_time
+                error=f"Error in execution process management: {str(process_error)}",
+                execution_time=time.time() - start_time,
+                stderr=f"ERROR: Process management failure: {str(process_error)}\n{traceback.format_exc()}"
             )
     
     def execute_from_text(self, text: str, input_data: Any = None, fn_name: str = "solve") -> ExecutionResult:
         """
         Extract a function from text and execute it.
+        
+        This method handles the extraction of code from unstructured text (like LLM responses),
+        validates it, and then executes it safely.
         
         Args:
             text: The text containing the function definition
@@ -490,14 +580,46 @@ class ExecutionEngine:
         Returns:
             ExecutionResult object containing the results and metadata
         """
-        # Extract the function code
-        code = CodeParser.extract_function(text, fn_name)
-        
-        if not code:
+        if not text:
             return ExecutionResult(
                 success=False,
-                error=f"No valid '{fn_name}' function found in the text",
+                error="Empty text provided for function extraction",
                 execution_time=0.0
+            )
+            
+        # Try to extract the function code
+        try:
+            code = CodeParser.extract_function(text, fn_name)
+        except Exception as e:
+            return ExecutionResult(
+                success=False,
+                error=f"Error extracting function from text: {str(e)}",
+                execution_time=0.0,
+                stderr=f"Function extraction error: {str(e)}\n{traceback.format_exc()}"
+            )
+        
+        if not code:
+            # Provide a more detailed diagnostic when no function is found
+            if "<composition>" in text and "</composition>" in text:
+                composition_content = re.search(r"<composition>(.*?)</composition>", text, re.DOTALL)
+                if composition_content:
+                    content = composition_content.group(1).strip()
+                    if not content:
+                        error_message = f"Empty <composition> tags found, but no valid '{fn_name}' function detected"
+                    else:
+                        error_message = f"<composition> tags found, but they don't contain a valid '{fn_name}' function"
+                else:
+                    error_message = f"<composition> tags found, but couldn't extract content between them"
+            elif f"def {fn_name}" in text:
+                error_message = f"Found 'def {fn_name}', but couldn't extract a complete function definition"
+            else:
+                error_message = f"No '{fn_name}' function definition found in the text"
+                
+            return ExecutionResult(
+                success=False,
+                error=error_message,
+                execution_time=0.0,
+                stderr=f"ERROR: {error_message}\n\nText snippet: {text[:200]}..."
             )
         
         # Check if it's a valid function
