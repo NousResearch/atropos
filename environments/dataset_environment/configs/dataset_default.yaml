@@ -1,11 +1,11 @@
 tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
-group_size: 32
+group_size: 16
 use_wandb: true
-max_num_workers: 256
+max_num_workers: 128
 rollout_server_url: "http://localhost:8000"
 total_steps: 1000
-batch_size: 1024
-steps_per_eval: 20
+batch_size: 512
+steps_per_eval: 100
 wandb_name: "dataset_default_run"
 ensure_scores_are_not_same: false
 
@@ -38,6 +38,7 @@ reward_functions:
       require_all_tags: true
 
 server_configs:
-  - model_name: "gpt-4.1-nano"
-    base_url: "https://api.openai.com/v1"
+  - model_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+    base_url: "http://localhost:9004/v1"
+    api_key: "x"
     num_requests_for_eval: 256

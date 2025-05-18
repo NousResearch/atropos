@@ -344,7 +344,7 @@ class DatasetEnv(BaseEnv):
             raw_from_yaml.update(override_dict)
 
         if "debug_mode" not in raw_from_yaml:
-            raw_from_yaml["debug_mode"] = False
+            raw_from_yaml["debug_mode"] = True
 
         env_conf = DatasetEnvConfig(**raw_from_yaml)
 
