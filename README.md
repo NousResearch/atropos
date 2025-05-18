@@ -281,11 +281,15 @@ This will create `gsm8k_rollouts.jsonl` and `gsm8k_rollouts.html`.
 You can customize the inference endpoint and other parameters for the `process` subcommand. For example, to use a different model or API endpoint:
 
 ```sh
-python environments/gsm8k_server.py process --env.data_path_to_save_groups gsm8k_rollouts.jsonl \
+python environments/gsm8k_server.py process \
+  --env.data_path_to_save_groups gsm8k_rollouts.jsonl \
+  --env.my_custom_field "value" \
   --openai.base_url https://your-custom-api-url/v1 \
   --openai.api_key YOUR_API_KEY \
   --openai.model_name your_model_identifier
 ```
+
+You can add custom fields to the `env` namespace by returning a custom subclass of BaseEnvConfig in `config_init` [[example](https://github.com/NousResearch/atropos/blob/bdb15e5d85ddcf8a6ede352977719df442e60a22/environments/math_server.py#L181)].
 
 Always refer to the specific environment script's help for all available options:
 

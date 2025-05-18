@@ -24,14 +24,21 @@ class OpenAIServer(APIServer):
         )
         super().__init__(config)
 
-    async def check_server_status_task(self):
+    async def check_server_status_task(self, chat_completion: bool = True):
         while True:
             try:
-                await self.openai.completions.create(
-                    model=self.config.model_name,
-                    prompt="hi",
-                    max_tokens=1,
-                )
+                if chat_completion:
+                    await self.openai.chat.completions.create(
+                        model=self.config.model_name,
+                        messages=[{"role": "user", "content": "hi"}],
+                        max_tokens=1,
+                    )
+                else:
+                    await self.openai.completions.create(
+                        model=self.config.model_name,
+                        prompt="hi",
+                        max_tokens=1,
+                    )
                 self.server_healthy = True
             except (
                 aiohttp.ClientError,
