@@ -157,7 +157,7 @@ class DatasetEnv(BaseEnv):
             max_tokens = self.config.max_tokens
 
             async with self.server.dedicated_server() as server:
-                logger.warning(f"collect_trajectory: calling chat_completion with messages: {messages}")
+                # logger.warning(f"collect_trajectory: calling chat_completion with messages: {messages}")
                 completions_result = await server.chat_completion(
                     messages=messages,
                     n=1,
