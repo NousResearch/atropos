@@ -1263,64 +1263,72 @@ class BaseEnv(ABC):
                 else:
                     yaml_config = {}
 
-                # Get CLI flags passed with double dashes
-                cli_passed_flags = get_double_dash_flags()
+                # --- Extract CLI arguments directly from self (populated by pydantic-cli) ---
+                env_namespace_cli_args = {}
+                openai_namespace_cli_args = {}
+                server_manager_cli_args = {}
 
+                # Pydantic uses double underscore for nested model paths in field names
+                env_pydantic_prefix = env_full_prefix.replace(NAMESPACE_SEP, "__")
+                openai_pydantic_prefix = openai_full_prefix.replace(NAMESPACE_SEP, "__")
+
+                for field_name in self.model_fields_set:
+                    value = getattr(self, field_name)
+                    if field_name.startswith(env_pydantic_prefix):
+                        original_key = field_name[len(env_pydantic_prefix) :]
+                        env_namespace_cli_args[original_key] = value
+                    elif field_name.startswith(openai_pydantic_prefix):
+                        original_key = field_name[len(openai_pydantic_prefix) :]
+                        openai_namespace_cli_args[original_key] = value
+                    # ServerManagerConfig fields (slurm, testing) are direct attributes
+                    # on the CliProcessConfig model as defined by its MRO.
+                    elif field_name in ServerManagerConfig.model_fields:
+                        server_manager_cli_args[field_name] = value
+                
                 # --- Configuration Merging ---
                 # Priority: CLI > YAML > Process Mode Defaults > `config_init` defaults
 
                 # 1. Environment Configuration
                 env_config_dict = merge_dicts(
-                    default_env_config.model_dump(),  # Class Defaults
+                    default_env_config.model_dump(),  # Class Defaults from config_init
                     PROCESS_MODE_ENV_DEFAULT_CONFIG.model_dump(),  # Process Mode Defaults
                     yaml_config.get(ENV_NAMESPACE, {}),  # YAML config
-                    extract_namespace(cli_passed_flags, env_full_prefix),  # CLI args
+                    env_namespace_cli_args,  # CLI args from self
                 )
 
                 # 2. OpenAI Configuration
-                oai_cli_passed_args = extract_namespace(
-                    cli_passed_flags, openai_full_prefix
-                )  # CLI args
                 yaml_oai_config = yaml_config.get(OPENAI_NAMESPACE, {})
                 if isinstance(default_server_configs, ServerBaseline) and (
-                    oai_cli_passed_args or yaml_oai_config
+                    openai_namespace_cli_args or yaml_oai_config # Check extracted CLI args
                 ):
                     raise ValueError(
-                        "ServerBaseline is not compatible with OpenAI-namespaced CLI arguments. Please edit `config_init` directly or use APIServerConfig."  # noqa: E501
+                        "ServerBaseline is not compatible with OpenAI-namespaced CLI arguments or YAML. Please edit `config_init` directly or use APIServerConfig."  # noqa: E501
                     )
 
                 if (
                     isinstance(default_server_configs, list)
                     and len(default_server_configs) == 1
                 ):
-                    # can't use the same var name because it shadows the class variable and we get an error
                     default_openai_config_ = default_server_configs[0]
                 else:
-                    default_openai_config_ = default_server_configs
+                    default_openai_config_ = default_server_configs # Could be ServerBaseline or list
+
                 if isinstance(yaml_oai_config, list) and len(yaml_oai_config) == 1:
                     yaml_oai_config = yaml_oai_config[0]
-                if isinstance(default_openai_config_, APIServerConfig) and isinstance(
-                    yaml_oai_config, dict
-                ):
-                    openai_config_dict = merge_dicts(
-                        default_openai_config_.model_dump(),  # Default APIServerConfig (or from class init)
-                        PROCESS_MODE_OPENAI_DEFAULT_CONFIG.model_dump(),  # Process Mode Defaults
-                        yaml_oai_config,
-                        oai_cli_passed_args,
-                    )
-                else:
-                    openai_config_dict = {}
+
+                # Prepare the base for merging: either default from config_init or an empty dict
+                base_openai_model_dump = {}
+                if isinstance(default_openai_config_, APIServerConfig):
+                    base_openai_model_dump = default_openai_config_.model_dump()
+                
+                openai_config_dict = merge_dicts(
+                    base_openai_model_dump,  # Default APIServerConfig (from class init) or {}
+                    PROCESS_MODE_OPENAI_DEFAULT_CONFIG.model_dump(),  # Process Mode Defaults
+                    yaml_oai_config if isinstance(yaml_oai_config, dict) else {}, # YAML
+                    openai_namespace_cli_args,  # CLI args from self
+                )
 
                 # 3. Server Manager Configuration
-                # Extract only relevant CLI flags
-                server_manager_cli_passed_flags = {}
-                if "slurm" in cli_passed_flags:
-                    server_manager_cli_passed_flags["slurm"] = cli_passed_flags["slurm"]
-                if "testing" in cli_passed_flags:
-                    server_manager_cli_passed_flags["testing"] = cli_passed_flags[
-                        "testing"
-                    ]
-
                 server_manager_yaml_dict = {}
                 if "slurm" in yaml_config:
                     server_manager_yaml_dict["slurm"] = yaml_config["slurm"]
@@ -1330,8 +1338,8 @@ class BaseEnv(ABC):
                 server_manager_config_dict = merge_dicts(
                     ServerManagerConfig().model_dump(),  # Base defaults
                     PROCESS_MODE_SERVER_MANAGER_DEFAULT_CONFIG.model_dump(),  # Process Mode Defaults
-                    server_manager_yaml_dict,
-                    server_manager_cli_passed_flags,  # CLI args
+                    server_manager_yaml_dict, # YAML
+                    server_manager_cli_args,  # CLI args from self
                 )
 
                 # --- Instantiate Final Config Objects ---
@@ -1347,8 +1355,8 @@ class BaseEnv(ABC):
                 openai_configs = resolve_openai_configs(
                     default_server_configs=default_server_configs,
                     openai_config_dict=openai_config_dict,
-                    yaml_config=yaml_config,
-                    cli_passed_flags=cli_passed_flags,
+                    yaml_config=yaml_config, # Pass the original yaml_config
+                    cli_passed_flags=openai_namespace_cli_args, # Pass the extracted CLI args
                     logger=logger,
                 )
 
