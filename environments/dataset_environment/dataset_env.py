@@ -137,6 +137,7 @@ class DatasetEnv(BaseEnv):
         return (prompt, answer, ground_truth)
 
     async def collect_trajectories(self, item: Item) -> Tuple[Optional[ScoredDataGroup], List[Item]]:
+        logger.setLevel(logging.DEBUG)
         logger.debug(f"collect_trajectories: Starting for item: {item}")
         try:
             self.current_item = item  # Used by self.score()
