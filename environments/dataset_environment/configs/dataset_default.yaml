@@ -6,7 +6,6 @@ rollout_server_url: "http://localhost:8000"
 total_steps: 1000
 batch_size: 1024
 steps_per_eval: 20
-max_token_length: 4096
 wandb_name: "dataset_default_run"
 ensure_scores_are_not_same: false
 
@@ -21,7 +20,7 @@ prefill: "<think>\n"
 shuffle_dataset: true
 max_generations_per_prompt: 1
 
-max_tokens: 4096
+max_tokens: 16384
 
 temperature: 0.7
 top_p: 0.9
