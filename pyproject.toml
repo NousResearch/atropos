@@ -26,6 +26,7 @@ dependencies = [
     "jsonlines",
     "pydantic-cli",
     "hf_transfer",
+    "torch>=2.7.0",
 ]
 
 [project.scripts]
@@ -65,3 +66,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["atroposlib"]
+
+[tool.uv.workspace]
+members = [
+    "environments/hack0",
+]
