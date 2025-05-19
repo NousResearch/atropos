@@ -151,13 +151,11 @@ class SigmaRuleEnv(BaseEnv):
         data["iter"] = self.iter
         super().save_checkpoint(step, data)
 
-    def llm_judge_similarity(self, gold_yaml_str: str, gen_yaml_str: str) -> float:
+    async def llm_judge_similarity(self, gold_yaml_str: str, gen_yaml_str: str) -> float:
         """
         Uses an LLM to decide whether the generated Sigma rule is semantically equivalent
         to the gold answer. Returns 1.0 if yes, 0.0 if no.
         """
-        print("-------------gold_yaml_str----------", gold_yaml_str)
-        print("------------gen_yaml_str-----------", gen_yaml_str)
         prompt = f"""
             You are an expert in cybersecurity and YAML-based Sigma rules. Given a gold standard Sigma rule and a generated rule, determine if the generated rule is functionally equivalent and correct.
             
@@ -174,10 +172,17 @@ class SigmaRuleEnv(BaseEnv):
         """
     
         try:
-            # Replace this with your actual LLM inference call
-            response = self.llm(prompt).strip()
-    
-            return 1.0 if response.startswith("1") else 0.0
+            completion = await self.server.chat_completion(
+                messages=[
+                    {"role": "user", "content": prompt},
+                ],
+                n=1,
+                max_tokens=1,
+                temperature=0.0,
+                split="eval",
+            )
+            reply = completion.choices[0].message.content.strip()
+            return 1.0 if reply == "1" else 0.0
     
         except Exception as e:
             print(f"LLM Judge error: {e}")
@@ -219,7 +224,7 @@ class SigmaRuleEnv(BaseEnv):
             ],
             extraction_mode="first_match",
         )
-        score = self.self.llm_judge_similarity(
+        score = self.llm_judge_similarity(
             gold_parsed["detection"],
             answer_parsed["detection"],
         )
@@ -295,7 +300,7 @@ class SigmaRuleEnv(BaseEnv):
                     yaml_str = boxed_match.group(1)
                     # gen_yaml = yaml.safe_load(yaml_str)
                     # gen_det = self.flatten_detection(gen_yaml.get("detection", {}))
-                    reward = self.llm_judge_similarity(gold_det, yaml_str)
+                    reward = await self.llm_judge_similarity(gold_det, yaml_str)
                 else:
                     reward = 0
             except Exception as e:
