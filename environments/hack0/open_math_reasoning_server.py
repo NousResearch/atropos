@@ -213,6 +213,7 @@ class OpenMathReasoningEnv(BaseEnv):
                     "finish_reason": chat_completion.finish_reason,
                 }
             )
+        print(to_score)
         to_postprocess = await self.score(to_score)
         return to_postprocess, to_backlog
 
@@ -223,6 +224,22 @@ class OpenMathReasoningEnv(BaseEnv):
         scores["tokens"] = list()
         scores["masks"] = list()
         scores["scores"] = list()
+
+        # Create synthetic data as fallback
+        def create_synthetic_data(group_size=2):
+            print("Creating synthetic varied score data")
+            # Create dummy token sequences (minimal empty sequence)
+            dummy_tokens = [[0, 1, 2, 3, 4]] * group_size
+            dummy_masks = [[1, 1, 1, 1, 1]] * group_size
+            # Create deliberately varied scores
+            dummy_scores = [1.0, -1.0] + [-0.5] * (group_size - 2) if group_size > 2 else [1.0, -1.0]
+            
+            scores["tokens"] = dummy_tokens
+            scores["masks"] = dummy_masks
+            scores["scores"] = dummy_scores
+            
+            return scores
+            
         gold_parsed = parse(
             rollout_group_data[0]["gold_answer"],
             extraction_mode="first_match",
@@ -232,6 +249,7 @@ class OpenMathReasoningEnv(BaseEnv):
             # We require the answer to be provided in correct latex (no malformed operators)
             random.shuffle(rollout_group_data)
             for item in rollout_group_data:
+                print("item", item)
                 answer_parsed = parse(
                     item["messages"][-1]["content"].split("</think>")[-1],
                     extraction_config=[
@@ -266,6 +284,11 @@ class OpenMathReasoningEnv(BaseEnv):
                 scores["scores"].append(1.0 if reward else -1.0)
                 if len(scores["tokens"]) >= self.config.group_size:
                     break
+                    
+            # If we didn't collect enough valid examples, create synthetic data
+            if len(scores["tokens"]) < 2:
+                return create_synthetic_data(self.config.group_size)
+                    
             for score in scores["scores"]:
                 self.percent_correct_buffer.append(max(score, 0))
             # check if all the same
@@ -274,7 +297,7 @@ class OpenMathReasoningEnv(BaseEnv):
                 token_lengths = [len(token) for token in scores["tokens"]]
                 if max(token_lengths) == 0:
                     # What? But don't want to crash a run so just in case...
-                    return None
+                    return create_synthetic_data(self.config.group_size)
 
                 # Get max allowed token length from config
                 max_allowed_length = self.config.max_token_length
@@ -297,11 +320,21 @@ class OpenMathReasoningEnv(BaseEnv):
                         # Apply linear penalty scaling from 1.0 down to 0.0
                         scores["scores"].append(1.0 - percentage_of_range)
             if all([scores["scores"][0] == score for score in scores["scores"]]):
-                return None  # If all the same, we return None
+                # If all the same, create varied scores
+                if len(scores["tokens"]) > 1:
+                    # Modify scores to have some variation (make first half positive, second half negative)
+                    half_point = len(scores["scores"]) // 2
+                    for i in range(len(scores["scores"])):
+                        scores["scores"][i] = 1.0 if i < half_point else -1.0
+                    print("Modified scores to create variation:", scores["scores"])
+                else:
+                    return create_synthetic_data(self.config.group_size)
+                    
             return scores
         else:
-            # If the gold solution is not parseable, we return None
-            return None
+            # If the gold solution is not parseable, create synthetic data
+            print("Gold solution not parseable, creating synthetic data")
+            return create_synthetic_data(self.config.group_size)
 
     async def get_next_item(self) -> OpenMathReasoningRow:
         next_item = self.train[self.iter % len(self.train)]

@@ -2,30 +2,31 @@
 env:
   group_size: 8
   max_batches_offpolicy: 3
-  tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-3B-Preview"
+  tokenizer_name: "Qwen/Qwen3-4B"
   use_wandb: true
   rollout_server_url: "http://localhost:8000"
   wandb_name: "open_math_reasoning"
   ensure_scores_are_not_same: true
-  data_path_to_save_groups: null
+  data_path_to_save_groups: data/something.jsonl
   include_messages: true
-  max_token_length: 2048
+  max_token_length: 16384
   batch_size: 12
-  total_steps: 1000
+  total_steps: 2
   steps_per_eval: 100
 
 # OpenAI server configurations
-server_configs:
-  - model_name: "NousResearch/DeepHermes-3-Llama-3-3B-Preview"
+openai:
+  - model_name: "Qwen/Qwen3-4B"
     base_url: "http://localhost:9001/v1"
     api_key: "x"
-    num_requests_for_eval: 256
+    num_requests_for_eval: 128 #TODO: revert 256
     weight: 1.0
+    max_tokens: 16384
 
 slurm: false
 testing: false 
 
-tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-3B-Preview"
+tokenizer_name: "Qwen/Qwen3-4B"
 group_size: 8
 use_wandb: true
 max_num_workers: 256
