@@ -14,15 +14,19 @@ The Recursive Tool Improvement Environment enables models to:
 
 This environment is designed to study how language models can learn to compose primitive tools into higher-order, reusable abstractions through a process of self-improvement.
 
+![Reward Trends Across Iterations](reward_trends_2.png)
+
 ## Key Research Questions
 
 This environment explores several novel research directions:
 
-1. **Tool Composition** (Highly Novel): How can LLMs learn to compose primitive tools into higher-order, reusable compositions rather than just sequencing individual tools?
+1. **Tool Composition**: How can LLMs learn to compose primitive tools into higher-order, reusable compositions rather than just sequencing individual tools?
 
-2. **Optimization Patterns** (Highly Novel): What patterns emerge in the optimization process as models refine their tool compositions across multiple iterations?
+2. **Optimization Patterns**: What patterns emerge in the optimization process as models refine their tool compositions across multiple iterations?
 
-3. **Meta-cognitive Evaluation** (Highly Novel): Can models develop their own principles for evaluating and improving tool compositions without human-defined metrics?
+   ![Iteration Distribution](iteration_distribution_1.png)
+
+3. **Meta-cognitive Evaluation**: Can models develop their own principles for evaluating and improving tool compositions without human-defined metrics?
 
 4. **Scaling Effects**: How does model scale impact the ability to create and recursively improve tool compositions?
 
@@ -137,6 +141,10 @@ Metrics are automatically logged to Weights & Biases, including:
 - Improvement trends
 - Convergence speeds
 - Example trajectories
+
+You can view a sample run with these metrics here: [Recursive Tool Improvement WandB Run](https://wandb.ai/nous-research/recursive_tool_improvement/runs/m66cviqn)
+
+The metrics show how models learn to systematically improve their tool compositions over multiple iterations, with most learning happening in the first 2-3 iterations.
 
 ## License
 
