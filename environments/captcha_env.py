@@ -1,8 +1,9 @@
 import base64
 import io
 import random
-from typing import Dict, List, Optional, Tuple, TypedDict, Union
 import re
+from typing import Dict, List, Optional, Tuple, TypedDict
+
 from datasets import load_dataset
 from PIL import Image
 from tqdm.asyncio import tqdm_asyncio
@@ -16,7 +17,6 @@ from atroposlib.envs.base import (
 from atroposlib.type_definitions import Item, number
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
-# System prompt for the CAPTCHA task
 captcha_system_prompt = (
     "You are a deep thinking AI, you may use extremely long chains of thought "
     "to deeply consider the problem and deliberate with yourself via systematic "
@@ -105,8 +105,8 @@ class CaptchaEnv(BaseEnv):
 
         for i, item in enumerate(shuffled_dataset):
             img = item["image"]
-            if img.mode == 'RGBA':
-                img = img.convert('RGB')
+            if img.mode == "RGBA":
+                img = img.convert("RGB")
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             img_bytes = buf.getvalue()
@@ -117,14 +117,15 @@ class CaptchaEnv(BaseEnv):
                 "solution": str(item["solution"]),
                 "base64_image": base64_image_str,
             }
-            if i % 10 == 0 :
-                 self.test_data.append(processed_item)
+            if i % 10 == 0:
+                self.test_data.append(processed_item)
             else:
                 self.train_data.append(processed_item)
 
         self.iter = 0
-        print(f"Loaded {len(self.train_data)} training examples and {len(self.test_data)} test examples.")
-
+        print(
+            f"Loaded {len(self.train_data)} training examples and {len(self.test_data)} test examples."
+        )
 
     def save_checkpoint(self, step, data=None):
         if data is None:
@@ -154,7 +155,9 @@ class CaptchaEnv(BaseEnv):
         )
 
         model_output = completion.choices[0].message.content.split("</think>")[-1]
-        match = re.search(r"<answer>\s*(.*?)\s*</answer>", model_output, re.IGNORECASE | re.DOTALL)
+        match = re.search(
+            r"<answer>\s*(.*?)\s*</answer>", model_output, re.IGNORECASE | re.DOTALL
+        )
         extracted_answer = match.group(1).strip() if match else model_output.strip()
 
         score = 1 if extracted_answer.lower() == item["solution"].lower() else 0
@@ -180,7 +183,6 @@ class CaptchaEnv(BaseEnv):
         accuracy = sum(scores) / len(scores) if scores else 0
         self.eval_metrics.append(("eval/accuracy", accuracy))
         print(f"Evaluation accuracy: {accuracy}")
-
 
     async def collect_trajectories(
         self, item: CaptchaRow
@@ -217,31 +219,41 @@ class CaptchaEnv(BaseEnv):
                     "model_response_content": chat_completion.message.content,
                     "gold_solution": item["solution"],
                     "finish_reason": chat_completion.finish_reason,
-                    "base64_image": item["base64_image"]
+                    "base64_image": item["base64_image"],
                 }
             )
         to_postprocess = await self.score(to_score)
         return to_postprocess, []
 
-
-    async def score(
-        self, rollout_group_data
-    ) -> Optional[ScoredDataGroup]:
+    async def score(self, rollout_group_data) -> Optional[ScoredDataGroup]:
         scores_group = ScoredDataGroup()
         scores_group["tokens"] = list()
         scores_group["masks"] = list()
         scores_group["scores"] = list()
 
-
         random.shuffle(rollout_group_data)
         for item_data in rollout_group_data:
-            model_output_text = item_data["model_response_content"].split("</think>")[-1]
-            match = re.search(r"<answer>\s*(.*?)\s*</answer>", model_output_text, re.IGNORECASE | re.DOTALL)
-            extracted_answer = match.group(1).strip() if match else model_output_text.strip()
-            reward = 1 if extracted_answer.lower() == item_data["gold_solution"].lower() else 0
+            model_output_text = item_data["model_response_content"].split("</think>")[
+                -1
+            ]
+            match = re.search(
+                r"<answer>\s*(.*?)\s*</answer>",
+                model_output_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            extracted_answer = (
+                match.group(1).strip() if match else model_output_text.strip()
+            )
+            reward = (
+                1
+                if extracted_answer.lower() == item_data["gold_solution"].lower()
+                else 0
+            )
 
             out_dict = tokenize_for_trainer(
-                self.tokenizer, item_data["messages_for_tokenizer"], item_data["finish_reason"]
+                self.tokenizer,
+                item_data["messages_for_tokenizer"],
+                item_data["finish_reason"],
             )
             tokens = out_dict["tokens"]
             masks = out_dict["masks"]
@@ -263,10 +275,9 @@ class CaptchaEnv(BaseEnv):
             self.accuracy_buffer.append(max(score_val, 0))
 
         if all(s == scores_group["scores"][0] for s in scores_group["scores"]):
-             pass
+            pass
 
         return scores_group
-
 
     async def get_next_item(self) -> CaptchaRow:
         item_index = self.iter % len(self.train_data)
@@ -276,4 +287,4 @@ class CaptchaEnv(BaseEnv):
 
 
 if __name__ == "__main__":
-    CaptchaEnv.cli() 
+    CaptchaEnv.cli()
