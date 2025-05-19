@@ -1,0 +1,5 @@
+pybullet
+websockets
+# pydantic (if using for data classes, otherwise standard dataclasses are fine for MVP)
+# fastapi # Not needed for this combined MVP script approach
+# uvicorn # Not needed for this combined MVP script approach 

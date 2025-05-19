@@ -1,0 +1,46 @@
+# Python general
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment backups
+*.bak
+
+# Virtual Environments
+.venv*/
+.venv_*/
+venv/
+ENV/
+env/
+
+# Conda environments (if created locally within project, though usually global)
+# anaconda/
+# miniconda/
+# miniforge*/
+# spatial_rl_conda_env/ # If it were in the project dir
+
+# dotenv environment variables file
+.env
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS specific
+.DS_Store
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# W&B local files (wandb run data)
+wandb/
+
+# Trajectory data (if you don't want to commit example outputs directly)
+# Might want to commit an example, but perhaps not all generated files
+# trajectories.jsonl
+# trajectories_wandb.jsonl
+# test_trajectories.jsonl 

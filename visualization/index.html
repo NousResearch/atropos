@@ -1,0 +1,21 @@
+<body>
+    <div id="info">
+        <h1>MVP Content Check ALPHA-BRAVO-CHARLIE</h1>
+        <p>Status: <span id="status">Disconnected</span></p>
+        <p>Task: <span id="task_description">N/A</span></p>
+        <div id="controls">
+            <button id="btnNextLLMTask">Next Task (Run LLM)</button>
+        </div>
+    </div>
+    <div id="canvas_container"></div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module" src="main.js"></script>
+</body>
+</html> 
