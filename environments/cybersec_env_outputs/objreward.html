@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rendered Messages - sigmarule_23.jsonl</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; margin: 20px; }
+        details { border: 1px solid #ccc; border-radius: 4px; margin-bottom: 15px; }
+        summary {
+            font-weight: bold;
+            padding: 10px;
+            background-color: #f0f0f0;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+            border-bottom: 1px solid #ccc;
+            outline: none; /* Remove default focus outline if needed */
+        }
+        details[open] summary { border-bottom: 1px solid #ccc; }
+        .group-content { padding: 15px; }
+        .item {
+            border: 1px solid #eee;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            padding: 10px;
+            transition: background-color 0.3s ease, box-shadow 0.2s ease; /* Smooth transitions */
+            scroll-margin-top: 10px; /* Space when scrolling into view */
+        }
+        .item h4 { margin-top: 0; margin-bottom: 5px; font-size: 1.1em; }
+        .content-block { background-color: #fff; padding: 8px; border-radius: 3px; margin-bottom: 5px; overflow-x: auto; }
+        /* Use :focus-within for better accessibility on container focus */
+        .item:focus, .item.active {
+             box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5); /* Highlight active/focused item */
+             outline: none; /* Remove default outline */
+        }
+
+        /* Score Backgrounds (Faint) */
+        .reward-positive { background-color: rgba(144, 238, 144, 0.3); } /* Faint light green */
+        .reward-zero { background-color: rgba(255, 215, 0, 0.3); }    /* Faint gold/orange */
+        .reward-negative { background-color: rgba(255, 182, 193, 0.4); } /* Faint light pink/red */
+
+        /* Markdown specific styles */
+        .content-block pre {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 10px;
+            overflow-x: auto; /* Allow horizontal scrolling for long code lines */
+            white-space: pre-wrap; /* Wrap long lines within pre */
+            word-wrap: break-word; /* Break long words if necessary */
+        }
+        .content-block code {
+             background-color: #f0f0f0; /* Slightly different for inline code */
+             padding: 0.2em 0.4em;
+             border-radius: 3px;
+             font-size: 0.9em;
+        }
+        .content-block pre code {
+            background-color: transparent; /* Don't double-background code in pre blocks */
+            padding: 0;
+            border-radius: 0;
+            font-size: inherit; /* Inherit pre font size */
+        }
+        .content-block blockquote {
+            border-left: 4px solid #ccc;
+            padding-left: 10px;
+            margin-left: 0;
+            color: #555;
+        }
+        .content-block table {
+            border-collapse: collapse;
+            width: auto; /* Don't force full width */
+            margin-bottom: 1em;
+        }
+        .content-block th, .content-block td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .content-block th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h1>Rendered Messages - sigmarule_23.jsonl</h1>
+    <div id="groups-container">
+                <details>
+            <summary>Group 0</summary>
+            <div class="group-content">
+                            <div class="item reward-positive" id="group-0-item-0">
+                <h4>Content 0</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>DotNET Assembly DLL Loaded Via Office Application: Detects any assembly DLL being loaded by an Office Product&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, let's see. The user wants a Sigma rule to detect when a.NET assembly DLL is loaded via an Office application. So I need to think about what logs would capture this kind of event. </p>
+<p>First, I should consider what kind of logs are generated when an Office app loads an assembly DLL. Typically, this would be in application logs, possibly from the Office process itself or from Windows Event Log. The specific event IDs might vary by Office version, but common ones are like 4104 or 4103 which relate to DLL loading events.</p>
+<p>Next, the condition needs to check for the DLL loading. The DLL name will likely have specific patterns, like starting with "Microsoft" or other common prefixes, but could also be any arbitrary name. So the condition should look for a specific DLL load event. The Office application name would be present in the event details, so I should include that in the condition.</p>
+<p>I should also consider the severity. Loading a malicious DLL could be an indicator of a lateral movement attempt, so setting a high severity makes sense. The logsource category should be application, and the source would be the Office application itself, possibly Windows Application logs.</p>
+<p>I need to structure the rule correctly. The main detection condition is the event ID and the DLL name. Then, the selection part would use the action and possibly other fields like process name or username. The timeframe should be reasonable, like 24 hours, to capture recent events.</p>
+<p>Wait, the user mentioned "via Office Application". So the event should specifically note that it was triggered by an Office app. I should include that in the condition or description. Also, the severity should be set to high.</p>
+<p>Putting it all together, the YAML should have the detection condition with the event ID and DLL name, the logsource details, and the timeframe. The selection should filter the action and other relevant fields. The logsource category is application, and the source would be the Windows Application log.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | event_id == 4104 and (dll in ["microsoft.office.interop.excel.dll", "microsoft.office.interop.word.dll", "microsoft.office.interop.powerpoint.dll"])<br />
+  selection:<br />
+    event_id: 4104<br />
+    user: $event_user<br />
+    process: $event_process<br />
+    dll_name: $event_dll<br />
+  severity: high<br />
+logsource:<br />
+  category: windows<br />
+  product: events<br />
+timeframe: 24h<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.18604651162790697</p>
+            </div>
+            <div class="item reward-positive" id="group-0-item-1">
+                <h4>Content 1</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>DotNET Assembly DLL Loaded Via Office Application: Detects any assembly DLL being loaded by an Office Product&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, I need to create a Sigma rule for detecting when a.NET Assembly DLL is loaded by an Office application. Let's start by thinking about the typical indicators of this behavior.</p>
+<p>First, I should consider the types of events that would show a DLL being loaded. In Windows, applications like Office products (e.g., Word, Excel) often log process start events. When an Office app loads a DLL, there would be a process creation event with the DLL path included.</p>
+<p>So the main fields I need are:<br />
+- event: process_creation<br />
+- image loaded (the DLL path)<br />
+- process name (like winword.exe, excel.exe, etc.)</p>
+<p>The condition should match when the DLL path is present and the process name is an Office application. Also, maybe the event should have the DLL path in the command line or image loaded field.</p>
+<p>Let me structure this:</p>
+<ul>
+<li>Logsource category: Windows</li>
+<li>Event: process_creation</li>
+<li>Condition: having the DLL path in the image loaded field AND the process name is an Office app</li>
+<li>Selection: the DLL path and process name as output fields</li>
+</ul>
+<p>For the timeframe, since DLL loading can happen quickly, maybe 24 hours is sufficient.</p>
+<p>Putting it all together, the YAML would look like this.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | where image loaded contains '.dll' and (process name in ['winword.exe', 'excel.exe', 'powerpnt.exe','mspub.exe', 'wordpad.exe', 'pptview.exe'])<br />
+  selection:<br />
+    image loaded: $image_loaded$<br />
+    process name: $process_name$<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: windows<br />
+  product: windows<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.3611111111111111</p>
+            </div>
+            <div class="item reward-positive" id="group-0-item-2">
+                <h4>Content 2</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>DotNET Assembly DLL Loaded Via Office Application: Detects any assembly DLL being loaded by an Office Product&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, let's think about this. The user wants a Sigma rule to detect when a DLL assembly is loaded via an Office application. So, the key here is to look for Office processes loading DLLs.</p>
+<p>First, I need to consider which Office products are common for this kind of activity. Office apps like Word, Excel, PowerPoint, etc. So the process name should be something like winword.exe, excel.exe, powerpnt.exe, etc.</p>
+<p>Next, the event should indicate a DLL being loaded. In Windows event logs, the process info would show the DLL path. We need to check for the creation of a process with a path that ends in.dll. Also, the parent process should be an Office application.</p>
+<p>So the condition would involve the process path ending with.dll, the parent process name being one of the Office apps, and possibly the creation time being around the same as the DLL loading.</p>
+<p>The selection part would look for these components. The logsource category is Application or System, depending on where the event is logged. Since DLL creation is a process event, maybe System.</p>
+<p>I need to make sure the timeframe is reasonable, maybe 24 hours. The action would be process creation. Let's check if there's any other fields, like user, but maybe that's optional.</p>
+<p>Also, maybe check if the DLL path is in a non-standard location or known malicious patterns. But the user didn't specify that, so maybe just the basic DLL loading by Office apps.</p>
+<p>So putting it all together: the rule should have logsource category as System, detection condition that checks process path ends with.dll and parent process is an Office app, and the action is process creation.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  selection:<br />
+    process.path: "<em>.dll"<br />
+    parent_process.name: (winword.exe|excel.exe|powerpnt.exe|mspub.exe|onenote.exe|outlook.exe)<br />
+    event.category: process<br />
+  condition: selection and process.name:</em>.dll<br />
+logsource:<br />
+  category: process<br />
+  product: windows<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.4827586206896552</p>
+            </div>
+            <div class="item reward-positive" id="group-0-item-3">
+                <h4>Content 3</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>DotNET Assembly DLL Loaded Via Office Application: Detects any assembly DLL being loaded by an Office Product&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, I need to create a Sigma rule to detect when a.NET assembly DLL is loaded through an Office application. Let's break this down.</p>
+<p>First, what kind of logs would contain information about DLL loading? Office applications typically log activities through their event logs. For example, Microsoft Office might log when a DLL is loaded. So the logsource category should be something like "application" or "office".</p>
+<p>The specific event that indicates a DLL being loaded might be something like a process starting, a DLL loaded, or a module being loaded. I think in Office apps, there's an event ID related to COM objects being created or something similar when a DLL is loaded. Maybe event ID 1001 or 400 in Office logs?</p>
+<p>The condition should look for a specific event where a DLL is loaded. So in the detection condition, we need to look for that event ID and check if the process name is an Office application like Excel, Word, etc. The DLL name would be part of the event details. The DLL name might be something like "MyAssembly.dll" but it can vary. We might not know the exact name, so perhaps we can just look for any.NET assembly DLL (ending with.dll).</p>
+<p>The timeframe should be something reasonable, maybe 24 hours. The logsource category should be application, specifically for Office products. The selection would filter for the event ID and process name being an Office app. The condition combines these into a single rule.</p>
+<p>I should also add a description explaining what the rule detects. Maybe something like "Detects any.NET assembly being loaded by an Office application through a COM object loading event."</p>
+<p>Putting it all together, the fields would be:</p>
+<ul>
+<li>logsource: category: application, product: office</li>
+<li>event: id: 1001</li>
+<li>process: name: (like excel.exe)</li>
+<li>condition: event.id == 1001 and process.name matches "OfficeApp.exe"</li>
+</ul>
+<p>Wait, but how do we check if the DLL loaded is an assembly? Maybe the event details have a field that indicates it's a.NET assembly. In Office logs, there might be a field like "Application" or "Module" that contains the DLL name. Alternatively, checking if the file extension is.dll and the filename suggests it's a.NET assembly. But that might not be reliable. Alternatively, looking for specific keywords in the DLL name, like "Assembly.dll".</p>
+<p>Another approach: look for any DLL being loaded, but since the question specifies.NET assemblies, maybe we should focus on DLLs that are likely.NET. But the rule might need to be broad enough to capture any.NET assembly, which typically have a.dll extension. So perhaps checking for a filename that ends with.dll and contains "Assembly" in the name, or matches a known.NET assembly pattern.</p>
+<p>Alternatively, maybe the Office application logs a specific event when a COM object is loaded, which would include the DLL name. So the event ID would indicate a COM object creation, and the DLL name would be part of the details. So the condition would be event.id == specific Office COM event ID, and the DLL name matches a.NET assembly pattern.</p>
+<p>But without specific knowledge of the exact event ID and log format, I might have to make general assumptions. Let's proceed with the following structure:</p>
+<p>Detection condition: Event ID indicating a DLL load, process is an Office app, and the DLL name is a.NET assembly.</p>
+<p>Logsource: Application logs, Office product.</p>
+<p>Timeframe: 24 hours.</p>
+<p>Selection: The event ID and process name being specific to Office apps.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | event.id == 1001 and process.name matches "OfficeApp.exe" and dll_name contains "Assembly.dll"<br />
+  selection:<br />
+    process: name: "OfficeApp.exe"<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: application<br />
+  product: office<br />
+description: Detects loading of.NET assemblies (DLL) by Office applications via COM object creation events<br />
+author: "Talhah Rahman"<br />
+reference: "MITRE T1055.001 - Process Injection"<br />
+tags:<br />
+  - attack.t1055.001<br />
+  - attack.lateral_movement<br />
+  - attack.defender.evasion<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.12698412698412698</p>
+            </div>
+            <div class="item reward-positive" id="group-0-item-4">
+                <h4>Content 4</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>DotNET Assembly DLL Loaded Via Office Application: Detects any assembly DLL being loaded by an Office Product&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, so I need to create a Sigma rule to detect when a.NET assembly DLL is loaded via an Office application. Let's break this down. </p>
+<p>First, I should think about the typical events or logs that would capture assembly loading. In Windows environments, the event logs often track DLL loading. The.NET framework might have specific events when an assembly is loaded. Also, Office applications might have their own logging or event sources.</p>
+<p>Looking at the Sigma syntax, I need to use the appropriate logsource category. For.NET, maybe "application" or "windows" categories? Or maybe "process monitoring" if we're looking at process creation events.</p>
+<p>The detection condition should focus on the assembly being loaded. So when a DLL is loaded and it's a.NET assembly, that's our trigger. The selection part might be looking for specific filter conditions, like the executable name (like office.exe) and the loaded DLL path having a.NET extension (like.dll or.exe files with specific.NET assemblies).</p>
+<p>The timeframe should be appropriate, maybe 24 hours for a single event, but perhaps longer for a pattern of loading multiple assemblies. </p>
+<p>Wait, but how do we specifically detect.NET assemblies? In the event log, when a DLL is loaded, the event properties might include the DLL name. So we need to check the path of the loaded DLL and see if it ends with.dll or.exe, and perhaps check for specific.NET assembly metadata (like the assembly name, version, culture, etc.). But maybe that's more advanced. Alternatively, checking for the DLL path containing.NET specific paths or tokens.</p>
+<p>Wait, perhaps looking for specific event IDs. For example, in Windows, event ID 26 might be for DLL loading. So if we can find that event with a process name like office.exe loading a DLL, that would be our condition.</p>
+<p>Putting it all together:</p>
+<p>Logsource should be Windows Event Log, category Application or Process Creation.</p>
+<p>The detection condition would be looking for an event ID 26, the process name being an Office application (like winword.exe, excel.exe, etc.), and the loaded DLL path being a.NET assembly (like containing.dll or.exe with specific.NET assembly information).</p>
+<p>The selection might filter for specific process names and DLL paths that match known.NET assemblies used by malicious actors.</p>
+<p>Timeframe: 24 hours.</p>
+<p>So the final Sigma rule would have:</p>
+<ul>
+<li>Logsource: windows event log, category application/process</li>
+<li>Event ID 26</li>
+<li>Process name matching an Office application (e.g., winword.exe, excel.exe)</li>
+<li>The loaded DLL path matches a.NET assembly pattern (like *.dll or specific assembly names)</li>
+<li>Selection might filter for specific DLL names or patterns</li>
+<li>Timeframe 24h<br />
+</think></li>
+</ul>
+<p>\boxed{<br />
+detection:<br />
+  selection:<br />
+    event_id: 26<br />
+    process: - 'winword.exe' - 'excel.exe' - 'powerpnt.exe' -'msaccess.exe' - 'onenote.exe' - 'outlook.exe'<br />
+    dll: '*.dll'<br />
+  condition: selection<br />
+logsource:<br />
+  category: windows<br />
+  product: windows<br />
+timeframe: 24h<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.4482758620689655</p>
+            </div>
+            <div class="item reward-zero" id="group-0-item-5">
+                <h4>Content 5</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>DotNET Assembly DLL Loaded Via Office Application: Detects any assembly DLL being loaded by an Office Product&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, let's see. The user wants a Sigma rule to detect when a.NET assembly DLL is loaded by an Office application. Hmm, so first, I need to think about the common events that occur when a DLL is loaded in this context.</p>
+<p>In Windows, when an Office application loads a DLL, it typically logs this in the Application event log. The event ID for DLL loading is usually 1026. That's a key part. So the log source would be the Application event log.</p>
+<p>Now, the condition part. The event ID should be checked for 1026, and the process name should be an Office application like Word.exe, Excel.exe, etc. The message would contain the DLL file path. So the condition would involve these elements.</p>
+<p>For the selection part, we need to look for events with EventID 1026 and process names matching Office applications. The message should contain the DLL path. Also, the user might want to look for suspicious DLLs, so maybe the DLL path should be a condition as well. But how to handle that? Maybe check if the DLL path matches a known bad list or is in a suspicious directory.</p>
+<p>Timeframe is important. Since this could be an initial access or lateral movement, a 24-hour timeframe makes sense. But maybe the user wants a longer timeframe. Let me think. If it's a single day, that's typical.</p>
+<p>Putting it all together, the rule would have:</p>
+<ul>
+<li>Logsource category: Windows Event Log</li>
+<li>Event ID 1026</li>
+<li>Process name matches Office applications</li>
+<li>Message contains the DLL path</li>
+<li>Action is to alert</li>
+</ul>
+<p>I should also consider using a known bad path list to check if the DLL is from a known malicious location. That would improve the rule's effectiveness. So adding a detection condition that checks if the DLL path is in the known bad paths.</p>
+<p>But how to implement that? Maybe using a regex or a list in the message. Since Sigma supports regex, that's the way to go.</p>
+<p>So the final rule would have:</p>
+<ul>
+<li>Condition: event.code == "1026" AND process.name IN ["winword.exe", "excel.exe", "powerpnt.exe", "mspub.exe", "onenote.exe", "outlook.exe", "wordpad.exe"] AND message | contains_regex("/[a-zA-Z]:[\/][^\/]*\.(dll)}/")</li>
+</ul>
+<p>Wait, but the regex might need escaping. Also, the DLL path should be captured for analysis. The message would include the DLL name. So the condition would need to check that the message contains the DLL path. Maybe using a regex pattern that matches the DLL path format.</p>
+<p>Alternatively, check if the message contains the DLL path. But the DLL path could be anywhere in the message, not just at the end. So perhaps using a regex to extract it and check if it's present.</p>
+<p>Another approach is to check if the message contains the actual DLL file path. For example:</p>
+<p>message contains "C:\Program Files\Malicious\DLL.dll"</p>
+<p>But to make this dynamic, we can use a regex pattern that matches the path. However, the exact format might vary. So maybe a regex pattern that matches any path followed by.dll, and then the filename.</p>
+<p>So the regex would be:</p>
+<p>".+\[^\]*\.dll"</p>
+<p>But I need to make sure that the regex works. Let's test. For example, "C:\Windows\System32\notepad.exe.dll" would not match, but "C:\Program Files\Malicious\DLL.dll" would. So maybe that's a way to go.</p>
+<p>Putting it all together, the condition would be:</p>
+<p>event.code == "1026" AND process.name IN ["winword.exe", "excel.exe", "powerpnt.exe", "mspub.exe", "onenote.exe", "outlook.exe", "wordpad.exe"] AND message | regex_matches("^.+\[^\]*\.dll$")</p>
+<p>Wait, maybe the regex should match the entire path, including the name. So perhaps:</p>
+<p>".+\[^\]*\.dll$"</p>
+<p>But I'm not sure. Maybe a better regex is:</p>
+<p>"\[a-zA-Z]:[\/].*\.(dll)$"</p>
+<p>But that might capture the entire line. Alternatively, just check if the message contains a path followed by.dll. So:</p>
+<p>message contains_regex(".<em>\[a-zA-Z]:[\/].</em>\.(dll)$")</p>
+<p>But maybe using a more flexible regex. Another option is to check for the presence of a DLL path in the message, regardless of its position. So:</p>
+<p>message contains_regex("/[a-zA-Z]:[\/][^\/]*\.dll/")</p>
+<p>But this might not capture the entire path. Alternatively, to capture the entire path in a group and then check if that group contains ".dll". Hmm, perhaps that's overcomplicating.</p>
+<p>Alternatively, use a regex that looks for a path followed by.dll. For example:</p>
+<p>"\[a-zA-Z]:[\/].*\.dll"</p>
+<p>But maybe the safest way is to check if the message contains a path followed by.dll. So the regex could be:</p>
+<p>".<em>[a-zA-Z]:[\/].</em>\.dll.*"</p>
+<p>This would check if the message contains any occurrence of a path followed by.dll. That should work.</p>
+<p>So the condition would be:</p>
+<p>event.code == "1026" AND process.name IN ["winword.exe", "excel.exe", "powerpnt.exe", "mspub.exe", "onenote.exe", "outlook.exe", "wordpad.exe"] AND message | contains_regex(".<em>[a-zA-Z]:[\/].</em>\.dll.*")</p>
+<p>That seems reasonable.</p>
+<p>So the Sigma rule would be structured as:</p>
+<pre><code>logsource:
+  category: windows_eventlog
+  product: windows
+
+detection:
+  selection:
+    event.code: &quot;1026&quot;
+    process.name: 
+      - winword.exe
+      - excel.exe
+      - powerpnt.exe
+      - mspub.exe
+      - onenote.exe
+      - outlook.exe
+      - wordpad.exe
+    message: 
+      contains_regex: &quot;.*[a-zA-Z]:[\\/].*\\.dll.*&quot;
+</code></pre>
+<p>But I should also include the DLL path in the detection condition. So the message should be checked for containing the DLL path. Alternatively, perhaps extract the DLL path and check if it's a known bad path.</p>
+<p>Alternatively, include a known bad paths list. But since the user might want to use this as a general rule, maybe it's better to focus on the DLL loading rather than specific bad paths.</p>
+<p>So the rule would trigger any time an Office application loads a DLL. That's the main idea. So the final rule would check for event 1026, process name in Office apps, and message containing a DLL path.</p>
+<p>Yes, that makes sense. So the YAML would look like:</p>
+<pre><code class="language-yaml">logsource:
+  category: windows_eventlog
+  product: windows
+
+detection:
+  selection:
+    event.code: &quot;1026&quot;
+    process.name: 
+      - winword.exe
+      - excel.exe
+      - powerpnt.exe
+      - mspub.exe
+      - onenote.exe
+      - outlook.exe
+      - wordpad.exe
+    message: 
+      contains_regex: &quot;.*[a-zA-Z]:[\\/].*\\.dll.*&quot;
+</code></pre>
+<p>This should detect when any Office application loads a DLL. The regex ensures that the message contains a path followed by.dll. The event code and process name filter for Office apps.</p>
+<p>I think that's solid. The timeframe can be set to 24h, but the user might want a longer period. Alternatively, keep it as default.<br />
+</think></p>
+<pre><code class="language-yaml">logsource:
+  category: windows_eventlog
+  product: windows
+
+detection:
+  selection:
+    event.code: &quot;1026&quot;
+    process.name:
+      - winword.exe
+      - excel.exe
+      - powerpnt.exe
+      - mspub.exe
+      - onenote.exe
+      - outlook.exe
+      - wordpad.exe
+    message:
+      contains_regex: &quot;.*[a-zA-Z]:[\\/].*\\.dll.*&quot;
+</code></pre>
+<h3>Explanation:</h3>
+<ul>
+<li><strong>Logsource</strong>: Targets Windows Event Log (Application) to monitor DLL loading events.</li>
+<li><strong>Condition</strong>: Filters events with <code>EventID 1026</code> (DLL load failure) from Office applications (<code>winword.exe</code>, <code>excel.exe</code>, etc.)</li>
+<li><strong>Selection</strong>: </li>
+<li>Matches event where DLL loading fails.</li>
+<li>Checks if the message contains a valid Windows path followed by <code>.dll</code>, flagging potential malicious loading.</li>
+<li><strong>Timeframe</strong>: Default 24-hour window for detection. Adjust as needed.&lt;|eot_id|&gt;</li>
+</ul>
+                </div>
+                <p><strong>Reward:</strong> 0</p>
+            </div>
+            <div class="item reward-positive" id="group-0-item-6">
+                <h4>Content 6</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>DotNET Assembly DLL Loaded Via Office Application: Detects any assembly DLL being loaded by an Office Product&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, the user wants a Sigma rule to detect when a.NET assembly DLL is loaded by an Office application. Let me think about the key components here.</p>
+<p>First, the event type. Since we're looking for assembly loading, perhaps the Windows Application event logs are the right place. The event ID for DLL loading is usually 26. So, the logsource category should be application and the event should be 26.</p>
+<p>Next, the condition. We need to check if the Image is a DLL and if it's being loaded by an Office product. The Image information might not directly tell us the product name, but we can look at the parent process name. So the condition would involve checking if the parent process includes terms like "Office16" or specific product names like Excel, Word, etc.</p>
+<p>Also, since it's a.NET assembly, maybe the Image contains ".dll" and the product name is part of the parent process. So the condition would combine these two parts.</p>
+<p>Timeframe: Since this could be an initial attack, maybe 24 hours or 48 hours would be appropriate. Let's go with 24h.</p>
+<p>The logsource should specify it's application logs. Also, the action is a detection, so no need to alert based on this alone. Just let the SIEM know it's happening.</p>
+<p>Putting it all together: The condition would check for event ID 26 in Application logs, parent process containing Office keywords, and image containing a.dll extension. The timeframe is 24h, the logsource is application, and the action is detection.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  selection:<br />
+    event_id: 26<br />
+    logsource:<br />
+      category: application<br />
+      product: windows<br />
+  condition: |-<br />
+    parent_process contains "Office16" and image contains ".dll"<br />
+  timeframe: 24h<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.25</p>
+            </div>
+            <div class="item reward-positive" id="group-0-item-7">
+                <h4>Content 7</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>DotNET Assembly DLL Loaded Via Office Application: Detects any assembly DLL being loaded by an Office Product&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, I need to create a Sigma rule that detects when a.NET assembly DLL is loaded via an Office application. Let me start by understanding what this means.</p>
+<p>First, loading a DLL in an Office application could be a sign of malicious activity, especially if it's unexpected. The goal is to monitor for assembly loading events triggered by Office products.</p>
+<p>I should check the event logs for something like ".NET assembly loaded" events. Common sources for these events are the Windows Application log, specifically event IDs related to assembly loading. For example, Microsoft might have specific event IDs when a DLL is loaded through an Office application.</p>
+<p>The log source needs to be specified. Since this is related to Office products, the category could be application or process, but I need to think of the exact Microsoft product name or event ID. Maybe something like "Microsoft Office" or a specific product like "Microsoft Word".</p>
+<p>The detection condition should look for events where the application that loaded the DLL is part of the Office suite. So the condition might involve checking if the application name contains "Office" or a specific product name. Alternatively, look for event IDs that are generated when Office applications load assemblies.</p>
+<p>Also, the process name or executable might be something like "MS Word" or "Excel". The event ID in the Windows Application log that indicates a.NET assembly load would be key here.</p>
+<p>Putting this together, the rule should select events where the application name includes an Office product, the event ID is the one indicating DLL loading, and the action is the assembly being loaded. The logsource category should specify Microsoft Office or a related category.</p>
+<p>I need to structure this in Sigma format. The logsource would have category: application, maybe. The condition would check the event ID and application name. The selection might filter for that specific combination.</p>
+<p>Wait, sometimes these events are in the Windows Security log. But I think the.NET assembly loading events are in the Application log. So the logsource category is correct. The event ID might be something like 1016 or 1000, but I need to confirm.</p>
+<p>Alternatively, maybe there's a specific event ID when an Office application loads an assembly. For example, Office might generate a specific event when it loads a DLL. I should check the Microsoft documentation or common event IDs for Office assembly loading.</p>
+<p>Alternatively, the assembly load could be detected by monitoring for processes like "outlook.exe" loading a DLL, or Word.exe. So the process name would be part of the condition.</p>
+<p>Putting this all together, the Sigma rule would have:</p>
+<ul>
+<li>Logsource with category: application or ms-office</li>
+<li>Event ID indicating assembly load</li>
+<li>Application name containing Office product</li>
+<li>Action of loading the assembly</li>
+</ul>
+<p>So the final rule would select events where the application name is in Office products, the event ID is a known assembly load event ID, and the action is loading a DLL.</p>
+<p>I need to make sure the event ID is correct. Let me think, when a.NET assembly is loaded, the event ID in the Application log is 1016. That's a common one. So the event ID would be 1016.</p>
+<p>So the rule would look for events with event ID 1016, application name containing "office" and process name like word.exe, excel.exe, etc.</p>
+<p>The exact syntax would be:</p>
+<p>logsource:<br />
+  category: application<br />
+event:<br />
+  id: 1016<br />
+detection:<br />
+  selection:<br />
+    application: "<em>Office</em>"<br />
+    process: "<em>Word|Excel|Outlook</em>"<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  selection:<br />
+    event_id: 1016<br />
+    application: "<em>Office</em>"<br />
+    process: "<em>Word|Excel|Outlook</em>"<br />
+logsource:<br />
+  category: application<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.21428571428571427</p>
+            </div>
+
+            </div>
+        </details>
+
+        <details>
+            <summary>Group 1</summary>
+            <div class="group-content">
+                            <div class="item reward-positive" id="group-1-item-0">
+                <h4>Content 0</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>Suspicious Invoke-WebRequest Execution: Detects a suspicious call to Invoke-WebRequest cmdlet where the and output is located in a suspicious location&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, I need to create a Sigma rule for detecting suspicious Invoke-WebRequest calls. Let's start by understanding the requirements. The rule should look for instances where PowerShell's Invoke-WebRequest cmdlet is used, but the output is saved in a suspicious location.</p>
+<p>First, I should think about the typical log sources that would record PowerShell activity. Windows Event Logs like PowerShell or Security are common places to look. The key fields here are the cmdlet executed and the output location.</p>
+<p>The condition needs to check for 'Invoke-WebRequest' in the command line. Then, the output path should be checked against known suspicious paths or unusual directories. Maybe using a blacklist or whitelist approach here.</p>
+<p>I should also consider the action taken by the cmdlet. If it's saving data to a network share or a non-standard location, that's a red flag. Also, looking for large data transfers could indicate malicious activity.</p>
+<p>I need to structure the rule correctly. The logsource category should be PowerShell. The condition would involve checking the command line for Invoke-WebRequest and the output path. The selection might look for specific patterns in the output path, like UNC paths or directories like 'C:\Windows\Temp'.</p>
+<p>Additionally, events that result in creating files with certain extensions or in specific locations need to be flagged. Maybe using a regular expression to match known malicious output paths.</p>
+<p>The timeframe should be set to a reasonable period, like 24 hours, to catch recent activity. The rule needs to be specific about what constitutes a suspicious location. Also, considering the size of the transferred data as another condition could help.</p>
+<p>I should also include the action field to indicate the type of event, like 'created file' or 'transferred data'. This helps in prioritizing the alerts.</p>
+<p>Putting it all together, the rule should have the logsource, detection condition, selection criteria, and timeframe. The condition checks both the cmdlet usage and the output location. The selection may use regex patterns on the output path. The action is set to 'created file' or similar. That should cover the main points of suspicious Invoke-WebRequest activity.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | contains(output_path_pattern, r'C:\Windows\Temp') or selection | contains(output_path_pattern, r'\')<br />
+  selection:<br />
+    event_id: 4104, 4106 # PowerShell events for script block logging<br />
+    command: '\bInvoke-WebRequest\b'<br />
+    output_path_pattern: (C:\Windows\Temp|\\)<br />
+  logsource:<br />
+    category: windows_event_log<br />
+    product: windows<br />
+  timeframe: 24h<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.19230769230769232</p>
+            </div>
+            <div class="item reward-zero" id="group-1-item-1">
+                <h4>Content 1</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>Suspicious Invoke-WebRequest Execution: Detects a suspicious call to Invoke-WebRequest cmdlet where the and output is located in a suspicious location&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, let's see. The user wants a Sigma rule to detect suspicious Invoke-WebRequest execution. The key points here are that the command is invoked and the output is in a suspicious location. </p>
+<p>First, I need to think about the Windows event logs that would capture PowerShell execution. The Security event IDs like 4688 (Process Creation) would log when a new process starts, including PowerShell. So the logsource should be set to regedit because PowerShell events are often under that.</p>
+<p>Next, the condition part. The command being executed is Invoke-WebRequest, so I should look for that in the command line. The actual command might be in the 'New process name' field or in the 'Command line' field, depending on the event format. Need to check the latest Sigma syntax for event parsing.</p>
+<p>The suspicious location part refers to where the output is stored. Common locations for malicious output include %TEMP%, %APPDATA%, or maybe even network shares. So maybe looking for output paths that match those patterns. Alternatively, maybe checking if the output path is in a directory that's not usually used for temporary files.</p>
+<p>Also, the user might want to check for certain parameters in Invoke-WebRequest that indicate malicious intentions. For example, -OutFile param with a suspicious path. But not sure if that's covered in the initial description. The original prompt just mentions the output location, so maybe focus on the path.</p>
+<p>Putting it all together: The detection condition would look for the Invoke-WebRequest command in the command line, and the output path in a known suspicious directory. The selection would be events where the command is Invoke-WebRequest and the output path matches a regex pattern of suspicious directories.</p>
+<p>Timeframe should be set to a reasonable window, maybe 24 hours. Logsource category is Windows regedit. The action is'success' or 'denied' depending on the event type.</p>
+<p>Wait, the original prompt says 'and output is located in a suspicious location'. So need to include both the Invoke-WebRequest command and the output path in the suspicious areas. So the condition would be a combination of these two factors.</p>
+<p>Possible regex patterns for suspicious directories: C:\Windows\Temp, C:\Users\Username\AppData\Local\Temp, possibly network paths like \server\share\output.txt. Also, looking for output paths that end with.txt or.log files.</p>
+<p>So in the detection.condition, perhaps something like:</p>
+<p>(command_line: "<em>Invoke-WebRequest</em>") AND (destination_info.path: "<em>C:\Windows\Temp</em>")</p>
+<p>But need to check if destination_info is the correct field name for output path. In Windows events, sometimes it's called 'Process command line' and the output path is stored in a different field. Wait, maybe in event 4688, the process command line is in 'New process name' and the destination is in 'New process information'.</p>
+<p>Alternatively, maybe looking for the -OutFile parameter in the command line. For example, if the command line includes -OutFile C:\Windows\Temp\somelog.txt, that's suspicious.</p>
+<p>So combining both factors: presence of Invoke-WebRequest and output to a suspicious path.</p>
+<p>In Sigma, the selection would be events where the command line contains Invoke-WebRequest, and the output path (destination) is in a known bad directory. So:</p>
+<p>selection:<br />
+  event_id: 4688<br />
+  command_line: "<em>Invoke-WebRequest</em>"<br />
+  destination_info.path: "<em>C:\Windows\Temp</em>"</p>
+<p>But need to check the exact field names. In Sigma for Windows, the process command line is typically 'command_line', and the destination path might be in 'destination_info.path' or 'process_info'.</p>
+<p>Alternatively, perhaps using a regex on the command line to match Invoke-WebRequest and also check for the -OutFile parameter followed by a suspicious path.</p>
+<p>Alternatively, the output path could be in the 'target_image_path' field.</p>
+<p>Hmm, this is a bit tricky. Let's check the actual Windows event 4688 schema. The process command line is in 'New process name' and the 'Target Image' is the destination. But in Sigma, the command line is mapped to 'command_line', and the destination is sometimes 'destination_info.path'.</p>
+<p>For example, in Sigma's Windows event 4688, the fields are:</p>
+<ul>
+<li>command_line</li>
+<li>destination_info.path</li>
+</ul>
+<p>So to check if the Invoke-WebRequest command is in the command line and the output path is in a suspicious directory.</p>
+<p>So the condition would be:</p>
+<p>(command_line: "<em>Invoke-WebRequest</em>") AND (destination_info.path: "<em>C:\Windows\Temp</em>")</p>
+<p>But need to check if the path is in the destination_info.path field.</p>
+<p>Alternatively, perhaps looking for the -OutFile parameter in the command line and then checking the path that follows.</p>
+<p>For example:</p>
+<p>(command_line: "<em>-OutFile</em> C:\Windows\Temp\*")</p>
+<p>But that might not cover all possibilities.</p>
+<p>Alternatively, check if the path in destination_info starts with a known malicious directory.</p>
+<p>So putting it all together, the detection condition would be:</p>
+<p>detection:<br />
+  condition: command_line: "<em>Invoke-WebRequest</em>" AND destination_info.path: "<em>C:\Windows\Temp</em>"</p>
+<p>But also, maybe the destination is not necessarily the output of Invoke-WebRequest. Maybe the Invoke-WebRequest is used to download a file to a temporary directory, which is a legitimate action. So perhaps the rule should focus on the combination of Invoke-WebRequest and the output path being in a suspicious location.</p>
+<p>Alternatively, maybe the rule should check if the output is saved to a location that's not the default temporary directory. For example, a file in System32 or Program Files.</p>
+<p>So, the rule should look for Invoke-WebRequest and the output path in a suspicious directory like C:\Windows\System32, C:\Program Files, or network shares.</p>
+<p>Therefore, the condition would be:</p>
+<p>(command_line: "<em>Invoke-WebRequest</em>") AND (destination_info.path: (C:\Windows\Temp|C:\Windows\System32|\172.16.*\))</p>
+<p>But need to validate the regex syntax.</p>
+<p>Alternatively, use regex to match any path that's not the default temp directory.</p>
+<p>But perhaps a better approach is to define a list of suspicious directories and check if the destination path matches any of them.</p>
+<p>In Sigma, the path can be checked with a regex pattern in the field.</p>
+<p>So, the selection would be:</p>
+<p>selection:<br />
+  event_id: 4688<br />
+  command_line: "<em>Invoke-WebRequest</em>"<br />
+  destination_info.path: (C:\Windows\Temp|C:\Windows\System32|\192.168.*|\attackerserver.com)</p>
+<p>But the user might want to include a more comprehensive list of suspicious directories.</p>
+<p>Alternatively, use a regex that matches paths in suspicious locations.</p>
+<p>Putting it all together, the final rule would:</p>
+<ul>
+<li>Logsource is Windows regedit</li>
+<li>Event ID 4688</li>
+<li>Command line contains Invoke-WebRequest</li>
+<li>Destination path is in a known suspicious location (like temp, system32, network shares)</li>
+</ul>
+<p>So the YAML would look like:</p>
+<p>detection:<br />
+  condition: command_line: "<em>Invoke-WebRequest</em>" AND destination_info.path: "<em>C:\Windows\Temp</em>"</p>
+<p>selection:<br />
+  event_id: 4688<br />
+  command_line: "<em>Invoke-WebRequest</em>"<br />
+  destination_info.path: "<em>C:\Windows\Temp</em>"</p>
+<p>logsource:<br />
+  category: registry<br />
+  product: windows</p>
+<p>But wait, the original prompt mentions "output is located in a suspicious location". So the detection condition should require both the command being Invoke-WebRequest and the output path being in a suspicious location.</p>
+<p>So the condition is:</p>
+<p>(command_line: "<em>Invoke-WebRequest</em>") AND (destination_info.path: "<em>C:\Windows\Temp</em>")</p>
+<p>The selection would be the same as the condition, because the condition is the criteria for matching.</p>
+<p>Alternatively, maybe the condition is written as:</p>
+<p>command_line: "<em>Invoke-WebRequest</em>" AND destination_info.path: "<em>C:\Windows\Temp</em>"</p>
+<p>But need to make sure that both conditions are met.</p>
+<p>Also, perhaps the output path is not always in the destination_info, but in some other field. Need to check the actual event schema.</p>
+<p>Assuming that in the Windows event 4688, the output path would be in the destination_info.path field, then the rule is correct.</p>
+<p>So the final rule would be:</p>
+<p>detection:<br />
+  condition: command_line: "<em>Invoke-WebRequest</em>" AND destination_info.path: (C:\Windows\Temp|C:\Windows\System32|\192.168.*|\10.0.0.1)</p>
+<p>selection:<br />
+  event_id: 4688<br />
+  command_line: "<em>Invoke-WebRequest</em>"<br />
+  destination_info.path: (C:\Windows\Temp|C:\Windows\System32|\192.168.*|\10.0.0.1)</p>
+<p>logsource:<br />
+  category: registry<br />
+  product: windows</p>
+<p>But perhaps a better approach is to use a regex pattern for the destination path instead of a list.</p>
+<p>So:</p>
+<p>destination_info.path: (C:\Windows\Temp|C:\Windows\System32|\192.168.*|\10.0.0.1)</p>
+<p>But in Sigma, the regex should be properly escaped.</p>
+<p>Alternatively, using a more general pattern:</p>
+<p>destination_info.path: (C:\Windows\Temp|C:\Windows\System32|\1\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|C:\ProgramData)</p>
+<p>But this is getting too specific. Maybe the best approach is to use a regex that matches any path not in the default temp directory.</p>
+<p>Alternatively, the user might want to check if the path is not the default temp directory. For example, if the default temp directory is C:\Windows\Temp, then any other directory could be considered suspicious.</p>
+<p>But that's a bit of a stretch. Perhaps the better approach is to define a whitelist of allowed directories and check if the output path is in the whitelist&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0</p>
+            </div>
+            <div class="item reward-positive" id="group-1-item-2">
+                <h4>Content 2</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>Suspicious Invoke-WebRequest Execution: Detects a suspicious call to Invoke-WebRequest cmdlet where the and output is located in a suspicious location&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, I need to create a Sigma rule for detecting suspicious Invoke-WebRequest execution. Let's start by understanding what Invoke-WebRequest does. It's a PowerShell cmdlet used to make web requests, but it can also be abused for things like data exfiltration or downloading malicious payloads.</p>
+<p>The key indicators here would be the use of Invoke-WebRequest and the output being in a suspicious location. So, I should check for commands using Invoke-WebRequest and then look at where the output is being written. Common suspicious locations might be temporary folders, system directories, or maybe even network shares.</p>
+<p>I should also consider the timeframe. Since Invoke-WebRequest might be used in a script, the events could be clustered together. Maybe a 24-hour window is sufficient.</p>
+<p>For the log source, since this is a PowerShell artifact, it's probably from PowerShell logs. But I should verify if there's a specific log source category for PowerShell events.</p>
+<p>Now, putting this all together. The condition would be when Invoke-WebRequest is called and the output is in a known suspicious location. The selection would filter for those events where cmdlet is Invoke-WebRequest and the output path matches the suspicious patterns. Then, the logsource category should be PowerShell.</p>
+<p>Wait, in Sigma, the selection is where you add your condition. So the condition is written in the selection section with the 'where' clause. The output path would be a known bad path or a pattern matching sensitive locations.</p>
+<p>I should also check if there are common paths that are suspicious, like ProgramData, C:\Windows\Temp, or maybe network UNC paths like \127.0.0.1\temp. Or perhaps paths that are typically used by legitimate programs but could indicate malicious activity when used in this context.</p>
+<p>Another thing to consider is the action. Since this is a detection rule, the action in the event might not matter, but perhaps the original event has an action like 'Write-Output' which writes to a file. So the event should include the action of writing to a file.</p>
+<p>Putting it all together, the rule should look for events where the cmdlet is Invoke-WebRequest and the output path matches a known suspicious pattern. The selection would include these conditions, and the logsource category would be PowerShell. The timeframe is 24 hours to catch recent activities. I need to make sure the path patterns are correctly specified as strings in the selection's condition.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  selection: <br />
+    event.category: "process"<br />
+    event.action: "Invoke-WebRequest"<br />
+    where: <br />
+      output_path: ("C:\Windows\Temp\<em>", "C:\ProgramData\</em>", "\\.\<em>\temp\</em>", "<em>\Logs\Suspicious\</em>", "<em>\cmdlet_output\</em>")<br />
+detection.condition: selection<br />
+logsource:<br />
+  category: process_creation<br />
+timeframe: 24h<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.1875</p>
+            </div>
+            <div class="item reward-positive" id="group-1-item-3">
+                <h4>Content 3</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>Suspicious Invoke-WebRequest Execution: Detects a suspicious call to Invoke-WebRequest cmdlet where the and output is located in a suspicious location&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, I need to create a Sigma rule to detect suspicious Invoke-WebRequest execution. Let's think through this step by step.</p>
+<p>First, the event would likely be from a Windows event log, probably EventID 4688 which is a Process Creation event. The process name would be PowerShell.exe or something related to PowerShell. The command line would include Invoke-WebRequest, but maybe it's obfuscated, like using a variable or another command to call it.</p>
+<p>Next, the location of the output is suspicious. The user mentioned it's located in a suspicious directory. So I need to check the target directory path. Maybe it's in C:\Program Files or a similar system directory, but if the user doesn't specify, I should assume it's a path that's not common.</p>
+<p>Also, the action here is detection. We might want to look for the command line containing Invoke-WebRequest or similar syntax. If the output is saved to a directory like C:\Temp or a network share, that's suspicious.</p>
+<p>So putting this together, the rule should look for a process creation event with PowerShell in the command line, containing Invoke-WebRequest, and the target path being an unusual directory. The detection condition would be the command line matching a pattern that includes Invoke-WebRequest, and the target path being a suspicious location.</p>
+<p>I should also set a timeframe of 24 hours to catch recent activity. The logsource category would be Windows for this Windows event. The selection would be the process creation event with the matching command line and path.</p>
+<p>Let me structure this in YAML. The detection condition would be based on the command line containing Invoke-WebRequest and the path being in a suspicious directory. The logsource is Windows. The timeframe is 24h. The selection is the specific event fields.</p>
+<p>Wait, the example provided in the initial problem mentioned "Suspicious Invoke-WebRequest Execution" and the output location being suspicious. So I need to capture both the command and the output directory. The detection condition should combine these two aspects.</p>
+<p>I think the final rule would check for a process creation event where the image is a PowerShell process, the command line includes Invoke-WebRequest, and the target file path is in a directory that's not typical for normal execution, like a system folder or a temp directory. The exact path might need to be specified or pattern-matched.</p>
+<p>Also, the action in the selection field would be the event ID 4688, which is the process creation event. The detection condition would combine these elements in the condition field.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection and command_line | contains 'Invoke-WebRequest' and target_file | contains 'C:\Windows\Temp\'<br />
+  selection:<br />
+    event.id: 4688<br />
+    event.type: process_creation<br />
+    image: '*\PowerShell.exe'<br />
+logsource:<br />
+  category: windows_event_log<br />
+  product: windows<br />
+timeframe: 24h<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.2978723404255319</p>
+            </div>
+            <div class="item reward-positive" id="group-1-item-4">
+                <h4>Content 4</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>Suspicious Invoke-WebRequest Execution: Detects a suspicious call to Invoke-WebRequest cmdlet where the and output is located in a suspicious location&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, let's think through this. The user is looking to detect suspicious Invoke-WebRequest executions. They mentioned the command is being used and the output is in a suspicious location. </p>
+<p>First, I need to consider what fields are important in a Sigma rule. The logsource category would typically be Windows, since this is a PowerShell command. The detection condition should probably look for the Invoke-WebRequest cmdlet in the command line. Also, the output being saved in a suspicious location might be a path that's unusual or one that attackers commonly use. </p>
+<p>I should structure the rule to check for the command line containing "Invoke-WebRequest" and then check the path where the output is being saved. The selection might use the action or the output path. The timeframe should be reasonable, maybe 24 hours. The logsource category is definitely Windows. I need to make sure the syntax is correct for Sigma, with the proper indentation and field names. Let me put it all together now.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | contains(cmd, "Invoke-WebRequest")<br />
+  selection:<br />
+    field: command_line<br />
+    pattern: "Invoke-WebRequest"<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: windows<br />
+  product: powershell<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.23255813953488372</p>
+            </div>
+            <div class="item reward-positive" id="group-1-item-5">
+                <h4>Content 5</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>Suspicious Invoke-WebRequest Execution: Detects a suspicious call to Invoke-WebRequest cmdlet where the and output is located in a suspicious location&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, I need to create a Sigma rule for detecting suspicious Invoke-WebRequest execution. Let's start by understanding what Invoke-WebRequest does. It's a PowerShell cmdlet used to send HTTP requests. If it's being used in a suspicious way, especially if the output is going to a known malicious location, that's a red flag.</p>
+<p>First, I should think about the log sources that might capture PowerShell execution. Windows Event Logs like System or Security logs have events related to PowerShell. Specifically, Event ID 4104 in the Windows PowerShell event log might be relevant because it logs PowerShell script block invocation.</p>
+<p>The condition should look for PowerShell executing a script block that contains Invoke-WebRequest. Then, check if the output path (the -OutFile parameter) points to a known malicious location. I need to determine what makes a location suspicious. Maybe it's a temporary folder, a system directory, or a location known to be used by malware.</p>
+<p>The detection might involve two parts: the PowerShell script block execution and checking the output path. So the condition could be something like:</p>
+<pre><code>WinEventLog:Microsoft-Windows-PowerShell/Operational when (ScriptBlockText contains 'Invoke-WebRequest') and (OutFile contains 'C:\\Windows\\Temp\\')
+</code></pre>
+<p>But I need to be more specific. Maybe check if the OutFile path is in a system directory or a known malicious path. Also, count the number of times this happens within a certain timeframe to avoid false positives from legitimate use.</p>
+<p>The timeframe should be set to something like 24 hours to catch repeated attempts in a short period. The logsource category should be PowerShell.</p>
+<p>Putting it all together, the rule should check for PowerShell script blocks containing Invoke-WebRequest and if the OutFile parameter points to a suspicious location. If both conditions are met, it's a match.</p>
+<p>I need to structure this correctly in Sigma syntax. The fields would include condition, selection, and logsource. The condition uses the PowerShell event log with specific parameters. The selection might use a count based on the number of events within a timeframe. The logsource specifies the Windows PowerShell event log category.</p>
+<p>Wait, but how to structure the condition. Maybe using regex to match Invoke-WebRequest in the script block. Also, checking if the OutFile parameter value matches certain patterns indicating suspicious locations. For example, paths like c:\windows\temp or c:\users\public.</p>
+<p>So the condition could be:</p>
+<pre><code class="language-yaml">condition: selection | where (ScriptBlockText matches regex 'Invoke-WebRequest') and (OutFile matches regex '^C:\\[A-Za-z0-9\\]+$')
+</code></pre>
+<p>But I need to make sure the regex is correct. The OutFile path should be starting with C:\ and then any combination of letters, numbers, or backslashes. This would catch paths like C:\Windows\System32 or C:\Users\Public.</p>
+<p>Also, maybe include a count to see if this happens more than once within a certain timeframe. So in the selection:</p>
+<pre><code class="language-yaml">selection:
+  count: 2
+</code></pre>
+<p>So the final rule would have:</p>
+<ul>
+<li>Logsource: Microsoft-Windows-PowerShell/Operational</li>
+<li>Condition: contains Invoke-WebRequest and OutFile matches regex</li>
+<li>Timeframe of 24 hours</li>
+<li>Action: alert if more than one occurrence<br />
+</think></li>
+</ul>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | where (ScriptBlockText contains 'Invoke-WebRequest') and (OutFile matches regex '^C:\[A-Za-z0-9\]+$')<br />
+  selection:<br />
+    count: 2<br />
+logsource:<br />
+  category: windows_event_log<br />
+  product: windows<br />
+  event_id: 4104<br />
+  definition: PowerShell ScriptBlock execution<br />
+timeframe: 24h<br />
+tags:<br />
+  - suspicious_activity<br />
+  - lateral_movement<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.17543859649122806</p>
+            </div>
+            <div class="item reward-positive" id="group-1-item-6">
+                <h4>Content 6</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>Suspicious Invoke-WebRequest Execution: Detects a suspicious call to Invoke-WebRequest cmdlet where the and output is located in a suspicious location&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, I need to create a Sigma rule for detecting suspicious use of Invoke-WebRequest. The user mentioned the command is called and the output is in a suspicious location. Let me break this down.</p>
+<p>First, the log event likely comes from Windows Event ID 4688, which is the Process Creation event. This event logs details about any process that is created, including the command line used to start it.</p>
+<p>The condition here should focus on the command line where the user is invoking Invoke-WebRequest. The actual command might look something like "powershell -command Invoke-WebRequest...", or maybe a simpler form like just "Invoke-WebRequest". So in the rule, I need to match the command line for these specific strings.</p>
+<p>Additionally, the user mentioned the output is in a suspicious location. I'm not entirely sure what "suspicious location" means here. Maybe it's a known malicious directory or a location that doesn't match the user's usual working directory? Alternatively, could it be that the output is being redirected to a file in a path that's considered insecure, like a system directory? The user might not have specified the exact condition, but I should probably include something like the output being written to a path that contains strings like "C:\Windows\Temp\" or similar.</p>
+<p>So the condition would check for the specific command line containing "Invoke-WebRequest" and also check the output path (maybe the <code>-OutFile</code> parameter) for a known suspicious path. I need to look for both the command presence and the output location.</p>
+<p>Another thing to consider is the user who executed the command. If the command is being run by a privileged user (like SYSTEM or Administrator) or a non-standard user that doesn't match typical logon sessions, that could be suspicious. But the user's message didn't specify, so maybe that's beyond the current scope.</p>
+<p>Also, the timeframe is important. The user might want this checked over the last day or week, but since they didn't specify, I can set a standard timeframe like 24 hours.</p>
+<p>Putting it all together, the Sigma rule should look for a process creation event where the command line includes "Invoke-WebRequest", and the output path (if specified) is in a known suspicious directory. The log source is Windows, and the event ID is 4688.</p>
+<p>I should also check if there's a specific field in the Windows event logs that captures the output path. The command line arguments might include parameters like <code>-OutFile</code>, and we can extract that part of the command line to check the path.</p>
+<p>Additionally, the detection condition should include both the presence of the Invoke-WebRequest command and the output path check. For example, using a condition like:</p>
+<p><code>args : "-command Invoke-WebRequest" OR args : "-OutFile *" AND args : "C:\\Windows\\Temp\\*"</code></p>
+<p>But I need to verify the exact syntax for matching the command line arguments. In Sigma, the condition is written using a custom syntax, so I need to make sure the field names and operators are correct.</p>
+<p>Also, the user mentioned the output is "located in a suspicious location". The exact detection condition might need to check for certain paths. I should include common malicious paths like %TEMP%, %SYSTEMROOT%, or any path containing "System32", "Windows", etc.</p>
+<p>So the final rule would have:</p>
+<ul>
+<li>Logsource set to Windows</li>
+<li>Event ID 4688</li>
+<li>Condition that matches the command line for Invoke-WebRequest and checks the output path (if present) against a list of known suspicious directories</li>
+</ul>
+<p>I should also consider that sometimes the output path might be part of the command line arguments, so I need to parse that correctly. If the command line has parameters like -OutFile followed by a path, we can extract that path and check it against the suspicious locations.</p>
+<p>Therefore, the Sigma rule would have:</p>
+<ul>
+<li>detection.condition: matches both the command line containing Invoke-WebRequest and the output path in a suspicious location</li>
+<li>detection.selection: selects the events matching the condition</li>
+<li>logsource: Windows, event id 4688</li>
+<li>timeframe: 24h<br />
+</think></li>
+</ul>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | args : "-command Invoke-WebRequest" OR (args : "-OutFile <em>" AND args : "</em>C:\Windows\Temp\*")<br />
+  selection:<br />
+    event_id: 4688<br />
+    logset: win_eventlog<br />
+timeframe: 24h<br />
+logsource:<br />
+  category: windows_events<br />
+  product: windows<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.1836734693877551</p>
+            </div>
+            <div class="item reward-positive" id="group-1-item-7">
+                <h4>Content 7</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</p>
+<p>You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first <strong>think carefully</strong> through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \boxed{...} environment.</p>
+<p><strong>You MUST follow this exact output format:</strong><br />
+<think><br />
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.<br />
+</think></p>
+<p>\boxed{<br />
+<YAML Sigma Rule><br />
+}</p>
+<p><strong>Important Rules:</strong><br />
+- DO NOT skip the <think> tags — all your thoughts must be inside them.<br />
+- DO NOT skip the \boxed{...} wrapper — your final YAML answer MUST go inside it.<br />
+- DO NOT output anything outside the <think> and \boxed{} blocks.<br />
+- The content inside \boxed{} must be <strong>pure YAML</strong>, with <strong>no extra formatting characters</strong> (no bullets, backticks, emojis, or markdown) so it can be passed <strong>directly</strong> to <code>yaml.safe_load()</code>.<br />
+- You are allocated a maximum of 2048 tokens — be detailed but concise.<br />
+- Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.<br />
+- Use Sigma best practices: include <code>detection.condition</code>, <code>detection.selection</code>, <code>logsource</code>, and <code>timeframe</code> when appropriate.<br />
+- Match the format and style of this example:</p>
+<p>Example:<br />
+<think><br />
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition'selection | count(dst_ip) by src_ip &gt; 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  condition: selection | count(dst_ip) by src_ip &gt; 10<br />
+  selection:<br />
+    action: denied<br />
+  timeframe: 24h<br />
+logsource:<br />
+  category: firewall<br />
+}</p>
+<p>Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>Suspicious Invoke-WebRequest Execution: Detects a suspicious call to Invoke-WebRequest cmdlet where the and output is located in a suspicious location&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p><think><br />
+Okay, let's see. The user wants a Sigma rule to detect suspicious Invoke-WebRequest executions. The key points here are looking for the Invoke-WebRequest cmdlet and checking if the output is in a suspicious location.</p>
+<p>First, I need to make sure the rule is looking for a specific cmdlet. Maybe using the command_line field and checking for the string "Invoke-WebRequest". But I should be careful not to miss variations in syntax or parameters.</p>
+<p>Next, the output location is important. The user mentioned it's suspicious. So perhaps the output is in a non-standard path, like a temporary folder, or a location that's unusual for that process. I should consider using the creation_time or properties of the output file to check its location.</p>
+<p>Wait, in Windows events, the cmdlet execution information is logged in the Windows Security event ID 4688 when a process starts. So maybe the event ID is 4688. The user data in that event would contain the command line.</p>
+<p>So the rule fields would be something like:</p>
+<p>event.category: process<br />
+event.id: 4688<br />
+event.dataset: windows<br />
+event.type: start</p>
+<p>Then in the command line, we can use grep for "Invoke-WebRequest". But maybe using a regex to capture the full command line with that string.</p>
+<p>Also, the output location needs to be checked. Since the output is from Invoke-WebRequest, it's likely an HTTP request or downloading files. So maybe the output is in a temporary directory. Checking the directory path where the output is saved would be a good indicator. But how to get that information from the event?</p>
+<p>In the Windows event 4688, the command line is captured, and the target user is available. But the output path might not be directly logged here. Alternatively, if the script writes to a suspicious location, maybe through an API call. Hmm, this might require multiple steps or looking for other events.</p>
+<p>Alternatively, if the Invoke-WebRequest writes the output to a known suspicious location, we can check the command line for that. But the user said the output is located in a suspicious location, which may not be directly captured in the event. So maybe this detection is based on the command line and the parameters, looking for suspicious URLs or file paths.</p>
+<p>Alternatively, if the script saves the output to a non-standard location, we could use something like:</p>
+<p>command_line: "<em>Invoke-WebRequest</em> -OutFile *\path\to\suspicious\location*"</p>
+<p>But how to detect the path? Maybe the user data in the event would have the path where the output is saved. But I'm not sure if that's always logged.</p>
+<p>Alternatively, maybe the detection is based on the fact that Invoke-WebRequest is being used to download something to a suspicious location, which would be caught by the command line parameters. For example, using -OutFile with a temp path.</p>
+<p>So the rule would look for the command line containing "Invoke-WebRequest" and the output path is a temporary directory or a known malicious location.</p>
+<p>So putting it all together:</p>
+<p>The event should be process start, with event ID 4688, and the command line matches a regular expression that includes Invoke-WebRequest and an unusual output path.</p>
+<p>Then, the rule would have:</p>
+<p>event.category: process<br />
+event.id: 4688<br />
+event.dataset: windows<br />
+event.type: start</p>
+<p>command_line: "<em>Invoke-WebRequest</em> -OutFile *\path\to\suspicious\location*"</p>
+<p>But the exact regex for the path would depend on what's considered suspicious. Maybe using wildcards for the path.</p>
+<p>Also, the user said "and output is located in a suspicious location". So the exact location isn't specified, but it's considered suspicious. So the rule needs to check for any unusual path.</p>
+<p>Another approach is to look for the output file being created in a temp directory, or a folder that's not used for normal web requests.</p>
+<p>Alternatively, if the script writes to a known malicious directory, like a temp folder, we can check the command line for that.</p>
+<p>But without specific information about the suspicious location, the rule could be written to detect when Invoke-WebRequest writes to a temp directory or a path that's outside the user's profile.</p>
+<p>So the rule would have a condition that checks if the output path is in a temporary directory or a known malicious location.</p>
+<p>But how to get that information from the event. Since the Windows event 4688 doesn't directly log the output path, perhaps this approach isn't possible. Therefore, the rule might need to focus on the parameters of Invoke-WebRequest that indicate an unusual output location.</p>
+<p>For example, if the -OutFile parameter is set to a temporary directory, or a path that's not related to the current user's download location.</p>
+<p>So the rule would look for:</p>
+<p>command_line: "<em>Invoke-WebRequest</em> -OutFile *\path\to\temp*"</p>
+<p>Or if the output is to a different location than where the script is running.</p>
+<p>Alternatively, checking the user profile directory and any other directories.</p>
+<p>In any case, the rule would need to use regex to match the command line for Invoke-WebRequest and the suspicious output path.</p>
+<p>I think the best approach is to create a rule that looks for Invoke-WebRequest in the command line and checks the parameters for an unusual output path, such as a temporary directory or a path that's not typically used for downloads.</p>
+<p>So the final rule would have:</p>
+<p>event.category: process<br />
+event.id: 4688<br />
+event.dataset: windows<br />
+event.type: start</p>
+<p>command_line: "<em>Invoke-WebRequest</em> -OutFile *\path\to\suspicious\location*"</p>
+<p>This would match attempts to download files or make web requests to output to a suspicious location.<br />
+</think></p>
+<p>\boxed{<br />
+detection:<br />
+  selection:<br />
+    event.action: New-process Creation<br />
+    command_line: "<em>Invoke-WebRequest</em> -OutFile <em>\temp</em>*"<br />
+  condition: selection<br />
+logsource:<br />
+  category: process_creation<br />
+  product: windows<br />
+event.type: start<br />
+timeframe: rule_change + 12h}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.20408163265306123</p>
+            </div>
+
+            </div>
+        </details>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const items = document.querySelectorAll('.item');
+            let activeIndex = -1; // No item active initially
+
+            // Function to set active item
+            function setActiveItem(index) {
+                if (activeIndex >= 0 && activeIndex < items.length) {
+                    items[activeIndex].classList.remove('active');
+                    items[activeIndex].removeAttribute('tabindex'); // Remove from tab order when not active
+                }
+                if (index >= 0 && index < items.length) {
+                    items[index].classList.add('active');
+                    items[index].setAttribute('tabindex', '0'); // Make active item focusable
+                    items[index].focus(); // Focus the element
+                    // Ensure the parent <details> is open
+                    const detailsParent = items[index].closest('details');
+                    if (detailsParent && !detailsParent.open) {
+                        detailsParent.open = true;
+                    }
+                    // Scroll into view with options if needed (focus should handle this mostly)
+                    // items[index].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    activeIndex = index;
+                } else {
+                    activeIndex = -1; // Deactivate if index is out of bounds
+                }
+            }
+
+            // Add click listener to activate items
+            items.forEach((item, index) => {
+                item.addEventListener('click', () => {
+                    setActiveItem(index);
+                });
+                // Make items focusable initially only if we want tab navigation
+                // item.setAttribute('tabindex', '0');
+            });
+
+            // Add keydown listener for arrow navigation
+            document.addEventListener('keydown', (event) => {
+                let targetIndex = -1;
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault(); // Prevent default page scroll
+                    targetIndex = (activeIndex === -1) ? 0 : Math.min(activeIndex + 1, items.length - 1);
+                } else if (event.key === 'ArrowUp') {
+                    event.preventDefault(); // Prevent default page scroll
+                    targetIndex = (activeIndex === -1) ? items.length - 1 : Math.max(activeIndex - 1, 0);
+                }
+
+                if (targetIndex !== -1) {
+                    setActiveItem(targetIndex);
+                }
+            });
+
+            // Make first item focusable initially if you want immediate keyboard nav
+             if (items.length > 0) {
+                 // items[0].setAttribute('tabindex', '0');
+                 // Optionally activate the first item on load:
+                 // setActiveItem(0);
+             }
+        });
+    </script>
+</body>
+</html>
