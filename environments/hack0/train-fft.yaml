@@ -1,0 +1,51 @@
+base_model: Qwen/Qwen3-4B
+
+torch_compile: true
+rl: grpo
+learning_rate: 1e-5
+optimizer: adamw_torch_fused
+vllm:
+  host: "0.0.0.0"
+  port: 9001  # Atropos is hardcoded to connect to vllm/openai-server on port 9001
+  tensor_parallel_size: 4
+  gpu_memory_utilization: 0.8
+  enable_prefix_caching: true
+  max_model_len: 16384
+trl:
+  beta: 0.0
+  num_generations: 8
+  max_completion_length: 2048
+  use_liger_loss: true
+  use_vllm: true
+  vllm_server_port: 9001
+  vllm_server_timeout: 15.0
+
+accelerator_config:
+  dispatch_batches: true  # must be used, or multiple workers fetching datasets will "lose" data
+  split_batches: true
+
+output_dir: /home/asardana/as/data/
+micro_batch_size: 8
+gradient_accumulation_steps: 2
+gradient_checkpointing: "offload"
+#gradient_checkpointing_kwargs:
+#  use_reentrant: false
+sequence_len: 4096
+flash_attention: true
+datasets:
+  - type: atropos
+    path: placeholder
+plugins:
+  - "plugin_atropos.AtroposPlugin"
+
+logging_steps: 1
+warmup_steps: 5
+max_steps: 20
+save_steps: 5
+
+wandb_project: 2048-fft
+
+bf16: true
+tf32: true
+
+gc_steps: 1
