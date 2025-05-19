@@ -59,7 +59,7 @@ class CaptchaEnv(BaseEnv):
     @classmethod
     def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = BaseEnvConfig(
-            tokenizer_name="Qwen/Qwen2.5-Omni-3B",
+            tokenizer_name="Qwen/Qwen2.5-VL-3B-Instruct",
             group_size=8,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
@@ -71,7 +71,7 @@ class CaptchaEnv(BaseEnv):
         )
         server_configs = [
             APIServerConfig(
-                model_name="Qwen/Qwen2.5-Omni-3B",
+                model_name="Qwen/Qwen2.5-VL-3B-Instruct",
                 base_url="http://localhost:9001/v1",
                 api_key="x",
                 num_requests_for_eval=256,
