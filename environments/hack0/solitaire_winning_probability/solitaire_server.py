@@ -95,7 +95,7 @@ class SolitaireEnv(BaseEnv):
             APIServerConfig(
                 model_name="gpt-4.1-nano",
                 base_url="https://api.openai.com/v1",
-                api_key="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",  # <-- IMPORTANT: Replace with your actual OpenAI API key
+                api_key="x",
                 num_requests_for_eval=256,
             ),
         ]
