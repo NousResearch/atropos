@@ -45,14 +45,14 @@ class Atropos2048Env(BaseEnv):
     def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = BaseEnvConfig(
             tokenizer_name="Qwen/Qwen3-4B",
-            group_size=16,
+            group_size=8,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
             total_steps=1000,
             batch_size=12,
             steps_per_eval=100,
-            max_token_length=4096,
-            wandb_name="atropos_2048",
+            max_token_length=16384,
+            wandb_name="2048-fft",
             max_batches_offpolicy=5,
         )
         server_configs = [
