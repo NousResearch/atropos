@@ -2,7 +2,7 @@ import base64
 import io
 import random
 from typing import Dict, List, Optional, Tuple, TypedDict, Union
-
+import re
 from datasets import load_dataset
 from PIL import Image
 from tqdm.asyncio import tqdm_asyncio
@@ -13,7 +13,7 @@ from atroposlib.envs.base import (
     BaseEnvConfig,
     ScoredDataGroup,
 )
-from atroposlib.type_definitions import Item, number # Changed from GameHistory
+from atroposlib.type_definitions import Item, number
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 # System prompt for the CAPTCHA task
@@ -37,7 +37,6 @@ So please end your answer with <answer>your answer here</answer>"""
 class CaptchaRow(TypedDict):
     image: Image.Image
     solution: str
-    # Adding an entry for the base64 encoded image string
     base64_image: Optional[str]
 
 
@@ -52,28 +51,27 @@ class CaptchaEnv(BaseEnv):
         testing=False,
     ):
         super().__init__(config, server_configs, slurm, testing)
-        self.accuracy_buffer = list() # Changed from percent_correct_buffer
+        self.accuracy_buffer = list()
         self.eval_metrics = list()
-        # Add tracking for wandb visualizations
         self.rollouts_for_wandb = []
         self.completion_lengths = []
 
     @classmethod
     def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = BaseEnvConfig(
-            tokenizer_name="Qwen/Qwen2-VL-2B-Instruct", # From ocr_vqa.py
+            tokenizer_name="Qwen/Qwen2-VL-2B-Instruct",
             group_size=8,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
             total_steps=1000,
             batch_size=12,
             steps_per_eval=100,
-            max_token_length=512, # Adjusted for CAPTCHA task
+            max_token_length=512,
             wandb_name="captcha",
         )
         server_configs = [
             APIServerConfig(
-                model_name="Qwen/Qwen2-VL-2B-Instruct", # From ocr_vqa.py
+                model_name="Qwen/Qwen2-VL-2B-Instruct",
                 base_url="http://localhost:9001/v1",
                 api_key="x",
                 num_requests_for_eval=256,
@@ -99,31 +97,27 @@ class CaptchaEnv(BaseEnv):
         await super().wandb_log(wandb_metrics)
 
     async def setup(self):
-        # Load the captcha dataset
         dataset = load_dataset("project-sloth/captcha-images")
-        # For simplicity, we'll use the 'train' split for both training and testing.
-        # In a real scenario, you'd split this or use a separate test set.
         shuffled_dataset = dataset["train"].shuffle(seed=42)
 
         self.train_data = []
-        self.test_data = [] # Using a subset of train for eval
+        self.test_data = []
 
         for i, item in enumerate(shuffled_dataset):
-            # Convert image to base64
             img = item["image"]
-            if img.mode == 'RGBA': # Convert RGBA to RGB if needed
+            if img.mode == 'RGBA':
                 img = img.convert('RGB')
             buf = io.BytesIO()
-            img.save(buf, format="PNG") # Save as PNG
+            img.save(buf, format="PNG")
             img_bytes = buf.getvalue()
             base64_image_str = base64.b64encode(img_bytes).decode("utf-8")
 
             processed_item = {
-                "image": item["image"], # Keep original PIL image if needed elsewhere
+                "image": item["image"],
                 "solution": str(item["solution"]),
                 "base64_image": base64_image_str,
             }
-            if i % 10 == 0 : # Use 10% of data for testing
+            if i % 10 == 0 :
                  self.test_data.append(processed_item)
             else:
                 self.train_data.append(processed_item)
@@ -139,7 +133,6 @@ class CaptchaEnv(BaseEnv):
         super().save_checkpoint(step, data)
 
     async def rollout_and_score_eval(self, item: CaptchaRow) -> number:
-        # General question for CAPTCHA
         text_prompt = "What text is shown in this CAPTCHA image?"
         user_content = [
             {"type": "text", "text": text_prompt},
@@ -161,11 +154,9 @@ class CaptchaEnv(BaseEnv):
         )
 
         model_output = completion.choices[0].message.content.split("</think>")[-1]
-        # Extract answer from <answer> tags, case-insensitive
         match = re.search(r"<answer>\s*(.*?)\s*</answer>", model_output, re.IGNORECASE | re.DOTALL)
         extracted_answer = match.group(1).strip() if match else model_output.strip()
 
-        # Simple exact match scoring (case-insensitive)
         score = 1 if extracted_answer.lower() == item["solution"].lower() else 0
         return score
 
@@ -175,7 +166,6 @@ class CaptchaEnv(BaseEnv):
             return
 
         eval_tasks = []
-        # Limiting evaluation to a subset for speed, e.g., first 100 samples or all if fewer
         num_eval_samples = min(len(self.test_data), 100)
         for i in range(num_eval_samples):
             item = self.test_data[i]
@@ -204,7 +194,7 @@ class CaptchaEnv(BaseEnv):
             },
         ]
         system_message_content = captcha_system_prompt
-        user_message_content = user_content # Already a list with text and image
+        user_message_content = user_content
 
         chat_completions = await self.server.chat_completion(
             messages=[
@@ -216,14 +206,9 @@ class CaptchaEnv(BaseEnv):
         )
         to_score = list()
         for i, chat_completion in enumerate(chat_completions.choices):
-            # For multimodal, the user prompt content is a list.
-            # For tokenization, we generally only care about the text part of the prompt
-            # and the assistant's response.
-            # The `tokenize_for_trainer` expects a list of dicts with "role" and "content" (string).
-            # We need to ensure the 'content' for the user message is just the text part for tokenization.
             messages_for_tokenizer = [
                 {"role": "system", "content": system_message_content},
-                {"role": "user", "content": text_prompt}, # Text part only for tokenizer
+                {"role": "user", "content": text_prompt},
                 {"role": "assistant", "content": chat_completion.message.content},
             ]
             to_score.append(
@@ -232,11 +217,10 @@ class CaptchaEnv(BaseEnv):
                     "model_response_content": chat_completion.message.content,
                     "gold_solution": item["solution"],
                     "finish_reason": chat_completion.finish_reason,
-                    "base64_image": item["base64_image"] # Pass image for potential wandb logging
+                    "base64_image": item["base64_image"]
                 }
             )
         to_postprocess = await self.score(to_score)
-        # For CAPTCHA, no separate backlog items are generated from trajectories.
         return to_postprocess, []
 
 
@@ -247,8 +231,6 @@ class CaptchaEnv(BaseEnv):
         scores_group["tokens"] = list()
         scores_group["masks"] = list()
         scores_group["scores"] = list()
-        # If you plan to log images to wandb, you might add:
-        # scores_group["images_base64"] = list()
 
 
         random.shuffle(rollout_group_data)
@@ -256,7 +238,6 @@ class CaptchaEnv(BaseEnv):
             model_output_text = item_data["model_response_content"].split("</think>")[-1]
             match = re.search(r"<answer>\s*(.*?)\s*</answer>", model_output_text, re.IGNORECASE | re.DOTALL)
             extracted_answer = match.group(1).strip() if match else model_output_text.strip()
-
             reward = 1 if extracted_answer.lower() == item_data["gold_solution"].lower() else 0
 
             out_dict = tokenize_for_trainer(
@@ -265,47 +246,29 @@ class CaptchaEnv(BaseEnv):
             tokens = out_dict["tokens"]
             masks = out_dict["masks"]
 
-            if len([i for i in masks if i != -100]) < 5: # Adjusted minimum length
+            if len([i for i in masks if i != -100]) < 5:
                 continue
 
             scores_group["tokens"].append(tokens)
             scores_group["masks"].append(masks)
             scores_group["scores"].append(1.0 if reward else -1.0)
-            # if item_data.get("base64_image"):
-            #    scores_group["images_base64"].append(item_data["base64_image"])
-
 
             if len(scores_group["tokens"]) >= self.config.group_size:
                 break
 
-        if not scores_group["tokens"]: # If no valid trajectories were processed
+        if not scores_group["tokens"]:
             return None
 
         for score_val in scores_group["scores"]:
             self.accuracy_buffer.append(max(score_val, 0))
 
-        # Simplified: No length penalty for now, can be added if needed.
-        # Check if all scores are the same (e.g., all correct or all incorrect)
         if all(s == scores_group["scores"][0] for s in scores_group["scores"]):
-             # If all scores are identical, it might not be a useful training signal for preference learning.
-             # However, for direct fine-tuning, even if all are correct/incorrect, it's still valid data.
-             # For DPO, we need pairs with different scores.
-             # Consider if returning None is always the best strategy here.
-             # For now, let's return the data even if scores are same,
-             # as the trainer might still use it or have its own filtering.
              pass
-
-
-        # Ensure we have enough samples to form pairs if this is for DPO
-        # This check might be more relevant in the trainer or a higher-level component.
-        # if len(scores_group["tokens"]) < 2 and self.config.group_size > 1 : # Assuming DPO needs pairs
-        #     return None
 
         return scores_group
 
 
     async def get_next_item(self) -> CaptchaRow:
-        # Cycle through the training data
         item_index = self.iter % len(self.train_data)
         next_item = self.train_data[item_index]
         self.iter += 1
