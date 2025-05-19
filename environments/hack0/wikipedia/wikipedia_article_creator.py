@@ -1400,20 +1400,43 @@ class WikipediaArticleCreatorEnv(BaseEnv):
             wandb_metrics["train/avg_article_quality"] = avg_quality
             wandb_metrics["train/avg_steps_per_article"] = avg_steps
             
+            # Convert to [-1, 1] range for consistency with other metrics
+            wandb_metrics["train/article_quality_score"] = avg_quality * 2 - 1
+            
             # Add factual accuracy metrics if available
             if any("accuracy_score" in m for m in self.article_quality_metrics):
                 # Calculate average accuracy metrics
                 accuracy_metrics = [m for m in self.article_quality_metrics if "accuracy_score" in m]
                 if accuracy_metrics:
-                    avg_accuracy = sum(m["accuracy_score"] for m in accuracy_metrics) / len(accuracy_metrics)
+                    # Calculate raw accuracy statistics
+                    avg_accuracy_score = sum(m["accuracy_score"] for m in accuracy_metrics) / len(accuracy_metrics)
                     avg_pct_correct = sum(m.get("pct_correct", 0) for m in accuracy_metrics) / len(accuracy_metrics)
                     avg_pct_incorrect = sum(m.get("pct_incorrect", 0) for m in accuracy_metrics) / len(accuracy_metrics)
                     avg_pct_unknown = sum(m.get("pct_unknown", 0) for m in accuracy_metrics) / len(accuracy_metrics)
                     
-                    wandb_metrics["train/avg_factual_accuracy"] = avg_accuracy
+                    # Log raw factual accuracy metrics
+                    wandb_metrics["train/avg_factual_accuracy"] = avg_accuracy_score
                     wandb_metrics["train/avg_pct_correct"] = avg_pct_correct
                     wandb_metrics["train/avg_pct_incorrect"] = avg_pct_incorrect
                     wandb_metrics["train/avg_pct_unknown"] = avg_pct_unknown
+                    
+                    # Calculate combined scores
+                    combined_scores = []
+                    for m in accuracy_metrics:
+                        # Convert quality score from [0,1] to [-1,1]
+                        quality_score_scaled = m["overall_quality"] * 2 - 1
+                        # Take average of quality and accuracy scores
+                        combined_score = (quality_score_scaled + m["accuracy_score"]) / 2
+                        combined_scores.append(combined_score)
+                    
+                    # Calculate average combined score
+                    if combined_scores:
+                        avg_combined_score = sum(combined_scores) / len(combined_scores)
+                        wandb_metrics["train/avg_combined_score"] = avg_combined_score
+                        
+                        # Add a summary metric that includes both article quality and factual accuracy
+                        # This provides a comprehensive score for overall article quality including factual accuracy
+                        wandb_metrics["train/overall_article_score"] = avg_combined_score
             
             # Create a table of article metrics
             if wandb.run is not None:
@@ -1423,7 +1446,7 @@ class WikipediaArticleCreatorEnv(BaseEnv):
                 
                 # Check if we have factual accuracy metrics
                 if any("accuracy_score" in m for m in self.article_quality_metrics):
-                    columns.extend(["factual_accuracy", "pct_correct", "pct_incorrect", "pct_unknown"])
+                    columns.extend(["factual_accuracy", "pct_correct", "pct_incorrect", "pct_unknown", "combined_score"])
                 
                 table = wandb.Table(columns=columns)
                 
@@ -1439,11 +1462,16 @@ class WikipediaArticleCreatorEnv(BaseEnv):
                     
                     # Add factual accuracy metrics if available
                     if "accuracy_score" in metric:
+                        # Calculate combined score
+                        quality_score_scaled = metric["overall_quality"] * 2 - 1
+                        combined_score = (quality_score_scaled + metric["accuracy_score"]) / 2
+                        
                         row_data.extend([
                             metric.get("accuracy_score", 0),
                             metric.get("pct_correct", 0),
                             metric.get("pct_incorrect", 0),
-                            metric.get("pct_unknown", 0)
+                            metric.get("pct_unknown", 0),
+                            combined_score
                         ])
                         
                     table.add_data(*row_data)

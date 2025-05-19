@@ -65,10 +65,27 @@ python -m atroposlib.cli.sft --eval-only --env-module "environments.hack0.wikipe
 
 The evaluation process generates the following metrics:
 
-- **Factual Accuracy**: Percentage of statements that are factually correct
-- **Structure Score**: Quality of article organization and section structure
-- **Comprehensiveness**: Coverage of important aspects of the topic
-- **Fact Usage**: Effective incorporation of researched facts
+### Quality Metrics
+
+- **Structure Score**: Quality of article organization and section structure (0-1)
+- **Comprehensiveness**: Coverage of important aspects of the topic (0-1)
+- **Fact Usage**: Effective incorporation of researched facts (0-1)
+- **Overall Quality**: Combined score of the above metrics (0-1)
+
+### Factual Accuracy Metrics
+
+- **Correct Statements**: Percentage and count of statements verified as factually correct
+- **Incorrect Statements**: Percentage and count of statements that contradict the reference
+- **Unknown Statements**: Percentage and count of statements that can't be verified
+- **Factual Accuracy Score**: Net accuracy score in range [-1, 1]
+
+### Combined Score
+
+- **Overall Article Score**: Comprehensive metric combining both quality and factual accuracy in range [-1, 1]
+
+This combined metric provides the best representation of article quality, as it balances structural elements with factual correctness. [This example run](https://wandb.ai/niemerg-chicago/atropos-environments_hack0_wikipedia/runs/cddj4yyy) demonstrates how these metrics are tracked and visualized during training.
+
+When evaluating models, the `train/overall_article_score` is the key metric to focus on, as it represents the total effectiveness of the model in producing high-quality, factually accurate articles.
 
 ## Configuration
 
