@@ -43,4 +43,11 @@ wandb/
 # Might want to commit an example, but perhaps not all generated files
 # trajectories.jsonl
 # trajectories_wandb.jsonl
-# test_trajectories.jsonl 
+# test_trajectories.jsonl .env
+
+# Google Cloud credentials
+gen-lang-client-*.json
+
+# Research results and experiment outputs
+*results_*.json
+experiment_summary_*.json

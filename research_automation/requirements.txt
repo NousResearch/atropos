@@ -1,0 +1,9 @@
+# Add research automation dependencies here later, e.g.:
+# google-cloud-bigquery
+# google-cloud-pubsub
+# pandas
+# numpy
+# google-api-python-client
+# google-auth-httplib2
+# google-auth-oauthlib
+# slack_sdk 

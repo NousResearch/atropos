@@ -1,0 +1,18 @@
+fastapi
+uvicorn[standard]
+google-cloud-bigquery # For BigQueryMCPServer
+pandas # For DataFrame conversion in BigQueryMCPServer and use in AnalysisEngine
+google-generativeai # For GeminiMCPServer
+google-cloud-firestore # For FirestoreMCPServer
+google-cloud-pubsub # For PubSubMCPServer
+httpx # For PerplexityMCPServer and potentially PadresMCPServer
+celery # For asynchronous task queuing
+redis # For Celery broker and results backend
+google-api-python-client # For GoogleDocsMCPServer, GoogleSheetsMCPServer etc.
+google-auth-httplib2 # For Google API auth
+google-auth-oauthlib # For Google API auth (user flow, service accounts)
+# Add other backend dependencies here later, e.g.:
+# anthropic (for ClaudeMCPServer)
+# slack_sdk (for SlackMCPServer)
+# celery
+# redis 

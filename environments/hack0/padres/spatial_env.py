@@ -203,118 +203,16 @@ class SpatialEnvironmentMVP:
         self.current_task: Optional[SpatialTask] = None
         self.task_id_counter = 0
 
-    async def initialize_task(self, task: SpatialTask):
-        """
-        Initializes the environment with a specific task definition.
-        This method is intended for use by an external service (like an API).
-        """
-        if not isinstance(task, SpatialTask):
-            raise ValueError("Invalid task object provided to initialize_task.")
-        
-        self.current_task = task
-        print(f"SpatialEnvironmentMVP: Initializing for task_id: {task.task_id}, Description: {task.description[:50]}...")
-        self.simulator.initialize(task.initial_objects)
-        
-        # Notify visualization clients about the new initial scene
-        # This assumes notify_visualization_clients can be called from a potentially new event loop
-        # or that this method is always called from within an existing one.
-        # If the API service for Padres runs in a separate process, this notification
-        # might need to go through a different channel or be initiated by the API service itself.
-        await notify_visualization_clients(self.simulator.get_current_state_for_visualization())
-        print(f"SpatialEnvironmentMVP: Task '{task.task_id}' initialized and simulator ready.")
-
-    async def apply_action_and_get_outcome(self, parsed_action: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Applies a parsed action to the environment and returns the outcome (new state, reward, done, etc.).
-        This method does NOT call any LLM; it assumes the action is already decided.
-        """
-        if not self.current_task:
-            return {"error": "No current task set. Call initialize_task first.", "status": "failure", "reward": 0.0, "done": True}
-
-        print(f"SpatialEnvironmentMVP (Task: {self.current_task.task_id}): Applying action: {parsed_action}")
-
-        action_executed_successfully = False
-        if parsed_action and parsed_action.get("action_type") == "move_object":
-            object_id_to_move = parsed_action.get("object_id", self.current_task.target_object_id)
-            target_position = parsed_action.get("target_position")
-            target_orientation = parsed_action.get("target_orientation_quaternion") # Optional
-
-            if object_id_to_move and target_position:
-                self.simulator.move_object(object_id_to_move, target_position, target_orientation)
-                action_executed_successfully = True
-                print(f"  Moved '{object_id_to_move}' to {target_position}.")
-            else:
-                print("  Warning: move_object action lacked object_id or target_position.")
-        else:
-            action_type = parsed_action.get("action_type", "unknown")
-            print(f"  Warning: Received unhandled or malformed action_type: '{action_type}'. No simulation change.")
-
-        # Simulate physics steps after action (or no-action)
-        self.simulator.simulate_steps(20 if action_executed_successfully else 5)
-        
-        # Get new visual state for clients and for reward calculation
-        new_state_viz = self.simulator.get_current_state_for_visualization()
-        await notify_visualization_clients(new_state_viz) # Update viz clients
-
-        # Scoring logic (adapted from collect_trajectories)
-        distance = self.simulator.calculate_distance(self.current_task.target_object_id, self.current_task.reference_object_id)
-        
-        initial_ref_pos = None
-        for obj_state in self.current_task.initial_objects:
-            if obj_state.id == self.current_task.reference_object_id:
-                initial_ref_pos = obj_state.position
-                break
-        initial_ref_pos = initial_ref_pos or [0,0,0] # Fallback
-        
-        final_target_pos = None
-        for obj_data in new_state_viz:
-            if obj_data["id"] == self.current_task.target_object_id:
-                final_target_pos = obj_data["position"]
-                break
-        final_target_pos = final_target_pos or initial_ref_pos # Fallback
-
-        side_condition_met = False
-        if initial_ref_pos[0] != 0: # Avoid division by zero or ambiguous sign if ref_obj at x=0
-            side_condition_met = (math.copysign(1.0, final_target_pos[0]) == math.copysign(1.0, initial_ref_pos[0]))
-        else: # if ref object is at x=0, target should also be very close to x=0 for side condition
-            side_condition_met = (abs(final_target_pos[0]) < 0.5) 
-        
-        score = 0.0
-        if distance <= self.current_task.target_distance:
-            score = 0.8 
-        elif distance <= self.current_task.target_distance * 1.25: 
-            score = 0.6
-        elif distance <= self.current_task.target_distance * 1.75:
-            score = 0.4
-        elif distance <= self.current_task.target_distance * 2.5: 
-            score = 0.2
-        if side_condition_met:
-            score += 0.2
-        score = round(min(score, 1.0), 2)
-
-        # Determine if task is done. For now, assume one action completes the task in this service context.
-        # More complex tasks might have different done conditions (e.g., max_turns, specific goal state reached).
-        is_done = True 
-        action_type_str = parsed_action.get("action_type", "unknown")
-        observation_message = f"Action '{action_type_str}' applied. Distance to ref: {distance:.2f}. Score: {score}. Side condition met: {side_condition_met}."
-
-        return {
-            "new_state_viz": new_state_viz,
-            "reward": score, 
-            "done": is_done,
-            "observation": observation_message,
-            "message": "Action applied and outcome calculated."
-            # "raw_action_applied": parsed_action # Could be useful for logging
-        }
-
     async def get_next_item(self) -> Dict[str, Any]:
         self.task_id_counter += 1
-        task_id = f"default_task_type_{self.task_id_counter}_{uuid.uuid4().hex[:4]}"
+        task_id = f"conditional_task_{self.task_id_counter}_{uuid.uuid4().hex[:4]}"
 
+        # Start objects on opposite sides, e.g., along the x-axis
         objects = [
             ObjectState(id="red_cube", type="cube", position=[2.0, 0.5, 0.5], scale=[1,1,1], color_rgba=[1,0,0,1]),
             ObjectState(id="blue_sphere", type="sphere", position=[-2.0, 0.5, 0.5], scale=[1,1,1], color_rgba=[0,0,1,1])
         ]
+
         task_description = (
             "The red cube and blue sphere are on opposite sides of the YZ plane (different X signs). "
             "Move the red cube so it remains on the opposite side of the YZ plane from the blue sphere, "
@@ -324,40 +222,50 @@ class SpatialEnvironmentMVP:
             "The red_cube's final x-coordinate should have the opposite sign to the blue_sphere's x-coordinate. "
             "The distance between the center of the red_cube and the center of the blue_sphere should be approximately 1.0 unit."
         )
-        current_default_task = SpatialTask(
+
+        task = SpatialTask(
             task_id=task_id,
             description=task_description,
             initial_objects=objects,
             goal_description=goal_description,
             target_object_id="red_cube",
             reference_object_id="blue_sphere",
-            target_distance=1.0 
+            target_distance=1.0 # This remains the target for proximity
         )
-        # Initialize with this default task if get_next_item is called directly
-        await self.initialize_task(current_default_task)
+        self.current_task = task
+        self.simulator.initialize(task.initial_objects)
+        
+        await notify_visualization_clients(self.simulator.get_current_state_for_visualization())
 
         return {
-            "task_id": current_default_task.task_id,
-            "llm_prompt": self._create_llm_prompt(current_default_task, current_default_task.initial_objects)
+            "task_id": task.task_id,
+            "llm_prompt": self._create_llm_prompt(task, objects) # Pass initial objects for the prompt
         }
 
     def _create_llm_prompt(self, task: SpatialTask, initial_objects_state: List[ObjectState]) -> str:
+        # Use the passed initial_objects_state for accurate current positions in the prompt
         objects_desc_parts = []
         for obj_state in initial_objects_state:
+            # Find the current position from the simulator if it has been initialized and objects added
+            # For the initial prompt, obj_state.position IS the current position.
             objects_desc_parts.append(
                 f"- ID: {obj_state.id}, Type: {obj_state.type}, Current Position: [{obj_state.position[0]:.2f}, {obj_state.position[1]:.2f}, {obj_state.position[2]:.2f}]"
             )
         objects_desc = "\n".join(objects_desc_parts)
+        
+        # Reference object's current position for the hint
         ref_obj_pos_str = "N/A"
         for obj_state in initial_objects_state:
             if obj_state.id == task.reference_object_id:
                 ref_obj_pos_str = f"[{obj_state.position[0]:.2f}, {obj_state.position[1]:.2f}, {obj_state.position[2]:.2f}]"
                 break
+
         hint = (
             f"Hint: The blue_sphere (reference object) is currently at {ref_obj_pos_str}. "
             f"To keep the red_cube on the opposite side of the YZ plane, its x-coordinate should generally have the opposite sign "
             f"to the blue_sphere's x-coordinate. Adjust its position to be about {task.target_distance:.1f} unit away from the blue_sphere."
         )
+
         return f"""Task: {task.description}
 Goal: {task.goal_description}
 
@@ -371,97 +279,133 @@ Your action MUST be a JSON object like:
 {{
     "action_type": "move_object",
     "object_id": "{task.target_object_id}",
-    "target_position": [x_float, y_float, z_float]
+    "target_position": [x_float, y_float, z_float]  # New target coordinates for the red_cube
 }}
 Only provide the JSON for the action. Do not add any other text or explanations.
 Your JSON action:"""
 
-    async def collect_trajectories(self, item_from_get_next: Dict[str, Any], llm_completion_raw: Optional[str]=None) -> Dict[str, Any]:
-        """
-        Orchestrates a single turn: gets LLM action (if not provided), applies it, scores.
-        If llm_completion_raw is provided, it's used directly. Otherwise, LLM is called.
-        """
+    async def collect_trajectories(self, item_from_get_next: Dict[str, Any], llm_completion_raw: str) -> Dict[str, Any]:
         if not self.current_task:
-            # This could happen if get_next_item or initialize_task wasn't called successfully prior.
-            # Try to initialize a default task as a fallback if a prompt is part of item_from_get_next.
-            if item_from_get_next and item_from_get_next.get("llm_prompt") and item_from_get_next.get("task_id"):
-                print("Warning: collect_trajectories called with no current_task, attempting to use item_from_get_next to reconstruct.")
-                # This is a limited reconstruction, initial_objects might be missing for full scoring context.
-                # This path is less ideal. Ensure initialize_task or get_next_item is called first.
-                mock_initial_objects = [ObjectState(id="dummy", type="cube", position=[0,0,0])] # Minimal for _create_llm_prompt
-                self.current_task = SpatialTask(
-                    task_id=item_from_get_next["task_id"],
-                    description="Reconstructed task from prompt",
-                    initial_objects=mock_initial_objects, # This is insufficient for accurate scoring logic
-                    goal_description="Reconstructed goal",
-                    target_object_id="unknown_target", # Placeholder
-                    reference_object_id="unknown_reference" # Placeholder
-                )
-                # Cannot reliably initialize simulator here without full object state.
-                print(f"  Reconstructed task: {self.current_task.task_id}. Scoring might be inaccurate.")
-            else:
-                return {"error": "No current task set. Call get_next_item or initialize_task first.", "score": 0.0}
+            return {"error": "No current task set. Call get_next_item first.", "score": 0.0}
 
-        llm_prompt_for_api = item_from_get_next.get("llm_prompt", self._create_llm_prompt(self.current_task, self.current_task.initial_objects))
+        llm_prompt_for_api = item_from_get_next["llm_prompt"]
         
+        print(f"\nDEBUG SPATIAL_ENV: Calling get_anthropic_completion with prompt... Timeout in 30s")
+        try:
+            # Add a timeout to the LLM call to prevent indefinite hanging
+            llm_completion_raw = await asyncio.wait_for(get_anthropic_completion(llm_prompt_for_api), timeout=30.0)
+        except asyncio.TimeoutError:
+            print("DEBUG SPATIAL_ENV: LLM call timed out after 30s. Using fallback mock.")
+            llm_completion_raw = None # Indicate timeout
+        except Exception as e:
+            print(f"DEBUG SPATIAL_ENV: Error during get_anthropic_completion call: {e}. Using fallback mock.")
+            llm_completion_raw = None # Indicate other error
+
+        print(f"DEBUG SPATIAL_ENV: llm_completion_raw received from get_anthropic_completion: '{llm_completion_raw}'")
+
         parsed_action = None
-        actual_llm_response_for_log = llm_completion_raw # Store the originally passed one for logging
+        # Check if llm_completion_raw is valid before attempting to parse
+        if not llm_completion_raw or not isinstance(llm_completion_raw, str) or llm_completion_raw.strip() == "" or llm_completion_raw.strip() == ".":
+            print(f"DEBUG SPATIAL_ENV: llm_completion_raw is invalid ('{llm_completion_raw}'). Using internal mock action.")
+            # Define a valid mock action string here
+            internal_mock_action_dict = {"action_type": "move_object", "object_id": self.current_task.target_object_id, "target_position": [1.0, 0.5, 0.5]} # Example mock
+            llm_completion_raw = json.dumps(internal_mock_action_dict) # Ensure it's a JSON string for parsing
+            print(f"DEBUG SPATIAL_ENV: Substituted internal mock: {llm_completion_raw}")
 
-        if llm_completion_raw is None:
-            print(f"DEBUG SPATIAL_ENV: llm_completion_raw not provided, calling get_anthropic_completion with prompt... Timeout in 30s")
-            try:
-                llm_response_from_service = await asyncio.wait_for(get_anthropic_completion(llm_prompt_for_api), timeout=30.0)
-                actual_llm_response_for_log = llm_response_from_service # Update for logging
-            except asyncio.TimeoutError:
-                print("DEBUG SPATIAL_ENV: LLM call timed out after 30s. Using fallback internal mock action.")
-                actual_llm_response_for_log = "{\"error\": \"LLM Timeout\"}" # Log timeout
-            except Exception as e:
-                print(f"DEBUG SPATIAL_ENV: Error during get_anthropic_completion: {e}. Using fallback internal mock action.")
-                actual_llm_response_for_log = f"{{\"error\": \"LLM Exception: {e}\"}}" # Log exception
-        
-        # Parse the action (either provided or from LLM call)
-        if actual_llm_response_for_log and isinstance(actual_llm_response_for_log, str):
-            try:
-                json_str = actual_llm_response_for_log.strip()
-                if json_str.startswith("```json"): json_str = json_str[7:]
-                if json_str.startswith("```"): json_str = json_str[3:]
-                if json_str.endswith("```"): json_str = json_str[:-3]
-                json_str = json_str.strip()
-                action_data = json.loads(json_str)
-                if action_data.get("action_type") == "move_object" and \
-                   action_data.get("object_id") == self.current_task.target_object_id and \
-                   isinstance(action_data.get("target_position"), list) and \
-                   len(action_data.get("target_position")) == 3:
-                    parsed_action = action_data
-                else:
-                    print(f"Warning: LLM action malformed or targets wrong object: {action_data}")
-            except json.JSONDecodeError as e:
-                print(f"Warning: LLM response not valid JSON: {actual_llm_response_for_log}. Error: {e}")
-            except Exception as e:
-                print(f"Warning: Unexpected error parsing LLM response: {e}. Response: {actual_llm_response_for_log}")
-        
-        if not parsed_action: # If LLM call failed, timed out, or parsing failed, use a default mock action
-            print(f"DEBUG SPATIAL_ENV: Using internal mock action as LLM response was problematic ('{str(actual_llm_response_for_log)[:100]}...').")
-            parsed_action = {"action_type": "move_object", "object_id": self.current_task.target_object_id, "target_position": [1.0, 0.5, 0.5]} # Example mock
-            actual_llm_response_for_log += " (FALLBACK TO MOCK ACTION USED)"
+        try:
+            json_str = llm_completion_raw.strip()
+            if json_str.startswith("```json"): json_str = json_str[7:]
+            if json_str.startswith("```"): json_str = json_str[3:]
+            if json_str.endswith("```"): json_str = json_str[:-3]
+            json_str = json_str.strip()
+            
+            action_data = json.loads(json_str)
+            if action_data.get("action_type") == "move_object" and \
+               action_data.get("object_id") == self.current_task.target_object_id and \
+               isinstance(action_data.get("target_position"), list) and \
+               len(action_data.get("target_position")) == 3:
+                parsed_action = action_data
+            else:
+                print(f"Warning: LLM action malformed or targets wrong object: {action_data}")
+        except json.JSONDecodeError as e:
+            print(f"Warning: LLM response not valid JSON: {llm_completion_raw}. Error: {e}")
+        except Exception as e:
+            print(f"Warning: Unexpected error parsing LLM response: {e}. Response: {llm_completion_raw}")
 
-        # Apply action and get outcome
-        outcome = await self.apply_action_and_get_outcome(parsed_action)
+        if parsed_action:
+            self.simulator.move_object(
+                object_id=parsed_action["object_id"],
+                target_position=parsed_action["target_position"]
+            )
+            self.simulator.simulate_steps(20)
+            await notify_visualization_clients(self.simulator.get_current_state_for_visualization())
+            await asyncio.sleep(0.05)
+        else:
+            print("No valid action parsed or executed. Scoring based on current state.")
+            self.simulator.simulate_steps(5)
+            await notify_visualization_clients(self.simulator.get_current_state_for_visualization())
+
+        distance = self.simulator.calculate_distance(self.current_task.target_object_id, self.current_task.reference_object_id)
+        
+        initial_ref_pos = None
+        # Find the initial position of the reference object (blue_sphere) from the stored task data
+        for obj_state in self.current_task.initial_objects:
+            if obj_state.id == self.current_task.reference_object_id:
+                initial_ref_pos = obj_state.position
+                break
+        
+        final_target_pos = None
+        # final_sim_state_viz is needed for metadata anyway, and has current positions
+        final_sim_state_viz = self.simulator.get_current_state_for_visualization() 
+        for obj_data in final_sim_state_viz:
+            if obj_data["id"] == self.current_task.target_object_id:
+                final_target_pos = obj_data["position"]
+                break
+
+        side_condition_met = False
+        if initial_ref_pos and final_target_pos:
+            # Task: red cube (target) starts at x=2, blue sphere (ref) at x=-2.
+            # Goal: move red cube near blue sphere. It should end up with x < 0 (same side as blue sphere).
+            initial_ref_x_sign = math.copysign(1.0, initial_ref_pos[0]) if initial_ref_pos[0] != 0 else 0.0
+            final_target_x_sign = math.copysign(1.0, final_target_pos[0]) if final_target_pos[0] != 0 else 0.0
+            
+            if initial_ref_x_sign != 0: # Avoid issues if ref_obj starts at x=0
+                side_condition_met = (final_target_x_sign == initial_ref_x_sign)
+            else: 
+                side_condition_met = (abs(final_target_pos[0]) < 0.5) # If ref is at x=0, target should also be near x=0
+            print(f"DEBUG SCORING: InitialRefXSign: {initial_ref_x_sign}, FinalTargetXSign: {final_target_x_sign}, SideConditionMet: {side_condition_met}")
+        else:
+            print("DEBUG SCORING: Could not determine initial/final positions for side condition check.")
+
+        score = 0.0
+        # Max 0.8 points for distance
+        if distance <= self.current_task.target_distance: # e.g., <= 1.0
+            score = 0.8 
+        elif distance <= self.current_task.target_distance * 1.25: # More lenient threshold for high score band
+            score = 0.6
+        elif distance <= self.current_task.target_distance * 1.75:
+            score = 0.4
+        elif distance <= self.current_task.target_distance * 2.5: 
+            score = 0.2
+        
+        # Bonus 0.2 points for correct side condition
+        if side_condition_met: # Give bonus if side condition is met, regardless of exact distance score (as long as it tried)
+            score += 0.2
+        
+        score = round(min(score, 1.0), 2) # Cap score at 1.0 and round
 
         return {
             "request_id": self.current_task.task_id,
-            "prompt_used": llm_prompt_for_api,
-            "llm_completion_raw": actual_llm_response_for_log,
+            "prompt_used": item_from_get_next["llm_prompt"],
+            "llm_completion_raw": llm_completion_raw,
             "parsed_action": parsed_action,
-            "score": outcome.get("reward"), # Use reward from outcome
+            "score": score,
             "metadata": {
                 "task_description": self.current_task.description,
-                "final_distance": self.simulator.calculate_distance(self.current_task.target_object_id, self.current_task.reference_object_id), # Recalculate for log, or get from outcome
+                "final_distance": round(distance, 2),
                 "target_distance": self.current_task.target_distance,
-                "side_condition_met": "N/A in this refactor yet", # This was part of scoring logic
-                "final_sim_state_viz": outcome.get("new_state_viz"),
-                "observation_from_action": outcome.get("observation"),
-                "action_done_status": outcome.get("done")
+                "side_condition_met": side_condition_met, 
+                "final_sim_state_viz": final_sim_state_viz
             }
         }
 
@@ -471,12 +415,27 @@ class MVPDemoRunner:
 
     async def run_single_turn_demo(self, use_real_llm: bool = True):
         print("\n--- Running MVP Demo Turn ---")
-        next_item_data = await self.env.get_next_item() # This now calls initialize_task with a default task
+        next_item_data = await self.env.get_next_item()
         task_id = next_item_data["task_id"]
+        llm_prompt = next_item_data["llm_prompt"]
         print(f"Task ID: {task_id}")
+        # LLM Prompt is now printed by the llm_service if use_real_llm is True, or before collect_trajectories if not.
+        # print(f"LLM Prompt:\n{llm_prompt}") 
+
+        # The llm_completion argument to collect_trajectories is now effectively ignored if use_real_llm is true,
+        # as collect_trajectories will call the LLM service itself.
+        # For mock behavior when use_real_llm is False, we might need to adjust.
+        # However, our llm_service has its own mock, so we can rely on that for now if API key is missing.
         
-        # collect_trajectories will call the LLM if llm_completion_raw is None (default behavior)
-        result = await self.env.collect_trajectories(next_item_data, llm_completion_raw=None)
+        # For clarity, if we are NOT using real LLM (e.g. for process mode without API key),
+        # we should generate a mock completion here and pass it.
+        # But since llm_services.py has a fallback, we might not need a separate mock here IF
+        # the intention is for collect_trajectories to ALWAYS try the LLM service path.
+        # Let's assume collect_trajectories now always drives the LLM call.
+
+        # The llm_completion parameter for collect_trajectories is now mostly for the original mock structure.
+        # We can pass an empty string or None, as it will be replaced by the real LLM call internally.
+        result = await self.env.collect_trajectories(next_item_data, "") # Pass dummy llm_completion
 
         print(f"\n--- Result for Task {task_id} ---")
         print(f"Final Score: {result['score']:.2f}")

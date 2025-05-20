@@ -1,0 +1,148 @@
+{
+    "gcp_project_id": "mock-gcp-project-id",
+    "padres_cloud_run_url": "http://localhost:8080",
+    "mock_mode": true,
+    
+    "firestore_collections": {
+        "experiments": "experiment_configs",
+        "prompts": "prompt_templates",
+        "assistant_outputs": "research_assistant_outputs"
+    },
+
+    "bigquery_config": {
+        "dataset_id": "ai_research_data",
+        "trial_results_table_id": "trial_results",
+        "analysis_outputs_table_id": "analysis_outputs"
+    },
+
+    "pubsub_topics": {
+        "experiment_completed": "experiment-batch-completed",
+        "new_analysis_task": "new-analysis-task"
+    },
+
+    "mcp_server_configurations": {
+        "gemini_pro_main": {
+            "module_name": "gemini_mcp_server", 
+            "class_name": "GeminiMCPServer",
+            "config": {
+                "api_key": "ENV_GOOGLE_API_KEY", 
+                "model_name": "gemini-pro",
+                "generation_config": {"temperature": 0.7, "max_output_tokens": 1024},
+                "mock_mode": true
+            }
+        },
+        "gemini_1_5_pro_latest": {
+            "module_name": "gemini_mcp_server", 
+            "class_name": "GeminiMCPServer",
+            "config": {
+                "api_key": "ENV_GOOGLE_API_KEY",
+                "model_name": "gemini-1.5-pro-latest",
+                "generation_config": {"temperature": 0.8, "max_output_tokens": 2048},
+                "mock_mode": true
+            }
+        },
+        "bq_main": {
+            "module_name": "bigquery_mcp_server", 
+            "class_name": "BigQueryMCPServer",
+            "config": {
+                "project_id": "mock-gcp-project-id", 
+                "dataset_id": "ai_research_data", 
+                "location": "US",
+                "mock_mode": true
+            }
+        },
+        "firestore_main": {
+            "module_name": "firestore_mcp_server", 
+            "class_name": "FirestoreMCPServer",
+            "config": {
+                "project_id": "mock-gcp-project-id",
+                "mock_mode": true,
+                "mock_data": {
+                    "experiment_configs/exp_spatial_reasoning_001": {
+                        "experiment_id": "exp_spatial_reasoning_001",
+                        "description": "Test Claude LLM on basic spatial reasoning task A.",
+                        "padres_task_name": "FindAndPlaceObject",
+                        "padres_task_parameters": {
+                            "target_object": "red_cube",
+                            "destination_area": "blue_circle_zone"
+                        },
+                        "llm_mcp_server_name": "claude_main",
+                        "prompt_template": "Given the following environment description, suggest the next action to take:\n{task_description}",
+                        "max_turns": 5,
+                        "num_trials": 1
+                    }
+                }
+            }
+        },
+        "padres_sim_env": {
+            "module_name": "padres_mcp_server", 
+            "class_name": "PadresMCPServer",
+            "config": {
+                "service_base_url": "http://localhost:8088",
+                "mock_mode": true
+            }
+        },
+        "pubsub_main": {
+            "module_name": "pubsub_mcp_server", 
+            "class_name": "PubSubMCPServer",
+            "config": {
+                "project_id": "mock-gcp-project-id",
+                "mock_mode": true
+            }
+        },
+        "perplexity_main": {
+            "module_name": "perplexity_mcp_server", 
+            "class_name": "PerplexityMCPServer",
+            "config": {
+                "api_key": "ENV_PERPLEXITY_API_KEY",
+                "mock_mode": true
+            }
+        },
+        "claude_main": {
+            "module_name": "claude_mcp_server", 
+            "class_name": "ClaudeMCPServer",
+            "config": {
+                "api_key": "ENV_ANTHROPIC_API_KEY",
+                "model_name": "claude-3-opus-20240229",
+                "mock_mode": true
+            }
+        }
+    },
+
+    "experiment_orchestrator_config": {
+        "default_llm_mcp_server_name": "claude_main",
+        "default_padres_mcp_server_name": "padres_sim_env",
+        "default_firestore_mcp_server_name": "firestore_main",
+        "default_bigquery_mcp_server_name": "bq_main",
+        "default_pubsub_mcp_server_name": "pubsub_main",
+        "firestore_experiment_collection": "experiment_configs",
+        "bigquery_trial_results_table": "trial_results",
+        "pubsub_topic_experiment_completed": "experiment-batch-completed",
+        "mock_mode": true
+    },
+
+    "research_assistant_config": {
+        "default_llm_mcp_server_name": "claude_main",
+        "default_bigquery_mcp_server_name": "bq_main",
+        "default_perplexity_mcp_server_name": "perplexity_main",
+        "default_firestore_mcp_server_name": "firestore_main",
+        "bigquery_project_id": "mock-gcp-project-id",
+        "bigquery_dataset_id": "ai_research_data",
+        "bigquery_trial_results_table": "trial_results",
+        "firestore_insights_collection": "research_assistant_outputs",
+        "low_score_threshold": 0.75,
+        "mock_mode": true
+    },
+
+    "analysis_engine_config": {
+        "default_bigquery_mcp_server_name": "bq_main",
+        "bigquery_analysis_results_table": "analysis_outputs",
+        "mock_mode": true
+    },
+
+    "report_generator_config": {
+        "mock_mode": true
+    },
+
+    "comment": "This is a configuration with mock_mode enabled for local testing without GCP credentials."
+} 

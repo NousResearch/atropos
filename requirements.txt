@@ -1,0 +1,12 @@
+requests>=2.31.0
+python-dotenv>=1.0.0
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+pybullet==3.2.5
+websockets
+numpy
+wandb
+anthropic
+
+# Add any other direct pip dependencies here
+# For example, if your llm_services.py used other specific libraries 

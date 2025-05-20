@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Experiment Configuration",
+  "description": "Schema for an experiment configuration document stored in Firestore.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the experiment (often the Firestore document ID itself)."
+    },
+    "description": {
+      "type": "string",
+      "description": "A human-readable description of the experiment."
+    },
+    "creation_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of when the experiment configuration was created."
+    },
+    "last_modified_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of when the experiment configuration was last modified."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tags for categorizing or searching experiments."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "paused", "completed", "archived"],
+      "default": "draft",
+      "description": "Current status of the experiment design."
+    },
+    "padres_task_name": {
+      "type": "string",
+      "description": "The name of the task to be run in the Padres environment."
+    },
+    "padres_task_parameters": {
+      "type": "object",
+      "description": "Specific parameters for the Padres task.",
+      "additionalProperties": true
+    },
+    "llm_mcp_server_name": {
+      "type": "string",
+      "description": "Name of the LLM MCP server to use (e.g., 'claude_opus', 'openai_gpt4_turbo'). This should match a server configured in MCPManager."
+    },
+    "prompt_template_id": {
+      "type": "string",
+      "description": "ID of the prompt template to use (from a Firestore 'prompt_templates' collection)."
+    },
+    "prompt_parameters": {
+        "type": "object",
+        "description": "Key-value pairs to fill in the prompt template.",
+        "additionalProperties": true
+    },
+    "max_turns_per_trial": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum number of turns or steps allowed for each trial of the experiment."
+    },
+    "num_trials": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of trials to run for this experiment configuration."
+    },
+    "evaluation_metrics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of metrics that will be used to evaluate the experiment's success (e.g., 'success_rate', 'average_score', 'steps_to_completion')."
+    },
+    "output_bigquery_table": {
+        "type": "string",
+        "description": "Optional: Specific BigQuery table to store results for this experiment, if overriding default."
+    },
+    "custom_metadata": {
+        "type": "object",
+        "description": "Any other custom metadata for this experiment configuration.",
+        "additionalProperties": true
+    }
+  },
+  "required": [
+    "id",
+    "description",
+    "padres_task_name",
+    "llm_mcp_server_name",
+    "prompt_template_id",
+    "num_trials"
+  ]
+} 

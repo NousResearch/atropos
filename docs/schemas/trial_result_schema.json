@@ -1,0 +1,121 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Experiment Trial Result",
+  "description": "Schema for an experiment trial result record stored in BigQuery.",
+  "type": "object",
+  "properties": {
+    "trial_id": {
+      "type": "string",
+      "description": "Unique identifier for this specific trial (e.g., experiment_id + trial_number + timestamp_hash)."
+    },
+    "experiment_id": {
+      "type": "string",
+      "description": "Identifier of the experiment configuration this trial belongs to."
+    },
+    "trial_number": {
+      "type": "integer",
+      "description": "Sequential number of this trial within the experiment."
+    },
+    "start_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the trial execution started."
+    },
+    "end_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the trial execution ended."
+    },
+    "duration_seconds": {
+      "type": "number",
+      "description": "Total duration of the trial in seconds."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "failure", "error", "in_progress", "timeout"],
+      "description": "Final status of the trial."
+    },
+    "experiment_config_snapshot": {
+      "type": "object",
+      "description": "A snapshot of the experiment configuration used for this trial (or key parts of it).",
+      "properties": {
+        "id": {"type": "string"},
+        "description": {"type": "string"},
+        "padres_task_name": {"type": "string"},
+        "padres_task_parameters": {"type": "object", "additionalProperties": true},
+        "llm_mcp_server_name": {"type": "string"},
+        "prompt_template_id": {"type": "string"},
+        "prompt_parameters": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "padres_environment_details": {
+        "type": "object",
+        "description": "Details about the Padres environment instance used.",
+        "properties": {
+            "environment_id": {"type": "string"},
+            "initial_state": {"type": "object", "additionalProperties": true},
+            "final_state": {"type": "object", "additionalProperties": true}
+        }
+    },
+    "llm_interaction_logs": {
+      "type": "array",
+      "description": "Log of interactions with the LLM during the trial.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "turn_number": {"type": "integer"},
+          "timestamp": {"type": "string", "format": "date-time"},
+          "prompt_sent_to_llm": {"type": "string"},
+          "raw_llm_response": {"type": "string"},
+          "action_extracted_or_parsed": {"type": "string"},
+          "llm_request_parameters": {"type": "object", "additionalProperties": true},
+          "llm_response_metadata": {"type": "object", "additionalProperties": true}
+        },
+        "required": ["turn_number", "timestamp", "prompt_sent_to_llm"]
+      }
+    },
+    "padres_action_logs": {
+        "type": "array",
+        "description": "Log of actions executed in the Padres environment.",
+        "items": {
+            "type": "object",
+            "properties": {
+                "turn_number": {"type": "integer"},
+                "timestamp": {"type": "string", "format": "date-time"},
+                "action_executed": {"type": "string"},
+                "action_parameters": {"type": "object", "additionalProperties": true},
+                "execution_result": {"type": "object", "additionalProperties": true},
+                "cumulative_score_after_action": {"type": "number"}
+            },
+            "required": ["turn_number", "timestamp", "action_executed"]
+        }
+    },
+    "final_trial_metrics": {
+        "type": "object",
+        "description": "Aggregated or final metrics for this specific trial.",
+        "additionalProperties": {"type": ["string", "number", "boolean"]}
+    },
+    "error_details": {
+        "type": "object",
+        "description": "Details of any error that occurred during the trial.",
+        "properties": {
+            "error_message": {"type": "string"},
+            "error_type": {"type": "string"},
+            "stack_trace": {"type": "string"}
+        }
+    },
+    "processing_logs": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "General logs from the orchestrator or other services during this trial's execution."
+    }
+  },
+  "required": [
+    "trial_id",
+    "experiment_id",
+    "trial_number",
+    "start_timestamp",
+    "end_timestamp",
+    "status"
+  ]
+} 

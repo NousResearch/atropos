@@ -1,0 +1,29 @@
+[
+    {
+        "experiment_id": "exp_spatial_reasoning_001",
+        "description": "Test Claude LLM on basic spatial reasoning task A.",
+        "padres_task_name": "FindAndPlaceObject",
+        "padres_task_parameters": {
+            "target_object": "red_cube",
+            "destination_area": "blue_circle_zone"
+        },
+        "llm_mcp_server": "claude_llm",
+        "prompt_template_id": "spatial_task_v1",
+        "max_turns": 10,
+        "num_trials": 5,
+        "evaluation_metrics": ["success_rate", "average_steps"]
+    },
+    {
+        "experiment_id": "exp_prompt_comparison_002",
+        "description": "Compare two prompt variations for OpenAI LLM on navigation task.",
+        "padres_task_name": "NavigateToTarget",
+        "padres_task_parameters": {
+            "target_location_description": "the tall green cylinder near the window"
+        },
+        "llm_mcp_server": "openai_llm",
+        "prompt_template_ids": ["navigation_prompt_v1a", "navigation_prompt_v1b"],
+        "max_turns": 15,
+        "num_trials": 10,
+        "evaluation_metrics": ["task_completion_rate", "path_efficiency"]
+    }
+] 
