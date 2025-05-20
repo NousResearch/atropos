@@ -1,0 +1,23 @@
+2025-05-18 17:48:35,060 INFO    MainThread:68462 [wandb_setup.py:_flush():70] Current SDK version is 0.19.11
+2025-05-18 17:48:35,060 INFO    MainThread:68462 [wandb_setup.py:_flush():70] Configure stats pid to 68462
+2025-05-18 17:48:35,060 INFO    MainThread:68462 [wandb_setup.py:_flush():70] Loading settings from /home/kirill/.config/wandb/settings
+2025-05-18 17:48:35,060 INFO    MainThread:68462 [wandb_setup.py:_flush():70] Loading settings from /home/kirill/hackathons/atropos-nrs15h/environments/hack0/wandb/settings
+2025-05-18 17:48:35,060 INFO    MainThread:68462 [wandb_setup.py:_flush():70] Loading settings from environment variables
+2025-05-18 17:48:35,060 INFO    MainThread:68462 [wandb_init.py:setup_run_log_directory():724] Logging user logs to /home/kirill/hackathons/atropos-nrs15h/environments/hack0/wandb/run-20250518_174835-2wfxhi28/logs/debug.log
+2025-05-18 17:48:35,060 INFO    MainThread:68462 [wandb_init.py:setup_run_log_directory():725] Logging internal logs to /home/kirill/hackathons/atropos-nrs15h/environments/hack0/wandb/run-20250518_174835-2wfxhi28/logs/debug-internal.log
+2025-05-18 17:48:35,060 INFO    MainThread:68462 [wandb_init.py:init():852] calling init triggers
+2025-05-18 17:48:35,060 INFO    MainThread:68462 [wandb_init.py:init():857] wandb.init called with sweep_config: {}
+config: {'group_size': 2, 'max_num_workers': -1, 'max_eval_workers': 16, 'max_num_workers_per_node': 8, 'steps_per_eval': 100, 'max_token_length': 2048, 'eval_handling': <EvalHandlingEnum.STOP_TRAIN: 'STOP_TRAIN'>, 'eval_limit_ratio': 0.5, 'inference_weight': 1.0, 'batch_size': -1, 'max_batches_offpolicy': 3, 'tokenizer_name': 'NousResearch/DeepHermes-3-Llama-3-3B-Preview', 'use_wandb': True, 'rollout_server_url': 'http://localhost:8000', 'total_steps': 2, 'wandb_name': None, 'num_rollouts_to_keep': 32, 'num_rollouts_per_group_for_logging': 1, 'ensure_scores_are_not_same': False, 'data_path_to_save_groups': 'data/humor_3.jsonl', 'min_items_sent_before_logging': 2, 'include_messages': True, 'data_path': 'humor_dataset.jsonl', '_wandb': {}}
+2025-05-18 17:48:35,060 INFO    MainThread:68462 [wandb_init.py:init():893] starting backend
+2025-05-18 17:48:35,060 INFO    MainThread:68462 [wandb_init.py:init():897] sending inform_init request
+2025-05-18 17:48:35,064 INFO    MainThread:68462 [backend.py:_multiprocessing_setup():101] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2025-05-18 17:48:35,065 INFO    MainThread:68462 [wandb_init.py:init():907] backend started and connected
+2025-05-18 17:48:35,066 INFO    MainThread:68462 [wandb_init.py:init():1005] updated telemetry
+2025-05-18 17:48:35,070 INFO    MainThread:68462 [wandb_init.py:init():1029] communicating run to backend with 90.0 second timeout
+2025-05-18 17:48:35,433 INFO    MainThread:68462 [wandb_init.py:init():1104] starting run threads in backend
+2025-05-18 17:48:35,491 INFO    MainThread:68462 [wandb_run.py:_console_start():2573] atexit reg
+2025-05-18 17:48:35,491 INFO    MainThread:68462 [wandb_run.py:_redirect():2421] redirect: wrap_raw
+2025-05-18 17:48:35,491 INFO    MainThread:68462 [wandb_run.py:_redirect():2490] Wrapping output streams.
+2025-05-18 17:48:35,491 INFO    MainThread:68462 [wandb_run.py:_redirect():2513] Redirects installed.
+2025-05-18 17:48:35,492 INFO    MainThread:68462 [wandb_init.py:init():1150] run started, returning control to user process
+2025-05-18 17:50:29,616 INFO    MsgRouterThr:68462 [mailbox.py:close():129] [no run ID] Closing mailbox, abandoning 2 handles.

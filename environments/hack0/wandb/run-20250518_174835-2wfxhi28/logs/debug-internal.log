@@ -1,0 +1,15 @@
+{"time":"2025-05-18T17:48:35.067285373-07:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/kirill/hackathons/atropos-nrs15h/environments/hack0/wandb/run-20250518_174835-2wfxhi28/logs/debug-core.log"}
+{"time":"2025-05-18T17:48:35.281397518-07:00","level":"INFO","msg":"created new stream","id":"2wfxhi28"}
+{"time":"2025-05-18T17:48:35.281429663-07:00","level":"INFO","msg":"stream: started","id":"2wfxhi28"}
+{"time":"2025-05-18T17:48:35.281465438-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"2wfxhi28"}
+{"time":"2025-05-18T17:48:35.281624943-07:00","level":"INFO","msg":"handler: started","stream_id":"2wfxhi28"}
+{"time":"2025-05-18T17:48:35.28163269-07:00","level":"INFO","msg":"sender: started","stream_id":"2wfxhi28"}
+{"time":"2025-05-18T17:48:35.435106526-07:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-18T17:50:29.617997906-07:00","level":"INFO","msg":"stream: closing","id":"2wfxhi28"}
+{"time":"2025-05-18T17:50:29.618126207-07:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-18T17:50:29.61816387-07:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-18T17:50:30.028808332-07:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-18T17:50:30.174820159-07:00","level":"INFO","msg":"handler: closed","stream_id":"2wfxhi28"}
+{"time":"2025-05-18T17:50:30.174870994-07:00","level":"INFO","msg":"sender: closed","stream_id":"2wfxhi28"}
+{"time":"2025-05-18T17:50:30.17484606-07:00","level":"INFO","msg":"writer: Close: closed","stream_id":"2wfxhi28"}
+{"time":"2025-05-18T17:50:30.175032671-07:00","level":"INFO","msg":"stream: closed","id":"2wfxhi28"}

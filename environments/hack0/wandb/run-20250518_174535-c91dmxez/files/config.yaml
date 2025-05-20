@@ -1,0 +1,79 @@
+_wandb:
+    value:
+        cli_version: 0.19.11
+        m: []
+        python_version: 3.13.2
+        t:
+            "1":
+                - 1
+                - 11
+                - 49
+                - 51
+                - 55
+                - 95
+            "2":
+                - 1
+                - 11
+                - 49
+                - 51
+                - 55
+                - 95
+            "3":
+                - 13
+                - 16
+                - 23
+                - 55
+                - 61
+            "4": 3.13.2
+            "5": 0.19.11
+            "6": 4.51.3
+            "8":
+                - 5
+            "12": 0.19.11
+            "13": linux-x86_64
+batch_size:
+    value: -1
+data_path:
+    value: humor_dataset.jsonl
+data_path_to_save_groups:
+    value: data/humor_2.jsonl
+ensure_scores_are_not_same:
+    value: false
+eval_handling:
+    value: STOP_TRAIN
+eval_limit_ratio:
+    value: 0.5
+group_size:
+    value: 2
+include_messages:
+    value: true
+inference_weight:
+    value: 1
+max_batches_offpolicy:
+    value: 3
+max_eval_workers:
+    value: 16
+max_num_workers:
+    value: -1
+max_num_workers_per_node:
+    value: 8
+max_token_length:
+    value: 2048
+min_items_sent_before_logging:
+    value: 2
+num_rollouts_per_group_for_logging:
+    value: 1
+num_rollouts_to_keep:
+    value: 32
+rollout_server_url:
+    value: http://localhost:8000
+steps_per_eval:
+    value: 100
+tokenizer_name:
+    value: NousResearch/DeepHermes-3-Llama-3-3B-Preview
+total_steps:
+    value: 2
+use_wandb:
+    value: true
+wandb_name:
+    value: null

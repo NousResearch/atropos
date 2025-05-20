@@ -1,0 +1,44 @@
+{
+  "os": "Linux-5.15.167.4-microsoft-standard-WSL2-x86_64-with-glibc2.40",
+  "python": "CPython 3.13.2",
+  "startedAt": "2025-05-19T00:48:35.065253Z",
+  "args": [
+    "process",
+    "--openai.base_url",
+    "https://api.x.ai/v1",
+    "--openai.api_key",
+    "xai-cjDD6fd8ArfNJgc5Xnz3AjiJNuUxMuaD1rcpTAOR4RRh0SSO8v2KBwjYwUuEI2kFQxQOkUx943keKiUF",
+    "--openai.model_name",
+    "grok-3-beta",
+    "--env.group_size",
+    "2",
+    "--env.data_path",
+    "humor_dataset.jsonl"
+  ],
+  "program": "/home/kirill/hackathons/atropos-nrs15h/environments/hack0/llm_humor_server.py",
+  "codePath": "environments/hack0/llm_humor_server.py",
+  "git": {
+    "remote": "git@github.com:kirilligum/atropos-nrs15h.git",
+    "commit": "96043a968f0afc34b8c1fb9dd104056fc6113e8b"
+  },
+  "email": "kirill.igum@gmail.com",
+  "root": "/home/kirill/hackathons/atropos-nrs15h/environments/hack0",
+  "host": "koldun",
+  "executable": "/home/kirill/miniconda3/bin/python",
+  "codePathLocal": "llm_humor_server.py",
+  "cpu_count": 7,
+  "cpu_count_logical": 14,
+  "disk": {
+    "/": {
+      "total": "1081101176832",
+      "used": "161502572544"
+    }
+  },
+  "memory": {
+    "total": "16480206848"
+  },
+  "cpu": {
+    "count": 7,
+    "countLogical": 14
+  }
+}

@@ -1,0 +1,9 @@
+Starting to process 2 groups...
+Processing group 1/2
+Wrote scored group to data/humor_2.jsonl
+Successfully processed group 1/2
+Processing group 2/2
+Wrote scored group to data/humor_2.jsonl
+Successfully processed group 2/2
+Completed processing 2 groups
+Successfully generated HTML file: /home/kirill/hackathons/atropos-nrs15h/environments/hack0/data/humor_2.html
