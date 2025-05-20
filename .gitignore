@@ -51,3 +51,5 @@ gen-lang-client-*.json
 # Research results and experiment outputs
 *results_*.json
 experiment_summary_*.json
+secure_keys/
+mcp_config.json
