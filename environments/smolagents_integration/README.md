@@ -17,6 +17,7 @@ The integration consists of:
 - `agent_process_runner.py`: Module for running agents in separate processes.
 - `server_proxy.py`: Proxy mechanism for communication between processes and Atropos server.
 - `smolagents_model.py`: Process-safe Atropos server model implementation for SmolaGents.
+- `download_gaia.py`: Script to download and set up the GAIA benchmark dataset.
 
 **Tools:**
 - `tools/file_tools.py`: Tools for reading, writing, and appending to files
@@ -36,6 +37,10 @@ The integration consists of:
 4. For web tools, install Tavily:
    ```
    pip install tavily-python
+   ```
+5. Download the GAIA benchmark dataset:
+   ```
+   python -m environments.smolagents_integration.download_gaia
    ```
 
 ## Environment Variables
@@ -154,11 +159,48 @@ The process-based isolation can be configured through the following options:
 --env.process_timeout=240
 ```
 
+## GAIA Benchmark Dataset
+
+The SmolaGents integration uses the GAIA benchmark dataset for generating high-quality agent trajectories. The dataset includes a variety of tasks with file attachments that test reasoning, problem-solving, and tool usage capabilities.
+
+### Downloading the Dataset
+
+The integration includes a dedicated script for downloading and setting up the GAIA dataset:
+
+```bash
+# Download to the default location (data/gaia)
+python -m environments.smolagents_integration.download_gaia
+
+# Specify a custom output directory
+python -m environments.smolagents_integration.download_gaia --output-dir /path/to/custom/dir
+
+# Use the raw dataset version instead of the annotated version
+python -m environments.smolagents_integration.download_gaia --use-raw
+```
+
+This script:
+1. Downloads the appropriate GAIA dataset from HuggingFace
+2. Creates a `GAIA.py` loader file that works with the HuggingFace datasets library
+3. Validates that all necessary files were downloaded correctly
+
+To use the dataset, you need to have access to the GAIA repository on HuggingFace. The script will automatically handle authentication using your HuggingFace credentials.
+
+### Dataset Structure
+
+The GAIA dataset is organized into:
+- `test/` - Tasks for evaluation
+- `validation/` - Additional tasks that can be used for development or validation
+
+Each task includes:
+- A question prompt
+- A ground truth answer
+- Associated files (images, documents, spreadsheets, etc.)
+
 ## Troubleshooting
 
 - **Process-related errors**: When using process-based isolation, ensure your code is serializable for multiprocessing. Also, check that proxy communication is working properly.
 - **Message format errors**: Check that message conversions between SmolaGents and Atropos formats are correct.
-- **Missing GAIA data**: Make sure you've downloaded the GAIA benchmark data correctly. If needed, run `python -m environments.smolagents_integration.download_gaia`.
+- **Missing GAIA data**: Make sure you've downloaded the GAIA benchmark data correctly. If needed, run `python -m environments.smolagents_integration.download_gaia`. If you encounter permission errors, you might need to request access to the HuggingFace dataset.
 - **Web tool errors**: If Tavily tools aren't working, make sure you have set the `TAVILY_API_KEY` environment variable and have installed the `tavily-python` package.
 - **Tool import errors**: If you see errors about missing tool modules, ensure your working directory allows proper imports of the tools folder.
 - **Permission errors with file tools**: Ensure your process has the correct permissions to read/write files in the directories being accessed.
