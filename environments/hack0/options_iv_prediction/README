@@ -1,0 +1,4 @@
+run with command
+```sh
+python options_iv_prediction.py process --env.data_path_to_save_groups ./outputs/options_rollouts.jsonl --openai.api_key YOUR_KEY
+```
