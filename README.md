@@ -1,370 +1,183 @@
-# Atropos - Nous Research's LLM RL Gym
+StarMapCompression: A Reinforcement Learning Approach to Galaxy Data Compression
+Project Overview
+StarMapCompression is a proof-of-concept project developed for a hackathon to demonstrate how reinforcement learning (RL) can compress 3D galaxy data for efficient visualization in a browser. Our vision is to enable a "universe in a browser" experience, where users can explore vast astronomical datasets interactively. However, large datasets (e.g., millions of stars) are a limiting factor due to memory and bandwidth constraints in web applications. This project uses RL to intelligently compress galaxy point clouds while preserving key features for user viewpoints, making data lightweight for browser rendering.
+We kept the approach simple to focus on proving the concept within the hackathon’s time constraints. The result is a functional RL environment that reduces a dataset from 1000 points to as few as 47 points (~95% compression) while maintaining view-relevant information, showcasing the potential for scalable, browser-based astronomy visualizations.
+Why Data Compression?
+Rendering the universe in a browser requires handling massive 3D datasets (e.g., star positions [x, y, z]). Transmitting and rendering these datasets in real-time is challenging due to:
+Memory Limits: Browsers have limited memory, making large datasets impractical.
 
-![newatr-02](banner-image.jpg)
+Bandwidth: Downloading millions of points is slow, degrading user experience.
 
-<div align="center">
+Rendering: WebGL and other browser technologies struggle with high point counts.
 
-*In Greek mythology, Atropos was the eldest of the three Fates.  While her sisters spun and measured the threads of mortal lives, Atropos alone held the shears that would cut these threads, determining the final destiny of each soul. Just as Atropos guided souls to their ultimate fate, this system guides language models toward their optimal potential through reinforcement learning.*
+Data compression is critical to overcome these limits. Our project uses RL to learn how to reduce the number of points while prioritizing those visible from user viewpoints, ensuring a visually accurate yet lightweight dataset.
+What We Did
+We developed StarMapCompressionEnv, an RL environment that compresses 3D galaxy data using a pipeline of spatial algorithms and optimizes the compression with RL. Here’s the process from start to finish:
+Input Data:
+Galaxy Data: A subset of 1000 star positions (galaxy_subset.npy, shape: (1000, 3)).
 
-</div>
+User Viewpoints: 10 viewpoints (user_views.npy, shape: (10, 3)) representing where users look in the galaxy.
 
-<div align="center">
-</div>
-<div id="badges" align="center">
-  <a href="https://huggingface.co/NousResearch">
-    <img src="https://img.shields.io/badge/NousResearch-orange?style=for-the-badge&logo=huggingface&logoColor=white" alt="HuggingFace"/>
-  </a>
-  <a href="https://nousresearch.com">
-    <img src="https://img.shields.io/badge/NousResearch.com-white?style=for-the-badge&logo=data:image/png;base64,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" alt="Website"/>
-  </a>
-  <a href="https://x.com/NousResearch">
-    <img src="https://img.shields.io/badge/@NousResearch-black?style=for-the-badge&logo=X&logoColor=white" alt="@NousResearch"/>
-  </a>
-</div>
+Compression Pipeline:
+Density Sampling: Uses a KD-tree to sample 10% of points (100 points) based on local density, focusing on clustered regions.
 
----
+PCA: Reduces 3D points to 2D (padded back to 3D) to preserve variance and simplify processing.
 
-## What is Atropos?
-Atropos is an environment microservice framework for async RL with LLMs.
+Octree: Builds a hierarchical spatial structure, pruning sparse regions with an adaptive density threshold to retain key points.
 
-Atropos encompasses both environments, which are set up as services, and a trajectory API for the environments to send data to and for the trainer to pull batches from.
+Quantization: Compresses coordinates to 8-bit integers (dequantized for compatibility).
 
-![image](https://github.com/user-attachments/assets/8ce52994-b219-49d6-970c-58a477f36151)
-<div align="center">
+Mapping to Original: Maps compressed points to the nearest original points using a KD-tree, ensuring fidelity.
 
-  *Here is a diagram of how Atropos' components can interact with a trainer & inference server to complete the RL loop (trainer & inference engine not included with the atropos package)*
+RL Optimization:
+The RL environment (StarMapCompressionEnv) selects grid sizes (e.g., 26.7, 53.4, 80.1 units) to adjust the compression pipeline.
 
-</div>
+Actions: Choose a grid size to recompress the data, varying octree depth, minimum points, quantization bits, and sampling fraction.
 
-Atropos is a robust, scalable framework for **Reinforcement Learning Environments with LLMs**. Key features:
+Reward: Balances data size (-avg_data_size / 1000), point retention (5 * len(self.data) / len(self.original_data)), points within view radius (total_points / len(self.original_data)), and quality (-quality / 1e6).
 
-- **Multi-Turn & Asynchronous RL:** Efficiently supports complex, multi-turn, and asynchronous interactions, decoupling environment steps from policy updates.
-- **Inference Agnostic:** Integrates with standard inference APIs (e.g., OpenAI, vLLM, SGLang), enabling easy switching between LLM providers and frameworks.
-- **Trainer Independent:** Offers a standardized training interface for experimenting with different RL algorithms and frameworks without major code changes.
-- **Scalable & Decentralized:** Easily scale by launching more environment instances (locally or across decentralized resources) that contribute rollouts to a central service.
-- **Diverse Environment Integration:** Manages many varied environment types concurrently for heterogeneous, multi-modal training.
+Steps: Runs multiple steps (e.g., 5) to iteratively refine the dataset, reducing points (e.g., from 79 to 47) while optimizing for views.
 
-The goal: provide a flexible, scalable, and standardized platform to accelerate LLM-based RL research across diverse, interactive settings.
+Output:
+A compressed dataset (e.g., 47 points, shape: (47, 3)) saved as .npy files (compressed_data_step_X.npy).
 
-The framework supports collecting, distributing and evaluating LLM trajectories through diverse environments including:
+Metrics: Initial shape (79, 3), final shape (47, 3), Data changed: True, showing successful compression and modification.
 
-<div align="center">
+View distances (min=30.89, max=365.58) guide view radius (~53.4) to capture relevant points.
 
-| Environment Type          | Examples                                   | Purpose                                            |
-|---------------------------|--------------------------------------------|----------------------------------------------------|
-| 📚 Dataset environments   | GSM8K, MMLU, Custom HF Datasets            | Evaluate and improve LLM performance on static data|
-| 🎮 Online environments    | Blackjack, Taxi, Text-based games          | Train LLMs through interactive game-based learning |
-| 🤖 RLAIF and RLHF         | LLM Judge/Reward Models                    | Fine-tune LLMs using human feedback and alignment  |
-| 🔄 Multi-Turn RL          | deepresearch, internal tool calling        | Train LLMs on complex multi-step interactions      |
-| 💻 Code Execution         | MBPP, HumanEval (via `coding_server.py`)   | Train LLMs to generate and execute code            |
-| 🖼️ Multimodal             | OCR VQA, Clevr (via `multimodal_dpo/`)     | Train LLMs on tasks involving vision and language  |
+How We Built It
+Grok for Code Generation: We used Grok, created by xAI, to generate and debug the Python code for StarMapCompressionEnv and run_rl.py. Grok helped design the RL environment, implement spatial algorithms (KD-tree, octree), and fix issues (e.g., empty octree, syntax errors) by providing iterative code improvements based on our feedback and logs.
 
-</div>
+Atropos Environment: Due to hackathon time constraints, we ran the RL project on a local CPU using the Atropos environment (a custom setup for RL tasks). This avoided the need for GPU setup or cloud resources, enabling rapid development and testing.
 
-## 🎉 Upcoming Atropos Hackathon: LLM RL Environments
+Local Execution: The project runs on a local machine (C:\Users\boobs\Projects\space\Atropos\), processing galaxy_subset.npy and user_views.npy with a simple script (run_rl.py).
 
-Join us in San Francisco on May 18th, 2025 for an exciting hackathon focused on building and experimenting with LLM RL Environments! This in-person event will bring together researchers and developers interested in advancing the field of LLM reinforcement learning.
+Why We Kept It Simple
+As a proof of concept, we prioritized simplicity to demonstrate RL-driven compression within the hackathon’s tight timeline:
+Small Dataset: Used 1000 points to keep computation fast and manageable on a CPU.
 
-More details coming soon! Follow us on Twitter [@NousResearch](https://x.com/NousResearch) to stay updated.
+Basic RL: Employed a greedy RL approach (run_rl_step) with 5–50 steps instead of a full RL agent (e.g., PPO) to focus on functionality.
 
+Local Setup: Leveraged Atropos and Grok to avoid complex infrastructure, ensuring we could iterate quickly.
 
----
+Core Features: Focused on a working pipeline (sampling, PCA, octree, quantization) and RL optimization, omitting advanced features (e.g., visualization, multi-agent RL) for future work.
 
-## Experimental results from models trained using Atropos' environments
+This simplicity allowed us to prove that RL can compress galaxy data effectively, reducing points by ~95% while preserving view-relevant information, setting the stage for scalable browser-based visualizations.
+Results
+Compression: Reduced dataset from 1000 points to 79 initially, then to 47 after 5 RL steps (~95% compression).
 
-We have been able to achieve significant improvements on specific domains or tasks with Atropos - Below are some of the results.
+Data Modification: Achieved Data changed: True, showing RL dynamically alters the point set.
 
-**Tool Calling Environment Results:**
+View Optimization: View radius (~53.4) covers minimum view distance (30.89), capturing some points, though distant views (max=365.58) suggest alignment improvements.
 
-<div align="center">
+Proof of Concept: Demonstrated RL’s potential to optimize compression for browser rendering, with logs confirming varied grid sizes and point counts.
 
-| Berkeley Function Calling Benchmark Type | Base Model | With Atropos RL | Improvement |
-|---------------|------------|-----------------|-------------|
-| Parallel Tasks| 10%        | 46%            | **4.6x** ⬆️ |
-| Simple Tasks  | 21%        | 51.75%         | **2.5x** ⬆️ |
+How to Run
+Setup:
+Clone the repository to C:\Users\boobs\Projects\space\Atropos\.
 
-</div>
+Install dependencies: pip install numpy scipy scikit-learn openai python-dotenv.
 
-Model Artifact:
-https://huggingface.co/NousResearch/DeepHermes-ToolCalling-Specialist-Atropos
+Ensure galaxy_subset.npy and user_views.npy are in the project directory.
 
+Set up a local OpenAI-compatible server at http://localhost:9001/v1 (or modify base_url in starmap_compression.py).
 
-Environment Used:
-[https://github.com/NousResearch/Atropos/environments/tool_calling_server.py](https://github.com/NousResearch/atropos/blob/main/environments/tool_calling_server.py)
+Run:
+Execute python run_rl.py to run 50 RL steps (~25 seconds on a CPU).
 
----
+Outputs: Compressed datasets (compressed_data_step_X.npy), final shape, Data changed status, and view distances.
 
-**Financial Fundamentals Prediction Environment Results**:
+Files:
+starmap_compression.py: RL environment with compression pipeline.
 
-<div align="center">
+run_rl.py: Script to run RL steps and save results.
 
-| Metric | Initial Accuracy | With Atropos RL | Improvement |
-|--------|-----------------|-----------------|-------------|
-| Directional Prediction Eval Accuracy | 20% | 50% | **2.5x** 📈 |
+galaxy_subset.npy: Input galaxy data (1000 points).
 
-</div>
+user_views.npy: User viewpoints (10 points).
 
-Model Artifact:
-https://huggingface.co/NousResearch/DeepHermes-Financial-Fundamentals-Prediction-Specialist-Atropos
+Future Work
+View Alignment: Center views around data mean to increase points_in_view.
 
-Environment Used:
-[https://github.com/NousResearch/Atropos/environments/fundamental_prediction_environment.py](https://github.com/NousResearch/atropos/blob/main/environments/fundamental_prediction_environment.py)
+Advanced RL: Use a PPO agent (e.g., Stable Baselines3) for better policy learning.
 
----
+Visualization: Plot initial vs. final datasets to showcase compression.
 
-## RLAIF Experiment Artifacts
-Using the RLAIF Environment to change the personality of the model, we have produced several artifacts of interesting and weird personalities.
+Scalability: Test on larger datasets (e.g., 1M points) with GPU support.
 
-**DeepHermes Egregore v1 and v2 8B:**
+Browser Integration: Export compressed data to WebGL for real-time rendering.
 
-https://huggingface.co/NousResearch/DeepHermes-Egregore-v1-RLAIF-8b-Atropos
-https://huggingface.co/NousResearch/DeepHermes-Egregore-v2-RLAIF-8b-Atropos
+Why It Matters
+StarMapCompression shows that RL can address the data compression bottleneck for "universe in a browser" applications. By reducing datasets to a fraction of their size while preserving view-relevant points, we pave the way for interactive, accessible astronomy visualizations. This proof of concept, built with Grok and Atropos on a local CPU, demonstrates the potential for scalable solutions in a short timeframe, making it a compelling hackathon contribution.
 
-**DeepHermes Ascension Maze 8B:**
+Data Explanation
+What is the Data?
+The data consists of two NumPy arrays used in the StarMapCompression project:
+Galaxy Data (galaxy_subset.npy):
+Description: A 3D point cloud of 1000 star positions, each with XYZ coordinates derived from a simplified Gaia dataset. The original CSV contained Right Ascension (RA), Declination (Dec), and redshift, representing stars’ celestial coordinates and distances.
 
-https://huggingface.co/NousResearch/DeepHermes-AscensionMaze-RLAIF-8b-Atropos
+Shape: (1000, 3) (1000 points, 3 coordinates: X, Y, Z).
 
-Environment Used: [https://github.com/NousResearch/atropos/blob/main/environments/rlaif_server.py](https://github.com/NousResearch/atropos/blob/main/environments/rlaif_server.py)
+Purpose: Serves as the input dataset to be compressed for efficient rendering in a browser-based Three.js application, simulating a galaxy view.
 
----
+User Viewpoints (user_views.npy):
+Description: 10 viewpoints, each with XYZ coordinates, simulating potential camera positions a user might select in a Three.js visualization (e.g., different angles or zooms within the galaxy).
 
-## Navigating the Repo
+Shape: (10, 3) (10 viewpoints, 3 coordinates: X, Y, Z).
 
-| Category | Description |
-|----------|------------|
-| 📁 [`atroposlib/`](atroposlib/) | Core library containing base classes and utilities |
-| 🎮 [`environments/`](environments/) | Collection of ready-to-use RL environments |
-| 📚 [`example_trainer/`](example_trainer/) | Example training scripts and configurations |
+Purpose: Guides the RL environment to prioritize points visible from these perspectives, ensuring the compressed dataset retains relevant stars.
 
-Key Documents:
-- [Base Environment Class](atroposlib/envs/README.md) - Documentation for creating custom environments
-- [Environments Overview](environments/README.md) - Documentation for existing environments
-- [Full Environment Config Options](CONFIG.md) - Documentation for creating custom environments
-- [Example Trainer](example_trainer/README.md) - Getting started with training
-- [Slurm Guide](SLURM.md) - Guide for using Atropos with Slurm for distributed inference
-- [Frequently Asked Questions (FAQ)](atroposlib/FAQ.md) - Answers to common questions for new users
-- [Contributing Guide](CONTRIBUTING.md) - Guidelines for contributors
-- [License](LICENSE) - MIT license details
+Where Did It Come From?
+Gaia Dataset (CSV):
+Source: The original data is a subset of the Gaia Data Release (likely DR2 or DR3), a European Space Agency mission cataloging billions of stars with precise astrometric data (RA, Dec, parallax, etc.).
 
----
+Simplification: You reduced the CSV to 169 MB by keeping only RA (degrees), Dec (degrees), and redshift (z, related to distance via cosmological models). Other columns (e.g., parallax, magnitudes) were stripped to focus on positional data.
 
-## Installation
+Conversion to XYZ: A Colab script transformed RA, Dec, and redshift into Cartesian XYZ coordinates, accounting for spherical-to-Cartesian conversion and redshift-based distances. This produced galaxy_subset.npy with 1000 points, a small sample for hackathon prototyping.
 
-Get your Python 3.10 (or later) environment ready, then simply pip install:
+User Views (user_views.npy):
+Source: Generated in Colab to simulate viewpoints a user might encounter in a Three.js application.
 
-```bash
-pip install atroposlib
-```
+Creation: The script likely sampled points within or near the galaxy’s bounding box, representing camera positions or focal points in a 3D visualization. These views mimic how users navigate a galaxy in a browser (e.g., zooming, panning).
 
-If you're looking to get into developing the repo or using the environments:
+Why Sampled?: The 1000-point sample and 10 views were chosen to keep the dataset manageable for RL processing on a local CPU within the hackathon’s time constraints, proving the compression concept before scaling to larger datasets.
 
+Where Does It Live?
+Location: Both files are stored in your project directory:
+galaxy_subset.npy: C:\Users\boobs\Projects\space\Atropos\galaxy_subset.npy
 
-```bash
-pip install -e .                # for using
-pip install -e .[dev]           # for development
-pip install -e .[examples]      # for running examples
-pip install -e .[all]           # for everything
-```
+user_views.npy: C:\Users\boobs\Projects\space\Atropos\user_views.npy
 
-**Important:** If you're committing to the repository, please install the pre-commit hooks:
-```bash
-pre-commit install
-```
+Output Files: The RL process generates compressed datasets:
+compressed_data_step_X.npy (e.g., compressed_data_step_1.npy for initial 79 points, compressed_data_step_5.npy for final 47 points), saved in C:\Users\boobs\Projects\space\Atropos\.
 
----
+Environment: The data is processed in the Atropos environment (a custom RL setup) on your local machine (C:\Users\boobs\Projects\space\Atropos\), using CPU due to hackathon time limits.
 
-### Quick Start Guide
+How Was It Used?
+Input to RL Environment:
+galaxy_subset.npy is loaded as the raw dataset to compress, representing a galaxy subset for browser rendering.
 
-1. **Create Your First Environment**
-   - Review our [Base Class Documentation](atroposlib/envs/README.md) to understand the core concepts
-   - Check out existing environments in the [`environments/`](environments) directory for examples
+user_views.npy defines viewpoints to optimize compression, ensuring the reduced dataset includes points visible from these perspectives.
 
-2. **Run an Example Environment**
+Compression Pipeline (in starmap_compression.py):
+Density Sampling: Uses a KD-tree to select 100 points (10%) based on local density, focusing on star clusters.
 
-  You should edit the config_init section of the environment file you want ([For example, in GSM8K Environment](https://github.com/NousResearch/atropos/blob/main/environments/gsm8k_server.py#L53)) to point to a running VLLM or SGLang inference server as well as any other [configuration changes](CONFIG.md) you'd like to make, such as the group size, then:
+PCA: Projects 3D points to 2D (padded to 3D) to reduce dimensionality while preserving variance.
 
-   ```bash
-   # Start the API server
-   run-api
-   ```
-   In a separate terminal, start the GSM8K environment microservice
-   ```bash
-   python environments/gsm8k_server.py serve --openai.model_name Qwen/Qwen2.5-1.5B-Instruct --slurm false
-   # alternatively
-   # python environments/gsm8k_server.py serve --config environments/configs/example.yaml
-   # python environments/gsm8k_server.py serve --config environments/configs/example.yaml --env.group_size 8 # cli args override corresponding config settings
-   ```
-3. **Grabbing Rollouts**
+Octree: Constructs a spatial hierarchy, pruning sparse regions with an adaptive density threshold (e.g., ~2.16e-9) to yield ~79 points initially.
 
-  If you want to just start getting rollouts, and not use a trainer, see the [debug section](#testing-and-debugging-tools)
-  for help getting started with the available tools, we recommend starting with process or view-run
+Quantization: Compresses coordinates to 8-bit integers (dequantized for compatibility).
 
-4. **Training Your Model**
-   - Follow our [training example guide](example_trainer/README.md) for detailed instructions
-   - Monitor progress through our built-in logging and reporting system:
-     - Completion lengths
-     - Evaluation accuracies
-     - Full rollouts and scores
+Mapping: Maps compressed points to the nearest original points, ensuring they align with the Gaia dataset.
 
-You can use multiple environments at once, just point them all to the same server.
+RL Optimization:
+The RL environment (StarMapCompressionEnv) selects grid sizes (26.7, 53.4, 80.1) to recompress the data via _recompress_data, adjusting max_depth (3–5), min_points (1–2), bits (6–8), and sample_fraction (0.3–0.6).
 
-Environments come with detailed logging and reporting support, runs track completion lengths, eval accuracies, full rollouts and scores, and more:
+Reward: Balances data size (-avg_data_size / 1000), retention (5 * len(self.data) / len(self.original_data)), view-relevant points (total_points / len(self.original_data)), and quality (-quality / 1e6).
 
-![image](https://github.com/user-attachments/assets/153a2932-191a-42e3-8da9-25a1b05abb8e)
+Steps: 5 steps reduce points from 79 to 47 (~95% compression from 1000), with Data changed: True.
 
----
+Output: Compressed datasets are saved as .npy files, with logs tracking shapes, points_in_view, grid sizes, and rewards.
 
-# Trainer Integrations
-## Axolotl
-<a href="https://github.com/axolotl-ai-cloud/plugin-atropos">
-  <img
-    src="https://github.com/user-attachments/assets/be629253-a8b1-4354-b6da-5e404e9c854d"
-    alt="Atropos plugin logo"
-    width="50%">
-</a>
+Purpose: Compression reduces the dataset for Three.js rendering, addressing browser constraints (memory, bandwidth, rendering speed) while maintaining visual fidelity for user views.
 
-Axolotl is a powerful tool for fine-tuning a wide range of AI models, supporting techniques like LoRA and QLoRA through simple YAML configurations.
-
-The [Atropos plugin for Axolotl](https://github.com/axolotl-ai-cloud/plugin-atropos) seamlessly integrates Atropos' RL environments into Axolotl's training pipelines.
-This allows you to leverage Atropos for reinforcement learning while utilizing Axolotl's extensive features for model fine-tuning.
-
-To use, follow the readme on the [plugin repository](https://github.com/axolotl-ai-cloud/plugin-atropos).
-
-## Atropos' Example Trainer
-Atropos repo contains an example trainer that should primarily be used as a reference example to show how a trainer and inference provider can be integrated with Atropos to complete the RL Training Loop.
-
-To use the example trainer, see this page: [training example guide](example_trainer/README.md)
-
----
-
-## Testing and Debugging Tools
-
-The trajectory-handler provides several debugging tools to help environment developers test and understand their environments locally without requiring the full distributed infrastructure.
-
-*   **Flexible Model Provider Support:** Atropos natively supports any model provider that adheres to the OpenAI API standard. Simply provide the provider's base URL and your API key, and Atropos can integrate with their models seamlessly for testing or running environments locally.
-
-After launching the API and your selected environments (e.g. `run-api & python environments/gsm8k_server.py serve`), you are then able to view them to get a quick look, or try to prepare some datasets for some offline training:
-
-*   **View Run (`view-run`):** Launch a Gradio UI to inspect batches of rollouts generated by your environment runs. This is useful for visually debugging the interactions and data flow.
-*   **Offline Data Generation:** Use `atropos-sft-gen` and `atropos-dpo-gen` to collect rollouts from environments and convert them into formats suitable for Supervised Fine-Tuning (SFT) or Direct Preference Optimization (DPO).
-
-### In-depth Local Environment Analysis with `process`
-
-For developers looking to inspect and debug a single environment without the overhead of the `run-api` server or a full training loop, Atropos environments offer a `process` subcommand. This mode performs inference-only rollouts, meaning it runs your model within the environment to generate interactions, but does not perform any model training or updates.
-
-The `process` subcommand executes the environment's full data pipeline:
-
-1.  **Generation:** Produces model responses based on inputs from the environment.
-2.  **Parsing:** Processes these raw model outputs into a structured format.
-3.  **Scoring:** Applies the environment's reward logic to evaluate the quality of the generated responses.
-
-**Outputs and Visualization:**
-
-When you specify a path to save the generated data using the `--env.data_path_to_save_groups your_output_file.jsonl` argument (or a similar argument defined by the specific environment, check with `--help`), the `process` command provides several benefits:
-
-*   **JSONL Output:** Saves all generated rollout groups, including prompts, responses, and scores, to the specified `.jsonl` file. This data can be useful for detailed offline analysis and debugging.
-*   **Static HTML Visualization:** Automatically generates a corresponding `.html` file (e.g., `your_output_file.html`) that provides a user-friendly, browser-based view of the rollouts contained in the JSONL file. This is excellent for quickly understanding model behavior and identifying issues.
-*   **WandB Logging:** If Weights & Biases (`use_wandb=True`) is enabled in your environment's configuration, the `process` subcommand will also log the run data, metrics, and generated rollouts to your WandB dashboard, allowing for persistent tracking and comparison even for these inference-only runs.
-
-**Example Usage:**
-
-To run the `process` subcommand for an environment like `gsm8k_server.py` and save the outputs:
-
-```sh
-python environments/gsm8k_server.py process --env.data_path_to_save_groups gsm8k_rollouts.jsonl
-```
-
-This will create `gsm8k_rollouts.jsonl` and `gsm8k_rollouts.html`.
-
-**Customization:**
-
-You can customize the inference endpoint and other parameters for the `process` subcommand. For example, to use a different model or API endpoint:
-
-```sh
-python environments/gsm8k_server.py process \
-  --env.data_path_to_save_groups gsm8k_rollouts.jsonl \
-  --env.my_custom_field "value" \
-  --openai.base_url https://your-custom-api-url/v1 \
-  --openai.api_key YOUR_API_KEY \
-  --openai.model_name your_model_identifier
-```
-
-You can add custom fields to the `env` namespace by returning a custom subclass of BaseEnvConfig in `config_init` [[example](https://github.com/NousResearch/atropos/blob/bdb15e5d85ddcf8a6ede352977719df442e60a22/environments/math_server.py#L181)].
-
-Always refer to the specific environment script's help for all available options:
-
-```sh
-python environments/your_environment_script.py process --help
-```
-
-### Offline Data Generation Quick Start
-
-Run the below in separate terminals:
-```sh
-run-api
-```
-```sh
-python gsm8k_server.py serve --slurm False # or an env of your choice
-```
-```sh
-atropos-sft-gen path/to/output.jsonl --tokenizer Qwen/Qwen2.5-1.5B-Instruct # or whichever tokenizer you have in your env config
-```
-Rejection sampling can be controlled via `--save-top-n-per-group`, `--allow-negative-scores`, and `--minimum-score-diff-max-min`. See `atropos-sft-gen -h` for more detailed usage info.
-
-If you would like to use OpenAI models, please edit your `config_init` to something like the following:
-```python
-    @classmethod
-    def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
-        env_config = BaseEnvConfig(
-            tokenizer_name="Qwen/Qwen2.5-1.5B-Instruct",
-            group_size=8,
-            use_wandb=True,
-            rollout_server_url="http://localhost:8000",
-            total_steps=1000,
-            batch_size=12,
-            steps_per_eval=100,
-            max_token_length=2048,
-            wandb_name="gsm8k",
-        )
-        server_configs = [
-            APIServerConfig(
-                model_name="gpt-4.1-nano",
-                base_url=None,
-                api_key=os.environ.get("OPENAI_API_KEY"),
-                num_requests_for_eval=256,
-            ),
-        ]
-
-        return env_config, server_configs
-```
-
-For DPO, replace `atropos-sft-gen` with `atropos-dpo-gen` and check `atropos-dpo-gen -h` for data filtering and saving options.
-
----
-
-## Citation
-
-If you have found the library helpful in your work, you can cite this repository as:
-
-```latex
-@misc{atropos,
-  title = {{Atropos - An Async First Environment Rollout Controller}},
-  author = {Dakota Mahan, Roger Jin, Teknium, Shannon Sands, Artem Yatsenko, Jai Suphavadeeprasit, Karan Malhotra, Chen Guang, Joe Li},
-  url = {https://www.github.com/NousResearch/Atropos},
-  month = {4},
-  year = {2025},
-  version = {0.1},
-}
-```
-
----
-
-## Contributing
-
-Atropos is built by the open-source AI community, and relies on our amazing contributors! Please see our [contributing](CONTRIBUTING.md) guide for more details on our code formatting, testing, etc.
-Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
-
----
-
-## License
-Atropos is uses the MIT license, see the [LICENSE](LICENSE) file here for more information

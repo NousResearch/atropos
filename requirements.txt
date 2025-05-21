@@ -1,0 +1,14 @@
+# requirements.txt for StarMapCompression project
+# Generated on May 18, 2025, for hackathon submission
+# Compatible with Python 3.8+ (assumed based on local setup)
+
+# Core dependencies for RL environment and data processing
+numpy>=1.26.4  # Array operations and .npy file handling
+scipy>=1.13.0  # cKDTree for spatial operations (density sampling, mapping)
+scikit-learn>=1.5.0  # PCA for dimensionality reduction
+openai>=1.30.0  # OpenAI client for local inference server (http://localhost:9001/v1)
+python-dotenv>=1.0.1  # Environment variable management
+
+# Visualization dependencies
+matplotlib>=3.9.0  # 3D scatter plots and animations
+pillow>=10.3.0  # GIF saving for animations
