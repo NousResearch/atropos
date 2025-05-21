@@ -1,0 +1,20 @@
+{
+    "configurations": [
+        {
+            "name": "Conversational Style DPO",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/environments/hack0/conversational_style_dpo/gsmk8k_conversational_style_dpo_env.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "process",
+                "--env.data_path_to_save_groups=environments/hack0/conversational_style_dpo/gsm8k_dpo_rollouts.jsonl",
+                "--env.total_steps=10",
+                "--openai.api_key=sk-3DvYKMv_-BfAoDSTfdSvEQ",
+                "--openai.base_url=https://inference-api.nousresearch.com/v1",
+                "--openai.model_name=DeepHermes-3-Llama-3-8B-Preview"
+            ]
+        }
+    ]
+}

@@ -172,7 +172,7 @@ cython_debug/
 
 # data
 *.json
-*.jsonl
+# *.jsonl
 
 # wandb
 wandb
