@@ -151,6 +151,9 @@ class TextWorldEpisodeState:
         # For reward calculation and RM target generation
         self.canonical_rewards: List[float] = [] # Stores immediate rewards from chosen actions
         self.canonical_chosen_alternative_indices: List[int] = [] # Stores index of chosen alternative for each step
+        
+        # Episode-level cache for thinking block summarizations
+        self.thinking_block_cache: Dict[int, str] = {}  # Maps hash(content) -> summarized_content
 
 
 class TextWorldEnv(BaseEnv):
@@ -669,7 +672,11 @@ class TextWorldEnv(BaseEnv):
             masks=sg_masks,
             scores=list(alternative_rm_scores), 
             messages=sg_messages,
-            metadata={"turn_number": current_turn_num, "chosen_alternative_index": best_alternative_idx}
+            metadata={
+                "turn_number": current_turn_num, 
+                "chosen_alternative_index": best_alternative_idx,
+                "episode_id": ep_state.episode_id  # Add episode_id for cache lookup
+            }
         )
         ep_state.policy_step_data.append(current_step_scored_data)
         logger.debug(
@@ -893,9 +900,8 @@ class TextWorldEnv(BaseEnv):
                 except OSError as e_remove:
                     logger.warning(f"[Episode: {ep_state.episode_id}] Error removing game file {ep_state.game_file}: {e_remove}")
 
-            if ep_state.episode_id in self.episodes:
-                del self.episodes[ep_state.episode_id]
-                logger.debug(f"[Episode: {ep_state.episode_id}] Removed episode state from active tracking.")
+            # Don't remove episode state yet - postprocess_histories needs it for cache
+            # It will be removed later in BaseEnv.handle_env after postprocess_histories
 
         # The policy_sdgs_for_episode have been updated in-place with MC returns for chosen actions.
         # BaseEnv will call our overridden postprocess_histories with this data.
@@ -926,6 +932,20 @@ class TextWorldEnv(BaseEnv):
         if not isinstance(trajectories, list):
             trajectories = [trajectories] if trajectories is not None else []
         
+        # Try to find the episode state from metadata to use its cache
+        episode_state = None
+        episode_id = None
+        for sdg in trajectories:
+            if sdg and sdg.get("metadata", {}).get("episode_id"):
+                episode_id = sdg["metadata"]["episode_id"]
+                if episode_id in self.episodes:
+                    episode_state = self.episodes[episode_id]
+                    logger.debug(f"Found episode state for {episode_id} to use for thinking block cache")
+                    break
+        
+        # If we can't find episode state, create a temporary cache
+        thinking_block_cache = episode_state.thinking_block_cache if episode_state else {}
+        
         # Process each ScoredDataGroup for policy training
         processed_trajectories = []
         for sdg_idx, sdg in enumerate(trajectories):
@@ -936,22 +956,37 @@ class TextWorldEnv(BaseEnv):
             try:
                 # Process policy data with thinking block summarization for history
                 # but keep the latest message raw for training
-                processed_policy_sdg = await self._process_policy_training_data(sdg)
+                processed_policy_sdg = await self._process_policy_training_data(sdg, thinking_block_cache)
                 processed_trajectories.append(processed_policy_sdg)
                 
             except Exception as e:
                 logger.error(f"Error processing policy ScoredDataGroup {sdg_idx}: {e}", exc_info=True)
                 processed_trajectories.append(sdg)  # Fallback to original
         
+        # Log cache efficiency across entire episode
+        if thinking_block_cache:
+            total_messages = sum(len(sdg.get("messages", [])) for sdg in trajectories if sdg)
+            logger.info(
+                f"Episode-level thinking block summarization: {len(thinking_block_cache)} unique blocks "
+                f"processed across {len(trajectories)} turns with {total_messages} total alternatives"
+            )
+        
         logger.debug(f"TextWorldEnv.postprocess_histories: Processed {len(processed_trajectories)} ScoredDataGroup(s) for policy training.")
+        
+        # Clean up the episode state now that processing is complete
+        if episode_id and episode_id in self.episodes:
+            del self.episodes[episode_id]
+            logger.debug(f"[Episode: {episode_id}] Removed episode state from tracking after postprocess_histories.")
+        
         return processed_trajectories
 
-    async def _process_policy_training_data(self, sdg: ScoredDataGroup) -> ScoredDataGroup:
+    async def _process_policy_training_data(self, sdg: ScoredDataGroup, thinking_block_cache: Dict[int, str]) -> ScoredDataGroup:
         """
         Process policy training data to:
         1. Summarize thinking blocks in message history (all but the latest message)
         2. Keep the latest message raw for training
         3. Ensure proper masking for training
+        4. Cache summarizations to avoid processing the same thinking blocks multiple times
         """
         if not self.config.enable_policy_thinking_summarization:
             # If summarization is disabled, return as-is
@@ -975,21 +1010,37 @@ class TextWorldEnv(BaseEnv):
                     # Keep the last message (the one being trained on) completely raw
                     alt_processed_messages.append(msg.copy())
                 elif msg["role"] == "assistant" and self.config.enable_policy_thinking_summarization:
-                    # Summarize thinking blocks in assistant messages that are part of history
+                    # Check cache first to avoid duplicate LLM calls
+                    original_content = msg["content"]
+                    cache_key = hash(original_content)  # Simple hash-based cache key
+                    
+                    if cache_key in thinking_block_cache:
+                        # Use cached summarization
+                        processed_content = thinking_block_cache[cache_key]
+                        logger.debug(f"Using cached thinking block summarization for alt {alt_idx}, msg {msg_idx}")
+                    else:
+                        # Summarize thinking blocks in assistant messages that are part of history
+                        try:
+                            from atroposlib.utils.message_history_utils import summarize_thinking_block
+                            processed_content = await summarize_thinking_block(
+                                original_content, 
+                                self.server, 
+                                self.tokenizer, 
+                                self.config.max_policy_thinking_summary_tokens
+                            )
+                            # Cache the result
+                            thinking_block_cache[cache_key] = processed_content
+                            logger.debug(f"Cached new thinking block summarization for alt {alt_idx}, msg {msg_idx}")
+                        except Exception as e:
+                            logger.warning(f"Failed to summarize thinking block for policy training data: {e}")
+                            # Fall back to stripping thinking blocks if summarization fails
+                            from atroposlib.utils.message_history_utils import strip_thinking
+                            processed_content = strip_thinking(original_content)
+                            # Cache the stripped version too
+                            thinking_block_cache[cache_key] = processed_content
+                    
                     processed_msg = msg.copy()
-                    try:
-                        from atroposlib.utils.message_history_utils import summarize_thinking_block
-                        processed_msg["content"] = await summarize_thinking_block(
-                            msg["content"], 
-                            self.server, 
-                            self.tokenizer, 
-                            self.config.max_policy_thinking_summary_tokens
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to summarize thinking block for policy training data: {e}")
-                        # Fall back to stripping thinking blocks if summarization fails
-                        from atroposlib.utils.message_history_utils import strip_thinking
-                        processed_msg["content"] = strip_thinking(msg["content"])
+                    processed_msg["content"] = processed_content
                     alt_processed_messages.append(processed_msg)
                 else:
                     # Keep other messages as-is
@@ -1017,7 +1068,8 @@ class TextWorldEnv(BaseEnv):
             metadata={
                 **(sdg.get("metadata", {})),
                 "policy_thinking_processed": True,
-                "thinking_summarization_enabled": self.config.enable_policy_thinking_summarization
+                "thinking_summarization_enabled": self.config.enable_policy_thinking_summarization,
+                "thinking_blocks_cached": len(thinking_block_cache)
             }
         )
         
