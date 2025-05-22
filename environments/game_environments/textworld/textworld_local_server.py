@@ -64,8 +64,7 @@ async def main():
         atropos_agent_config=AtroposAgentConfig(enable_memory=False), # Use default agent config, ensure memory is off
         atropos_rm_config=AtroposRMConfig(thinking=False), # RM thinking off for cleaner logs initially
         
-        G_policy_alternatives=2, # Number of actions agent generates
-        G_rm_judgements=1,       # Number of RM scores per action
+        group_size=2, # Explicitly set group_size for policy alternatives, matching old G_policy_alternatives for this test script
         
         # Other relevant fields from TextWorldEnvConfig defaults if needed
         # game_seed=None, # Use random seed by default for variety unless specific seed needed

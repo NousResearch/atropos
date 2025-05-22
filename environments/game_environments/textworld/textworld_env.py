@@ -71,8 +71,6 @@ class TextWorldEnvConfig(BaseEnvConfig):
     max_trajectory_tokens: int = 24576 # Trainer max token length
     agent_config: Optional[AtroposAgentConfig] = None
     rm_config: Optional[AtroposRMConfig] = None
-    G_policy_alternatives: int = Field(default=4, description="Number of alternative actions policy agent generates.")
-    G_rm_judgements: int = Field(default=1, description="Number of judgements RM makes per policy alternative.")
     rm_reward_discount_factor: float = Field(default=0.99, description="Discount factor for RM Q-value accuracy scoring.")
     debug_mode: bool = False
 
@@ -106,14 +104,6 @@ class TextWorldEnvConfig(BaseEnvConfig):
     atropos_agent_config: AtroposAgentConfig = Field(default_factory=AtroposAgentConfig) 
     atropos_rm_config: AtroposRMConfig = Field(default_factory=AtroposRMConfig) 
     # group_size: int = 3 # Number of alternatives -> This is part of BaseEnvConfig now
-
-    # Policy search and evaluation parameters
-    # G_policy_alternatives: int = Field( # This is now effectively controlled by atropos_agent_config or direct param to generate_action
-    
-    rm_reward_discount_factor: float = Field(
-        default=0.99, 
-        description="Discount factor for future game rewards when training RM."
-    )
 
     class Config:
         extra = 'forbid'
@@ -486,7 +476,7 @@ class TextWorldEnv(BaseEnv):
         try:
             agent_action_alternatives: List[AtroposAgentAction] = await self.agent.generate_action(
                 observation_content=current_observation_for_agent,
-                n=self.config.G_policy_alternatives,
+                n=self.config.group_size, # Use group_size from BaseEnvConfig
             )
         except Exception as e:
             logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error during agent.generate_action: {e}", exc_info=True)
@@ -535,7 +525,7 @@ class TextWorldEnv(BaseEnv):
 
         for i, policy_alt_data in enumerate(policy_alternatives_for_rm_eval):
             rm_evaluation_tasks.append(self.rm.generate_g_judgements(
-                num_judgements_g=self.config.G_rm_judgements,
+                num_judgements_g=1, # Hardcoded to 1 as G_rm_judgements is removed
                 game_history_window=policy_alt_data["agent_history_for_rm"],
                 game_seed_for_logging=self.config.game_seed, # Or a per-episode seed
                 turn_idx_for_logging=current_turn_num,
@@ -547,7 +537,8 @@ class TextWorldEnv(BaseEnv):
                 rm_judgement_log_groups = await asyncio.gather(*rm_evaluation_tasks)
             except Exception as e:
                 logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error during rm.generate_g_judgements: {e}", exc_info=True)
-                rm_judgement_log_groups = [[RMJudgementLog(api_error=True, parsed_q_value=0.0)] * self.config.G_rm_judgements] * len(policy_alternatives_for_rm_eval)
+                # Ensure rm_judgement_log_groups is a list of lists, matching structure of successful call
+                rm_judgement_log_groups = [[RMJudgementLog(api_error=True, parsed_q_value=0.0)] * 1] * len(policy_alternatives_for_rm_eval) # 1 judgement per alternative
         else:
             rm_judgement_log_groups = [] 
 
@@ -617,6 +608,23 @@ class TextWorldEnv(BaseEnv):
 
         ep_state.done = done_from_env 
         ep_state.last_score = infos_next.get("score", ep_state.last_score) # This is cumulative score from TW
+        ep_state.moves = infos_next.get("moves", ep_state.moves) # Update moves
+        
+        if ep_state.done: # If the episode is marked as done by the environment
+            ep_state.won = infos_next.get("won", False)
+            ep_state.lost = infos_next.get("lost", False)
+            logger.info(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Env signaled done. Won: {ep_state.won}, Lost: {ep_state.lost}")
+            if self.config.debug_mode:
+                # Safely convert infos_next to a string for logging, handling non-serializable items
+                safe_infos_to_log = {}
+                for k, v in infos_next.items():
+                    try:
+                        json.dumps(v) # Test if serializable
+                        safe_infos_to_log[k] = v
+                    except TypeError:
+                        safe_infos_to_log[k] = str(v) # Convert non-serializable items to string
+                logger.debug(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Full infos_next at episode end: {json.dumps(safe_infos_to_log)}")
+
         
         # Store the raw observation and infos for the next step's _format_observation call
         ep_state.last_env_raw_observation = raw_obs_next
@@ -765,65 +773,103 @@ class TextWorldEnv(BaseEnv):
 
 
             # 3. Generate and send RM training data
-            rm_training_data: List[ScoredDataGroup] = []
-            if ep_state.rm_judgement_history and num_canonical_steps > 0:
+            rm_training_sdgs_for_episode: List[ScoredDataGroup] = []
+            if policy_sdgs_for_episode and num_canonical_steps > 0: # Ensure there's policy data to base RM data on
                 # Calculate full list of discounted returns for the canonical path once
                 canonical_discounted_returns = [0.0] * num_canonical_steps
-                current_discounted_return = final_outcome_reward
-                for t in range(num_canonical_steps - 1, -1, -1):
-                    current_step_reward = ep_state.canonical_rewards[t]
-                    current_discounted_return = current_step_reward + self.config.rm_reward_discount_factor * current_discounted_return
-                    canonical_discounted_returns[t] = current_discounted_return
+                current_discounted_return_for_path = final_outcome_reward # Renamed to avoid clash
+                for t_idx in range(num_canonical_steps - 1, -1, -1): # Iterate backwards by index t_idx
+                    current_step_reward = ep_state.canonical_rewards[t_idx]
+                    current_discounted_return_for_path = current_step_reward + self.config.rm_reward_discount_factor * current_discounted_return_for_path
+                    canonical_discounted_returns[t_idx] = current_discounted_return_for_path
 
-                for rm_log_entry in ep_state.rm_judgement_history:
-                    turn_idx = rm_log_entry.get("turn_idx_for_logging")
-                    policy_alt_idx = rm_log_entry.get("policy_action_candidate_idx_for_logging")
+                # Iterate through each turn for which we have policy ScoredDataGroups
+                for turn_idx, policy_sdg_for_turn in enumerate(policy_sdgs_for_episode):
+                    if not (0 <= turn_idx < num_canonical_steps):
+                        logger.warning(f"[Episode: {ep_state.episode_id}] Turn index {turn_idx} out of sync with canonical rewards/indices. Skipping RM data for this turn.")
+                        continue
 
-                    # We only train RM on its judgements of the *chosen* policy actions for now
-                    if turn_idx is not None and 0 <= turn_idx < num_canonical_steps:
-                        chosen_alt_for_this_turn = ep_state.canonical_chosen_alternative_indices[turn_idx]
-                        if policy_alt_idx == chosen_alt_for_this_turn:
-                            # This RM judgement was for the action that was actually taken
-                            true_target_q_value = canonical_discounted_returns[turn_idx]
-                            
-                            # RM input messages are already List[Dict[str,str]]
-                            rm_input_dict_list = rm_log_entry["rm_input_messages"]
-                            
-                            try:
-                                # Tokenize RM's input.
-                                # Ensure rm_input_dict_list is correctly formatted if Message type def changes
-                                tokenized_rm_input = tokenize_for_trainer(self.tokenizer, rm_input_dict_list)
-                                
-                                rm_sdg = ScoredDataGroup(
-                                    tokens=[tokenized_rm_input["tokens"]],
-                                    masks=[tokenized_rm_input["masks"]],
-                                    scores=[true_target_q_value], # Target for RM training
-                                    messages=[rm_input_dict_list], # Original messages for context/debug
-                                    metadata={
-                                        "original_rm_q_value": rm_log_entry["parsed_q_value"],
-                                        "original_rm_thinking": rm_log_entry["parsed_thinking_block"],
-                                        "turn_number": turn_idx,
-                                        "policy_action_candidate_idx": policy_alt_idx,
-                                        "game_seed": rm_log_entry.get("game_seed_for_logging"),
-                                        "episode_id": ep_state.episode_id,
-                                        "rm_api_error": rm_log_entry.get("api_error", False),
-                                        "rm_q_parse_error": rm_log_entry.get("q_value_parse_error", False),
-                                    }
-                                )
-                                rm_training_data.append(rm_sdg)
-                            except Exception as e_tok:
-                                logger.error(f"[Episode: {ep_state.episode_id} Turn: {turn_idx+1}] Error tokenizing RM input for training: {e_tok}", exc_info=True)
-                        # else: Skip RM judgements for non-chosen policy alternatives for now
-                    else:
-                        logger.warning(f"[Episode: {ep_state.episode_id}] RM log entry has invalid turn_idx: {turn_idx}")
+                    rm_tokens_for_turn: List[List[int]] = []
+                    rm_masks_for_turn: List[List[int]] = []
+                    rm_target_scores_for_turn: List[float] = []
+                    rm_messages_for_turn: List[List[Message]] = []
+                    
+                    # policy_sdg_for_turn contains all alternatives for this turn
+                    # Its 'messages' are List[List[Message]], where each inner List[Message] is the history for one policy alternative
+                    # Its 'scores' are the original Q-estimates from the RM for each policy alternative
+                    
+                    num_alternatives_this_turn = len(policy_sdg_for_turn["messages"])
+                    if num_alternatives_this_turn != self.config.group_size:
+                        logger.warning(
+                            f"[Episode: {ep_state.episode_id} Turn: {turn_idx+1}] Number of alternatives in policy SDG ({num_alternatives_this_turn}) "
+                            f"does not match config.group_size ({self.config.group_size}). Skipping RM data generation for this turn."
+                        )
+                        continue
+
+                    chosen_alternative_idx_for_this_turn = ep_state.canonical_chosen_alternative_indices[turn_idx]
+
+                    for alt_idx in range(num_alternatives_this_turn):
+                        # The 'messages' for this specific alternative already represent the RM's input history
+                        # (System Prompt, UserObs1, ..., PrevSelectedAssistAction, CurrentUserObs, CurrentAssistAlternative)
+                        rm_input_messages_for_alt: List[Message] = policy_sdg_for_turn["messages"][alt_idx]
+                        
+                        target_q_value_for_alt: float
+                        if alt_idx == chosen_alternative_idx_for_this_turn:
+                            target_q_value_for_alt = canonical_discounted_returns[turn_idx]
+                            logger.debug(f"RM training data generation for policy alternative {alt_idx} (chosen) for turn {turn_idx}. Target score (G_t): {target_q_value_for_alt:.4f}")
+                        else:
+                            # Use the original RM Q-estimate for non-chosen alternatives
+                            # These are already present in the policy_sdg_for_turn["scores"]
+                            original_rm_q_estimate = policy_sdg_for_turn["scores"][alt_idx]
+                            target_q_value_for_alt = original_rm_q_estimate 
+                            logger.debug(f"RM training data generation for policy alternative {alt_idx} (not chosen) for turn {turn_idx}. Target score (Q_estimate): {target_q_value_for_alt:.4f}")
+
+                        try:
+                            tokenized_rm_input = tokenize_for_trainer(self.tokenizer, rm_input_messages_for_alt)
+                            rm_tokens_for_turn.append(tokenized_rm_input["tokens"])
+                            rm_masks_for_turn.append(tokenized_rm_input["masks"])
+                            rm_target_scores_for_turn.append(target_q_value_for_alt)
+                            rm_messages_for_turn.append(rm_input_messages_for_alt)
+                        except Exception as e_tok:
+                            logger.error(f"[Episode: {ep_state.episode_id} Turn: {turn_idx+1} Alt: {alt_idx}] Error tokenizing RM input for training: {e_tok}", exc_info=True)
+                            # Need to add placeholders to keep lists aligned if one alternative fails, or skip the whole turn's RM SDG
+                            # For simplicity, let's skip the whole turn if any alternative fails tokenization for now.
+                            # A more robust solution might add empty lists and filter later or handle per-alternative.
+                            logger.error(f"Skipping RM ScoredDataGroup for turn {turn_idx+1} due to tokenization error.")
+                            rm_tokens_for_turn = [] # Clear lists to ensure this SDG isn't added
+                            break 
+                    
+                    if rm_tokens_for_turn: # Only add if tokenization succeeded for all alternatives in this turn
+                        # Ensure all inner lists have the same length (should be self.config.group_size)
+                        if not (len(rm_tokens_for_turn) == len(rm_masks_for_turn) == len(rm_target_scores_for_turn) == len(rm_messages_for_turn) == self.config.group_size):
+                            logger.error(
+                                f"[Episode: {ep_state.episode_id} Turn: {turn_idx+1}] Mismatch in lengths of RM data components before creating SDG. "
+                                f"Tokens: {len(rm_tokens_for_turn)}, Masks: {len(rm_masks_for_turn)}, Scores: {len(rm_target_scores_for_turn)}, Messages: {len(rm_messages_for_turn)}. "
+                                f"Expected {self.config.group_size}. Skipping RM SDG for this turn."
+                            )
+                            continue
+
+                        rm_sdg_for_turn = ScoredDataGroup(
+                            tokens=rm_tokens_for_turn,
+                            masks=rm_masks_for_turn,
+                            scores=rm_target_scores_for_turn,
+                            messages=rm_messages_for_turn,
+                            metadata={
+                                "turn_number": turn_idx,
+                                "episode_id": ep_state.episode_id,
+                                "type": "rm_training_data"
+                            }
+                        )
+                        rm_training_sdgs_for_episode.append(rm_sdg_for_turn)
             
-            if rm_training_data:
-                logger.info(f"[Episode: {ep_state.episode_id}] Attempting to send {len(rm_training_data)} ScoredDataGroups for RM training.")
+            if rm_training_sdgs_for_episode:
+                logger.info(f"[Episode: {ep_state.episode_id}] Total {len(rm_training_sdgs_for_episode)} RM ScoredDataGroups prepared for this episode. Sending to API...")
                 try:
-                    # `item` here is the original item passed to collect_trajectories
-                    await self.handle_send_to_api(rm_training_data, item=item, do_send_to_api=True)
+                    await self.handle_send_to_api(rm_training_sdgs_for_episode, item=item, do_send_to_api=True)
                 except Exception as e_send_rm:
                     logger.error(f"[Episode: {ep_state.episode_id}] Error sending RM training data: {e_send_rm}", exc_info=True)
+            else:
+                logger.info(f"[Episode: {ep_state.episode_id}] No RM training ScoredDataGroups were generated for this episode.")
 
 
             # --- Finalize and Cleanup ---
@@ -928,7 +974,7 @@ class TextWorldEnv(BaseEnv):
         env_config = TextWorldEnvConfig(
             # BaseEnvConfig common parameters (inspired by Blackjack defaults)
             tokenizer_name="NousResearch/Hermes-2-Pro-Llama-3-8B", # Example tokenizer
-            group_size=1, # Number of trajectories per run_trajectories_on_item call by BaseEnv
+            group_size=2, # Number of trajectories per run_trajectories_on_item call by BaseEnv. Also num policy alternatives.
             use_wandb=True,
             rollout_server_url="http://localhost:8000", # Example
             total_steps=1000,
@@ -952,8 +998,6 @@ class TextWorldEnv(BaseEnv):
                 thinking=True,
                 model_id="NousResearch/Hermes-2-Pro-Llama-3-8B" # Default to same model for now
             ),      
-            G_policy_alternatives=4, # This should align with how agent.generate_action is called 
-            G_rm_judgements=1, 
             rm_reward_discount_factor=0.99,
             debug_mode=False
         )
