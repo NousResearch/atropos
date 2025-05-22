@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from atroposlib.envs.base import ServerManager
 
 # Import the new memory manager
-from environments.game_environments.textworld.agents.textworld_memory_manager import TextWorldMemoryManager, MEMORY_SYSTEM_PREREQUISITES_AVAILABLE
+from .textworld_memory_manager import TextWorldMemoryManager, MEMORY_SYSTEM_PREREQUISITES_AVAILABLE
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG) # Keep this commented or control via TextWorldEnv config

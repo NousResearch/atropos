@@ -133,9 +133,9 @@ class TextWorldEpisodeState:
         self.initial_infos: Dict[str, Any] = initial_infos
         
         self.rm_judgement_history: List[RMJudgementLog] = [] 
-        self.policy_step_data: List[ScoredDataGroup] = []
+        self.policy_step_data: List[ScoredDataGroup] = [] # Stores ScoredDataGroup for each turn of the canonical path
         
-        self.cumulative_reward: float = 0.0
+        self.cumulative_reward: float = 0.0 # Overall game score progression
         self.max_turns: int = max_steps
         
         self.last_score: float = initial_infos.get("score", 0.0)
@@ -145,6 +145,10 @@ class TextWorldEpisodeState:
         self.done: bool = False
         self.last_env_raw_observation: Optional[str] = None
         self.last_env_infos: Optional[Dict[str, Any]] = None
+
+        # For reward calculation and RM target generation
+        self.canonical_rewards: List[float] = [] # Stores immediate rewards from chosen actions
+        self.canonical_chosen_alternative_indices: List[int] = [] # Stores index of chosen alternative for each step
 
 
 class TextWorldEnv(BaseEnv):
@@ -229,7 +233,10 @@ class TextWorldEnv(BaseEnv):
         # Ensure AtroposAgentConfig is instantiated
         agent_cfg = self.config.atropos_agent_config if self.config.atropos_agent_config is not None else AtroposAgentConfig()
         agent_cfg.system_prompt = constructed_system_prompt 
-        agent_cfg.model_id = self.config.default_server_config.model_name # Ensure model_id is set for smolagents
+        if self.config.policy_agent_server_config and self.config.policy_agent_server_config.model_name:
+            agent_cfg.model_id = self.config.policy_agent_server_config.model_name
+        else:
+            agent_cfg.model_id = self.config.default_server_config.model_name
         
         self.agent = AtroposAgent(
             server_client=self.server, 
@@ -239,10 +246,17 @@ class TextWorldEnv(BaseEnv):
         )
         # Store the system prompt that will be used for the policy agent message history
         # TODO: Remove this? -> self.agent.system_prompt_content should be the source of truth
-        self.policy_agent_system_prompt_content = agent_cfg.system_prompt # Use the updated system_prompt
+        # self.policy_agent_system_prompt_content = agent_cfg.system_prompt # REMOVED - Redundant
  
         # Ensure AtroposRMConfig is instantiated
         rm_cfg = self.config.atropos_rm_config if self.config.atropos_rm_config is not None else AtroposRMConfig()
+        # Set RM model_id, defaulting to policy agent's model if not specified
+        if self.config.rm_agent_server_config and self.config.rm_agent_server_config.model_name:
+            rm_cfg.model_id = self.config.rm_agent_server_config.model_name
+        elif agent_cfg.model_id: # Default to policy agent's model_id if RM specific is not set
+            rm_cfg.model_id = agent_cfg.model_id
+        else: # Fallback to default server config if policy also didn't have one (should not happen with current logic)
+            rm_cfg.model_id = self.config.default_server_config.model_name
 
         self.rm = AtroposRM(
             server_client=self.server,
@@ -582,21 +596,27 @@ class TextWorldEnv(BaseEnv):
 
         # 6. Execute Chosen Action in TextWorld
         try:
-            raw_obs_next, score_from_env, done_from_env, infos_next = ep_state.textworld_env.step(chosen_action_command)
+            raw_obs_next, immediate_score_from_env, done_from_env, infos_next = ep_state.textworld_env.step(chosen_action_command)
         except Exception as e:
             logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error stepping TextWorld environment: {e}", exc_info=True)
-            ep_state.done = True
+            ep_state.done = True # Mark as done
+            # Store a placeholder reward if step fails, or decide how to handle
+            ep_state.canonical_rewards.append(0.0) # Or a penalty
+            ep_state.canonical_chosen_alternative_indices.append(best_alternative_idx)
             return None, True 
 
-        # 7. Update Episode State
-        ep_state.cumulative_reward += score_from_env 
-        ep_state.done = done_from_env # Max turns condition handled by the calling loop
-        ep_state.last_score = infos_next.get("score", ep_state.last_score)
-        ep_state.moves = infos_next.get("moves", ep_state.moves)
-        ep_state.won = infos_next.get("won", False)
-        ep_state.lost = infos_next.get("lost", False)
-        if ep_state.won or ep_state.lost:
-            ep_state.done = True
+        # 7. Update Episode State with outcome of this step
+        ep_state.cumulative_reward += immediate_score_from_env # This is the TextWorld score, often sparse
+        
+        # Store the immediate reward from this step for later GAE/MC calculation.
+        # For TextWorld, score_from_env is often the change in total score.
+        # If dense rewards are desired, they might need to be engineered (e.g., +0.1 for valid action, -0.1 for invalid).
+        # For now, using immediate_score_from_env as the per-step reward.
+        ep_state.canonical_rewards.append(immediate_score_from_env)
+        ep_state.canonical_chosen_alternative_indices.append(best_alternative_idx)
+
+        ep_state.done = done_from_env 
+        ep_state.last_score = infos_next.get("score", ep_state.last_score) # This is cumulative score from TW
         
         # Store the raw observation and infos for the next step's _format_observation call
         ep_state.last_env_raw_observation = raw_obs_next
@@ -642,39 +662,38 @@ class TextWorldEnv(BaseEnv):
 
     async def collect_trajectories(
         self, item: Dict[str, Any]  # Item is Dict[str, Any] from BaseEnv
-    ) -> Tuple[List[ScoredDataGroup], List[Dict[str, Any]]]: # Return List[ScoredDataGroup] and List[Item]
+    ) -> Tuple[List[ScoredDataGroup], List[Dict[str, Any]]]: # Return List[ScoredDataGroup] and List[Item for backlog]
         """
         Runs a full TextWorld episode using AtroposAgent and AtroposRM,
-        collecting data for each step.
+        collecting data for each step. Also processes rewards and generates RM training data.
         """
         if not item or "episode_state" not in item:
             logger.error(f"Invalid item received in collect_trajectories. Missing 'episode_state'. Item: {item}")
             return [], []
 
         ep_state: TextWorldEpisodeState = item["episode_state"]
-        if not ep_state:
+        if not ep_state: # Should have been caught by the item check, but good practice
             logger.error("Episode state is None in collect_trajectories.")
             return [], []
 
         logger.info(f"Starting trajectory collection for episode: {ep_state.episode_id}, Game file: {ep_state.game_file}")
 
-        all_scored_data_groups_for_episode: List[ScoredDataGroup] = []
+        # This list will store ScoredDataGroups for the policy agent for each turn
+        policy_sdgs_for_episode: List[ScoredDataGroup] = [] 
         
         try:
             for current_turn_num in range(ep_state.max_turns):
                 if ep_state.done:
                     logger.info(f"[Episode: {ep_state.episode_id}] Episode marked done before turn {current_turn_num + 1}. Ending early.")
                     break
-
                 
                 scored_data_group_for_turn, episode_is_done_after_step = await self._next_step(
                     ep_state, current_turn_num
                 )
 
-                # Need to get the RM scored data groups.
-
                 if scored_data_group_for_turn:
-                    all_scored_data_groups_for_episode.append(scored_data_group_for_turn)
+                    # Store the SDG from this turn; it will be post-processed later
+                    policy_sdgs_for_episode.append(scored_data_group_for_turn) 
                 
                 if episode_is_done_after_step:
                     logger.info(f"[Episode: {ep_state.episode_id}] Episode finished after turn {current_turn_num + 1}. Won: {ep_state.won}, Lost: {ep_state.lost}, Score: {ep_state.last_score}, Moves: {ep_state.moves}")
@@ -686,11 +705,131 @@ class TextWorldEnv(BaseEnv):
 
         except Exception as e:
             logger.error(f"[Episode: {ep_state.episode_id}] Unexpected error during trajectory collection: {e}", exc_info=True)
-            ep_state.done = True # Mark as done to ensure cleanup and proper handling
+            ep_state.done = True 
         finally:
-            # Use len(all_scored_data_groups_for_episode) for number of processed turns
-            processed_turns_count = len(all_scored_data_groups_for_episode)
-            logger.info(f"[Episode: {ep_state.episode_id}] Finalizing episode. Score: {ep_state.last_score}, Won: {ep_state.won}, Lost: {ep_state.lost}, Turns: {processed_turns_count}")
+            # --- Post-episode processing ---
+            num_canonical_steps = len(ep_state.canonical_rewards)
+            
+            # 1. Determine final reward for GAE/MC calculation
+            final_outcome_reward = 0.0
+            if ep_state.won:
+                final_outcome_reward = 1.0
+            elif ep_state.lost:
+                final_outcome_reward = -1.0
+            # else, if just max_steps reached without explicit win/loss, reward might be 0 or based on score.
+            # For simplicity, using 0 if not win/loss. Could also use normalized ep_state.last_score.
+            
+            # 2. Calculate true discounted returns for the POLICY agent's chosen actions
+            if policy_sdgs_for_episode and num_canonical_steps > 0:
+                # Ensure policy_sdgs_for_episode and canonical_rewards align (they should if no errors in _next_step)
+                if len(policy_sdgs_for_episode) != num_canonical_steps:
+                    logger.error(
+                        f"[Episode: {ep_state.episode_id}] Mismatch between policy SDGs ({len(policy_sdgs_for_episode)}) "
+                        f"and canonical rewards ({num_canonical_steps}). Reward processing for policy might be incorrect."
+                    )
+                
+                # Calculate discounted returns backwards
+                discounted_return = final_outcome_reward 
+                for t in range(num_canonical_steps - 1, -1, -1):
+                    # The reward r_t is ep_state.canonical_rewards[t]
+                    # G_t = r_t + gamma * G_{t+1} (where G_{T} = final_outcome_reward, G_{T+1} for r_T would be 0)
+                    # If t is the last step (T-1), then G_t = r_t + gamma * final_outcome_reward (if final_outcome_reward is for state T)
+                    # Or, if final_outcome_reward is considered the reward for the last action itself, then it's simpler.
+                    
+                    # Let's assume canonical_rewards are R_0, R_1, ..., R_{N-1} for N steps.
+                    # final_outcome_reward is an additional terminal reward R_N.
+                    # G_{N-1} = R_{N-1} + gamma * R_N
+                    # G_t = R_t + gamma * G_{t+1}
+                    
+                    # If current 'discounted_return' is G_{t+1} from previous iteration (or R_N for first iteration)
+                    # Current step's immediate reward is ep_state.canonical_rewards[t]
+                    current_step_reward = ep_state.canonical_rewards[t]
+                    discounted_return = current_step_reward + self.config.rm_reward_discount_factor * discounted_return
+                    
+                    if t < len(policy_sdgs_for_episode):
+                        sdg_t = policy_sdgs_for_episode[t]
+                        chosen_idx = ep_state.canonical_chosen_alternative_indices[t]
+                        
+                        # Update the score of the chosen alternative
+                        # Non-chosen alternatives keep their RM-assigned Q-value scores
+                        if 0 <= chosen_idx < len(sdg_t["scores"]):
+                            # Create a new list for scores to avoid modifying the original if it's shared/logged elsewhere before this
+                            new_scores = list(sdg_t["scores"]) 
+                            new_scores[chosen_idx] = discounted_return
+                            sdg_t["scores"] = new_scores 
+                            logger.debug(f"[Episode: {ep_state.episode_id} Turn: {t+1}] Policy chosen action (idx {chosen_idx}) updated MC score to {discounted_return:.4f}")
+                        else:
+                            logger.warning(f"[Episode: {ep_state.episode_id} Turn: {t+1}] Invalid chosen_idx {chosen_idx} for policy SDG scores.")
+                    else:
+                        logger.warning(f"[Episode: {ep_state.episode_id}] Index t={t} out of bounds for policy_sdgs_for_episode (len {len(policy_sdgs_for_episode)}).")
+
+
+            # 3. Generate and send RM training data
+            rm_training_data: List[ScoredDataGroup] = []
+            if ep_state.rm_judgement_history and num_canonical_steps > 0:
+                # Calculate full list of discounted returns for the canonical path once
+                canonical_discounted_returns = [0.0] * num_canonical_steps
+                current_discounted_return = final_outcome_reward
+                for t in range(num_canonical_steps - 1, -1, -1):
+                    current_step_reward = ep_state.canonical_rewards[t]
+                    current_discounted_return = current_step_reward + self.config.rm_reward_discount_factor * current_discounted_return
+                    canonical_discounted_returns[t] = current_discounted_return
+
+                for rm_log_entry in ep_state.rm_judgement_history:
+                    turn_idx = rm_log_entry.get("turn_idx_for_logging")
+                    policy_alt_idx = rm_log_entry.get("policy_action_candidate_idx_for_logging")
+
+                    # We only train RM on its judgements of the *chosen* policy actions for now
+                    if turn_idx is not None and 0 <= turn_idx < num_canonical_steps:
+                        chosen_alt_for_this_turn = ep_state.canonical_chosen_alternative_indices[turn_idx]
+                        if policy_alt_idx == chosen_alt_for_this_turn:
+                            # This RM judgement was for the action that was actually taken
+                            true_target_q_value = canonical_discounted_returns[turn_idx]
+                            
+                            # RM input messages are already List[Dict[str,str]]
+                            rm_input_dict_list = rm_log_entry["rm_input_messages"]
+                            
+                            try:
+                                # Tokenize RM's input.
+                                # Ensure rm_input_dict_list is correctly formatted if Message type def changes
+                                tokenized_rm_input = tokenize_for_trainer(self.tokenizer, rm_input_dict_list)
+                                
+                                rm_sdg = ScoredDataGroup(
+                                    tokens=[tokenized_rm_input["tokens"]],
+                                    masks=[tokenized_rm_input["masks"]],
+                                    scores=[true_target_q_value], # Target for RM training
+                                    messages=[rm_input_dict_list], # Original messages for context/debug
+                                    metadata={
+                                        "original_rm_q_value": rm_log_entry["parsed_q_value"],
+                                        "original_rm_thinking": rm_log_entry["parsed_thinking_block"],
+                                        "turn_number": turn_idx,
+                                        "policy_action_candidate_idx": policy_alt_idx,
+                                        "game_seed": rm_log_entry.get("game_seed_for_logging"),
+                                        "episode_id": ep_state.episode_id,
+                                        "rm_api_error": rm_log_entry.get("api_error", False),
+                                        "rm_q_parse_error": rm_log_entry.get("q_value_parse_error", False),
+                                    }
+                                )
+                                rm_training_data.append(rm_sdg)
+                            except Exception as e_tok:
+                                logger.error(f"[Episode: {ep_state.episode_id} Turn: {turn_idx+1}] Error tokenizing RM input for training: {e_tok}", exc_info=True)
+                        # else: Skip RM judgements for non-chosen policy alternatives for now
+                    else:
+                        logger.warning(f"[Episode: {ep_state.episode_id}] RM log entry has invalid turn_idx: {turn_idx}")
+            
+            if rm_training_data:
+                logger.info(f"[Episode: {ep_state.episode_id}] Attempting to send {len(rm_training_data)} ScoredDataGroups for RM training.")
+                try:
+                    # `item` here is the original item passed to collect_trajectories
+                    await self.handle_send_to_api(rm_training_data, item=item, do_send_to_api=True)
+                except Exception as e_send_rm:
+                    logger.error(f"[Episode: {ep_state.episode_id}] Error sending RM training data: {e_send_rm}", exc_info=True)
+
+
+            # --- Finalize and Cleanup ---
+            processed_turns_count = len(policy_sdgs_for_episode) # Number of policy ScoredDataGroups
+            logger.info(f"[Episode: {ep_state.episode_id}] Finalizing episode. Score: {ep_state.last_score}, Won: {ep_state.won}, Lost: {ep_state.lost}, Processed Turns for Policy: {processed_turns_count}")
+            
             if ep_state.textworld_env:
                 try:
                     ep_state.textworld_env.close()
@@ -709,30 +848,43 @@ class TextWorldEnv(BaseEnv):
                 del self.episodes[ep_state.episode_id]
                 logger.debug(f"[Episode: {ep_state.episode_id}] Removed episode state from active tracking.")
 
-        return all_scored_data_groups_for_episode, [] 
+        # The policy_sdgs_for_episode have been updated in-place with MC returns for chosen actions.
+        # BaseEnv will call our overridden postprocess_histories with this data.
+        return policy_sdgs_for_episode, [] # Return policy data; backlog is empty for this env structure.
 
     async def postprocess_histories(
         self,
         trajectories: Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]],
-        rollout_info: List[Dict[str, Any]] # Item is Dict[str, Any]
+        # rollout_info: List[Dict[str, Any]] # This is not passed by BaseEnv.handle_env
     ) -> Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]:
         """
-        Post-processes trajectories, e.g., to calculate final rewards based on episode outcome.
-        For TextWorld, this could involve discounting rewards based on game win/loss/score.
-        Currently a passthrough.
+        Post-processes policy agent trajectories.
+        In this TextWorldEnv implementation, the core reward processing (MC returns)
+        is done directly at the end of `collect_trajectories` before returning
+        the policy ScoredDataGroups. This method can be a passthrough or for
+        any final adjustments if needed.
         """
+        # The main reward processing for policy agent data (calculating MC discounted returns
+        # for chosen actions) is now handled at the end of the `collect_trajectories` method
+        # to ensure all episode information (like ep_state.canonical_rewards) is available.
+        # This method is called by BaseEnv *after* `collect_trajectories` returns.
+        
         if not trajectories:
+            logger.debug("postprocess_histories received no trajectories. Passthrough.")
             return trajectories
 
-        processed_trajectories = trajectories
-        if isinstance(trajectories, ScoredDataGroup):
-            processed_trajectories = [trajectories]
+        # Ensure it's a list for consistent logging/processing, though it should be List[ScoredDataGroup]
+        # from collect_trajectories if an episode ran.
+        num_groups_to_log = 0
+        if isinstance(trajectories, list):
+            num_groups_to_log = len([t for t in trajectories if t is not None])
+        elif trajectories is not None : # Single ScoredDataGroup
+            num_groups_to_log = 1
+            
+        logger.debug(f"TextWorldEnv.postprocess_histories: Received {num_groups_to_log} ScoredDataGroup(s) for policy. Rewards already processed in collect_trajectories. Passthrough.")
         
-        # Ensure it's a list for consistent logging, though it should be from collect_trajectories
-        num_groups_to_log = len(processed_trajectories) if isinstance(processed_trajectories, list) else 1
-
-        logger.debug(f"Postprocessing {num_groups_to_log} ScoredDataGroup(s). (Currently a passthrough)")
-        return processed_trajectories
+        # For now, this is a passthrough as rewards are processed in collect_trajectories.
+        return trajectories
 
     async def evaluate(self, *args, **kwargs):
         # Implementation pending
@@ -796,7 +948,10 @@ class TextWorldEnv(BaseEnv):
                 model_id="NousResearch/Hermes-2-Pro-Llama-3-8B" # Ensure model_id matches server
             ), 
             # rm_config is now used directly
-            atropos_rm_config=AtroposRMConfig(thinking=True),      
+            atropos_rm_config=AtroposRMConfig( # Ensure RM also gets a model_id if not covered by default logic
+                thinking=True,
+                model_id="NousResearch/Hermes-2-Pro-Llama-3-8B" # Default to same model for now
+            ),      
             G_policy_alternatives=4, # This should align with how agent.generate_action is called 
             G_rm_judgements=1, 
             rm_reward_discount_factor=0.99,
