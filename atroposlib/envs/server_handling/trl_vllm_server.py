@@ -29,7 +29,7 @@ class TrlVllmServer(APIServer):
         self.tokenizer = AutoTokenizer.from_pretrained(config.model_name)
         super().__init__(config)
 
-    async def check_server_status_task(self):
+    async def check_server_status_task(self, chat_completion: bool = True):
         """
         Perform a health check for the TRL VLLM server by sending a minimal request to /generate.
         """

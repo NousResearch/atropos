@@ -21,10 +21,10 @@ import gymnasium
 from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
+    APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
     EvalHandlingEnum,
-    OpenaiConfig,
     ScoredDataGroup,
 )
 from atroposlib.utils.best_of_n_selection import select_best_index
@@ -79,7 +79,7 @@ class BlackjackEnv(BaseEnv):
     def __init__(
         self,
         config: BlackjackEnvConfig,
-        server_configs: List[OpenaiConfig],
+        server_configs: List[APIServerConfig],
         slurm: bool = True,
         testing: bool = False,
     ):
@@ -936,7 +936,7 @@ class BlackjackEnv(BaseEnv):
         await super().wandb_log(wandb_metrics)
 
     @classmethod
-    def config_init(cls) -> Tuple[BlackjackEnvConfig, List[OpenaiConfig]]:
+    def config_init(cls) -> Tuple[BlackjackEnvConfig, List[APIServerConfig]]:
         env_config = BlackjackEnvConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
             group_size=16,
@@ -964,7 +964,7 @@ class BlackjackEnv(BaseEnv):
             tiebreak_token_factor=0.01,
         )
         server_configs = [
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9004/v1",
                 api_key="x",

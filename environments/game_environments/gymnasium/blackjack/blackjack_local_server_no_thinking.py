@@ -6,7 +6,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-from atroposlib.envs.base import EvalHandlingEnum, OpenaiConfig, ScoredDataItem
+from atroposlib.envs.base import APIServerConfig, EvalHandlingEnum, ScoredDataItem
 from environments.game_environments.gymnasium.blackjack.blackjack_env_no_thinking import (
     BlackjackEnvNoThinking,
     BlackjackEnvNoThinkingConfig,
@@ -41,7 +41,7 @@ async def main():
         eval_episodes=0,
     )
     server_configs = [
-        OpenaiConfig(
+        APIServerConfig(
             model_name="gpt-4.1-nano",
             base_url="https://api.openai.com/v1",
             api_key=os.getenv("OPENAI_API_KEY"),

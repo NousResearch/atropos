@@ -2,6 +2,14 @@
 
 This document explains the design philosophy behind the `blackjack_env_thinking.py` environment, particularly why its approach to trajectory collection and scoring is necessary for reinforcement learning agents that generate very long sequences, such as those incorporating extensive "thinking" or chain-of-thought reasoning.
 
+## Installation
+
+Before running or using this environment, ensure you have installed the necessary dependencies. Navigate to the `environments/game_environments/gymnasium/blackjack/` directory and run:
+
+```bash
+pip install -r requirements.txt
+```
+
 ## TL;DR
 
 The `blackjack_env_thinking` environment, while based on a simple game, is an example of how to structure RL environments for agents that produce exceptionally long interaction sequences. The core principles are:

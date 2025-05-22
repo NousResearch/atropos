@@ -123,6 +123,9 @@ class APIServerConfig(ServerBaseline):
     n_kwarg_is_ignored: bool = Field(
         default=False, description="Whether the n kwarg is ignored by this API server."
     )
+    health_check: bool = Field(
+        default=True, description="Whether to perform a health check on the server."
+    )
 
 
 class APIServer(ABC):
@@ -152,7 +155,7 @@ class APIServer(ABC):
         self.eval_sem.update_weight(weight)
 
     @abstractmethod
-    async def check_server_status_task(self):
+    async def check_server_status_task(self, chat_completion: bool = True):
         """
         Check the status of the server. Should be overridden by the child class.
         Set self.server_healthy to True if the server is healthy.
@@ -256,10 +259,15 @@ class APIServer(ABC):
         Chat completion handler, waits for the server to be healthy and then calls the chat completion wrapper.
         """
         if not self.initialized:
-            if (
-                self.config.base_url is not None
-            ):  # skip health check if using OpenAI API
-                self.check_task = asyncio.create_task(self.check_server_status_task())
+            if self.config.health_check:
+                if (
+                    self.config.base_url is not None
+                ):  # skip health check if using OpenAI API
+                    self.check_task = asyncio.create_task(
+                        self.check_server_status_task()
+                    )
+                else:
+                    self.server_healthy = True
             else:
                 self.server_healthy = True
             self.initialized = True
@@ -317,11 +325,17 @@ class APIServer(ABC):
         Completion handler, waits for the server to be healthy and then calls the completion wrapper.
         """
         if not self.initialized:
-            if (
-                self.config.base_url is not None
-            ):  # skip health check if using OpenAI API
-                self.check_task = asyncio.create_task(self.check_server_status_task())
+            if self.config.health_check:
+                if (
+                    self.config.base_url is not None
+                ):  # skip health check if using OpenAI API
+                    self.check_task = asyncio.create_task(
+                        self.check_server_status_task(chat_completion=False)
+                    )
+                else:
+                    self.server_healthy = True
             else:
+                # If health_check is False, always assume healthy
                 self.server_healthy = True
             self.initialized = True
         kwargs["model"] = self.config.model_name

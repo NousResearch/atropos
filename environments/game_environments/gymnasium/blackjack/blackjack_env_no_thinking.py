@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Tuple
 
 import gymnasium as gym
 
-from atroposlib.envs.base import BaseEnv, BaseEnvConfig, OpenaiConfig, ScoredDataItem
+from atroposlib.envs.base import APIServerConfig, BaseEnv, BaseEnvConfig, ScoredDataItem
 from atroposlib.type_definitions import Item, Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 from atroposlib.utils.tool_call_parser import parse_tool_call
@@ -35,7 +35,7 @@ class BlackjackEnvNoThinking(BaseEnv):
     def __init__(
         self,
         config: BlackjackEnvNoThinkingConfig,
-        server_configs: List[OpenaiConfig],
+        server_configs: List[APIServerConfig],
         slurm: bool = True,
         testing: bool = False,
     ):
@@ -74,7 +74,7 @@ class BlackjackEnvNoThinking(BaseEnv):
         )
 
     @classmethod
-    def config_init(cls) -> Tuple[BlackjackEnvNoThinkingConfig, List[OpenaiConfig]]:
+    def config_init(cls) -> Tuple[BlackjackEnvNoThinkingConfig, List[APIServerConfig]]:
         env_config = BlackjackEnvNoThinkingConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
             group_size=16,
@@ -87,7 +87,7 @@ class BlackjackEnvNoThinking(BaseEnv):
             eval_episodes=100,
         )
         server_configs = [
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9001/v1",
                 api_key="x",

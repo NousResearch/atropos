@@ -24,14 +24,21 @@ class OpenAIServer(APIServer):
         )
         super().__init__(config)
 
-    async def check_server_status_task(self):
+    async def check_server_status_task(self, chat_completion: bool = True):
         while True:
             try:
-                await self.openai.completions.create(
-                    model=self.config.model_name,
-                    prompt="hi",
-                    max_tokens=1,
-                )
+                if chat_completion:
+                    await self.openai.chat.completions.create(
+                        model=self.config.model_name,
+                        messages=[{"role": "user", "content": "hi"}],
+                        max_tokens=1,
+                    )
+                else:
+                    await self.openai.completions.create(
+                        model=self.config.model_name,
+                        prompt="hi",
+                        max_tokens=1,
+                    )
                 self.server_healthy = True
             except (
                 aiohttp.ClientError,
@@ -157,9 +164,10 @@ def resolve_openai_configs(
 
     if (is_multi_server_yaml or is_multi_server_default) and openai_cli_config:
         raise FailedExecutionException(
-            f"CLI overrides for OpenAI settings (--{openai_full_prefix}*) are not supported "
+            message=f"CLI overrides for OpenAI settings (--{openai_full_prefix}*) are not supported "
             f"when multiple servers are defined (either via YAML list under '{OPENAI_NAMESPACE}' "
-            "or a default list with length >= 2)."
+            "or a default list with length >= 2).",
+            exit_code=2,
         )
 
     if is_multi_server_yaml:

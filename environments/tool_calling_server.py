@@ -44,7 +44,7 @@ class SingleToolCallingEnv(BaseEnv):
     def config_init(self) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = BaseEnvConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
-            group_size=32,
+            group_size=16,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
             total_steps=2000,
@@ -60,13 +60,6 @@ class SingleToolCallingEnv(BaseEnv):
             APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9004/v1",
-                api_key="x",
-                num_max_requests_at_once=32,
-                num_requests_for_eval=256,
-            ),
-            APIServerConfig(
-                model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
-                base_url="http://localhost:9005/v1",
                 api_key="x",
                 num_max_requests_at_once=32,
                 num_requests_for_eval=256,
@@ -301,7 +294,6 @@ class SingleToolCallingEnv(BaseEnv):
             max_tokens=1024 * 15,
             temperature=0.8,  # Using temperature to get diverse responses
         )
-
         to_score = list()
 
         for i, completion_choice in enumerate(completions.choices):
