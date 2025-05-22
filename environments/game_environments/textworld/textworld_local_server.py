@@ -4,10 +4,17 @@ import os
 import random
 from dotenv import load_dotenv
 
+import sys
+# Calculate the project root directory (three levels up from the script's directory)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 from atroposlib.envs.base import APIServerConfig
 from environments.game_environments.textworld.textworld_env import TextWorldEnv, TextWorldEnvConfig
-from environments.agents.atropos_agent import AtroposAgentConfig
-from environments.agents.atropos_rm import AtroposRMConfig, RMJudgementLog
+# Use absolute imports now that project root is in sys.path
+from environments.game_environments.textworld.agents.atropos_agent import AtroposAgentConfig 
+from environments.game_environments.textworld.agents.atropos_rm import AtroposRMConfig, RMJudgementLog
 
 # Load environment variables from .env file
 load_dotenv()
@@ -45,7 +52,7 @@ async def main():
         max_token_length=4096, # Max tokens for an LLM call (agent/RM), from TextWorldEnv.config_init
         
         # Test-specific settings
-        max_steps=10,  # Keep episodes short for testing
+        max_steps=100,  # Increased for more complete episodes
         challenge_name="tw-simple", # A simple, quick challenge
         debug_mode=True,
 
@@ -54,7 +61,7 @@ async def main():
         # policy_agent_server_config=None, # Explicitly None to use default
         # rm_agent_server_config=None,     # Explicitly None to use default
         
-        atropos_agent_config=AtroposAgentConfig(), # Use default agent config
+        atropos_agent_config=AtroposAgentConfig(enable_memory=False), # Use default agent config, ensure memory is off
         atropos_rm_config=AtroposRMConfig(thinking=False), # RM thinking off for cleaner logs initially
         
         G_policy_alternatives=2, # Number of actions agent generates
@@ -90,9 +97,7 @@ async def main():
         logger.info("TextWorldEnv setup complete.")
 
         # Get a new game/episode
-        # episode_seed = 12345 # Optionally set a seed for reproducibility
-        # episode_state = await env._get_or_create_episode(episode_seed=episode_seed)
-        item = await env.get_next_item() # Uses env_config.game_seed or random
+        item = await env.get_next_item() 
 
         if not item or "episode_state" not in item:
             logger.error("Failed to get or create a new TextWorld episode.")
@@ -107,138 +112,98 @@ async def main():
         game_objective = episode_state.initial_infos.get('objective', 'N/A')
         logger.info(f"Objective: {game_objective.strip() if game_objective else 'N/A'}")
         
-        # Log system prompt from the agent's configuration
         system_prompt_to_log = env.agent.system_prompt_content
         logger.info(f"""Policy Agent System Prompt:
 {system_prompt_to_log}""")
         
-        # Log initial observation from episode_state
         logger.info(f"""Initial Observation (Turn 1):
 {episode_state.initial_formatted_obs}""")
 
-        # Main interaction loop
-        # turn_idx_0_based is 0-indexed for calls to _next_step
-        for turn_idx_0_based in range(episode_state.max_turns):
-            current_turn_for_log = turn_idx_0_based + 1 # 1-indexed for logging
-            logger.info(f"\n<<< --- Turn: {current_turn_for_log}/{episode_state.max_turns} --- >>>")
-            
-            # Check if episode became done in the previous iteration or before starting
-            if episode_state.done:
-                logger.info(f"Episode was already marked done. Ending loop before Turn {current_turn_for_log}.")
-                break
+        # Run the full episode using collect_trajectories
+        logger.info(f"--- Running Full Episode Trajectory Collection for Episode: {episode_id} ---")
+        policy_sdgs_for_episode, _ = await env.collect_trajectories(item)
+        logger.info(f"--- Trajectory Collection Finished for Episode: {episode_id} ---")
 
-            scored_data_group, episode_done_from_step = await env._next_step(
-                ep_state=episode_state, 
-                current_turn_num=turn_idx_0_based # _next_step expects 0-indexed 
-            )
-            
-            if scored_data_group:
-                logger.info(f"--- Turn {current_turn_for_log} Policy Agent Output & RM Evaluation ---")
-                
-                # Access metadata safely, handling both attribute and dictionary access
-                chosen_alternative_idx = -1
-                if hasattr(scored_data_group, 'metadata'):
-                    chosen_alternative_idx = scored_data_group.metadata.get("chosen_alternative_index", -1)
-                elif isinstance(scored_data_group, dict) and "metadata" in scored_data_group:
-                    chosen_alternative_idx = scored_data_group["metadata"].get("chosen_alternative_index", -1)
-                
-                # Access messages safely, handling both attribute and dictionary access
-                messages = []
-                if hasattr(scored_data_group, 'messages'):
-                    messages = scored_data_group.messages
-                elif isinstance(scored_data_group, dict) and "messages" in scored_data_group:
-                    messages = scored_data_group["messages"]
-                
-                # Access scores safely
-                scores = []
-                if hasattr(scored_data_group, 'scores'):
-                    scores = scored_data_group.scores
-                elif isinstance(scored_data_group, dict) and "scores" in scored_data_group:
-                    scores = scored_data_group["scores"]
-                
-                if chosen_alternative_idx != -1 and chosen_alternative_idx < len(messages):
-                    # The chosen alternative's history is in messages[chosen_alternative_idx]
-                    # The last message is the agent's raw response.
-                    chosen_agent_raw_response = messages[chosen_alternative_idx][-1]['content']
-                    # Re-parse the command from the raw response for logging
-                    parsed_command_executed = env._parse_action(chosen_agent_raw_response)
+        # Post-process the collected trajectories (for policy agent data)
+        logger.info(f"--- Post-processing Policy Trajectories for Episode: {episode_id} ---")
+        final_policy_data = await env.postprocess_histories(policy_sdgs_for_episode)
+        logger.info(f"--- Post-processing Finished for Episode: {episode_id} ---")
+
+        # Log results from final_policy_data
+        if final_policy_data:
+            logger.info("\n--- Processed Policy Agent Data (from postprocess_histories) ---")
+            for turn_num, sdg in enumerate(final_policy_data):
+                if sdg: # sdg is a ScoredDataGroup (TypedDict)
+                    metadata = sdg.get("metadata")
+                    chosen_idx = metadata.get("chosen_alternative_index", -1) if metadata else -1
+                    scores = sdg.get("scores", [])
+                    messages = sdg.get("messages", [])
                     
-                    logger.info(f"  Chosen Alternative Index: {chosen_alternative_idx}")
-                    logger.info(f"  Agent's Raw Response (Chosen): '{chosen_agent_raw_response.strip()}'")
-                    logger.info(f"  Parsed Command Executed: '{parsed_command_executed if parsed_command_executed else 'None/Error'}'")
-                    logger.info(f"  RM Score for Chosen: {scores[chosen_alternative_idx]:.4f}")
+                    logger.info(f"  Turn {turn_num + 1} ScoredDataGroup:")
+                    logger.info(f"    Chosen Alternative Index (from _next_step metadata): {chosen_idx}")
+                    logger.info(f"    Number of alternatives: {len(scores)}")
+                    logger.info(f"    Scores: {scores}")
+                    if chosen_idx != -1 and 0 <= chosen_idx < len(scores):
+                         logger.info(f"    Score of Chosen Alternative (after collect_trajectories): {scores[chosen_idx]:.4f}")
+                    
+                    if chosen_idx != -1 and 0 <= chosen_idx < len(messages):
+                        chosen_alt_messages = messages[chosen_idx]
+                        if chosen_alt_messages and len(chosen_alt_messages) >= 2: # Need at least obs and action
+                             logger.info(f"    Chosen Alternative Input (last user message): '{chosen_alt_messages[-2].get('content', '')[:200]}...'")
+                             logger.info(f"    Chosen Alternative Output (last assistant message): '{chosen_alt_messages[-1].get('content', '')[:200]}...'")
+                        elif chosen_alt_messages: # Only one message?
+                             logger.info(f"    Chosen Alternative Message (single): '{chosen_alt_messages[0].get('content', '')[:200]}...'")
                 else:
-                    logger.warning("  Could not determine chosen action details from ScoredDataGroup metadata.")
-
-                logger.info("  --- All Generated Policy Alternatives & RM Scores ---")
-                for i, alt_messages in enumerate(messages):
-                    alt_raw_response = alt_messages[-1]['content'] # Last message is agent's output for this alternative
-                    alt_parsed_cmd = env._parse_action(alt_raw_response)
-                    alt_score = scores[i]
-                    is_chosen = "(CHOSEN)" if i == chosen_alternative_idx else ""
-                    logger.info(f"    Alt {i} {is_chosen}: Command='{alt_parsed_cmd}', Raw='{alt_raw_response.strip()}', Score={alt_score:.4f}")
-            else:
-                logger.warning(f"  _next_step for turn {current_turn_for_log} did not return a ScoredDataGroup (episode might have ended due to error).")
+                    logger.info(f"  Turn {turn_num + 1}: No ScoredDataGroup found (None).")
+        else:
+            logger.info("  No policy data returned from postprocess_histories.")
 
 
-            logger.info(f"--- Turn {current_turn_for_log} Environment Response ---")
-            # Log the observation that will be used for the *next* turn, if the episode isn't done.
-            if not episode_state.done:
-                if episode_state.last_env_raw_observation and episode_state.last_env_infos:
-                    obs_for_next_turn_formatted = env._format_observation(
-                        episode_state.last_env_raw_observation,
-                        episode_state.last_env_infos
-                    )
-                    # Log the observation that will be processed by the agent in the *next* iteration of the loop.
-                    # current_turn_for_log is the turn that just finished.
-                    # So the observation is for (current_turn_for_log + 1).
-                    logger.info(f"""Observation for Next Turn ({current_turn_for_log + 1}):
-{obs_for_next_turn_formatted}""")
-                else:
-                    # This might happen if _next_step returned an error before env output was stored
-                    logger.info("Observation for next turn not available (ep_state.last_env_raw_observation or infos is None).")
-            elif episode_state.done:
-                 logger.info("Episode is now DONE.")
-
-            logger.info(f"  State: Score={episode_state.last_score}, Moves={episode_state.moves}, Won={episode_state.won}, Lost={episode_state.lost}, Done={episode_state.done}")
-
-            if episode_done_from_step and not episode_state.done: # Should be consistent
-                logger.warning(f"  _next_step reported episode_done={episode_done_from_step} but ep_state.done={episode_state.done}. Syncing.")
-                episode_state.done = True
-
-
-        # End of episode
-        logger.info(f"\n<<< --- Episode Finished: {episode_id} --- >>>")
+        # Episode summary (already present in the script, good to keep)
+        logger.info(f"\n<<< --- Episode Summary: {episode_id} --- >>>")
         logger.info(f"  Final Status: Won={episode_state.won}, Lost={episode_state.lost}")
-        logger.info(f"  Total Turns Taken: {len(episode_state.policy_step_data)}")
-        logger.info(f"  Final Score: {episode_state.last_score}")
-        logger.info(f"  Total Moves Reported by Env: {episode_state.moves}")
+        # The number of turns is now len(policy_sdgs_for_episode) or len(final_policy_data)
+        # ep_state.policy_step_data is populated by _next_step, which is called by collect_trajectories
+        logger.info(f"  Total Policy SDGs generated: {len(policy_sdgs_for_episode) if policy_sdgs_for_episode else 0}") 
+        logger.info(f"  Total Game Moves in Env: {episode_state.moves}")
+        logger.info(f"  Final Game Score: {episode_state.last_score}")
         
-        logger.info("\n--- Full RM Judgement History for Episode ---")
+        
+        logger.info("\n--- Full RM Judgement History for Episode (from episode_state.rm_judgement_history) ---")
         if episode_state.rm_judgement_history:
             for i, judgement_log_dict in enumerate(episode_state.rm_judgement_history):
-                # Convert dict to RMJudgementLog TypedDict for easier access if needed, or access by key
-                # For now, direct dict access
-                judgement = RMJudgementLog(**judgement_log_dict) if isinstance(judgement_log_dict, dict) else judgement_log_dict
+                # Assuming judgement_log_dict is a dict. RMJudgementLog is a TypedDict.
+                judgement = judgement_log_dict 
 
                 logger.info(f"  Judgement {i+1}:")
-                # Assuming judgement is now a dict-like object or RMJudgementLog instance
-                if hasattr(judgement, 'get') or isinstance(judgement, dict): # Check if it's dict-like
-                    input_msgs = judgement.get('llm_input_messages', [])
-                    last_user_msg_content = "N/A"
-                    if input_msgs and isinstance(input_msgs, list) and len(input_msgs) > 0 and isinstance(input_msgs[-1], dict):
-                        last_user_msg_content = input_msgs[-1].get('content', 'N/A')
-                    
-                    logger.info(f"    Policy Action Evaluated (from history): {last_user_msg_content[:300].strip()}...")
-                    logger.info(f"    Raw LLM Output (RM): {str(judgement.get('raw_llm_output_content', 'N/A'))[:300].strip()}...")
-                    logger.info(f"    Parsed Q-value: {judgement.get('parsed_q_value', 'N/A')}")
-                    logger.info(f"    Parsed Thinking: {str(judgement.get('parsed_thinking_content', 'N/A'))[:300].strip()}...")
-                    if judgement.get('api_error'): logger.info("    API Error: True")
-                    if judgement.get('q_value_parse_error'): logger.info("    Q-Value Parse Error: True")
-                else: # Fallback if it's not a dict (e.g. already an RMJudgementLog object, though unlikely here)
-                    logger.info(f"    Log Entry (type {type(judgement)}): {str(judgement)[:300]}...")
+                input_msgs = judgement.get('rm_input_messages', []) # Corrected field name
+                last_user_msg_content = "N/A"
+                # The RM input messages are [system_prompt, user_prompt_content_str]
+                # user_prompt_content_str contains the policy agent's proposed move
+                if input_msgs and isinstance(input_msgs, list) and len(input_msgs) > 1 and isinstance(input_msgs[1], dict):
+                    # The actual content with policy action is in the 'user' message to RM
+                    rm_user_prompt_str = input_msgs[1].get('content', 'N/A')
+                    # Extracting the policy action part for logging
+                    action_marker = "--- Policy Agent's Proposed Move (to be evaluated) ---"
+                    end_action_marker = "--- End of Proposed Move ---"
+                    start_idx = rm_user_prompt_str.find(action_marker)
+                    end_idx = rm_user_prompt_str.find(end_action_marker)
+                    if start_idx != -1 and end_idx != -1:
+                        last_user_msg_content = rm_user_prompt_str[start_idx + len(action_marker) : end_idx].strip()
+                    else:
+                        last_user_msg_content = rm_user_prompt_str[:300] # Fallback
+                
+                logger.info(f"    Policy Action Evaluated (part of RM user prompt): {last_user_msg_content[:300].strip()}...")
+                logger.info(f"    Raw LLM Output (RM): {str(judgement.get('raw_rm_response_content', 'N/A'))[:300].strip()}...") # Corrected
+                logger.info(f"    Parsed Q-value: {judgement.get('parsed_q_value', 'N/A')}")
+                logger.info(f"    Parsed Thinking: {str(judgement.get('parsed_thinking_block', 'N/A'))[:300].strip()}...") # Corrected
+                if judgement.get('api_error'): logger.info("    API Error: True")
+                if judgement.get('q_value_parse_error'): logger.info("    Q-Value Parse Error: True")
         else:
             logger.info("  No RM judgements recorded in episode state.")
+        
+        logger.info("Note: RM training ScoredDataGroups were generated by collect_trajectories. "
+                    "Their successful processing by the trainer API depends on BaseEnv's 'handle_send_to_api' validation (e.g., group_size checks).")
 
     except Exception as e:
         logger.exception(f"An error occurred during the episode run: {e}")

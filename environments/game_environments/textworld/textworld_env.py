@@ -35,9 +35,9 @@ from atroposlib.utils.tool_call_parser import parse_tool_call
 from environments.game_environments.textworld.generation_utils import generate_textworld_game
 
 # Import agent and RM configurations
-from environments.agents.atropos_agent import AtroposAgent, AtroposAgentConfig
-from environments.agents.atropos_rm import AtroposRM, AtroposRMConfig, RMJudgementLog
-from environments.game_environments.textworld.agents.textworld_memory_manager import TextWorldMemoryManager, MEMORY_SYSTEM_PREREQUISITES_AVAILABLE
+from .agents.atropos_agent import AtroposAgent, AtroposAgentConfig
+from .agents.atropos_rm import AtroposRM, AtroposRMConfig, RMJudgementLog
+from .agents.textworld_memory_manager import TextWorldMemoryManager, MEMORY_SYSTEM_PREREQUISITES_AVAILABLE
 from atroposlib.type_definitions import AtroposAgentAction
 
 import asyncio # Add asyncio for gather
@@ -655,7 +655,7 @@ class TextWorldEnv(BaseEnv):
         logger.debug(
             f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Constructed ScoredDataGroup with "
             f"{len(sg_tokens)} alternatives. Chosen Idx in metadata: {best_alternative_idx}. "
-            f"Scores: {current_step_scored_data.scores}"
+            f"Scores: {current_step_scored_data['scores']}"
         )
         
         return current_step_scored_data, ep_state.done
