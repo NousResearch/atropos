@@ -5,12 +5,13 @@ Utils for managing trajectory sizing, formatting, compression, etc.
 """
 
 import logging
-from typing import List
+from typing import List, Optional, Dict, Any
 
 from transformers import PreTrainedTokenizer
 
 from atroposlib.envs.base import ScoredDataGroup
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+from atroposlib.type_definitions import Message
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +148,321 @@ def truncate_thinking(
             exc_info=True,
         )
         return response_text
+
+
+async def summarize_conversation_history(
+    messages: List[Message], 
+    server_client,
+    tokenizer: PreTrainedTokenizer,
+    max_summary_tokens: int = 512,
+    preserve_recent_turns: int = 2
+) -> List[Message]:
+    """
+    Summarize conversation history using an LLM call, preserving recent turns.
+    
+    Args:
+        messages: List of messages to potentially summarize
+        server_client: Server client for making LLM calls
+        tokenizer: Tokenizer for counting tokens
+        max_summary_tokens: Maximum tokens for the summary
+        preserve_recent_turns: Number of recent turns to keep unsummarized
+        
+    Returns:
+        List of messages with older messages summarized
+    """
+    if len(messages) <= preserve_recent_turns * 2 + 1:  # system + preserve_recent_turns * (user + assistant)
+        return messages
+    
+    try:
+        # Separate system message, messages to summarize, and recent messages to preserve
+        system_msg = messages[0] if messages and messages[0]["role"] == "system" else None
+        start_idx = 1 if system_msg else 0
+        
+        # Calculate how many messages to preserve (recent turns)
+        # Each turn is typically user + assistant, so preserve_recent_turns * 2 messages
+        preserve_count = preserve_recent_turns * 2
+        split_idx = max(start_idx, len(messages) - preserve_count)
+        
+        messages_to_summarize = messages[start_idx:split_idx]
+        recent_messages = messages[split_idx:]
+        
+        if not messages_to_summarize:
+            return messages
+        
+        # Create summarization prompt
+        conversation_text = ""
+        for msg in messages_to_summarize:
+            role = msg["role"]
+            content = msg["content"]
+            
+            # Strip thinking blocks from assistant messages for summarization
+            if role == "assistant":
+                content = strip_thinking(content)
+            
+            conversation_text += f"{role.upper()}: {content}\n\n"
+        
+        summarization_prompt = f"""Please provide a concise summary of the following conversation history. Focus on:
+1. Key game state information and observations
+2. Important actions taken and their outcomes
+3. Strategic decisions and reasoning (without full chains of thought)
+4. Current objectives and progress
+
+Conversation to summarize:
+{conversation_text.strip()}
+
+Provide a summary in 2-3 sentences that captures the essential context needed to continue the conversation effectively."""
+
+        # Make LLM call for summarization
+        summary_messages = [
+            {"role": "system", "content": "You are a helpful assistant that summarizes conversations concisely while preserving important context."},
+            {"role": "user", "content": summarization_prompt}
+        ]
+        
+        response = await server_client.chat_completion(
+            messages=summary_messages,
+            max_tokens=max_summary_tokens,
+            temperature=0.1  # Low temperature for consistent summaries
+        )
+        
+        summary_content = response.choices[0].message.content.strip()
+        
+        # Create summarized message list
+        result_messages = []
+        if system_msg:
+            result_messages.append(system_msg)
+        
+        # Add summary as a special message
+        result_messages.append({
+            "role": "user", 
+            "content": f"[CONVERSATION SUMMARY]: {summary_content}"
+        })
+        
+        # Add recent messages
+        result_messages.extend(recent_messages)
+        
+        logger.info(f"Summarized {len(messages_to_summarize)} messages into summary. "
+                   f"Original tokens: ~{sum(len(tokenizer.encode(msg['content'])) for msg in messages_to_summarize)}, "
+                   f"Summary tokens: ~{len(tokenizer.encode(summary_content))}")
+        
+        return result_messages
+        
+    except Exception as e:
+        logger.error(f"Error in summarize_conversation_history: {e}", exc_info=True)
+        return messages  # Return original messages if summarization fails
+
+
+def prepare_reward_model_input(
+    scored_data_group: ScoredDataGroup,
+    tokenizer: PreTrainedTokenizer,
+    max_tokens: int = 4096,
+    strip_thinking_from_history: bool = True
+) -> ScoredDataGroup:
+    """
+    Prepare ScoredDataGroup for reward model by filtering and truncating appropriately.
+    
+    Args:
+        scored_data_group: Original ScoredDataGroup with full conversation history
+        tokenizer: Tokenizer for counting tokens
+        max_tokens: Maximum tokens for reward model input
+        strip_thinking_from_history: Whether to strip <think> blocks from previous messages
+        
+    Returns:
+        Filtered and truncated ScoredDataGroup suitable for reward model
+    """
+    try:
+        filtered_messages = []
+        filtered_tokens = []
+        filtered_masks = []
+        
+        for alt_idx, alt_messages in enumerate(scored_data_group["messages"]):
+            # Process messages for reward model
+            processed_messages = []
+            
+            for msg_idx, msg in enumerate(alt_messages):
+                processed_msg = msg.copy()
+                
+                # Strip thinking blocks from all but the last assistant message
+                if (msg["role"] == "assistant" and 
+                    strip_thinking_from_history and 
+                    msg_idx < len(alt_messages) - 1):
+                    processed_msg["content"] = strip_thinking(msg["content"])
+                
+                processed_messages.append(processed_msg)
+            
+            # Apply token limit truncation
+            truncated_messages = ensure_message_token_limit(
+                processed_messages, tokenizer, max_tokens
+            )
+            
+            # Re-tokenize the processed messages
+            try:
+                tokenized_output = tokenize_for_trainer(tokenizer, truncated_messages)
+                filtered_messages.append(truncated_messages)
+                filtered_tokens.append(tokenized_output["tokens"])
+                filtered_masks.append(tokenized_output["masks"])
+            except Exception as e:
+                logger.error(f"Error re-tokenizing messages for reward model alt {alt_idx}: {e}")
+                # Keep original if re-tokenization fails
+                filtered_messages.append(alt_messages)
+                filtered_tokens.append(scored_data_group["tokens"][alt_idx] if alt_idx < len(scored_data_group["tokens"]) else [])
+                filtered_masks.append(scored_data_group["masks"][alt_idx] if alt_idx < len(scored_data_group["masks"]) else [])
+        
+        # Create new ScoredDataGroup with filtered data
+        filtered_sdg = ScoredDataGroup(
+            tokens=filtered_tokens,
+            masks=filtered_masks,
+            scores=scored_data_group["scores"],
+            messages=filtered_messages,
+            metadata={
+                **(scored_data_group.get("metadata", {})),
+                "reward_model_processed": True,
+                "original_message_count": len(scored_data_group["messages"][0]) if scored_data_group["messages"] else 0,
+                "filtered_message_count": len(filtered_messages[0]) if filtered_messages else 0
+            }
+        )
+        
+        return filtered_sdg
+        
+    except Exception as e:
+        logger.error(f"Error in prepare_reward_model_input: {e}", exc_info=True)
+        return scored_data_group  # Return original if processing fails
+
+
+def ensure_message_token_limit(
+    messages: List[Message],
+    tokenizer: PreTrainedTokenizer,
+    max_tokens: int
+) -> List[Message]:
+    """
+    Ensure message list doesn't exceed token limit by truncating older messages.
+    Preserves system message and recent messages.
+    
+    Args:
+        messages: List of messages to check and potentially truncate
+        tokenizer: Tokenizer for counting tokens
+        max_tokens: Maximum allowed tokens
+        
+    Returns:
+        Truncated message list within token limit
+    """
+    if not messages:
+        return messages
+    
+    try:
+        # Count current tokens
+        total_tokens = sum(len(tokenizer.encode(msg["content"], add_special_tokens=False)) for msg in messages)
+        
+        if total_tokens <= max_tokens:
+            return messages
+        
+        logger.info(f"Message history ({total_tokens} tokens) exceeds limit ({max_tokens}). Truncating...")
+        
+        # Preserve system message and last few messages
+        system_msg = messages[0] if messages and messages[0]["role"] == "system" else None
+        start_idx = 1 if system_msg else 0
+        
+        # Keep last 4 messages (2 turns) minimum
+        preserve_count = min(4, len(messages) - start_idx)
+        
+        # Binary search to find optimal truncation point
+        left, right = start_idx, len(messages) - preserve_count
+        best_split = start_idx
+        
+        while left <= right:
+            mid = (left + right) // 2
+            
+            # Test messages from mid to end
+            test_messages = []
+            if system_msg:
+                test_messages.append(system_msg)
+            test_messages.extend(messages[mid:])
+            
+            test_tokens = sum(len(tokenizer.encode(msg["content"], add_special_tokens=False)) for msg in test_messages)
+            
+            if test_tokens <= max_tokens:
+                best_split = mid
+                right = mid - 1
+            else:
+                left = mid + 1
+        
+        # Construct final message list
+        result_messages = []
+        if system_msg:
+            result_messages.append(system_msg)
+        
+        if best_split > start_idx:
+            # Add truncation indicator
+            result_messages.append({
+                "role": "user",
+                "content": "[CONVERSATION TRUNCATED - Earlier messages removed due to length]"
+            })
+        
+        result_messages.extend(messages[best_split:])
+        
+        final_tokens = sum(len(tokenizer.encode(msg["content"], add_special_tokens=False)) for msg in result_messages)
+        logger.info(f"Truncated to {len(result_messages)} messages ({final_tokens} tokens)")
+        
+        return result_messages
+        
+    except Exception as e:
+        logger.error(f"Error in ensure_message_token_limit: {e}", exc_info=True)
+        return messages
+
+
+def manage_token_budget(
+    messages: List[Message],
+    tokenizer: PreTrainedTokenizer,
+    max_tokens: int,
+    summarization_trigger_ratio: float = 0.8,
+    server_client = None
+) -> tuple[List[Message], bool]:
+    """
+    Manage token budget by triggering summarization or truncation as needed.
+    
+    Args:
+        messages: Current message history
+        tokenizer: Tokenizer for counting tokens
+        max_tokens: Maximum allowed tokens
+        summarization_trigger_ratio: Ratio of max_tokens that triggers summarization
+        server_client: Server client for LLM calls (required for summarization)
+        
+    Returns:
+        Tuple of (processed_messages, was_summarized)
+    """
+    try:
+        current_tokens = sum(len(tokenizer.encode(msg["content"], add_special_tokens=False)) for msg in messages)
+        trigger_threshold = int(max_tokens * summarization_trigger_ratio)
+        
+        if current_tokens <= trigger_threshold:
+            return messages, False
+        
+        logger.info(f"Token budget management triggered. Current: {current_tokens}, Threshold: {trigger_threshold}")
+        
+        # Try summarization first if server_client is available
+        if server_client and current_tokens > trigger_threshold:
+            try:
+                import asyncio
+                if asyncio.iscoroutinefunction(summarize_conversation_history):
+                    # If we're in an async context, we need to handle this properly
+                    # For now, fall back to truncation if we can't await
+                    logger.warning("Cannot await summarization in sync context, falling back to truncation")
+                    processed_messages = ensure_message_token_limit(messages, tokenizer, max_tokens)
+                    return processed_messages, False
+                else:
+                    summarized_messages = summarize_conversation_history(
+                        messages, server_client, tokenizer
+                    )
+                    return summarized_messages, True
+            except Exception as e:
+                logger.error(f"Summarization failed, falling back to truncation: {e}")
+        
+        # Fall back to truncation
+        processed_messages = ensure_message_token_limit(messages, tokenizer, max_tokens)
+        return processed_messages, False
+        
+    except Exception as e:
+        logger.error(f"Error in manage_token_budget: {e}", exc_info=True)
+        return messages, False
 
 
 def ensure_trajectory_token_limit(
