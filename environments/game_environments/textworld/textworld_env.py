@@ -37,6 +37,7 @@ from environments.game_environments.textworld.generation_utils import generate_t
 # Import agent and RM configurations
 from environments.agents.atropos_agent import AtroposAgent, AtroposAgentConfig
 from environments.agents.atropos_rm import AtroposRM, AtroposRMConfig, RMJudgementLog
+from environments.game_environments.textworld.agents.textworld_memory_manager import TextWorldMemoryManager, MEMORY_SYSTEM_PREREQUISITES_AVAILABLE
 from atroposlib.type_definitions import AtroposAgentAction
 
 import asyncio # Add asyncio for gather
@@ -102,18 +103,12 @@ class TextWorldEnvConfig(BaseEnvConfig):
     policy_agent_server_config: Optional[APIServerConfig] = None
     rm_agent_server_config: Optional[APIServerConfig] = None
 
-    atropos_agent_config: AtroposAgentConfig = Field(default_factory=AtroposAgentConfig) # Use default_factory
-    atropos_rm_config: AtroposRMConfig = Field(default_factory=AtroposRMConfig) # Use default_factory
-    group_size: int = 3 # Number of alternatives
+    atropos_agent_config: AtroposAgentConfig = Field(default_factory=AtroposAgentConfig) 
+    atropos_rm_config: AtroposRMConfig = Field(default_factory=AtroposRMConfig) 
+    # group_size: int = 3 # Number of alternatives -> This is part of BaseEnvConfig now
+
     # Policy search and evaluation parameters
-    G_policy_alternatives: int = Field(
-        default=3, 
-        description="Number of policy alternatives to generate at each step."
-    )
-    G_rm_judgements: int = Field(
-        default=1, 
-        description="Number of RM judgements to sample per policy alternative."
-    )
+    # G_policy_alternatives: int = Field( # This is now effectively controlled by atropos_agent_config or direct param to generate_action
     
     rm_reward_discount_factor: float = Field(
         default=0.99, 
@@ -170,6 +165,18 @@ class TextWorldEnv(BaseEnv):
         self._temp_dir = tempfile.mkdtemp(prefix="textworld_env_")
         logger.info(f"TextWorldEnv created temporary directory: {self._temp_dir}")
 
+        # Initialize Memory Manager (shared by Agent)
+        self.memory_manager = None
+        if self.config.atropos_agent_config.enable_memory and MEMORY_SYSTEM_PREREQUISITES_AVAILABLE:
+            logger.info("TextWorldEnv: Initializing TextWorldMemoryManager for AtroposAgent.")
+            self.memory_manager = TextWorldMemoryManager(
+                embedding_dim_config_val=self.config.atropos_agent_config.embedding_dim,
+                player_id_for_logging=f"{self.config.atropos_agent_config.player_id_for_logging}_Memory"
+            )
+        elif self.config.atropos_agent_config.enable_memory:
+            logger.warning("TextWorldEnv: AtroposAgent memory is enabled in config, but prerequisites are not met. Memory will be OFF.")
+
+
         # Define the tool for executing TextWorld commands
         self.textworld_tools = [
             {
@@ -222,14 +229,16 @@ class TextWorldEnv(BaseEnv):
         # Ensure AtroposAgentConfig is instantiated
         agent_cfg = self.config.atropos_agent_config if self.config.atropos_agent_config is not None else AtroposAgentConfig()
         agent_cfg.system_prompt = constructed_system_prompt 
+        agent_cfg.model_id = self.config.default_server_config.model_name # Ensure model_id is set for smolagents
         
         self.agent = AtroposAgent(
             server_client=self.server, 
             tokenizer=self.tokenizer, 
-            config=agent_cfg
+            config=agent_cfg,
+            memory_manager=self.memory_manager # Pass the memory manager
         )
         # Store the system prompt that will be used for the policy agent message history
-        # TODO: Remove this?
+        # TODO: Remove this? -> self.agent.system_prompt_content should be the source of truth
         self.policy_agent_system_prompt_content = agent_cfg.system_prompt # Use the updated system_prompt
  
         # Ensure AtroposRMConfig is instantiated
@@ -344,7 +353,7 @@ class TextWorldEnv(BaseEnv):
             formatted_initial_obs = self._format_observation(raw_obs, infos)
             
             # Agent's game state should be reset for a new episode
-            self.agent.new_game() # Ensures agent's internal game_log is cleared
+            self.agent.new_game() # Ensures agent's internal game_log and memory manager are cleared
 
             ep_state = TextWorldEpisodeState(
                 episode_id=episode_id,
@@ -561,12 +570,13 @@ class TextWorldEnv(BaseEnv):
 
         logger.info(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Chosen action: '{chosen_action_command}' (from Alt {best_alternative_idx} with RM score {alternative_rm_scores[best_alternative_idx]:.2f})")
 
-        # 5. Record selected action with the Agent
+        # 5. Record selected action with the Agent and allow it to learn/store memory
         try:
-            self.agent.record_selected_action(selected_action_index=best_alternative_idx)
-            logger.debug(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent logs updated with selected action index: {best_alternative_idx}")
+            # self.agent.record_selected_action(selected_action_index=best_alternative_idx)
+            await self.agent.record_selected_action_and_learn_from_turn(selected_action_index=best_alternative_idx)
+            logger.debug(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent logs updated and memory processed for selected action index: {best_alternative_idx}")
         except Exception as e:
-            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error recording selected action with agent: {e}", exc_info=True)
+            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error recording selected action/learning with agent: {e}", exc_info=True)
             return None, True
 
 
@@ -780,9 +790,14 @@ class TextWorldEnv(BaseEnv):
             challenge_name="tw-simple",
             game_seed=None, 
             max_trajectory_tokens=32768, # For the combined trajectory data sent to trainer
-            agent_config=AtroposAgentConfig(), # Use default agent config
-            rm_config=AtroposRMConfig(thinking=True),      # Use default RM config, enable thinking
-            G_policy_alternatives=4, 
+            
+            # atropos_agent_config is now used directly
+            atropos_agent_config=AtroposAgentConfig( # Pass any overrides here if needed
+                model_id="NousResearch/Hermes-2-Pro-Llama-3-8B" # Ensure model_id matches server
+            ), 
+            # rm_config is now used directly
+            atropos_rm_config=AtroposRMConfig(thinking=True),      
+            G_policy_alternatives=4, # This should align with how agent.generate_action is called 
             G_rm_judgements=1, 
             rm_reward_discount_factor=0.99,
             debug_mode=False
@@ -797,4 +812,9 @@ class TextWorldEnv(BaseEnv):
         return env_config, server_configs
 
 if __name__ == "__main__":
-    TextWorldEnv.cli()
+    # Ensure asyncio event loop is managed correctly if TextWorldEnv.cli() is async
+    # For direct script execution, it might be simpler to wrap in an async function and run
+    async def main_cli():
+        await TextWorldEnv.cli()
+
+    asyncio.run(main_cli()) # Use asyncio.run if TextWorldEnv.cli() is async
