@@ -61,7 +61,7 @@ async def main():
         # policy_agent_server_config=None, # Explicitly None to use default
         # rm_agent_server_config=None,     # Explicitly None to use default
         
-        atropos_agent_config=AtroposAgentConfig(enable_memory=False), # Use default agent config, ensure memory is off
+        atropos_agent_config=AtroposAgentConfig(enable_memory=True), # Enable memory for testing
         atropos_rm_config=AtroposRMConfig(thinking=False), # RM thinking off for cleaner logs initially
         
         group_size=2, # Explicitly set group_size for policy alternatives, matching old G_policy_alternatives for this test script
