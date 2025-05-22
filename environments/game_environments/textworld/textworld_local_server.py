@@ -66,6 +66,10 @@ async def main():
         
         group_size=2, # Explicitly set group_size for policy alternatives, matching old G_policy_alternatives for this test script
         
+        # Data processing configuration for testing
+        enable_policy_thinking_summarization=True,  # Enable to test LLM-based thinking summarization
+        max_policy_thinking_summary_tokens=128,
+        
         # Other relevant fields from TextWorldEnvConfig defaults if needed
         # game_seed=None, # Use random seed by default for variety unless specific seed needed
         # max_trajectory_tokens = 24576, # Default from TextWorldEnvConfig

@@ -255,7 +255,10 @@ def prepare_reward_model_input(
     scored_data_group: ScoredDataGroup,
     tokenizer: PreTrainedTokenizer,
     max_tokens: int = 4096,
-    strip_thinking_from_history: bool = True
+    strip_thinking_from_history: bool = True,
+    summarize_thinking_with_llm: bool = False,
+    server_client = None,
+    max_thinking_summary_tokens: int = 128
 ) -> ScoredDataGroup:
     """
     Prepare ScoredDataGroup for reward model by filtering and truncating appropriately.
@@ -265,47 +268,120 @@ def prepare_reward_model_input(
         tokenizer: Tokenizer for counting tokens
         max_tokens: Maximum tokens for reward model input
         strip_thinking_from_history: Whether to strip <think> blocks from previous messages
+        summarize_thinking_with_llm: Whether to use LLM to summarize thinking blocks instead of stripping
+        server_client: Server client for LLM calls (required if summarize_thinking_with_llm=True)
+        max_thinking_summary_tokens: Maximum tokens for thinking block summaries
         
     Returns:
         Filtered and truncated ScoredDataGroup suitable for reward model
     """
     try:
-        filtered_messages = []
-        filtered_tokens = []
-        filtered_masks = []
+        import asyncio
         
-        for alt_idx, alt_messages in enumerate(scored_data_group["messages"]):
-            # Process messages for reward model
-            processed_messages = []
+        async def process_messages_async():
+            filtered_messages = []
+            filtered_tokens = []
+            filtered_masks = []
             
-            for msg_idx, msg in enumerate(alt_messages):
-                processed_msg = msg.copy()
+            for alt_idx, alt_messages in enumerate(scored_data_group["messages"]):
+                # Process messages for reward model
+                processed_messages = []
                 
-                # Strip thinking blocks from all but the last assistant message
-                if (msg["role"] == "assistant" and 
-                    strip_thinking_from_history and 
-                    msg_idx < len(alt_messages) - 1):
-                    processed_msg["content"] = strip_thinking(msg["content"])
+                for msg_idx, msg in enumerate(alt_messages):
+                    processed_msg = msg.copy()
+                    
+                    # Process thinking blocks in assistant messages (except the last one)
+                    if (msg["role"] == "assistant" and msg_idx < len(alt_messages) - 1):
+                        if summarize_thinking_with_llm and server_client:
+                            # Use LLM-based summarization
+                            processed_msg["content"] = await summarize_thinking_block(
+                                msg["content"], 
+                                server_client, 
+                                tokenizer, 
+                                max_thinking_summary_tokens
+                            )
+                        elif strip_thinking_from_history:
+                            # Strip thinking blocks entirely
+                            processed_msg["content"] = strip_thinking(msg["content"])
+                    
+                    processed_messages.append(processed_msg)
                 
-                processed_messages.append(processed_msg)
+                # Apply token limit truncation
+                truncated_messages = ensure_message_token_limit(
+                    processed_messages, tokenizer, max_tokens
+                )
+                
+                # Re-tokenize the processed messages
+                try:
+                    tokenized_output = tokenize_for_trainer(tokenizer, truncated_messages)
+                    filtered_messages.append(truncated_messages)
+                    filtered_tokens.append(tokenized_output["tokens"])
+                    filtered_masks.append(tokenized_output["masks"])
+                except Exception as e:
+                    logger.error(f"Error re-tokenizing messages for reward model alt {alt_idx}: {e}")
+                    # Keep original if re-tokenization fails
+                    filtered_messages.append(alt_messages)
+                    filtered_tokens.append(scored_data_group["tokens"][alt_idx] if alt_idx < len(scored_data_group["tokens"]) else [])
+                    filtered_masks.append(scored_data_group["masks"][alt_idx] if alt_idx < len(scored_data_group["masks"]) else [])
             
-            # Apply token limit truncation
-            truncated_messages = ensure_message_token_limit(
-                processed_messages, tokenizer, max_tokens
-            )
-            
-            # Re-tokenize the processed messages
+            return filtered_messages, filtered_tokens, filtered_masks
+        
+        # Check if we're in an async context
+        if summarize_thinking_with_llm and server_client:
             try:
-                tokenized_output = tokenize_for_trainer(tokenizer, truncated_messages)
-                filtered_messages.append(truncated_messages)
-                filtered_tokens.append(tokenized_output["tokens"])
-                filtered_masks.append(tokenized_output["masks"])
+                # Try to run the async processing
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # We're in an async context, create a task
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, process_messages_async())
+                        filtered_messages, filtered_tokens, filtered_masks = future.result()
+                else:
+                    # We're not in an async context, run directly
+                    filtered_messages, filtered_tokens, filtered_masks = asyncio.run(process_messages_async())
             except Exception as e:
-                logger.error(f"Error re-tokenizing messages for reward model alt {alt_idx}: {e}")
-                # Keep original if re-tokenization fails
-                filtered_messages.append(alt_messages)
-                filtered_tokens.append(scored_data_group["tokens"][alt_idx] if alt_idx < len(scored_data_group["tokens"]) else [])
-                filtered_masks.append(scored_data_group["masks"][alt_idx] if alt_idx < len(scored_data_group["masks"]) else [])
+                logger.error(f"Error in async processing, falling back to sync: {e}")
+                # Fall back to synchronous processing without LLM summarization
+                summarize_thinking_with_llm = False
+        
+        # Synchronous fallback processing
+        if not (summarize_thinking_with_llm and server_client):
+            filtered_messages = []
+            filtered_tokens = []
+            filtered_masks = []
+            
+            for alt_idx, alt_messages in enumerate(scored_data_group["messages"]):
+                processed_messages = []
+                
+                for msg_idx, msg in enumerate(alt_messages):
+                    processed_msg = msg.copy()
+                    
+                    # Strip thinking blocks from all but the last assistant message
+                    if (msg["role"] == "assistant" and 
+                        strip_thinking_from_history and 
+                        msg_idx < len(alt_messages) - 1):
+                        processed_msg["content"] = strip_thinking(msg["content"])
+                    
+                    processed_messages.append(processed_msg)
+                
+                # Apply token limit truncation
+                truncated_messages = ensure_message_token_limit(
+                    processed_messages, tokenizer, max_tokens
+                )
+                
+                # Re-tokenize the processed messages
+                try:
+                    tokenized_output = tokenize_for_trainer(tokenizer, truncated_messages)
+                    filtered_messages.append(truncated_messages)
+                    filtered_tokens.append(tokenized_output["tokens"])
+                    filtered_masks.append(tokenized_output["masks"])
+                except Exception as e:
+                    logger.error(f"Error re-tokenizing messages for reward model alt {alt_idx}: {e}")
+                    # Keep original if re-tokenization fails
+                    filtered_messages.append(alt_messages)
+                    filtered_tokens.append(scored_data_group["tokens"][alt_idx] if alt_idx < len(scored_data_group["tokens"]) else [])
+                    filtered_masks.append(scored_data_group["masks"][alt_idx] if alt_idx < len(scored_data_group["masks"]) else [])
         
         # Create new ScoredDataGroup with filtered data
         filtered_sdg = ScoredDataGroup(
@@ -316,6 +392,7 @@ def prepare_reward_model_input(
             metadata={
                 **(scored_data_group.get("metadata", {})),
                 "reward_model_processed": True,
+                "thinking_summarized_with_llm": summarize_thinking_with_llm,
                 "original_message_count": len(scored_data_group["messages"][0]) if scored_data_group["messages"] else 0,
                 "filtered_message_count": len(filtered_messages[0]) if filtered_messages else 0
             }
@@ -664,3 +741,102 @@ def ensure_trajectory_token_limit(
             f"due to token limit constraints. Original: {len(trajectory)}, Filtered: {len(filtered_trajectory)}"
         )
     return filtered_trajectory
+
+
+async def summarize_thinking_block(
+    response_text: str,
+    server_client,
+    tokenizer: PreTrainedTokenizer,
+    max_summary_tokens: int = 256
+) -> str:
+    """
+    Summarize the thinking block in a response using an LLM call.
+    Preserves key reasoning, strategic planning, and conclusions while making it more concise.
+    
+    Args:
+        response_text: The response text containing a thinking block to summarize
+        server_client: Server client for making LLM calls
+        tokenizer: Tokenizer for counting tokens
+        max_summary_tokens: Maximum tokens for the summarized thinking block
+        
+    Returns:
+        Response text with summarized thinking block, or original if no thinking block found
+    """
+    try:
+        think_start_tag = "<think>"
+        think_end_tag = "</think>"
+
+        think_start_idx = response_text.find(think_start_tag)
+        think_end_idx = response_text.find(think_end_tag)
+
+        # If no thinking block found, return original
+        if not (think_start_idx != -1 and think_end_idx != -1 and think_start_idx < think_end_idx):
+            return response_text
+
+        # Extract parts
+        part_before_thinking = response_text[:think_start_idx]
+        original_thinking_content = response_text[think_start_idx + len(think_start_tag):think_end_idx]
+        part_after_thinking = response_text[think_end_idx + len(think_end_tag):]
+
+        # Skip summarization if thinking block is already short or empty
+        original_thinking_stripped = original_thinking_content.strip()
+        if not original_thinking_stripped:
+            return response_text
+        
+        original_tokens = tokenizer.encode(original_thinking_stripped, add_special_tokens=False)
+        if len(original_tokens) <= max_summary_tokens:
+            return response_text
+
+        # Create summarization prompt
+        summarization_prompt = f"""Please summarize the following thinking block concisely while preserving:
+1. Key reasoning steps that led to the final decision/conclusion
+2. Strategic planning information needed for subsequent actions
+3. Important observations or insights about the current situation
+4. The logical flow from analysis to decision
+
+Keep the summary brief but comprehensive enough that someone could understand the essential reasoning process.
+
+Original thinking block:
+{original_thinking_stripped}
+
+Provide only the summarized thinking content (without the <think> tags)."""
+
+        # Make LLM call for summarization
+        summary_messages = [
+            {
+                "role": "system", 
+                "content": "You are a helpful assistant that summarizes reasoning processes concisely while preserving essential strategic information and logical flow."
+            },
+            {"role": "user", "content": summarization_prompt}
+        ]
+        
+        response = await server_client.chat_completion(
+            messages=summary_messages,
+            max_tokens=max_summary_tokens,
+            temperature=0.1  # Low temperature for consistent summaries
+        )
+        
+        if not (response and response.choices and response.choices[0].message):
+            logger.warning("LLM summarization call failed or returned empty response")
+            return response_text
+            
+        summary_content = response.choices[0].message.content.strip()
+        
+        if not summary_content:
+            logger.warning("LLM returned empty summary for thinking block")
+            return response_text
+        
+        # Reconstruct the response with summarized thinking block
+        summarized_response = f"{part_before_thinking}{think_start_tag}\n{summary_content}\n{think_end_tag}{part_after_thinking}"
+        
+        # Log the summarization
+        original_token_count = len(original_tokens)
+        summary_token_count = len(tokenizer.encode(summary_content, add_special_tokens=False))
+        logger.info(f"Summarized thinking block: {original_token_count} -> {summary_token_count} tokens "
+                   f"({summary_token_count/original_token_count*100:.1f}% of original)")
+        
+        return summarized_response
+        
+    except Exception as e:
+        logger.error(f"Error in summarize_thinking_block: {e}", exc_info=True)
+        return response_text  # Return original if summarization fails

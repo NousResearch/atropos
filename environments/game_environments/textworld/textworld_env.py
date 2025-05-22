@@ -30,6 +30,7 @@ from atroposlib.envs.base import (
 from atroposlib.type_definitions import Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 from atroposlib.utils.tool_call_parser import parse_tool_call
+from atroposlib.utils.message_history_utils import prepare_reward_model_input
 
 # Import the generation utility
 from environments.game_environments.textworld.generation_utils import generate_textworld_game
@@ -73,6 +74,17 @@ class TextWorldEnvConfig(BaseEnvConfig):
     rm_config: Optional[AtroposRMConfig] = None
     rm_reward_discount_factor: float = Field(default=0.99, description="Discount factor for RM Q-value accuracy scoring.")
     debug_mode: bool = False
+
+    # Data processing options
+    enable_policy_thinking_summarization: bool = Field(
+        default=True, 
+        description="Whether to use LLM-based summarization for thinking blocks in policy training data history (latest message always remains raw)."
+    )
+    max_policy_thinking_summary_tokens: int = Field(
+        default=128,
+        description="Maximum tokens for LLM-summarized thinking blocks in policy training data history."
+    )
+    # RM always has thinking blocks stripped entirely for objectivity
 
     # TextWorld specific game generation settings
     game_generation_params: Dict[str, Any] = Field(
@@ -789,11 +801,6 @@ class TextWorldEnv(BaseEnv):
                         logger.warning(f"[Episode: {ep_state.episode_id}] Turn index {turn_idx} out of sync with canonical rewards/indices. Skipping RM data for this turn.")
                         continue
 
-                    rm_tokens_for_turn: List[List[int]] = []
-                    rm_masks_for_turn: List[List[int]] = []
-                    rm_target_scores_for_turn: List[float] = []
-                    rm_messages_for_turn: List[List[Message]] = []
-                    
                     # policy_sdg_for_turn contains all alternatives for this turn
                     # Its 'messages' are List[List[Message]], where each inner List[Message] is the history for one policy alternative
                     # Its 'scores' are the original Q-estimates from the RM for each policy alternative
@@ -808,59 +815,55 @@ class TextWorldEnv(BaseEnv):
 
                     chosen_alternative_idx_for_this_turn = ep_state.canonical_chosen_alternative_indices[turn_idx]
 
+                    # Create the RM training target scores list
+                    rm_target_scores_for_turn: List[float] = []
                     for alt_idx in range(num_alternatives_this_turn):
-                        # The 'messages' for this specific alternative already represent the RM's input history
-                        # (System Prompt, UserObs1, ..., PrevSelectedAssistAction, CurrentUserObs, CurrentAssistAlternative)
-                        rm_input_messages_for_alt: List[Message] = policy_sdg_for_turn["messages"][alt_idx]
-                        
-                        target_q_value_for_alt: float
                         if alt_idx == chosen_alternative_idx_for_this_turn:
                             target_q_value_for_alt = canonical_discounted_returns[turn_idx]
                             logger.debug(f"RM training data generation for policy alternative {alt_idx} (chosen) for turn {turn_idx}. Target score (G_t): {target_q_value_for_alt:.4f}")
                         else:
                             # Use the original RM Q-estimate for non-chosen alternatives
-                            # These are already present in the policy_sdg_for_turn["scores"]
                             original_rm_q_estimate = policy_sdg_for_turn["scores"][alt_idx]
                             target_q_value_for_alt = original_rm_q_estimate 
                             logger.debug(f"RM training data generation for policy alternative {alt_idx} (not chosen) for turn {turn_idx}. Target score (Q_estimate): {target_q_value_for_alt:.4f}")
-
-                        try:
-                            tokenized_rm_input = tokenize_for_trainer(self.tokenizer, rm_input_messages_for_alt)
-                            rm_tokens_for_turn.append(tokenized_rm_input["tokens"])
-                            rm_masks_for_turn.append(tokenized_rm_input["masks"])
-                            rm_target_scores_for_turn.append(target_q_value_for_alt)
-                            rm_messages_for_turn.append(rm_input_messages_for_alt)
-                        except Exception as e_tok:
-                            logger.error(f"[Episode: {ep_state.episode_id} Turn: {turn_idx+1} Alt: {alt_idx}] Error tokenizing RM input for training: {e_tok}", exc_info=True)
-                            # Need to add placeholders to keep lists aligned if one alternative fails, or skip the whole turn's RM SDG
-                            # For simplicity, let's skip the whole turn if any alternative fails tokenization for now.
-                            # A more robust solution might add empty lists and filter later or handle per-alternative.
-                            logger.error(f"Skipping RM ScoredDataGroup for turn {turn_idx+1} due to tokenization error.")
-                            rm_tokens_for_turn = [] # Clear lists to ensure this SDG isn't added
-                            break 
+                        rm_target_scores_for_turn.append(target_q_value_for_alt)
                     
-                    if rm_tokens_for_turn: # Only add if tokenization succeeded for all alternatives in this turn
-                        # Ensure all inner lists have the same length (should be self.config.group_size)
-                        if not (len(rm_tokens_for_turn) == len(rm_masks_for_turn) == len(rm_target_scores_for_turn) == len(rm_messages_for_turn) == self.config.group_size):
-                            logger.error(
-                                f"[Episode: {ep_state.episode_id} Turn: {turn_idx+1}] Mismatch in lengths of RM data components before creating SDG. "
-                                f"Tokens: {len(rm_tokens_for_turn)}, Masks: {len(rm_masks_for_turn)}, Scores: {len(rm_target_scores_for_turn)}, Messages: {len(rm_messages_for_turn)}. "
-                                f"Expected {self.config.group_size}. Skipping RM SDG for this turn."
-                            )
-                            continue
-
-                        rm_sdg_for_turn = ScoredDataGroup(
-                            tokens=rm_tokens_for_turn,
-                            masks=rm_masks_for_turn,
-                            scores=rm_target_scores_for_turn,
-                            messages=rm_messages_for_turn,
+                    # Use prepare_reward_model_input to process the data with optional thinking summarization
+                    try:
+                        raw_rm_sdg = ScoredDataGroup(
+                            tokens=policy_sdg_for_turn["tokens"],  # Start with policy tokens 
+                            masks=policy_sdg_for_turn["masks"],    # Start with policy masks
+                            scores=rm_target_scores_for_turn,      # Use RM target scores
+                            messages=policy_sdg_for_turn["messages"], # Start with policy messages
                             metadata={
                                 "turn_number": turn_idx,
                                 "episode_id": ep_state.episode_id,
-                                "type": "rm_training_data"
+                                "type": "rm_training_data_raw"
                             }
                         )
-                        rm_training_sdgs_for_episode.append(rm_sdg_for_turn)
+                        
+                        processed_rm_sdg = prepare_reward_model_input(
+                            scored_data_group=raw_rm_sdg,
+                            tokenizer=self.tokenizer,
+                            max_tokens=self.config.max_token_length,  # Use configured max token length
+                            strip_thinking_from_history=True,  # RM always strips thinking blocks entirely
+                            summarize_thinking_with_llm=False,  # RM never uses thinking summarization
+                            server_client=None,  # Not needed since we're not summarizing
+                            max_thinking_summary_tokens=0  # Not used
+                        )
+                        
+                        # Update metadata to indicate final processing
+                        processed_rm_sdg["metadata"].update({
+                            "type": "rm_training_data",
+                            "thinking_processed": True
+                        })
+                        
+                        rm_training_sdgs_for_episode.append(processed_rm_sdg)
+                        
+                    except Exception as e_processing:
+                        logger.error(f"[Episode: {ep_state.episode_id} Turn: {turn_idx+1}] Error processing RM input for training: {e_processing}", exc_info=True)
+                        logger.error(f"Skipping RM ScoredDataGroup for turn {turn_idx+1} due to processing error.") 
+
             
             if rm_training_sdgs_for_episode:
                 logger.info(f"[Episode: {ep_state.episode_id}] Total {len(rm_training_sdgs_for_episode)} RM ScoredDataGroups prepared for this episode. Sending to API...")
@@ -911,26 +914,114 @@ class TextWorldEnv(BaseEnv):
         any final adjustments if needed.
         """
         # The main reward processing for policy agent data (calculating MC discounted returns
-        # for chosen actions) is now handled at the end of the `collect_trajectories` method
-        # to ensure all episode information (like ep_state.canonical_rewards) is available.
-        # This method is called by BaseEnv *after* `collect_trajectories` returns.
+        # for chosen actions) is now handled at the end of the `collect_trajectories`
+        # method to ensure all episode information is available.
+        # This method now processes policy data to summarize thinking blocks properly.
         
         if not trajectories:
-            logger.debug("postprocess_histories received no trajectories. Passthrough.")
+            logger.debug("postprocess_histories received no trajectories.")
             return trajectories
 
-        # Ensure it's a list for consistent logging/processing, though it should be List[ScoredDataGroup]
-        # from collect_trajectories if an episode ran.
-        num_groups_to_log = 0
-        if isinstance(trajectories, list):
-            num_groups_to_log = len([t for t in trajectories if t is not None])
-        elif trajectories is not None : # Single ScoredDataGroup
-            num_groups_to_log = 1
-            
-        logger.debug(f"TextWorldEnv.postprocess_histories: Received {num_groups_to_log} ScoredDataGroup(s) for policy. Rewards already processed in collect_trajectories. Passthrough.")
+        # Ensure it's a list for consistent processing
+        if not isinstance(trajectories, list):
+            trajectories = [trajectories] if trajectories is not None else []
         
-        # For now, this is a passthrough as rewards are processed in collect_trajectories.
-        return trajectories
+        # Process each ScoredDataGroup for policy training
+        processed_trajectories = []
+        for sdg_idx, sdg in enumerate(trajectories):
+            if sdg is None:
+                processed_trajectories.append(None)
+                continue
+                
+            try:
+                # Process policy data with thinking block summarization for history
+                # but keep the latest message raw for training
+                processed_policy_sdg = await self._process_policy_training_data(sdg)
+                processed_trajectories.append(processed_policy_sdg)
+                
+            except Exception as e:
+                logger.error(f"Error processing policy ScoredDataGroup {sdg_idx}: {e}", exc_info=True)
+                processed_trajectories.append(sdg)  # Fallback to original
+        
+        logger.debug(f"TextWorldEnv.postprocess_histories: Processed {len(processed_trajectories)} ScoredDataGroup(s) for policy training.")
+        return processed_trajectories
+
+    async def _process_policy_training_data(self, sdg: ScoredDataGroup) -> ScoredDataGroup:
+        """
+        Process policy training data to:
+        1. Summarize thinking blocks in message history (all but the latest message)
+        2. Keep the latest message raw for training
+        3. Ensure proper masking for training
+        """
+        if not self.config.enable_policy_thinking_summarization:
+            # If summarization is disabled, return as-is
+            return sdg
+            
+        processed_messages = []
+        processed_tokens = []
+        processed_masks = []
+        
+        for alt_idx, alt_messages in enumerate(sdg["messages"]):
+            if not alt_messages:
+                processed_messages.append(alt_messages)
+                processed_tokens.append(sdg["tokens"][alt_idx] if alt_idx < len(sdg["tokens"]) else [])
+                processed_masks.append(sdg["masks"][alt_idx] if alt_idx < len(sdg["masks"]) else [])
+                continue
+                
+            # Process all messages except the last one (which should remain raw for training)
+            alt_processed_messages = []
+            for msg_idx, msg in enumerate(alt_messages):
+                if msg_idx == len(alt_messages) - 1:
+                    # Keep the last message (the one being trained on) completely raw
+                    alt_processed_messages.append(msg.copy())
+                elif msg["role"] == "assistant" and self.config.enable_policy_thinking_summarization:
+                    # Summarize thinking blocks in assistant messages that are part of history
+                    processed_msg = msg.copy()
+                    try:
+                        from atroposlib.utils.message_history_utils import summarize_thinking_block
+                        processed_msg["content"] = await summarize_thinking_block(
+                            msg["content"], 
+                            self.server, 
+                            self.tokenizer, 
+                            self.config.max_policy_thinking_summary_tokens
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to summarize thinking block for policy training data: {e}")
+                        # Fall back to stripping thinking blocks if summarization fails
+                        from atroposlib.utils.message_history_utils import strip_thinking
+                        processed_msg["content"] = strip_thinking(msg["content"])
+                    alt_processed_messages.append(processed_msg)
+                else:
+                    # Keep other messages as-is
+                    alt_processed_messages.append(msg.copy())
+            
+            # Re-tokenize the processed messages
+            try:
+                tokenized_output = tokenize_for_trainer(self.tokenizer, alt_processed_messages)
+                processed_messages.append(alt_processed_messages)
+                processed_tokens.append(tokenized_output["tokens"])
+                processed_masks.append(tokenized_output["masks"])
+            except Exception as e:
+                logger.error(f"Error re-tokenizing processed policy messages for alt {alt_idx}: {e}")
+                # Fallback to original
+                processed_messages.append(alt_messages)
+                processed_tokens.append(sdg["tokens"][alt_idx] if alt_idx < len(sdg["tokens"]) else [])
+                processed_masks.append(sdg["masks"][alt_idx] if alt_idx < len(sdg["masks"]) else [])
+        
+        # Create processed ScoredDataGroup
+        processed_sdg = ScoredDataGroup(
+            tokens=processed_tokens,
+            masks=processed_masks,
+            scores=sdg["scores"],
+            messages=processed_messages,
+            metadata={
+                **(sdg.get("metadata", {})),
+                "policy_thinking_processed": True,
+                "thinking_summarization_enabled": self.config.enable_policy_thinking_summarization
+            }
+        )
+        
+        return processed_sdg
 
     async def evaluate(self, *args, **kwargs):
         # Implementation pending
@@ -939,10 +1030,6 @@ class TextWorldEnv(BaseEnv):
 
     async def cleanup(self):
         """Clean up temporary game files and directory."""
-        # Clean up registered environments
-        # Note: textworld.gym doesn't have a public unregister function easily accessible.
-        # We might need to manage env_ids carefully or rely on process exit.
-        # For now, focus on deleting the temp dir.
         try:
             if os.path.exists(self._temp_dir):
                 shutil.rmtree(self._temp_dir)
@@ -954,52 +1041,43 @@ class TextWorldEnv(BaseEnv):
 
     def __del__(self):
         # Ensure cleanup runs even if explicit cleanup isn't called.
-        # Avoid calling async methods like self.cleanup() here.
-        # Attempt synchronous removal of the temporary directory.
         try:
             if hasattr(self, '_temp_dir') and os.path.exists(self._temp_dir):
                 shutil.rmtree(self._temp_dir)
         except Exception as e:
-            # Suppress errors during __del__ as interpreter state is unpredictable.
-            # print(f"Error during TextWorldEnv __del__: {e}") # Avoid logger
             pass
 
     @classmethod
     def config_init(cls) -> Tuple[TextWorldEnvConfig, List[APIServerConfig]]:
         """
         Initializes the environment and server configurations with hardcoded defaults.
-        This method provides a standard way to get a runnable configuration without
-        needing to parse external files.
         """
         env_config = TextWorldEnvConfig(
-            # BaseEnvConfig common parameters (inspired by Blackjack defaults)
-            tokenizer_name="NousResearch/Hermes-2-Pro-Llama-3-8B", # Example tokenizer
-            group_size=2, # Number of trajectories per run_trajectories_on_item call by BaseEnv. Also num policy alternatives.
+            tokenizer_name="NousResearch/Hermes-2-Pro-Llama-3-8B",
+            group_size=2,
             use_wandb=True,
-            rollout_server_url="http://localhost:8000", # Example
+            rollout_server_url="http://localhost:8000",
             total_steps=1000,
-            batch_size=32, # Example
+            batch_size=32,
             steps_per_eval=50,
-            max_token_length=4096, # Max tokens for a single LLM call (agent/RM)
+            max_token_length=4096,
             wandb_name="textworld_atropos",
-            eval_handling=APIServerConfig.EvalHandlingEnum.LIMIT_TRAIN, # Corrected enum access
+            eval_handling=APIServerConfig.EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
             max_steps=50,
             challenge_name="tw-simple",
             game_seed=None, 
-            max_trajectory_tokens=32768, # For the combined trajectory data sent to trainer
-            
-            # atropos_agent_config is now used directly
-            atropos_agent_config=AtroposAgentConfig( # Pass any overrides here if needed
-                model_id="NousResearch/Hermes-2-Pro-Llama-3-8B" # Ensure model_id matches server
+            max_trajectory_tokens=32768,
+            atropos_agent_config=AtroposAgentConfig(
+                model_id="NousResearch/Hermes-2-Pro-Llama-3-8B"
             ), 
-            # rm_config is now used directly
-            atropos_rm_config=AtroposRMConfig( # Ensure RM also gets a model_id if not covered by default logic
+            atropos_rm_config=AtroposRMConfig(
                 thinking=True,
-                model_id="NousResearch/Hermes-2-Pro-Llama-3-8B" # Default to same model for now
+                model_id="NousResearch/Hermes-2-Pro-Llama-3-8B"
             ),      
             rm_reward_discount_factor=0.99,
-            debug_mode=False
+            debug_mode=False,
+            enable_policy_thinking_summarization=True
         )
         server_configs = [
             APIServerConfig(
@@ -1011,9 +1089,6 @@ class TextWorldEnv(BaseEnv):
         return env_config, server_configs
 
 if __name__ == "__main__":
-    # Ensure asyncio event loop is managed correctly if TextWorldEnv.cli() is async
-    # For direct script execution, it might be simpler to wrap in an async function and run
     async def main_cli():
         await TextWorldEnv.cli()
-
-    asyncio.run(main_cli()) # Use asyncio.run if TextWorldEnv.cli() is async
+    asyncio.run(main_cli())
