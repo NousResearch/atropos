@@ -5,13 +5,12 @@ from typing import List, Optional, Tuple, Any, Dict
 from smolagents.models import Model, ChatMessage, MessageRole
 
 from atroposlib.type_definitions import Message, AtroposAgentActionLog, AtroposAgentAction, AtroposAgentTurn
-import numpy as np
 from transformers import PreTrainedTokenizer
 from pydantic import BaseModel, Field
 from atroposlib.envs.base import ServerManager
 
 # Import the new memory manager
-from .textworld_memory_manager import TextWorldMemoryManager, MEMORY_SYSTEM_PREREQUISITES_AVAILABLE
+from .atropos_memory_manager import AtroposMemoryManager as TextWorldMemoryManager, MEMORY_SYSTEM_PREREQUISITES_AVAILABLE
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG) # Keep this commented or control via TextWorldEnv config

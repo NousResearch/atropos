@@ -2,10 +2,12 @@
 """
 TextWorldEnv: Trainer environment for Microsoft TextWorld
 
-Wraps the TextWorld game generator and Gym interface to train an LLM
-using a best-of-n pattern with function-call style actions. Extends BaseEnv.
+A trainer environment that wraps TextWorld game generator and Gym interface 
+to train LLMs using best-of-n pattern with function-call style actions.
+Integrates with AtroposAgent and AtroposRM for policy and reward modeling.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -16,9 +18,10 @@ import uuid
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import textworld
-import textworld.challenges  # Import the challenges module
+import textworld.challenges
 import textworld.gym
 from textworld import EnvInfos, GameOptions
+from textworld.gym.envs import TextworldGymEnv
 from pydantic import Field
 
 from atroposlib.envs.base import (
@@ -27,36 +30,25 @@ from atroposlib.envs.base import (
     APIServerConfig,
     ScoredDataGroup,
 )
-from atroposlib.type_definitions import Message
+from atroposlib.type_definitions import Message, AtroposAgentAction
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 from atroposlib.utils.tool_call_parser import parse_tool_call
 from atroposlib.utils.message_history_utils import prepare_reward_model_input
 
-# Import the generation utility
 from environments.game_environments.textworld.generation_utils import generate_textworld_game
-
-# Import agent and RM configurations
 from .agents.atropos_agent import AtroposAgent, AtroposAgentConfig
 from .agents.atropos_rm import AtroposRM, AtroposRMConfig, RMJudgementLog
-from .agents.textworld_memory_manager import TextWorldMemoryManager, MEMORY_SYSTEM_PREREQUISITES_AVAILABLE
-from atroposlib.type_definitions import AtroposAgentAction
-
-import asyncio # Add asyncio for gather
-import textworld.gym.envs # Import the specific module
-from textworld.gym.envs import TextworldGymEnv # Import the class
+from .agents.atropos_memory_manager import AtroposMemoryManager, MEMORY_SYSTEM_PREREQUISITES_AVAILABLE
 
 logger = logging.getLogger(__name__)
 
 
-# Updated Config Class (as previously defined)
 class TextWorldEnvConfig(BaseEnvConfig):
-    """
-    Configuration for the TextWorld environment trainer.
-    """
+    """Configuration for the TextWorld environment trainer."""
 
     env_name: str = "TextWorld"
     max_steps: int = 50
-    challenge_name: str = "simple_home"
+    challenge_name: str = "tw-simple"
     challenge_rewards: str = "dense"
     challenge_goal: str = "detailed"
     challenge_test_mode: bool = False
@@ -68,25 +60,25 @@ class TextWorldEnvConfig(BaseEnvConfig):
     grammar_theme: str = "house"
     grammar_include_adj: bool = True
     game_seed: Optional[int] = None
-    max_token_length: int = 16384 # LLM max token length
-    max_trajectory_tokens: int = 24576 # Trainer max token length
+    max_token_length: int = 16384
+    max_trajectory_tokens: int = 24576
     agent_config: Optional[AtroposAgentConfig] = None
     rm_config: Optional[AtroposRMConfig] = None
-    rm_reward_discount_factor: float = Field(default=0.99, description="Discount factor for RM Q-value accuracy scoring.")
+    rm_reward_discount_factor: float = Field(
+        default=0.99, 
+        description="Discount factor for RM Q-value accuracy scoring."
+    )
     debug_mode: bool = False
 
-    # Data processing options
     enable_policy_thinking_summarization: bool = Field(
         default=True, 
-        description="Whether to use LLM-based summarization for thinking blocks in policy training data history (latest message always remains raw)."
+        description="Whether to use LLM-based summarization for thinking blocks in policy training data."
     )
     max_policy_thinking_summary_tokens: int = Field(
         default=128,
-        description="Maximum tokens for LLM-summarized thinking blocks in policy training data history."
+        description="Maximum tokens for LLM-summarized thinking blocks."
     )
-    # RM always has thinking blocks stripped entirely for objectivity
 
-    # TextWorld specific game generation settings
     game_generation_params: Dict[str, Any] = Field(
         default_factory=lambda: {
             "max_score": 10,
@@ -101,12 +93,10 @@ class TextWorldEnvConfig(BaseEnvConfig):
             "include_examine_action": True,
             "include_inventory_action": True,
             "include_look_action": True,
-            # Add more as needed based on textworld.GameMaker API
         }
     )
-    game_file_path: Optional[str] = None # If using a pre-existing game file
+    game_file_path: Optional[str] = None
 
-    # Agent and RM configurations
     default_server_config: APIServerConfig = Field(
         default_factory=lambda: APIServerConfig(api_server_type="openai", model_name="gpt-3.5-turbo")
     )
@@ -115,17 +105,15 @@ class TextWorldEnvConfig(BaseEnvConfig):
 
     atropos_agent_config: AtroposAgentConfig = Field(default_factory=AtroposAgentConfig) 
     atropos_rm_config: AtroposRMConfig = Field(default_factory=AtroposRMConfig) 
-    # group_size: int = 3 # Number of alternatives -> This is part of BaseEnvConfig now
 
     class Config:
         extra = 'forbid'
         arbitrary_types_allowed = True
 
-# New EpisodeState for Atropos integration
+
 class TextWorldEpisodeState:
-    """
-    Stores per-episode state for a TextWorld game when using AtroposAgent and AtroposRM.
-    """
+    """Stores per-episode state for a TextWorld game when using AtroposAgent and AtroposRM."""
+    
     def __init__(self, episode_id: str, game_file: str, textworld_env_instance: TextworldGymEnv, 
                  initial_obs: str, initial_infos: Dict[str, Any], max_steps: int):
         self.episode_id: str = episode_id
@@ -135,9 +123,9 @@ class TextWorldEpisodeState:
         self.initial_infos: Dict[str, Any] = initial_infos
         
         self.rm_judgement_history: List[RMJudgementLog] = [] 
-        self.policy_step_data: List[ScoredDataGroup] = [] # Stores ScoredDataGroup for each turn of the canonical path
+        self.policy_step_data: List[ScoredDataGroup] = []
         
-        self.cumulative_reward: float = 0.0 # Overall game score progression
+        self.cumulative_reward: float = 0.0
         self.max_turns: int = max_steps
         
         self.last_score: float = initial_infos.get("score", 0.0)
@@ -148,23 +136,20 @@ class TextWorldEpisodeState:
         self.last_env_raw_observation: Optional[str] = None
         self.last_env_infos: Optional[Dict[str, Any]] = None
 
-        # For reward calculation and RM target generation
-        self.canonical_rewards: List[float] = [] # Stores immediate rewards from chosen actions
-        self.canonical_chosen_alternative_indices: List[int] = [] # Stores index of chosen alternative for each step
+        self.canonical_rewards: List[float] = []
+        self.canonical_chosen_alternative_indices: List[int] = []
         
         # Episode-level cache for thinking block summarizations
-        self.thinking_block_cache: Dict[int, str] = {}  # Maps hash(content) -> summarized_content
+        self.thinking_block_cache: Dict[int, str] = {}
 
 
 class TextWorldEnv(BaseEnv):
-    """
-    Trainer environment for TextWorld integrating AtroposAgent and AtroposRM.
-    """
+    """Trainer environment for TextWorld integrating AtroposAgent and AtroposRM."""
 
     def __init__(
         self,
         config: TextWorldEnvConfig,
-        server_configs: List[APIServerConfig], # These are all unique configs needed by env
+        server_configs: List[APIServerConfig],
         slurm: bool = True,
         testing: bool = False,
     ):
@@ -172,21 +157,18 @@ class TextWorldEnv(BaseEnv):
         self.config: TextWorldEnvConfig = config 
         self.episodes: Dict[str, TextWorldEpisodeState] = {}
         self._temp_dir = tempfile.mkdtemp(prefix="textworld_env_")
-        logger.info(f"TextWorldEnv created temporary directory: {self._temp_dir}")
 
-        # Initialize Memory Manager (shared by Agent)
+        # Initialize Memory Manager
         self.memory_manager = None
         if self.config.atropos_agent_config.enable_memory and MEMORY_SYSTEM_PREREQUISITES_AVAILABLE:
-            logger.info("TextWorldEnv: Initializing TextWorldMemoryManager for AtroposAgent.")
-            self.memory_manager = TextWorldMemoryManager(
+            self.memory_manager = AtroposMemoryManager(
                 embedding_dim_config_val=self.config.atropos_agent_config.embedding_dim,
                 player_id_for_logging=f"{self.config.atropos_agent_config.player_id_for_logging}_Memory"
             )
         elif self.config.atropos_agent_config.enable_memory:
-            logger.warning("TextWorldEnv: AtroposAgent memory is enabled in config, but prerequisites are not met. Memory will be OFF.")
+            logger.warning("Memory is enabled in config, but prerequisites are not met. Memory disabled.")
 
-
-        # Define the tool for executing TextWorld commands
+        # Define TextWorld command execution tool
         self.textworld_tools = [
             {
                 "type": "function",
@@ -194,16 +176,16 @@ class TextWorldEnv(BaseEnv):
                     "name": "execute_command",
                     "description": "Execute a text command in the adventure game.",
                     "parameters": {
-                        "type": "object", # Added for OpenAI compatibility
+                        "type": "object",
                         "properties": {
-                             "command": { # Changed from command_string to command for consistency with _parse_action
+                             "command": {
                                 "type": "string", 
-                                "description": "The full text command to execute (e.g., 'go north', 'take shiny key', 'open wooden door with rusty key')."
+                                "description": "The command to execute in the game."
                             }
                         },
-                        "required": ["command"] # Added for OpenAI compatibility
-                    },
-                },
+                        "required": ["command"]
+                    }
+                }
             }
         ]
         tools_json = json.dumps(self.textworld_tools, indent=2)
@@ -273,53 +255,34 @@ class TextWorldEnv(BaseEnv):
             logger.setLevel(logging.DEBUG)
 
     async def setup(self):
-        """Ensure prerequisites are met, e.g., TextWorld is installed and working."""
-        # Basic check, can be expanded (e.g., try generating a dummy game)
+        """Ensure prerequisites are met for TextWorld."""
         try:
             import textworld
-            logger.info(f"TextWorld version {textworld.__version__} found.")
         except ImportError:
             logger.error("TextWorld library not found. Please install it to use TextWorldEnv.")
             raise
-        # Agent and RM setup (like model loading) is handled by their __init__ methods,
-        # which are called in TextWorldEnv.__init__.
-        pass
 
     def _format_observation(self, obs: str, infos: Dict[str, Any]) -> str:
-        """Formats the TextWorld observation and additional info for the LLM."""
-        # Basic formatting, can be enhanced to include inventory, score, objective, etc.
-        # from infos if they are consistently available and useful.
+        """Format TextWorld observation and additional info for the LLM."""
         objective = infos.get("objective", "No objective provided.")
         inventory = infos.get("inventory", "Your inventory is empty.")
-        description = infos.get("description", obs) # Use description if available, else raw obs
-        feedback = infos.get("feedback", "") # Previous command's feedback
+        description = infos.get("description", obs)
+        feedback = infos.get("feedback", "")
 
-        # Filter out potentially redundant or overly verbose infos if necessary.
-        # For now, include key ones.
         formatted_obs = f"Objective: {objective}\n\n"
         formatted_obs += f"Current Location & State:\n{description}\n\n"
         formatted_obs += f"Inventory: {inventory}\n\n"
-        if infos.get("last_action"): # Add feedback from last action if it exists
+        if infos.get("last_action"):
             formatted_obs += f"Feedback from last action ('{infos['last_action']}'):\n{feedback}\n"
-        
-        # Consider adding score, moves, etc., if strategically important for the agent.
-        # current_score = infos.get("score", 0)
-        # num_moves = infos.get("moves", 0)
-        # formatted_obs += f"Current Score: {current_score}, Moves: {num_moves}\n"
         
         return formatted_obs.strip()
 
     async def _get_or_create_episode(self, episode_seed: Optional[int] = None) -> Optional[TextWorldEpisodeState]:
-        """
-        Generates a new TextWorld game, registers it, and initializes an episode state.
-        If episode_seed is provided, it's used for game generation.
-        The agent's game state is reset here.
-        """
+        """Generate a new TextWorld game and initialize episode state."""
         episode_id = f"textworld-episode-{uuid.uuid4().hex}"
-        
         current_game_seed = episode_seed if episode_seed is not None else random.randint(0, 0xFFFFFFFF)
 
-        # Create a proper GameOptions object
+        # Create GameOptions
         options = GameOptions()
         options.seeds = current_game_seed
         options.nb_rooms = self.config.nb_rooms
@@ -330,7 +293,6 @@ class TextWorldEnv(BaseEnv):
         options.grammar.theme = self.config.grammar_theme
         options.grammar.include_adj = self.config.grammar_include_adj
 
-        # Create settings dictionary as expected by generate_textworld_game
         challenge_settings = {
             'seed': current_game_seed,
             'rewards': self.config.challenge_rewards,
@@ -338,7 +300,6 @@ class TextWorldEnv(BaseEnv):
             'test': self.config.challenge_test_mode
         }
 
-        # Call generate_textworld_game with the correct parameters - EXACTLY as in the working code
         try:
             game_file_path, game_object = generate_textworld_game(
                 challenge_name=self.config.challenge_name,
@@ -349,11 +310,11 @@ class TextWorldEnv(BaseEnv):
             )
             
             if not game_file_path or not os.path.exists(game_file_path):
-                logger.error(f"Failed to generate game file for episode {episode_id} with seed {current_game_seed}")
+                logger.error(f"Failed to generate game file for episode {episode_id}")
                 return None
                 
         except Exception as e:
-            logger.error(f"Error generating game for {self.config.challenge_name} challenge: {e}", exc_info=True)
+            logger.error(f"Error generating game for {self.config.challenge_name} challenge: {e}")
             return None
 
         requested_infos = EnvInfos(
@@ -362,187 +323,122 @@ class TextWorldEnv(BaseEnv):
             last_action=True, feedback=True, moves=True, admissible_commands=True
         )
         
-        registered_env_id = textworld.gym.register_game(game_file_path, requested_infos, max_episode_steps=self.config.max_steps, name=episode_id)
-        logger.info(f"Registered gym environment: {registered_env_id} (using episode_id: {episode_id})")
+        registered_env_id = textworld.gym.register_game(
+            game_file_path, requested_infos, max_episode_steps=self.config.max_steps, name=episode_id
+        )
 
         try:
             env = textworld.gym.make(registered_env_id)
-            logger.info(f"Gym environment created for {episode_id}.")
-            raw_obs, infos = env.reset() # Resets and provides initial state
+            raw_obs, infos = env.reset()
             formatted_initial_obs = self._format_observation(raw_obs, infos)
             
-            # Agent's game state should be reset for a new episode
-            self.agent.new_game() # Ensures agent's internal game_log and memory manager are cleared
+            self.agent.new_game()
 
             ep_state = TextWorldEpisodeState(
                 episode_id=episode_id,
                 game_file=game_file_path,
                 textworld_env_instance=env,
-                initial_obs=formatted_initial_obs, # Pass formatted initial obs
+                initial_obs=formatted_initial_obs,
                 initial_infos=infos,
                 max_steps=self.config.max_steps,
-                # policy_system_prompt is handled by agent's config
             )
             self.episodes[episode_id] = ep_state
-            # Store initial raw obs and infos for the first step if needed outside _format_observation
             ep_state.last_env_raw_observation = raw_obs 
             ep_state.last_env_infos = infos
             return ep_state
         except Exception as e:
-            logger.error(f"Failed to setup gym environment for {game_file_path} (episode {episode_id}): {e}", exc_info=True)
+            logger.error(f"Failed to setup gym environment for episode {episode_id}: {e}")
             if os.path.exists(game_file_path):
-                try: os.remove(game_file_path)
-                except OSError: pass # Ignore if removal fails, temp dir will be cleaned later
+                try: 
+                    os.remove(game_file_path)
+                except OSError: 
+                    pass
             return None
 
     async def get_next_item(self) -> Optional[Dict[str, Any]]:
-        """
-        Provides a new, initialized TextWorldEpisodeState for trajectory collection.
-        This now directly returns the episode state object. Agent's new_game is called within _get_or_create_episode.
-        """
+        """Provide a new, initialized TextWorldEpisodeState for trajectory collection."""
         episode_state = await self._get_or_create_episode(episode_seed=self.config.game_seed)
         if episode_state is None:
-            logger.error("Failed to get or create a new TextWorld episode.")
+            logger.error("Failed to create new TextWorld episode.")
             return None
         
-        # self.agent.new_game() is now called in _get_or_create_episode
-
         return {"episode_state": episode_state, "episode_id": episode_state.episode_id}
 
     def _parse_action(self, agent_response_text: str) -> Optional[str]:
-        """
-        Parses the agent's response to extract the TextWorld command string,
-        expecting the command to be within a tool call.
-        Example tool call: <tool_call>{"name": "execute_command", "arguments": {"command": "go north"}}</tool_call>
-        """
+        """Parse agent response to extract TextWorld command from tool call."""
         if not agent_response_text:
-            logger.warning("[TextWorldEnv._parse_action] Received empty or None agent response text.")
             return None
-
-        # We expect the agent to use a specific tool name for TextWorld commands.
-        # This could be made configurable if needed.
-        expected_tool_name = "execute_command"
-        command_argument_key = "command"
 
         tool_name, arguments, is_error = parse_tool_call(
             response=agent_response_text,
-            # available_tools can be provided if strict validation against a schema is needed,
-            # but for now, we primarily check the tool_name and presence of the command argument.
-            # Example: available_tools=[{"name": "execute_command", "parameters": {"type": "object", "properties": {"command": {"type": "string"}}}}],
-            preferred_tags=["tool_call"] # Standard tag
+            preferred_tags=["tool_call"]
         )
 
-        if is_error:
-            logger.warning(f"[TextWorldEnv._parse_action] Failed to parse tool call from response: '{agent_response_text[:200]}...'")
+        if is_error or tool_name != "execute_command":
             return None
 
-        if tool_name != expected_tool_name:
-            logger.warning(
-                f"[TextWorldEnv._parse_action] Unexpected tool name. Expected '{expected_tool_name}', but got '{tool_name}'. Response: '{agent_response_text[:200]}...'"
-            )
-            return None
-
-        parsed_command = arguments.get(command_argument_key)
-
+        parsed_command = arguments.get("command")
         if not parsed_command or not isinstance(parsed_command, str):
-            logger.warning(
-                f"[TextWorldEnv._parse_action] Command argument '{command_argument_key}' not found or not a string in tool call arguments. Args: {arguments}. Response: '{agent_response_text[:200]}...'"
-            )
             return None
         
         parsed_command = parsed_command.strip()
-        if not parsed_command:
-            logger.warning(
-                 f"[TextWorldEnv._parse_action] Parsed command is an empty string after stripping. Original from tool: '{arguments.get(command_argument_key)}'. Response: '{agent_response_text[:200]}...'"
-            )
-            return None
-
-        # Optional: Validate against admissible commands if available and strictness is needed, though
-        # TextWorld itself will handle invalid commands.
-        # infos = ep_state.textworld_env.infos # (Would need ep_state here, or pass infos)
-        # if 'admissible_commands' in infos and parsed_command not in infos['admissible_commands']:
-        #     logger.warning(f"Parsed command '{parsed_command}' not in admissible commands: {infos['admissible_commands']}")
-            # Decide if this is an error or let TextWorld handle it.
-
-        logger.debug(f"[TextWorldEnv._parse_action] Parsed command via tool call: '{parsed_command}'")
-        return parsed_command
+        return parsed_command if parsed_command else None
 
     async def _next_step(
         self, ep_state: TextWorldEpisodeState, current_turn_num: int
-    ) -> Tuple[Optional[ScoredDataGroup], bool]: # Returns (ScoredDataGroup for this turn, is_episode_done)
-        """
-        Process one step/turn of a TextWorld episode using AtroposAgent and AtroposRM.
-        Relies on agent for history management.
-        """
-        # Log with 1-indexed turn number for human readability
-        logger.info(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}/{ep_state.max_turns}] Starting step.")
-
-        # 1. Determine current observation for the agent
+    ) -> Tuple[Optional[ScoredDataGroup], bool]:
+        """Execute one step of the TextWorld episode using AtroposAgent and AtroposRM."""
+        
+        # 1. Construct observation for agent
         if current_turn_num == 0:
-            current_observation_for_agent = ep_state.initial_formatted_obs
-        elif ep_state.last_env_raw_observation is not None and ep_state.last_env_infos is not None:
-            current_observation_for_agent = self._format_observation(ep_state.last_env_raw_observation, ep_state.last_env_infos)
+            current_observation = ep_state.initial_formatted_obs
         else:
-            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Missing last observation data. Cannot proceed.")
-            return None, True # Critical error
-        logger.debug(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Observation for Agent: {current_observation_for_agent[:300]}...")
+            raw_obs = ep_state.last_env_raw_observation
+            infos = ep_state.last_env_infos
+            if raw_obs is None or infos is None:
+                logger.error(f"[Episode: {ep_state.episode_id}] Missing observation data for turn {current_turn_num + 1}")
+                return None, True
+            current_observation = self._format_observation(raw_obs, infos)
 
-        # 2. Get Policy Agent Alternatives
+        # 2. Get alternative actions from Agent
         try:
-            agent_action_alternatives: List[AtroposAgentAction] = await self.agent.generate_action(
-                observation_content=current_observation_for_agent,
-                n=self.config.group_size, # Use group_size from BaseEnvConfig
+            group_actions: List[AtroposAgentAction] = await self.agent.generate_action(
+                current_observation, n=self.config.group_size
             )
         except Exception as e:
-            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error during agent.generate_action: {e}", exc_info=True)
-            return None, True 
-
-        if not agent_action_alternatives:
-            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent generated no action alternatives. Ending episode.")
+            logger.error(f"[Episode: {ep_state.episode_id}] Error getting actions from agent: {e}")
             return None, True
-        logger.info(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent generated {len(agent_action_alternatives)} action alternatives.")
 
-        # The agent has now added a turn to its self.agent.game_log.turn[-1]
-        # This turn includes the observation_message and all alternatives, with selected_alternative = None
-
-        # 3. Evaluate Alternatives with RM
-        policy_alternatives_for_rm_eval = [] # Stores {parsed_command, raw_agent_response, history_for_rm}
-        
-        # History up to *before* the current observation that led to these alternatives
-        history_of_completed_turns = self.agent._reconstruct_canonical_history() # Ends with last selected assistant action
-        
-        # This is the observation_message that was just added to the agent's log by generate_action.
-        # This ensures the RM gets the exact same observation the agent based its alternatives on.
-        if not self.agent.game_log['turn']: # Should not happen if generate_action succeeded
-            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent's game_log is empty after generate_action. Cannot get observation for RM.")
-            # Handle error or return early if critical
+        if not group_actions:
+            logger.error(f"[Episode: {ep_state.episode_id}] No actions received from agent")
             return None, True
-        current_observation_msg_from_agent_log = self.agent.game_log['turn'][-1]['observation_message'] # Corrected
 
-
-        for alt_idx, alt_action in enumerate(agent_action_alternatives):
+        # 3. Evaluate alternatives with RM
+        policy_alternatives_for_rm_eval = []
+        for alt_action in group_actions:
             parsed_cmd = self._parse_action(alt_action['action_text'])
             
-            # Construct history for RM: completed history + current observation + this specific alternative action
-            history_for_rm_alt = list(history_of_completed_turns) 
-            history_for_rm_alt.append(current_observation_msg_from_agent_log)
+            # Get the canonical history up to this point
+            history_for_rm_alt = self.agent.get_final_canonical_dialogue()
+            # Add the alternative action to evaluate
             history_for_rm_alt.append(Message(role="assistant", content=alt_action['action_text'], reward=None))
             
             policy_alternatives_for_rm_eval.append({
                 "parsed_command": parsed_cmd,
-                "raw_agent_response": alt_action['action_text'], # Full <think>...<tool_call>...</tool_call>
+                "raw_agent_response": alt_action['action_text'],
                 "agent_history_for_rm": history_for_rm_alt 
             })
 
+        # Evaluate alternatives with RM
         alternative_rm_scores: List[float] = []
         all_rm_judgements_this_step: List[RMJudgementLog] = []
         rm_evaluation_tasks = []
 
         for i, policy_alt_data in enumerate(policy_alternatives_for_rm_eval):
             rm_evaluation_tasks.append(self.rm.generate_g_judgements(
-                num_judgements_g=1, # Hardcoded to 1 as G_rm_judgements is removed
+                num_judgements_g=1,
                 game_history_window=policy_alt_data["agent_history_for_rm"],
-                game_seed_for_logging=self.config.game_seed, # Or a per-episode seed
+                game_seed_for_logging=self.config.game_seed,
                 turn_idx_for_logging=current_turn_num,
                 policy_action_candidate_idx_for_logging=i
             ))
@@ -551,9 +447,8 @@ class TextWorldEnv(BaseEnv):
             try:
                 rm_judgement_log_groups = await asyncio.gather(*rm_evaluation_tasks)
             except Exception as e:
-                logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error during rm.generate_g_judgements: {e}", exc_info=True)
-                # Ensure rm_judgement_log_groups is a list of lists, matching structure of successful call
-                rm_judgement_log_groups = [[RMJudgementLog(api_error=True, parsed_q_value=0.0)] * 1] * len(policy_alternatives_for_rm_eval) # 1 judgement per alternative
+                logger.error(f"[Episode: {ep_state.episode_id}] Error during RM evaluation: {e}")
+                rm_judgement_log_groups = [[RMJudgementLog(api_error=True, parsed_q_value=0.0)] * 1] * len(policy_alternatives_for_rm_eval)
         else:
             rm_judgement_log_groups = [] 
 
@@ -563,9 +458,7 @@ class TextWorldEnv(BaseEnv):
                 j["parsed_q_value"] for j in rm_judgements_for_this_alt 
                 if not j["api_error"] and not j["q_value_parse_error"] and j["parsed_q_value"] is not None
             ]
-            if not valid_q_values: # If all RM judgements for an alt failed, or no Q values parsed
-                 # Use a default low score (e.g. 0 or a penalty)
-                logger.warning(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1} Alt: {i}] No valid Q-values from RM. Assigning 0.0.")
+            if not valid_q_values:
                 alternative_rm_scores.append(0.0) 
             else:
                 mean_q_value = sum(valid_q_values) / len(valid_q_values)
@@ -573,88 +466,57 @@ class TextWorldEnv(BaseEnv):
 
         ep_state.rm_judgement_history.extend(all_rm_judgements_this_step)
 
-        # 4. Select Best Action
+        # 4. Select best action
         if not alternative_rm_scores: 
-            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] No RM scores available. Ending episode.")
+            logger.error(f"[Episode: {ep_state.episode_id}] No RM scores available")
             return None, True
-        logger.debug(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] RM scores for alternatives: {alternative_rm_scores}")
             
         best_alternative_idx = alternative_rm_scores.index(max(alternative_rm_scores))
         chosen_policy_alt_data = policy_alternatives_for_rm_eval[best_alternative_idx]
         chosen_action_command = chosen_policy_alt_data["parsed_command"]
-        # chosen_agent_raw_response = chosen_policy_alt_data["raw_agent_response"] # raw response of chosen action
 
         if chosen_action_command is None:
-            logger.warning(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Best alternative (idx {best_alternative_idx}) had a None parsed command. Using 'look' as fallback.")
             chosen_action_command = "look"
 
-        logger.info(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Chosen action: '{chosen_action_command}' (from Alt {best_alternative_idx} with RM score {alternative_rm_scores[best_alternative_idx]:.2f})")
-
-        # 5. Record selected action with the Agent and allow it to learn/store memory
+        # 5. Record selected action with Agent
         try:
-            # self.agent.record_selected_action(selected_action_index=best_alternative_idx)
             await self.agent.record_selected_action_and_learn_from_turn(selected_action_index=best_alternative_idx)
-            logger.debug(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Agent logs updated and memory processed for selected action index: {best_alternative_idx}")
         except Exception as e:
-            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error recording selected action/learning with agent: {e}", exc_info=True)
+            logger.error(f"[Episode: {ep_state.episode_id}] Error recording selected action: {e}")
             return None, True
 
-
-        # 6. Execute Chosen Action in TextWorld
+        # 6. Execute action in TextWorld
         try:
             raw_obs_next, immediate_score_from_env, done_from_env, infos_next = ep_state.textworld_env.step(chosen_action_command)
         except Exception as e:
-            logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error stepping TextWorld environment: {e}", exc_info=True)
-            ep_state.done = True # Mark as done
-            # Store a placeholder reward if step fails, or decide how to handle
-            ep_state.canonical_rewards.append(0.0) # Or a penalty
+            logger.error(f"[Episode: {ep_state.episode_id}] Error stepping TextWorld environment: {e}")
+            ep_state.done = True
+            ep_state.canonical_rewards.append(0.0)
             ep_state.canonical_chosen_alternative_indices.append(best_alternative_idx)
             return None, True 
 
-        # 7. Update Episode State with outcome of this step
-        ep_state.cumulative_reward += immediate_score_from_env # This is the TextWorld score, often sparse
-        
-        # Store the immediate reward from this step for later GAE/MC calculation.
-        # For TextWorld, score_from_env is often the change in total score.
-        # If dense rewards are desired, they might need to be engineered (e.g., +0.1 for valid action, -0.1 for invalid).
-        # For now, using immediate_score_from_env as the per-step reward.
+        # 7. Update episode state
+        ep_state.cumulative_reward += immediate_score_from_env
         ep_state.canonical_rewards.append(immediate_score_from_env)
         ep_state.canonical_chosen_alternative_indices.append(best_alternative_idx)
-
         ep_state.done = done_from_env 
-        ep_state.last_score = infos_next.get("score", ep_state.last_score) # This is cumulative score from TW
-        ep_state.moves = infos_next.get("moves", ep_state.moves) # Update moves
+        ep_state.last_score = infos_next.get("score", ep_state.last_score)
+        ep_state.moves = infos_next.get("moves", ep_state.moves)
         
-        if ep_state.done: # If the episode is marked as done by the environment
+        if ep_state.done:
             ep_state.won = infos_next.get("won", False)
             ep_state.lost = infos_next.get("lost", False)
-            logger.info(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Env signaled done. Won: {ep_state.won}, Lost: {ep_state.lost}")
-            if self.config.debug_mode:
-                # Safely convert infos_next to a string for logging, handling non-serializable items
-                safe_infos_to_log = {}
-                for k, v in infos_next.items():
-                    try:
-                        json.dumps(v) # Test if serializable
-                        safe_infos_to_log[k] = v
-                    except TypeError:
-                        safe_infos_to_log[k] = str(v) # Convert non-serializable items to string
-                logger.debug(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Full infos_next at episode end: {json.dumps(safe_infos_to_log)}")
-
         
-        # Store the raw observation and infos for the next step's _format_observation call
         ep_state.last_env_raw_observation = raw_obs_next
         ep_state.last_env_infos = infos_next
-        
-        # message_history update is now implicitly handled by agent and reconstruction for RM/ScoredDataGroup
 
-        # 8. Prepare ScoredDataGroup for Policy Agent
+        # 8. Prepare ScoredDataGroup for policy agent
         sg_tokens: List[List[int]] = []
         sg_masks: List[List[int]] = []
         sg_messages: List[List[Message]] = [] 
 
         for policy_alt_data in policy_alternatives_for_rm_eval:
             history_to_tokenize = policy_alt_data["agent_history_for_rm"]
-            # This history_to_tokenize is [SysPrompt, UserObs1, ..., PrevSelectedAssistAction, CurrentUserObs, CurrentAssistAlternative]
             
             try:
                 tokenized_output = tokenize_for_trainer(self.tokenizer, history_to_tokenize)
@@ -662,7 +524,7 @@ class TextWorldEnv(BaseEnv):
                 sg_masks.append(tokenized_output["masks"])
                 sg_messages.append(history_to_tokenize)
             except Exception as e:
-                logger.error(f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Error tokenizing history for ScoredDataGroup: {e}", exc_info=True)
+                logger.error(f"[Episode: {ep_state.episode_id}] Error tokenizing history: {e}")
                 sg_tokens.append([])
                 sg_masks.append([])
                 sg_messages.append(history_to_tokenize) 
@@ -675,43 +537,33 @@ class TextWorldEnv(BaseEnv):
             metadata={
                 "turn_number": current_turn_num, 
                 "chosen_alternative_index": best_alternative_idx,
-                "episode_id": ep_state.episode_id  # Add episode_id for cache lookup
+                "episode_id": ep_state.episode_id,
+                "type": "policy_training_data"
             }
         )
         ep_state.policy_step_data.append(current_step_scored_data)
-        logger.debug(
-            f"[Episode: {ep_state.episode_id} Turn: {current_turn_num + 1}] Constructed ScoredDataGroup with "
-            f"{len(sg_tokens)} alternatives. Chosen Idx in metadata: {best_alternative_idx}. "
-            f"Scores: {current_step_scored_data['scores']}"
-        )
         
         return current_step_scored_data, ep_state.done
 
     async def collect_trajectories(
-        self, item: Dict[str, Any]  # Item is Dict[str, Any] from BaseEnv
-    ) -> Tuple[List[ScoredDataGroup], List[Dict[str, Any]]]: # Return List[ScoredDataGroup] and List[Item for backlog]
-        """
-        Runs a full TextWorld episode using AtroposAgent and AtroposRM,
-        collecting data for each step. Also processes rewards and generates RM training data.
-        """
+        self, item: Dict[str, Any]
+    ) -> Tuple[List[ScoredDataGroup], List[Dict[str, Any]]]:
+        """Run a full TextWorld episode collecting data for each step."""
         if not item or "episode_state" not in item:
-            logger.error(f"Invalid item received in collect_trajectories. Missing 'episode_state'. Item: {item}")
+            logger.error("Invalid item received - missing 'episode_state'")
             return [], []
 
         ep_state: TextWorldEpisodeState = item["episode_state"]
-        if not ep_state: # Should have been caught by the item check, but good practice
-            logger.error("Episode state is None in collect_trajectories.")
+        if not ep_state:
+            logger.error("Episode state is None")
             return [], []
 
-        logger.info(f"Starting trajectory collection for episode: {ep_state.episode_id}, Game file: {ep_state.game_file}")
+        policy_sdgs_for_episode: List[ScoredDataGroup] = []
 
-        # This list will store ScoredDataGroups for the policy agent for each turn
-        policy_sdgs_for_episode: List[ScoredDataGroup] = [] 
-        
         try:
+            # Execute episode turns
             for current_turn_num in range(ep_state.max_turns):
                 if ep_state.done:
-                    logger.info(f"[Episode: {ep_state.episode_id}] Episode marked done before turn {current_turn_num + 1}. Ending early.")
                     break
                 
                 scored_data_group_for_turn, episode_is_done_after_step = await self._next_step(
@@ -719,220 +571,217 @@ class TextWorldEnv(BaseEnv):
                 )
 
                 if scored_data_group_for_turn:
-                    # Store the SDG from this turn; it will be post-processed later
-                    policy_sdgs_for_episode.append(scored_data_group_for_turn) 
+                    policy_sdgs_for_episode.append(scored_data_group_for_turn)
                 
                 if episode_is_done_after_step:
-                    logger.info(f"[Episode: {ep_state.episode_id}] Episode finished after turn {current_turn_num + 1}. Won: {ep_state.won}, Lost: {ep_state.lost}, Score: {ep_state.last_score}, Moves: {ep_state.moves}")
                     break
                 
                 if current_turn_num == ep_state.max_turns - 1 and not ep_state.done:
-                    logger.info(f"[Episode: {ep_state.episode_id}] Max turns reached. Won: {ep_state.won}, Lost: {ep_state.lost}, Score: {ep_state.last_score}, Moves: {ep_state.moves}")
-                    ep_state.done = True # Ensure it's marked done
+                    ep_state.done = True
 
         except Exception as e:
-            logger.error(f"[Episode: {ep_state.episode_id}] Unexpected error during trajectory collection: {e}", exc_info=True)
-            ep_state.done = True 
+            logger.error(f"[Episode: {ep_state.episode_id}] Error during trajectory collection: {e}")
+            ep_state.done = True
         finally:
-            # --- Post-episode processing ---
-            num_canonical_steps = len(ep_state.canonical_rewards)
+            # Post-episode processing
+            await self._process_episode_completion(ep_state, policy_sdgs_for_episode)
+
+        logger.info(f"[Episode: {ep_state.episode_id}] Finalizing episode. Score: {ep_state.last_score}, Won: {ep_state.won}, Lost: {ep_state.lost}, Processed Turns: {len(policy_sdgs_for_episode)}")
+        
+        # Combine policy and RM training data
+        all_scored_data_groups = []
+        
+        # Add policy training data
+        all_scored_data_groups.extend(policy_sdgs_for_episode)
+        
+        # Add RM training data if available
+        if hasattr(ep_state, 'rm_training_data') and ep_state.rm_training_data:
+            all_scored_data_groups.extend(ep_state.rm_training_data)
+            logger.info(f"[Episode: {ep_state.episode_id}] Returning {len(policy_sdgs_for_episode)} policy + {len(ep_state.rm_training_data)} RM ScoredDataGroups")
+        
+        return all_scored_data_groups, []
+
+    async def _process_episode_completion(self, ep_state: TextWorldEpisodeState, policy_sdgs_for_episode: List[ScoredDataGroup]) -> None:
+        """Process episode completion including reward calculations, RM data generation, and cleanup."""
+        if not policy_sdgs_for_episode:
+            await self._cleanup_episode_resources(ep_state)
+            return
+
+        # Calculate final outcome reward
+        final_outcome_reward = self._calculate_final_outcome_reward(ep_state)
+        
+        # Update policy training data with discounted returns
+        self._update_policy_returns(policy_sdgs_for_episode, ep_state, final_outcome_reward)
+        
+        # Generate and send RM training data
+        await self._generate_and_send_rm_training_data(policy_sdgs_for_episode, ep_state, final_outcome_reward)
+        
+        # Clean up episode resources
+        await self._cleanup_episode_resources(ep_state)
+
+    def _calculate_final_outcome_reward(self, ep_state: TextWorldEpisodeState) -> float:
+        """Calculate the final outcome reward based on episode completion status."""
+        if ep_state.won:
+            return 1.0
+        elif ep_state.lost:
+            return -1.0
+        return 0.0
+
+    def _update_policy_returns(self, policy_sdgs_for_episode: List[ScoredDataGroup], 
+                              ep_state: TextWorldEpisodeState, final_outcome_reward: float) -> None:
+        """Update policy training data with Monte Carlo discounted returns."""
+        num_canonical_steps = len(ep_state.canonical_rewards)
+        
+        if not policy_sdgs_for_episode or num_canonical_steps == 0:
+            return
+
+        if len(policy_sdgs_for_episode) != num_canonical_steps:
+            logger.error(f"[Episode: {ep_state.episode_id}] Mismatch between policy SDGs and canonical rewards")
+
+        # Calculate discounted returns backwards
+        discounted_return = final_outcome_reward
+        for t in range(num_canonical_steps - 1, -1, -1):
+            current_step_reward = ep_state.canonical_rewards[t]
+            discounted_return = current_step_reward + self.config.rm_reward_discount_factor * discounted_return
             
-            # 1. Determine final reward for GAE/MC calculation
-            final_outcome_reward = 0.0
-            if ep_state.won:
-                final_outcome_reward = 1.0
-            elif ep_state.lost:
-                final_outcome_reward = -1.0
-            # else, if just max_steps reached without explicit win/loss, reward might be 0 or based on score.
-            # For simplicity, using 0 if not win/loss. Could also use normalized ep_state.last_score.
-            
-            # 2. Calculate true discounted returns for the POLICY agent's chosen actions
-            if policy_sdgs_for_episode and num_canonical_steps > 0:
-                # Ensure policy_sdgs_for_episode and canonical_rewards align (they should if no errors in _next_step)
-                if len(policy_sdgs_for_episode) != num_canonical_steps:
-                    logger.error(
-                        f"[Episode: {ep_state.episode_id}] Mismatch between policy SDGs ({len(policy_sdgs_for_episode)}) "
-                        f"and canonical rewards ({num_canonical_steps}). Reward processing for policy might be incorrect."
-                    )
+            if t < len(policy_sdgs_for_episode):
+                sdg_t = policy_sdgs_for_episode[t]
+                chosen_idx = ep_state.canonical_chosen_alternative_indices[t]
                 
-                # Calculate discounted returns backwards
-                discounted_return = final_outcome_reward 
-                for t in range(num_canonical_steps - 1, -1, -1):
-                    # The reward r_t is ep_state.canonical_rewards[t]
-                    # G_t = r_t + gamma * G_{t+1} (where G_{T} = final_outcome_reward, G_{T+1} for r_T would be 0)
-                    # If t is the last step (T-1), then G_t = r_t + gamma * final_outcome_reward (if final_outcome_reward is for state T)
-                    # Or, if final_outcome_reward is considered the reward for the last action itself, then it's simpler.
-                    
-                    # Let's assume canonical_rewards are R_0, R_1, ..., R_{N-1} for N steps.
-                    # final_outcome_reward is an additional terminal reward R_N.
-                    # G_{N-1} = R_{N-1} + gamma * R_N
-                    # G_t = R_t + gamma * G_{t+1}
-                    
-                    # If current 'discounted_return' is G_{t+1} from previous iteration (or R_N for first iteration)
-                    # Current step's immediate reward is ep_state.canonical_rewards[t]
-                    current_step_reward = ep_state.canonical_rewards[t]
-                    discounted_return = current_step_reward + self.config.rm_reward_discount_factor * discounted_return
-                    
-                    if t < len(policy_sdgs_for_episode):
-                        sdg_t = policy_sdgs_for_episode[t]
-                        chosen_idx = ep_state.canonical_chosen_alternative_indices[t]
-                        
-                        # Update the score of the chosen alternative
-                        # Non-chosen alternatives keep their RM-assigned Q-value scores
-                        if 0 <= chosen_idx < len(sdg_t["scores"]):
-                            # Create a new list for scores to avoid modifying the original if it's shared/logged elsewhere before this
-                            new_scores = list(sdg_t["scores"]) 
-                            new_scores[chosen_idx] = discounted_return
-                            sdg_t["scores"] = new_scores 
-                            logger.debug(f"[Episode: {ep_state.episode_id} Turn: {t+1}] Policy chosen action (idx {chosen_idx}) updated MC score to {discounted_return:.4f}")
-                        else:
-                            logger.warning(f"[Episode: {ep_state.episode_id} Turn: {t+1}] Invalid chosen_idx {chosen_idx} for policy SDG scores.")
-                    else:
-                        logger.warning(f"[Episode: {ep_state.episode_id}] Index t={t} out of bounds for policy_sdgs_for_episode (len {len(policy_sdgs_for_episode)}).")
+                if 0 <= chosen_idx < len(sdg_t["scores"]):
+                    new_scores = list(sdg_t["scores"])
+                    new_scores[chosen_idx] = discounted_return
+                    sdg_t["scores"] = new_scores
 
+    async def _generate_and_send_rm_training_data(self, policy_sdgs_for_episode: List[ScoredDataGroup], 
+                                                 ep_state: TextWorldEpisodeState, final_outcome_reward: float) -> None:
+        """Generate RM training data and store it for later processing."""
+        rm_training_sdgs = self._generate_rm_training_data(policy_sdgs_for_episode, ep_state, final_outcome_reward)
+        
+        if rm_training_sdgs:
+            logger.info(f"[Episode: {ep_state.episode_id}] Total {len(rm_training_sdgs)} RM ScoredDataGroups prepared")
+            # Store RM training data in episode state for now
+            # TODO: Determine proper handling of RM training data within the base class pattern
+            ep_state.rm_training_data = rm_training_sdgs
 
-            # 3. Generate and send RM training data
-            rm_training_sdgs_for_episode: List[ScoredDataGroup] = []
-            if policy_sdgs_for_episode and num_canonical_steps > 0: # Ensure there's policy data to base RM data on
-                # Calculate full list of discounted returns for the canonical path once
-                canonical_discounted_returns = [0.0] * num_canonical_steps
-                current_discounted_return_for_path = final_outcome_reward # Renamed to avoid clash
-                for t_idx in range(num_canonical_steps - 1, -1, -1): # Iterate backwards by index t_idx
-                    current_step_reward = ep_state.canonical_rewards[t_idx]
-                    current_discounted_return_for_path = current_step_reward + self.config.rm_reward_discount_factor * current_discounted_return_for_path
-                    canonical_discounted_returns[t_idx] = current_discounted_return_for_path
+    def _generate_rm_training_data(self, policy_sdgs_for_episode: List[ScoredDataGroup], 
+                                  ep_state: TextWorldEpisodeState, final_outcome_reward: float) -> List[ScoredDataGroup]:
+        """Generate RM training data from policy episode data."""
+        num_canonical_steps = len(ep_state.canonical_rewards)
+        if not policy_sdgs_for_episode or num_canonical_steps == 0:
+            return []
 
-                # Iterate through each turn for which we have policy ScoredDataGroups
-                for turn_idx, policy_sdg_for_turn in enumerate(policy_sdgs_for_episode):
-                    if not (0 <= turn_idx < num_canonical_steps):
-                        logger.warning(f"[Episode: {ep_state.episode_id}] Turn index {turn_idx} out of sync with canonical rewards/indices. Skipping RM data for this turn.")
-                        continue
+        # Calculate canonical path discounted returns
+        canonical_discounted_returns = self._calculate_canonical_returns(ep_state, final_outcome_reward)
+        
+        rm_training_sdgs = []
+        for turn_idx, policy_sdg_for_turn in enumerate(policy_sdgs_for_episode):
+            if not (0 <= turn_idx < num_canonical_steps):
+                continue
 
-                    # policy_sdg_for_turn contains all alternatives for this turn
-                    # Its 'messages' are List[List[Message]], where each inner List[Message] is the history for one policy alternative
-                    # Its 'scores' are the original Q-estimates from the RM for each policy alternative
-                    
-                    num_alternatives_this_turn = len(policy_sdg_for_turn["messages"])
-                    if num_alternatives_this_turn != self.config.group_size:
-                        logger.warning(
-                            f"[Episode: {ep_state.episode_id} Turn: {turn_idx+1}] Number of alternatives in policy SDG ({num_alternatives_this_turn}) "
-                            f"does not match config.group_size ({self.config.group_size}). Skipping RM data generation for this turn."
-                        )
-                        continue
+            num_alternatives_this_turn = len(policy_sdg_for_turn["messages"])
+            if num_alternatives_this_turn != self.config.group_size:
+                continue
 
-                    chosen_alternative_idx_for_this_turn = ep_state.canonical_chosen_alternative_indices[turn_idx]
-
-                    # Create the RM training target scores list
-                    rm_target_scores_for_turn: List[float] = []
-                    for alt_idx in range(num_alternatives_this_turn):
-                        if alt_idx == chosen_alternative_idx_for_this_turn:
-                            target_q_value_for_alt = canonical_discounted_returns[turn_idx]
-                            logger.debug(f"RM training data generation for policy alternative {alt_idx} (chosen) for turn {turn_idx}. Target score (G_t): {target_q_value_for_alt:.4f}")
-                        else:
-                            # Use the original RM Q-estimate for non-chosen alternatives
-                            original_rm_q_estimate = policy_sdg_for_turn["scores"][alt_idx]
-                            target_q_value_for_alt = original_rm_q_estimate 
-                            logger.debug(f"RM training data generation for policy alternative {alt_idx} (not chosen) for turn {turn_idx}. Target score (Q_estimate): {target_q_value_for_alt:.4f}")
-                        rm_target_scores_for_turn.append(target_q_value_for_alt)
-                    
-                    # Use prepare_reward_model_input to process the data with optional thinking summarization
-                    try:
-                        raw_rm_sdg = ScoredDataGroup(
-                            tokens=policy_sdg_for_turn["tokens"],  # Start with policy tokens 
-                            masks=policy_sdg_for_turn["masks"],    # Start with policy masks
-                            scores=rm_target_scores_for_turn,      # Use RM target scores
-                            messages=policy_sdg_for_turn["messages"], # Start with policy messages
-                            metadata={
-                                "turn_number": turn_idx,
-                                "episode_id": ep_state.episode_id,
-                                "type": "rm_training_data_raw"
-                            }
-                        )
-                        
-                        processed_rm_sdg = prepare_reward_model_input(
-                            scored_data_group=raw_rm_sdg,
-                            tokenizer=self.tokenizer,
-                            max_tokens=self.config.max_token_length,  # Use configured max token length
-                            strip_thinking_from_history=True,  # RM always strips thinking blocks entirely
-                            summarize_thinking_with_llm=False,  # RM never uses thinking summarization
-                            server_client=None,  # Not needed since we're not summarizing
-                            max_thinking_summary_tokens=0  # Not used
-                        )
-                        
-                        # Update metadata to indicate final processing
-                        processed_rm_sdg["metadata"].update({
-                            "type": "rm_training_data",
-                            "thinking_processed": True
-                        })
-                        
-                        rm_training_sdgs_for_episode.append(processed_rm_sdg)
-                        
-                    except Exception as e_processing:
-                        logger.error(f"[Episode: {ep_state.episode_id} Turn: {turn_idx+1}] Error processing RM input for training: {e_processing}", exc_info=True)
-                        logger.error(f"Skipping RM ScoredDataGroup for turn {turn_idx+1} due to processing error.") 
-
+            # Create RM training targets
+            rm_target_scores = self._create_rm_target_scores(
+                policy_sdg_for_turn, ep_state, turn_idx, canonical_discounted_returns
+            )
             
-            if rm_training_sdgs_for_episode:
-                logger.info(f"[Episode: {ep_state.episode_id}] Total {len(rm_training_sdgs_for_episode)} RM ScoredDataGroups prepared for this episode. Sending to API...")
-                try:
-                    await self.handle_send_to_api(rm_training_sdgs_for_episode, item=item, do_send_to_api=True)
-                except Exception as e_send_rm:
-                    logger.error(f"[Episode: {ep_state.episode_id}] Error sending RM training data: {e_send_rm}", exc_info=True)
+            # Process RM training data
+            try:
+                processed_rm_sdg = self._process_rm_training_sdg(
+                    policy_sdg_for_turn, rm_target_scores, turn_idx, ep_state.episode_id
+                )
+                rm_training_sdgs.append(processed_rm_sdg)
+            except Exception as e:
+                logger.error(f"[Episode: {ep_state.episode_id}] Error processing RM training data: {e}")
+
+        return rm_training_sdgs
+
+    def _calculate_canonical_returns(self, ep_state: TextWorldEpisodeState, final_outcome_reward: float) -> List[float]:
+        """Calculate discounted returns for the canonical path."""
+        num_canonical_steps = len(ep_state.canonical_rewards)
+        canonical_discounted_returns = [0.0] * num_canonical_steps
+        current_discounted_return = final_outcome_reward
+        
+        for t_idx in range(num_canonical_steps - 1, -1, -1):
+            current_step_reward = ep_state.canonical_rewards[t_idx]
+            current_discounted_return = current_step_reward + self.config.rm_reward_discount_factor * current_discounted_return
+            canonical_discounted_returns[t_idx] = current_discounted_return
+            
+        return canonical_discounted_returns
+
+    def _create_rm_target_scores(self, policy_sdg_for_turn: ScoredDataGroup, ep_state: TextWorldEpisodeState, 
+                                turn_idx: int, canonical_discounted_returns: List[float]) -> List[float]:
+        """Create target scores for RM training."""
+        num_alternatives = len(policy_sdg_for_turn["messages"])
+        chosen_alternative_idx = ep_state.canonical_chosen_alternative_indices[turn_idx]
+        
+        rm_target_scores = []
+        for alt_idx in range(num_alternatives):
+            if alt_idx == chosen_alternative_idx:
+                target_score = canonical_discounted_returns[turn_idx]
             else:
-                logger.info(f"[Episode: {ep_state.episode_id}] No RM training ScoredDataGroups were generated for this episode.")
-
-
-            # --- Finalize and Cleanup ---
-            processed_turns_count = len(policy_sdgs_for_episode) # Number of policy ScoredDataGroups
-            logger.info(f"[Episode: {ep_state.episode_id}] Finalizing episode. Score: {ep_state.last_score}, Won: {ep_state.won}, Lost: {ep_state.lost}, Processed Turns for Policy: {processed_turns_count}")
+                target_score = policy_sdg_for_turn["scores"][alt_idx]
+            rm_target_scores.append(target_score)
             
-            if ep_state.textworld_env:
-                try:
-                    ep_state.textworld_env.close()
-                    logger.debug(f"[Episode: {ep_state.episode_id}] Closed gym environment.")
-                except Exception as e_close:
-                    logger.warning(f"[Episode: {ep_state.episode_id}] Error closing gym environment: {e_close}")
-            
-            if ep_state.game_file and os.path.exists(ep_state.game_file):
-                try:
-                    os.remove(ep_state.game_file)
-                    logger.debug(f"[Episode: {ep_state.episode_id}] Removed game file: {ep_state.game_file}")
-                except OSError as e_remove:
-                    logger.warning(f"[Episode: {ep_state.episode_id}] Error removing game file {ep_state.game_file}: {e_remove}")
+        return rm_target_scores
 
-            # Don't remove episode state yet - postprocess_histories needs it for cache
-            # It will be removed later in BaseEnv.handle_env after postprocess_histories
+    def _process_rm_training_sdg(self, policy_sdg_for_turn: ScoredDataGroup, rm_target_scores: List[float], 
+                                turn_idx: int, episode_id: str) -> ScoredDataGroup:
+        """Process a single RM training ScoredDataGroup."""
+        raw_rm_sdg = ScoredDataGroup(
+            tokens=policy_sdg_for_turn["tokens"],
+            masks=policy_sdg_for_turn["masks"],
+            scores=rm_target_scores,
+            messages=policy_sdg_for_turn["messages"],
+            metadata={
+                "turn_number": turn_idx,
+                "episode_id": episode_id,
+                "type": "rm_training_data_raw"
+            }
+        )
+        
+        processed_rm_sdg = prepare_reward_model_input(
+            scored_data_group=raw_rm_sdg,
+            tokenizer=self.tokenizer,
+            max_tokens=self.config.max_token_length,
+            strip_thinking_from_history=True,
+            summarize_thinking_with_llm=False,
+            server_client=None,
+            max_thinking_summary_tokens=0
+        )
+        
+        processed_rm_sdg["metadata"]["type"] = "rm_training_data_processed"
+        return processed_rm_sdg
 
-        # The policy_sdgs_for_episode have been updated in-place with MC returns for chosen actions.
-        # BaseEnv will call our overridden postprocess_histories with this data.
-        return policy_sdgs_for_episode, [] # Return policy data; backlog is empty for this env structure.
+    async def _cleanup_episode_resources(self, ep_state: TextWorldEpisodeState) -> None:
+        """Clean up episode resources including environment and game files."""
+        if ep_state.textworld_env:
+            try:
+                ep_state.textworld_env.close()
+            except Exception as e:
+                logger.warning(f"[Episode: {ep_state.episode_id}] Error closing TextWorld environment: {e}")
+
+        if ep_state.game_file and os.path.exists(ep_state.game_file):
+            try:
+                os.remove(ep_state.game_file)
+            except OSError as e:
+                logger.warning(f"[Episode: {ep_state.episode_id}] Error removing game file: {e}")
 
     async def postprocess_histories(
         self,
         trajectories: Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]],
-        # rollout_info: List[Dict[str, Any]] # This is not passed by BaseEnv.handle_env
     ) -> Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]:
-        """
-        Post-processes policy agent trajectories.
-        In this TextWorldEnv implementation, the core reward processing (MC returns)
-        is done directly at the end of `collect_trajectories` before returning
-        the policy ScoredDataGroups. This method can be a passthrough or for
-        any final adjustments if needed.
-        """
-        # The main reward processing for policy agent data (calculating MC discounted returns
-        # for chosen actions) is now handled at the end of the `collect_trajectories`
-        # method to ensure all episode information is available.
-        # This method now processes policy data to summarize thinking blocks properly.
-        
+        """Post-process policy agent trajectories with thinking block summarization."""
         if not trajectories:
-            logger.debug("postprocess_histories received no trajectories.")
             return trajectories
 
-        # Ensure it's a list for consistent processing
         if not isinstance(trajectories, list):
             trajectories = [trajectories] if trajectories is not None else []
         
-        # Try to find the episode state from metadata to use its cache
+        # Find episode state for cache
         episode_state = None
         episode_id = None
         for sdg in trajectories:
@@ -940,30 +789,31 @@ class TextWorldEnv(BaseEnv):
                 episode_id = sdg["metadata"]["episode_id"]
                 if episode_id in self.episodes:
                     episode_state = self.episodes[episode_id]
-                    logger.debug(f"Found episode state for {episode_id} to use for thinking block cache")
                     break
         
-        # If we can't find episode state, create a temporary cache
         thinking_block_cache = episode_state.thinking_block_cache if episode_state else {}
         
-        # Process each ScoredDataGroup for policy training
+        # Process each ScoredDataGroup
         processed_trajectories = []
         for sdg_idx, sdg in enumerate(trajectories):
             if sdg is None:
                 processed_trajectories.append(None)
                 continue
-                
-            try:
-                # Process policy data with thinking block summarization for history
-                # but keep the latest message raw for training
-                processed_policy_sdg = await self._process_policy_training_data(sdg, thinking_block_cache)
-                processed_trajectories.append(processed_policy_sdg)
-                
-            except Exception as e:
-                logger.error(f"Error processing policy ScoredDataGroup {sdg_idx}: {e}", exc_info=True)
-                processed_trajectories.append(sdg)  # Fallback to original
+            
+            # Only process policy training data with thinking summarization
+            # RM training data is already processed with thinking stripped
+            if sdg.get("metadata", {}).get("type") == "policy_training_data":
+                try:
+                    processed_policy_sdg = await self._process_policy_training_data(sdg, thinking_block_cache)
+                    processed_trajectories.append(processed_policy_sdg)
+                except Exception as e:
+                    logger.error(f"Error processing policy ScoredDataGroup {sdg_idx}: {e}")
+                    processed_trajectories.append(sdg)
+            else:
+                # Pass through RM training data unchanged
+                processed_trajectories.append(sdg)
         
-        # Log cache efficiency across entire episode
+        # Log cache efficiency
         if thinking_block_cache:
             total_messages = sum(len(sdg.get("messages", [])) for sdg in trajectories if sdg)
             logger.info(
@@ -971,25 +821,15 @@ class TextWorldEnv(BaseEnv):
                 f"processed across {len(trajectories)} turns with {total_messages} total alternatives"
             )
         
-        logger.debug(f"TextWorldEnv.postprocess_histories: Processed {len(processed_trajectories)} ScoredDataGroup(s) for policy training.")
-        
-        # Clean up the episode state now that processing is complete
+        # Clean up episode state
         if episode_id and episode_id in self.episodes:
             del self.episodes[episode_id]
-            logger.debug(f"[Episode: {episode_id}] Removed episode state from tracking after postprocess_histories.")
         
         return processed_trajectories
 
     async def _process_policy_training_data(self, sdg: ScoredDataGroup, thinking_block_cache: Dict[int, str]) -> ScoredDataGroup:
-        """
-        Process policy training data to:
-        1. Summarize thinking blocks in message history (all but the latest message)
-        2. Keep the latest message raw for training
-        3. Ensure proper masking for training
-        4. Cache summarizations to avoid processing the same thinking blocks multiple times
-        """
+        """Process policy training data with thinking block summarization while keeping latest message raw."""
         if not self.config.enable_policy_thinking_summarization:
-            # If summarization is disabled, return as-is
             return sdg
             
         processed_messages = []
@@ -1003,23 +843,20 @@ class TextWorldEnv(BaseEnv):
                 processed_masks.append(sdg["masks"][alt_idx] if alt_idx < len(sdg["masks"]) else [])
                 continue
                 
-            # Process all messages except the last one (which should remain raw for training)
             alt_processed_messages = []
             for msg_idx, msg in enumerate(alt_messages):
                 if msg_idx == len(alt_messages) - 1:
-                    # Keep the last message (the one being trained on) completely raw
+                    # Keep the last message raw for training
                     alt_processed_messages.append(msg.copy())
                 elif msg["role"] == "assistant" and self.config.enable_policy_thinking_summarization:
-                    # Check cache first to avoid duplicate LLM calls
+                    # Check cache for thinking block summarization
                     original_content = msg["content"]
-                    cache_key = hash(original_content)  # Simple hash-based cache key
+                    cache_key = hash(original_content)
                     
                     if cache_key in thinking_block_cache:
-                        # Use cached summarization
                         processed_content = thinking_block_cache[cache_key]
-                        logger.debug(f"Using cached thinking block summarization for alt {alt_idx}, msg {msg_idx}")
                     else:
-                        # Summarize thinking blocks in assistant messages that are part of history
+                        # Summarize thinking blocks
                         try:
                             from atroposlib.utils.message_history_utils import summarize_thinking_block
                             processed_content = await summarize_thinking_block(
@@ -1028,25 +865,20 @@ class TextWorldEnv(BaseEnv):
                                 self.tokenizer, 
                                 self.config.max_policy_thinking_summary_tokens
                             )
-                            # Cache the result
                             thinking_block_cache[cache_key] = processed_content
-                            logger.debug(f"Cached new thinking block summarization for alt {alt_idx}, msg {msg_idx}")
                         except Exception as e:
-                            logger.warning(f"Failed to summarize thinking block for policy training data: {e}")
-                            # Fall back to stripping thinking blocks if summarization fails
+                            logger.warning(f"Failed to summarize thinking block: {e}")
                             from atroposlib.utils.message_history_utils import strip_thinking
                             processed_content = strip_thinking(original_content)
-                            # Cache the stripped version too
                             thinking_block_cache[cache_key] = processed_content
                     
                     processed_msg = msg.copy()
                     processed_msg["content"] = processed_content
                     alt_processed_messages.append(processed_msg)
                 else:
-                    # Keep other messages as-is
                     alt_processed_messages.append(msg.copy())
             
-            # Re-tokenize the processed messages
+            # Re-tokenize processed messages
             try:
                 tokenized_output = tokenize_for_trainer(self.tokenizer, alt_processed_messages)
                 processed_messages.append(alt_processed_messages)
@@ -1054,91 +886,45 @@ class TextWorldEnv(BaseEnv):
                 processed_masks.append(tokenized_output["masks"])
             except Exception as e:
                 logger.error(f"Error re-tokenizing processed policy messages for alt {alt_idx}: {e}")
-                # Fallback to original
                 processed_messages.append(alt_messages)
                 processed_tokens.append(sdg["tokens"][alt_idx] if alt_idx < len(sdg["tokens"]) else [])
                 processed_masks.append(sdg["masks"][alt_idx] if alt_idx < len(sdg["masks"]) else [])
         
-        # Create processed ScoredDataGroup
-        processed_sdg = ScoredDataGroup(
+        return ScoredDataGroup(
             tokens=processed_tokens,
             masks=processed_masks,
             scores=sdg["scores"],
             messages=processed_messages,
-            metadata={
-                **(sdg.get("metadata", {})),
-                "policy_thinking_processed": True,
-                "thinking_summarization_enabled": self.config.enable_policy_thinking_summarization,
-                "thinking_blocks_cached": len(thinking_block_cache)
-            }
+            metadata=sdg["metadata"]
         )
-        
-        return processed_sdg
 
     async def evaluate(self, *args, **kwargs):
-        # Implementation pending
-        logger.warning("evaluate not yet implemented")
+        """Evaluation method - implementation pending."""
         pass
 
     async def cleanup(self):
-        """Clean up temporary game files and directory."""
-        try:
-            if os.path.exists(self._temp_dir):
+        """Clean up resources."""
+        if hasattr(self, '_temp_dir') and self._temp_dir and os.path.exists(self._temp_dir):
+            try:
                 shutil.rmtree(self._temp_dir)
-                logger.info(f"Cleaned up temporary directory: {self._temp_dir}")
-        except Exception as e:
-            logger.error(f"Error cleaning up temporary directory {self._temp_dir}: {e}")
-
-        await super().cleanup()
+            except Exception as e:
+                logger.warning(f"Error cleaning up temporary directory {self._temp_dir}: {e}")
 
     def __del__(self):
-        # Ensure cleanup runs even if explicit cleanup isn't called.
+        """Ensure cleanup runs even if explicit cleanup isn't called."""
         try:
-            if hasattr(self, '_temp_dir') and os.path.exists(self._temp_dir):
+            import asyncio
+            if hasattr(self, '_temp_dir') and self._temp_dir and os.path.exists(self._temp_dir):
                 shutil.rmtree(self._temp_dir)
-        except Exception as e:
+        except Exception:
             pass
 
     @classmethod
     def config_init(cls) -> Tuple[TextWorldEnvConfig, List[APIServerConfig]]:
-        """
-        Initializes the environment and server configurations with hardcoded defaults.
-        """
-        env_config = TextWorldEnvConfig(
-            tokenizer_name="NousResearch/Hermes-2-Pro-Llama-3-8B",
-            group_size=2,
-            use_wandb=True,
-            rollout_server_url="http://localhost:8000",
-            total_steps=1000,
-            batch_size=32,
-            steps_per_eval=50,
-            max_token_length=4096,
-            wandb_name="textworld_atropos",
-            eval_handling=APIServerConfig.EvalHandlingEnum.LIMIT_TRAIN,
-            eval_limit_ratio=0.1,
-            max_steps=50,
-            challenge_name="tw-simple",
-            game_seed=None, 
-            max_trajectory_tokens=32768,
-            atropos_agent_config=AtroposAgentConfig(
-                model_id="NousResearch/Hermes-2-Pro-Llama-3-8B"
-            ), 
-            atropos_rm_config=AtroposRMConfig(
-                thinking=True,
-                model_id="NousResearch/Hermes-2-Pro-Llama-3-8B"
-            ),      
-            rm_reward_discount_factor=0.99,
-            debug_mode=False,
-            enable_policy_thinking_summarization=True
-        )
-        server_configs = [
-            APIServerConfig(
-                model_name="NousResearch/Hermes-2-Pro-Llama-3-8B",
-                base_url="http://localhost:9004/v1",
-                api_key="x",
-            )
-        ]
-        return env_config, server_configs
+        """Initialize default configuration for TextWorldEnv."""
+        config = TextWorldEnvConfig()
+        server_configs = [config.default_server_config]
+        return config, server_configs
 
 if __name__ == "__main__":
     async def main_cli():

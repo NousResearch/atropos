@@ -56,10 +56,10 @@ class AtroposRMConfig(BaseModel):
     )
     thinking: bool = Field(
         default=True,
-        description="If True, RM is instructed to use <thinking> tags. If False, only Q-value."
+        description="If True, RM is instructed to use <think> tags. If False, only Q-value."
     )
     thinking_block_extraction_pattern: str = Field(
-        default=r"<thinking>(.*?)</thinking>",
+        default=r"<think>(.*?)</think>",
         description="Regex pattern to extract the thinking block. Must capture content within tags."
     )
     rm_id_for_logging: str = Field(
@@ -105,9 +105,9 @@ class AtroposRM(Model):
         thinking_instructions = (
             "Before providing your final Q-value, you should engage in a detailed chain of thought. "
             "Enclose your entire reasoning process, step-by-step analysis, and any intermediate "
-            "calculations or considerations within <thinking> and </thinking> tags. This thinking "
+            "calculations or considerations within <think> and </think> tags. This thinking "
             "process can be as long and detailed as necessary to arrive at an accurate estimate. "
-            "After the </thinking> tag, YOU MUST IMMEDIATELY provide your final Q-value estimate. No other text should follow the </thinking> tag before the Q-value."
+            "After the </think> tag, YOU MUST IMMEDIATELY provide your final Q-value estimate. No other text should follow the </think> tag before the Q-value."
         )
         no_thinking_instructions = (
             "You must provide ONLY the Q-value estimate as a single floating-point number. Nothing else."
@@ -116,7 +116,7 @@ class AtroposRM(Model):
             "Your final Q-value estimate MUST be a single floating-point number. "
             "This number MUST be enclosed in \\boxed{}. For example: \\boxed{17.35} or \\boxed{-2.5}. "
             "This \\boxed{} expression is MANDATORY and MUST be the absolute final part of your response. "
-            "If thinking is enabled, it appears immediately after the </thinking> tag. If thinking is disabled, it is your entire response."
+            "If thinking is enabled, it appears immediately after the </think> tag. If thinking is disabled, it is your entire response."
         )
 
         if self.config.thinking:
@@ -397,7 +397,7 @@ async def example_rm_usage(server_client: ServerManager, tokenizer: PreTrainedTo
     policy_agent_system_prompt = "You are a UTTT playing agent. Your goal is to win."
     current_game_observation = "Player X to move. Board: ... (detailed UTTT board) ..."
     policy_agent_response_content = (
-        "<thinking>I should try to win microboard 3</thinking>"
+        "<think>I should try to win microboard 3</think>"
         '<tool_call>{"arguments": {"micro_board": 3, "row": 1, "col": 1}, "name": "submit_move"}</tool_call>'
     )
 

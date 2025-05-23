@@ -1379,6 +1379,16 @@ class BaseEnv(ABC):
                 )
 
                 # Run the environment's asynchronous process manager function
-                asyncio.run(env.process_manager())
+                try:
+                    # Try to get the current event loop
+                    loop = asyncio.get_running_loop()
+                    # If we're already in an event loop, create a task
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, env.process_manager())
+                        future.result()
+                except RuntimeError:
+                    # No event loop running, safe to use asyncio.run()
+                    asyncio.run(env.process_manager())
 
         return CliProcessConfig
