@@ -185,5 +185,6 @@ wandb
 
 example_trainer/trained_model_checkpoints/
 
+data/*
 # uv
 uv.lock
