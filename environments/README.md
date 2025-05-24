@@ -286,6 +286,94 @@ output adheres to diverse and specific constraints defined in the input instruct
 
 - **Fallback Mechanism:** Includes a fallback to a small, predefined dummy dataset if the primary dataset (`allenai/RLVR-IFeval`) cannot be loaded, ensuring operational continuity for testing or development.
 
+---
+
+### SWE-RL Environment (`swe_rl_env.py`)
+
+Software Engineering Reinforcement Learning environment for training models to fix bugs based on issue descriptions and code context.
+
+**Dependencies:**
+- `datasets` (Hugging Face)
+- `difflib`
+- `wandb`
+- `pydantic`
+
+**Dataset:**
+- Default: `princeton-nlp/SWE-bench_Lite_oracle`
+- Configurable via `SWERLEnvConfig` (e.g., `dataset_name`, `dataset_split_train`, `dataset_split_eval`).
+
+**Input Format (for the model via prompts):**
+- `problem_statement`: The issue text.
+- `content`: Relevant code segments from one or more files.
+
+**System Prompts:**
+1.  **Thinking System Prompt:**
+    ```
+    You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution prior to answering. You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem.
+    ```
+2.  **Task System Prompt:**
+    ```
+    A user will ask you to solve a task. You should generate the solution. Your response format must follow the template below:
+    ```
+    (Followed by instructions on the SEARCH/REPLACE format)
+
+**User Prompt Template:**
+```
+We are currently solving the following issue within our repository. Here is the issue text:
+--- BEGIN ISSUE ---
+{problem_statement}
+--- END ISSUE ---
+Below are some code segments, each from a relevant file. One or more of these files may contain bugs.
+--- BEGIN FILE ---
+``` {content} ```
+--- END FILE ---
+Please first localize the bug based on the issue statement, and then generate *SEARCH/REPLACE* edits to fix the issue.
+Every *SEARCH/REPLACE* edit must use this format:
+1. The file path
+2. The start of search block: <<<<<<< SEARCH
+3. A contiguous chunk of lines to search for in the existing source code
+4. The dividing line: =======
+5. The lines to replace into the source code
+6. The end of the replace block: >>>>>>> REPLACE
+Here is an example:
+```python
+### mathweb/flask/app.py
+<<<<<<< SEARCH
+from flask import Flask
+=======
+import math
+from flask import Flask
+>>>>>>> REPLACE
+```
+Please note that the *SEARCH/REPLACE* edit REQUIRES PROPER INDENTATION. If you would like to add the line ’ print(x)’, you must fully write that out, with all those spaces before the code!
+Wrap each *SEARCH/REPLACE* edit in a code block as shown in the example above. If you have multiple *SEARCH/REPLACE* edits, use a separate code block for each one.
+```
+
+**Reward Function:**
+- Primary reward is based on the `SequenceMatcher` ratio between the model's reconstructed generated patch and the oracle patch.
+- A score of -1.0 is given initially.
+- If the model's response has a `finish_reason` of "length", or if `<think>` tags are present but malformed, the reward remains -1.0 and advantage is set to zero for "length".
+- If the SEARCH/REPLACE patch format is correctly parsed from the model's output (after potentially extracting content from `<think> </think>` tags):
+    - The `SequenceMatcher.ratio()` between the reconstructed predicted patch and the `oracle_patch_str` is used as the reward.
+- Buffers track:
+    - `percent_format_correct_buffer`: Percentage of responses with correctly formatted patches.
+    - `similarity_score_buffer`: List of similarity scores for correctly formatted patches.
+    - `think_tags_present_buffer`: Percentage of responses where `<think>` tags were present.
+    - `think_tags_well_formed_buffer`: Percentage of responses where `<think>` tags were present AND well-formed.
+
+**Evaluation Metrics:**
+- `eval/avg_similarity_score_correct_patch_format`: Average similarity score for responses that had a correctly formatted patch.
+- `eval/patch_format_accuracy`: Proportion of evaluation items where the patch was correctly formatted.
+- `eval/pass_at_1`: Proportion of evaluation items where the patch was correct and achieved a similarity score of 1.0.
+- `eval/avg_think_tags_present`: Average presence of think tags in evaluation responses.
+- `eval/avg_think_tags_well_formed`: Average well-formedness of think tags in evaluation responses.
+
+**Unique Configuration and Features:**
+- **Dataset Handling:** Loads training and test data from Hugging Face datasets, specifically tailored for SWE-bench like formats.
+- **Patch Parsing:** Implements robust parsing for a specific SEARCH/REPLACE patch format.
+- **Thinking Tag Processing:** Extracts content after `<think> </think>` tags for patch generation, and scores based on presence and well-formedness of these tags.
+- **Wandb Logging:** Logs detailed training and evaluation metrics, including rollout tables with problem statements, full interaction text, oracle patches, and scores.
+
 ## Common Features
 
 All environments share these common features:
