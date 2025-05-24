@@ -1,3 +1,4 @@
+print("--- PING: app/main.py top level ---")
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
@@ -67,12 +68,8 @@ async def shutdown_event():
             print("INFO: Restored original notify_visualization_clients on shutdown.")
 
 @app.get("/")
-async def read_root():
-    return {
-        "message": "Welcome to the Padres Simulation Service API (Live V2)!",
-        "available_endpoints": ["/status", "/setup_environment", "/execute_action"],
-        "documentation": "/docs"
-    }
+async def root():
+    return {"message": "Padres API is alive!"}
 
 @app.get("/status")
 async def get_status_endpoint(): # Renamed from get_status to avoid conflict if imported elsewhere

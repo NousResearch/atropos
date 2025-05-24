@@ -17,6 +17,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
+# Install PyBullet system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libopengl0 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Copy the actual spatial_rl_mvp code first
 COPY ./spatial_rl_mvp /padres_app/spatial_rl_mvp/
 
@@ -38,7 +48,7 @@ EXPOSE 8088
 ENV PYTHONPATH=/padres_app
 
 # Run the FastAPI application
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8088"]
+CMD ["sh", "-c", "cd /padres_app/app && python -m uvicorn main:app --host 0.0.0.0 --port 8088"]
 
 # TEMPORARY CMD for debugging startup issues:
 # CMD ["python", "app/main.py"] 
