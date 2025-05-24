@@ -1,0 +1,572 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Enhanced Rubik's Cube Visualizer</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background-color: #f5f5f5;
+                color: #333;
+            }
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            }
+            header {
+                background-color: #2c3e50;
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }
+            h1, h2, h3 {
+                margin: 0;
+            }
+            .cube-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                background-color: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }
+            .cube-row {
+                display: flex;
+            }
+            .face {
+                margin: 5px;
+            }
+            .face-title {
+                text-align: center;
+                font-weight: bold;
+                margin-bottom: 5px;
+            }
+            .face-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 40px);
+                grid-template-rows: repeat(3, 40px);
+                gap: 2px;
+            }
+            .cubie {
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                border: 1px solid #333;
+                box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+                border-radius: 3px;
+            }
+            .chart-container {
+                background-color: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                text-align: center;
+            }
+            .move-history {
+                background-color: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }
+            .move-container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+                margin-top: 10px;
+            }
+            .move {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 40px;
+                height: 40px;
+                background-color: #e0e0e0;
+                border-radius: 5px;
+                font-weight: bold;
+                cursor: pointer;
+                transition: transform 0.2s, background-color 0.2s;
+            }
+            .move:hover {
+                background-color: #d0d0d0;
+                transform: scale(1.1);
+            }
+            .move.U { background-color: #f5f5f5; color: #333; }
+            .move.D { background-color: #ffeb3b; color: #333; }
+            .move.L { background-color: #ff9800; color: white; }
+            .move.R { background-color: #f44336; color: white; }
+            .move.F { background-color: #4caf50; color: white; }
+            .move.B { background-color: #2196f3; color: white; }
+            
+            .thinking-container {
+                background-color: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                max-height: 300px;
+                overflow-y: auto;
+            }
+            .thinking-step {
+                margin-bottom: 15px;
+                padding: 10px;
+                border-left: 3px solid #2196f3;
+                background-color: #f9f9f9;
+            }
+            .badge {
+                display: inline-block;
+                padding: 3px 8px;
+                border-radius: 12px;
+                font-size: 0.8em;
+                margin-left: 10px;
+            }
+            .level-badge {
+                background-color: #3498db;
+                color: white;
+            }
+            .status-badge {
+                background-color: #2ecc71;
+                color: white;
+            }
+            .status-badge.unsolved {
+                background-color: #e74c3c;
+            }
+            footer {
+                text-align: center;
+                margin-top: 30px;
+                padding: 20px;
+                color: #7f8c8d;
+                font-size: 0.9em;
+            }
+            .tabs {
+                display: flex;
+                border-bottom: 1px solid #ddd;
+                margin-bottom: 15px;
+            }
+            .tab {
+                padding: 8px 16px;
+                cursor: pointer;
+                background-color: #f1f1f1;
+                border: 1px solid #ddd;
+                border-bottom: none;
+                margin-right: 5px;
+                border-radius: 5px 5px 0 0;
+            }
+            .tab.active {
+                background-color: white;
+                border-bottom: 2px solid white;
+                position: relative;
+                top: 1px;
+                font-weight: bold;
+            }
+            .tab-content {
+                display: none;
+            }
+            .tab-content.active {
+                display: block;
+            }
+            
+            @media (max-width: 768px) {
+                .cube-row {
+                    flex-direction: column;
+                }
+                .face-grid {
+                    grid-template-columns: repeat(3, 30px);
+                    grid-template-rows: repeat(3, 30px);
+                }
+                .cubie {
+                    width: 30px;
+                    height: 30px;
+                    font-size: 0.8em;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <h1>Enhanced Rubik's Cube Visualization</h1>
+    <span class="status-badge unsolved">UNSOLVED</span><span class="badge level-badge">LEVEL 1</span><p>Beginner level - Single move to Triple moves scrambles</p>
+            </header>
+            
+            <div class="cube-container">
+                <h2>Current State</h2>
+    <div class="cube-row"><div class="face"></div><div class="face"><div class="face-title">Up</div><div class="face-grid"><div class="cubie" style="background-color: #FFFFFF;">W</div><div class="cubie" style="background-color: #FFFF00;">Y</div><div class="cubie" style="background-color: #FFFF00;">Y</div><div class="cubie" style="background-color: #FFFFFF;">W</div><div class="cubie" style="background-color: #FFFFFF;">W</div><div class="cubie" style="background-color: #FFFFFF;">W</div><div class="cubie" style="background-color: #FFFFFF;">W</div><div class="cubie" style="background-color: #FFFFFF;">W</div><div class="cubie" style="background-color: #FFFFFF;">W</div></div></div><div class="face"></div><div class="face"></div></div><div class="cube-row"><div class="face"><div class="face-title">Left</div><div class="face-grid"><div class="cubie" style="background-color: #FFA500;">O</div><div class="cubie" style="background-color: #FFA500;">O</div><div class="cubie" style="background-color: #FFA500;">O</div><div class="cubie" style="background-color: #FFA500;">O</div><div class="cubie" style="background-color: #FFA500;">O</div><div class="cubie" style="background-color: #FFA500;">O</div><div class="cubie" style="background-color: #00FF00;">G</div><div class="cubie" style="background-color: #0000FF;">B</div><div class="cubie" style="background-color: #0000FF;">B</div></div></div><div class="face"><div class="face-title">Front</div><div class="face-grid"><div class="cubie" style="background-color: #00FF00;">G</div><div class="cubie" style="background-color: #FFA500;">O</div><div class="cubie" style="background-color: #FFA500;">O</div><div class="cubie" style="background-color: #00FF00;">G</div><div class="cubie" style="background-color: #00FF00;">G</div><div class="cubie" style="background-color: #00FF00;">G</div><div class="cubie" style="background-color: #FF0000;">R</div><div class="cubie" style="background-color: #00FF00;">G</div><div class="cubie" style="background-color: #00FF00;">G</div></div></div><div class="face"><div class="face-title">Right</div><div class="face-grid"><div class="cubie" style="background-color: #0000FF;">B</div><div class="cubie" style="background-color: #00FF00;">G</div><div class="cubie" style="background-color: #00FF00;">G</div><div class="cubie" style="background-color: #FF0000;">R</div><div class="cubie" style="background-color: #FF0000;">R</div><div class="cubie" style="background-color: #FF0000;">R</div><div class="cubie" style="background-color: #FF0000;">R</div><div class="cubie" style="background-color: #FF0000;">R</div><div class="cubie" style="background-color: #FF0000;">R</div></div></div><div class="face"><div class="face-title">Back</div><div class="face-grid"><div class="cubie" style="background-color: #FF0000;">R</div><div class="cubie" style="background-color: #FF0000;">R</div><div class="cubie" style="background-color: #0000FF;">B</div><div class="cubie" style="background-color: #0000FF;">B</div><div class="cubie" style="background-color: #0000FF;">B</div><div class="cubie" style="background-color: #0000FF;">B</div><div class="cubie" style="background-color: #0000FF;">B</div><div class="cubie" style="background-color: #0000FF;">B</div><div class="cubie" style="background-color: #FFA500;">O</div></div></div></div><div class="cube-row"><div class="face"></div><div class="face"><div class="face-title">Down</div><div class="face-grid"><div class="cubie" style="background-color: #FFFF00;">Y</div><div class="cubie" style="background-color: #FFFF00;">Y</div><div class="cubie" style="background-color: #FFFF00;">Y</div><div class="cubie" style="background-color: #FFFFFF;">W</div><div class="cubie" style="background-color: #FFFF00;">Y</div><div class="cubie" style="background-color: #FFFF00;">Y</div><div class="cubie" style="background-color: #FFFFFF;">W</div><div class="cubie" style="background-color: #FFFF00;">Y</div><div class="cubie" style="background-color: #FFFF00;">Y</div></div></div><div class="face"></div><div class="face"></div></div>
+            </div>
+            
+            <div class="tabs">
+                <div class="tab active" onclick="openTab(event, 'tab-progress')">Progress</div>
+                <div class="tab" onclick="openTab(event, 'tab-moves')">Move History</div>
+                <div class="tab" onclick="openTab(event, 'tab-thinking')">Thinking Steps</div>
+            </div>
+    <div id="tab-progress" class="tab-content active"><div class="chart-container"><h2>Solving Progress</h2><p>No progress data available.</p></div></div><div id="tab-moves" class="tab-content"><div class="move-history"><h2>Move History</h2><h3>Scramble Sequence</h3><div class="move-container"><div class="move L">L2</div><div class="move U">U</div><div class="move L">L2</div></div><p>No moves have been made yet.</p></div></div><div id="tab-thinking" class="tab-content"><div class="thinking-container"><h2>Thinking Process</h2><p>No thinking steps recorded.</p></div></div>
+            <footer>
+                Generated with Atropos Enhanced Rubik's Cube Visualizer
+            </footer>
+        </div>
+        
+        <script>
+        // Tab functionality
+        function openTab(evt, tabName) {
+            var i, tabcontent, tablinks;
+            
+            // Hide all tab content
+            tabcontent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].className = tabcontent[i].className.replace(" active", "");
+            }
+            
+            // Remove active class from all tabs
+            tablinks = document.getElementsByClassName("tab");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            
+            // Show the current tab and add an active class
+            document.getElementById(tabName).className += " active";
+            evt.currentTarget.className += " active";
+        }
+
+        // Interactive cube visualization
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add hover effects to moves
+            const moveElements = document.querySelectorAll('.move');
+            moveElements.forEach(function(move) {
+                move.addEventListener('mouseenter', function() {
+                    this.style.transform = 'scale(1.2)';
+                    this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+                    
+                    // Display move description
+                    const moveText = this.textContent;
+                    const description = getMoveDescription(moveText);
+                    
+                    // Create or update tooltip
+                    let tooltip = document.getElementById('move-tooltip');
+                    if (!tooltip) {
+                        tooltip = document.createElement('div');
+                        tooltip.id = 'move-tooltip';
+                        tooltip.style.position = 'fixed';
+                        tooltip.style.backgroundColor = 'rgba(0,0,0,0.8)';
+                        tooltip.style.color = 'white';
+                        tooltip.style.padding = '5px 10px';
+                        tooltip.style.borderRadius = '5px';
+                        tooltip.style.zIndex = '1000';
+                        tooltip.style.pointerEvents = 'none';
+                        document.body.appendChild(tooltip);
+                    }
+                    
+                    tooltip.textContent = description;
+                    tooltip.style.display = 'block';
+                    
+                    // Position tooltip near the move
+                    const rect = this.getBoundingClientRect();
+                    tooltip.style.left = rect.right + 10 + 'px';
+                    tooltip.style.top = rect.top + 'px';
+                });
+                
+                move.addEventListener('mouseleave', function() {
+                    this.style.transform = '';
+                    this.style.boxShadow = '';
+                    
+                    // Hide tooltip
+                    const tooltip = document.getElementById('move-tooltip');
+                    if (tooltip) {
+                        tooltip.style.display = 'none';
+                    }
+                });
+                
+                // Make moves clickable to show animation
+                move.addEventListener('click', function() {
+                    animateMove(this.textContent);
+                });
+            });
+            
+            // Add animation capability to cube
+            function animateMove(moveText) {
+                // Flash the move to indicate it's being applied
+                const moveElements = document.querySelectorAll('.move');
+                moveElements.forEach(function(move) {
+                    if (move.textContent === moveText) {
+                        // Add animation class
+                        move.classList.add('move-animate');
+                        
+                        // Remove animation class after animation completes
+                        setTimeout(function() {
+                            move.classList.remove('move-animate');
+                        }, 500);
+                    }
+                });
+                
+                // Animate cubies (simplified version - just highlights affected face)
+                const faceToAnimate = moveText[0]; // Get the face letter (U, D, L, R, F, B)
+                const cubies = document.querySelectorAll('.cubie');
+                
+                // Map face letter to face name
+                const faceMap = {
+                    'U': 'Up',
+                    'D': 'Down',
+                    'L': 'Left',
+                    'R': 'Right',
+                    'F': 'Front',
+                    'B': 'Back'
+                };
+                
+                // Find the face container
+                const faceTitles = document.querySelectorAll('.face-title');
+                let targetFace = null;
+                
+                faceTitles.forEach(function(title) {
+                    if (title.textContent === faceMap[faceToAnimate]) {
+                        targetFace = title.parentElement;
+                    }
+                });
+                
+                if (targetFace) {
+                    // Add animation to the face
+                    targetFace.classList.add('face-animate');
+                    
+                    // Remove animation class after it completes
+                    setTimeout(function() {
+                        targetFace.classList.remove('face-animate');
+                    }, 500);
+                }
+            }
+            
+            // Get description for a move
+            function getMoveDescription(moveText) {
+                const moveDescriptions = {
+                    'U': 'Up face clockwise',
+                    'D': 'Down face clockwise',
+                    'L': 'Left face clockwise',
+                    'R': 'Right face clockwise',
+                    'F': 'Front face clockwise',
+                    'B': 'Back face clockwise',
+                    "U'": 'Up face counter-clockwise',
+                    "D'": 'Down face counter-clockwise',
+                    "L'": 'Left face counter-clockwise',
+                    "R'": 'Right face counter-clockwise',
+                    "F'": 'Front face counter-clockwise',
+                    "B'": 'Back face counter-clockwise',
+                    'U2': 'Up face 180 degrees',
+                    'D2': 'Down face 180 degrees',
+                    'L2': 'Left face 180 degrees',
+                    'R2': 'Right face 180 degrees',
+                    'F2': 'Front face 180 degrees',
+                    'B2': 'Back face 180 degrees'
+                };
+                
+                return moveDescriptions[moveText] || moveText;
+            }
+            
+            // Solution playback functionality
+            let moveIndex = 0;
+            let playInterval = null;
+            let solvingMoves = [];
+            
+            // Initialize the moves array and counter
+            function initSolutionPlayer() {
+                // Collect all solving moves
+                const moveElements = document.querySelectorAll('.move-container:last-child .move');
+                solvingMoves = Array.from(moveElements);
+                
+                // Update move counter
+                const moveCounter = document.getElementById('move-counter');
+                if (moveCounter) {
+                    moveCounter.textContent = `0 / ${solvingMoves.length}`;
+                }
+            }
+            
+            // Play the solution automatically
+            function playSolution() {
+                // Initialize if needed
+                if (solvingMoves.length === 0) {
+                    initSolutionPlayer();
+                }
+                
+                if (solvingMoves.length === 0) return;
+                
+                // Update button states
+                document.getElementById('play-button').disabled = true;
+                document.getElementById('pause-button').disabled = false;
+                
+                // Start playback interval
+                playInterval = setInterval(function() {
+                    if (moveIndex < solvingMoves.length) {
+                        // Animate the current move
+                        const currentMove = solvingMoves[moveIndex];
+                        animateMove(currentMove.textContent);
+                        
+                        // Highlight the current move
+                        solvingMoves.forEach(move => move.classList.remove('current-move'));
+                        currentMove.classList.add('current-move');
+                        
+                        // Scroll to the move if needed
+                        currentMove.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        
+                        // Update move counter
+                        const moveCounter = document.getElementById('move-counter');
+                        if (moveCounter) {
+                            moveCounter.textContent = `${moveIndex + 1} / ${solvingMoves.length}`;
+                        }
+                        
+                        moveIndex++;
+                        
+                        // If we reached the end, stop playback
+                        if (moveIndex >= solvingMoves.length) {
+                            pauseSolution();
+                            document.getElementById('play-button').disabled = true;
+                        }
+                    } else {
+                        pauseSolution();
+                    }
+                }, 1000); // Play one move per second
+            }
+            
+            // Pause the solution playback
+            function pauseSolution() {
+                clearInterval(playInterval);
+                playInterval = null;
+                
+                // Update button states
+                document.getElementById('play-button').disabled = false;
+                document.getElementById('pause-button').disabled = true;
+            }
+            
+            // Step through the solution one move at a time
+            function stepSolution() {
+                // Initialize if needed
+                if (solvingMoves.length === 0) {
+                    initSolutionPlayer();
+                }
+                
+                if (solvingMoves.length === 0 || moveIndex >= solvingMoves.length) return;
+                
+                // Pause any ongoing playback
+                pauseSolution();
+                
+                // Animate the current move
+                const currentMove = solvingMoves[moveIndex];
+                animateMove(currentMove.textContent);
+                
+                // Highlight the current move
+                solvingMoves.forEach(move => move.classList.remove('current-move'));
+                currentMove.classList.add('current-move');
+                
+                // Scroll to the move if needed
+                currentMove.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                
+                // Update move counter
+                const moveCounter = document.getElementById('move-counter');
+                if (moveCounter) {
+                    moveCounter.textContent = `${moveIndex + 1} / ${solvingMoves.length}`;
+                }
+                
+                moveIndex++;
+                
+                // If we reached the end, disable play button
+                if (moveIndex >= solvingMoves.length) {
+                    document.getElementById('play-button').disabled = true;
+                }
+            }
+            
+            // Reset the solution playback
+            function resetSolution() {
+                pauseSolution();
+                moveIndex = 0;
+                
+                // Remove highlighting from all moves
+                solvingMoves.forEach(move => move.classList.remove('current-move'));
+                
+                // Update move counter
+                const moveCounter = document.getElementById('move-counter');
+                if (moveCounter) {
+                    moveCounter.textContent = `0 / ${solvingMoves.length}`;
+                }
+                
+                // Enable play button
+                document.getElementById('play-button').disabled = false;
+            }
+            
+            // Initialize the solution player when the page loads
+            initSolutionPlayer();
+        });
+        </script>
+        
+        <style>
+        /* Animation styles */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3); background-color: #ffeb3b; }
+            100% { transform: scale(1); }
+        }
+        
+        @keyframes rotateFace {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(90deg); }
+        }
+        
+        .move-animate {
+            animation: pulse 0.5s ease;
+        }
+        
+        .face-animate {
+            animation: pulse 0.5s ease;
+        }
+        
+        /* Interactive hover styles */
+        .cubie:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        /* Current move highlight */
+        .current-move {
+            background-color: #3498db !important;
+            color: white;
+            transform: scale(1.2);
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            font-weight: bold;
+        }
+        
+        /* Add a button to play through the solution */
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .control-button {
+            padding: 8px 16px;
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .control-button:hover {
+            background-color: #1a2530;
+        }
+        
+        .control-button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        </style>
+    </body>
+    </html>
+    
