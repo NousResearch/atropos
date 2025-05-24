@@ -88,7 +88,7 @@ These class-level variables in `BaseEnv` can be overridden in your subclass to c
 
 *   **`server_cls: Type[APIServer]`**:
     *   Default: `APIServer`
-    *   Purpose: Specifies the class to be used for managing interactions with API servers (e.g., inference endpoints). Should mostly be used for developing addiitonal API interfaces, but if you need a nonstandard way of connecting with an existing API you can use this to easily slot in any modifications you need.
+    *   Purpose: Specifies the class to be used for managing interactions with API servers (e.g., inference endpoints). Should mostly be used for developing additional API interfaces, but if you need a nonstandard way of connecting with an existing API you can use this to easily slot in any modifications you need.
 
 ## Provided Functionality
 

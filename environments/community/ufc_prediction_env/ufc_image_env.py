@@ -163,7 +163,7 @@ class UFCImageEnv(BaseEnv):
                 "End your masterpiece with your prediction in this exact format:\n"
                 "[S1]Hello im your host  [S2] And so am i (name) [S1] Wow. Amazing. (laughs) "
                 "[S2] Lets get started! (coughs)\n\n"
-                "The winner should always be annouced with"
+                "The winner should always be announced with"
                 "\\boxed{Red} or \\boxed{Blue}"
                 "Or you will receive a score of -1.0"
             )
