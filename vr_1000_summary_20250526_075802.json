@@ -1,0 +1,27 @@
+{
+  "study_info": {
+    "total_experiments": 1000,
+    "successful_experiments": 1000,
+    "success_rate": 1.0,
+    "study_date": "20250526_075802"
+  },
+  "accuracy_stats": {
+    "mean": 0.7983281632970234,
+    "median": 0.7940172456883864,
+    "stdev": 0.09021890613007415,
+    "min": 0.6319589911846653,
+    "max": 0.9643238720997567
+  },
+  "distance_stats": {
+    "mean": 0.2016718367029766,
+    "median": 0.20598275431161364,
+    "stdev": 0.09021890613007413,
+    "min": 0.03567612790024338,
+    "max": 0.3680410088153347
+  },
+  "performance_distribution": {
+    "high_accuracy_count": 165,
+    "medium_accuracy_count": 646,
+    "low_accuracy_count": 189
+  }
+}
