@@ -1,0 +1,12 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '-t'
+  - 'us-central1-docker.pkg.dev/gen-lang-client-0029379200/padres-api-repo/padres-api-image:latest'
+  - '.'
+  # Specify the Dockerfile relative to the build context (which is the project root)
+  - '-f'
+  - 'padres_container/Dockerfile'
+images:
+- 'us-central1-docker.pkg.dev/gen-lang-client-0029379200/padres-api-repo/padres-api-image:latest' 
