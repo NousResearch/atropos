@@ -62,10 +62,10 @@ def download_gaia_dataset(output_dir, use_raw=False):
             ignore_patterns=[".gitattributes", "README.md"],
         )
 
-        # Create a minimal GAIA.py that loads directly from metadata.jsonl
+        # Create a minimal GAIA.py that loads directly from metadata.jsonl using absolute paths
         with open(os.path.join(output_dir, "GAIA.py"), "w") as f:
             f.write(
-                '''
+                f'''
 """
 GAIA benchmark dataset loader.
 Loads data directly from metadata.jsonl files.
@@ -74,6 +74,9 @@ Loads data directly from metadata.jsonl files.
 import os
 import json
 import datasets
+
+# Define absolute path to the dataset directory - crucial for correct operation
+DATASET_PATH = "{os.path.abspath(output_dir)}"
 
 class GAIA(datasets.GeneratorBasedBuilder):
     VERSION = datasets.Version("2023.0.0")
@@ -88,13 +91,13 @@ class GAIA(datasets.GeneratorBasedBuilder):
     def _info(self):
         return datasets.DatasetInfo(
             description="GAIA benchmark dataset",
-            features=datasets.Features({
+            features=datasets.Features({{
                 "Question": datasets.Value("string"),
                 "Final answer": datasets.Value("string"),
                 "Level": datasets.Value("string"),
                 "task_id": datasets.Value("string"),
                 "file_name": datasets.Value("string"),
-            }),
+            }}),
             homepage="https://huggingface.co/datasets/gaia-benchmark/GAIA",
         )
 
@@ -102,30 +105,34 @@ class GAIA(datasets.GeneratorBasedBuilder):
         return [
             datasets.SplitGenerator(
                 name=datasets.Split.VALIDATION,
-                gen_kwargs={"split": "validation"},
+                gen_kwargs={{"split": "validation"}},
             ),
             datasets.SplitGenerator(
                 name=datasets.Split.TEST,
-                gen_kwargs={"split": "test"},
+                gen_kwargs={{"split": "test"}},
             ),
         ]
 
     def _generate_examples(self, split):
         """Read data from the metadata.jsonl file."""
-        # Data is stored in a 2023 subfolder
-        metadata_path = os.path.join(os.path.dirname(__file__), "2023", split, "metadata.jsonl")
+        # Use absolute path to the metadata.jsonl file
+        metadata_path = os.path.join(DATASET_PATH, "2023", split, "metadata.jsonl")
+        print(f"Loading GAIA data from: {{metadata_path}}")
+
         with open(metadata_path, "r") as f:
             for i, line in enumerate(f):
                 example = json.loads(line)
                 if "file_name" in example and example["file_name"]:
-                    # Ensure file paths include the 2023 directory
+                    # Ensure file paths include the 2023 directory and absolute path
                     example["file_name"] = os.path.join("2023", split, example["file_name"])
                 yield i, example
 '''
             )
 
         # Verify the download worked by checking for key files
-        validation_path = os.path.join(output_dir, "2023", "validation", "metadata.jsonl")
+        validation_path = os.path.join(
+            output_dir, "2023", "validation", "metadata.jsonl"
+        )
         if not os.path.exists(validation_path):
             logger.error(f"Download appears incomplete. Missing: {validation_path}")
             return False
@@ -145,7 +152,7 @@ def main():
     if success:
         logger.info("GAIA dataset setup completed successfully")
         logger.info(
-            f"You can now run: python -m environments.smolagents_integration.run_gaia_single_task"
+            "You can now run: python -m environments.smolagents_integration.run_gaia_single_task"
         )
     else:
         logger.error("GAIA dataset setup failed - Aborting")
