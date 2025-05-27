@@ -1,10 +1,15 @@
+import asyncio
 import json
+import logging
+import os
 import random
 import re
+import uuid
 from typing import Dict, List, Optional, Tuple, Union
 
 import wandb
 from datasets import load_dataset
+from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
@@ -25,36 +30,76 @@ system_prompt = (
 )
 
 
+class SingleToolCallingEnvConfig(BaseEnvConfig):
+    dump_rollouts: bool = Field(
+        default=False,
+        description="Whether to dump rollouts to JSONL files.",
+    )
+    # Add other specific configs for SingleToolCallingEnv if any in the future
+
+
 class SingleToolCallingEnv(BaseEnv):
+    env_config_cls = SingleToolCallingEnvConfig
+
     def __init__(
         self,
-        config: BaseEnvConfig,
+        config: SingleToolCallingEnvConfig,
         server_configs: List[APIServerConfig],
         slurm=True,
         testing=False,
     ):
         super().__init__(config, server_configs, slurm, testing)
+
+        # Explicitly initialize the logger for this class, similar to SWERLEnv
+        self.logger = logging.getLogger(self.__class__.__name__)
+        if not self.logger.handlers:
+            _handler = logging.StreamHandler()
+            _formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            )
+            _handler.setFormatter(_formatter)
+            self.logger.addHandler(_handler)
+            self.logger.setLevel(logging.INFO)
+        self.logger.disabled = False  # Ensure logger is enabled
+
         self.percent_correct_buffer = list()
         self.eval_metrics = list()
         # Add tracking for wandb visualizations
         self.rollouts_for_wandb = []
         self.completion_lengths = []
 
+        # For saving rollouts to JSONL
+        self.run_uuid = str(uuid.uuid4())
+        # Buffer will store a list of item groups, where each group has an item_id and a list of its rollouts.
+        # Each rollout detail will contain conversation, score, and expected_tool_call.
+        RolloutDetail = Dict[
+            str, Union[List[Dict[str, str]], float, str]
+        ]  # Type alias for clarity
+        ItemGroup = Dict[str, Union[str, List[RolloutDetail]]]
+        self.rollouts_to_save_buffer: List[ItemGroup] = []
+        self.processed_item_count = 0
+        # Creates .../atropos/environments/datadumps/ relative to this file
+        self.datadumps_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "datadumps"
+        )
+        self.save_file_batch_num = 0
+
     @classmethod
-    def config_init(self) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
-        env_config = BaseEnvConfig(
+    def config_init(self) -> Tuple[SingleToolCallingEnvConfig, List[APIServerConfig]]:
+        env_config = SingleToolCallingEnvConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
             group_size=16,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
             total_steps=2000,
             batch_size=1024,
-            steps_per_eval=20,
+            steps_per_eval=1000,
             max_token_length=1024 * 16,
             inference_weight=1.0,
             wandb_name="toolcall_think",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
+            dump_rollouts=True,
         )
         server_configs = [
             APIServerConfig(
@@ -116,8 +161,25 @@ class SingleToolCallingEnv(BaseEnv):
         split_dataset = full_dataset.train_test_split(test_size=0.02, seed=42)
 
         # Keep the splits as is - no need to reformat
-        self.train = split_dataset["train"]
-        self.test = split_dataset["test"]
+        # self.train = split_dataset["train"]
+        # self.test = split_dataset["test"]
+
+        # Helper function to add static IDs
+        def add_static_id_func(example, idx, prefix="train"):
+            # Ensures we are working with a mutable copy if necessary,
+            # though .map typically handles this by creating new examples.
+            example_copy = dict(example)
+            example_copy["dataset_static_id"] = f"{prefix}_ds_entry_{idx}"
+            return example_copy
+
+        # Add static IDs to train and test datasets
+        # The with_indices=True argument provides the index of each example.
+        self.train = split_dataset["train"].map(
+            add_static_id_func, with_indices=True, fn_kwargs={"prefix": "train"}
+        )
+        self.test = split_dataset["test"].map(
+            add_static_id_func, with_indices=True, fn_kwargs={"prefix": "test"}
+        )
 
         self.iter = 0
 
@@ -319,6 +381,79 @@ class SingleToolCallingEnv(BaseEnv):
         scored_data = await self.score(to_score)
         to_backlog = []
 
+        # Log after scoring, before checking dump_rollouts condition
+        current_batch_progress = self.processed_item_count % 100
+        log_message_group_processed = (
+            f"GROUP_PROC - Item Iter: {self.iter-1}, Scored Data Present: {bool(scored_data)}, "
+            f"Dump Rollouts Cfg: {self.config.dump_rollouts}, "
+            f"Total Items Processed (for save): {self.processed_item_count}, Batch Counter: {current_batch_progress}/99"
+        )
+        self.logger.info(log_message_group_processed)
+
+        # If rollouts were generated and scored, and data dumping is enabled,
+        # prepare them for saving.
+        self.logger.info(
+            f"COLLECT_TRAJ - dump_rollouts: {self.config.dump_rollouts}, processed_item_count: {self.processed_item_count}, current_buffer_size: {len(self.rollouts_to_save_buffer)}"  # noqa: E501
+        )
+        if scored_data and self.config.dump_rollouts:
+            rollouts_for_current_item = (
+                []
+            )  # Store dicts of {conversation, score, expected_tool_call}
+
+            num_scored_rollouts = len(scored_data.get("scores", []))
+            conversation_messages_batch = scored_data.get("messages", [])
+
+            for i in range(num_scored_rollouts):
+                conversation_messages = (
+                    conversation_messages_batch[i]
+                    if i < len(conversation_messages_batch)
+                    else []
+                )
+                score_for_rollout = scored_data["scores"][i]
+
+                rollouts_for_current_item.append(
+                    {
+                        # item_id will be part of the parent group
+                        "conversation": conversation_messages,  # Full conversation history
+                        "score": score_for_rollout,
+                        "expected_tool_call": item[
+                            1
+                        ],  # Include expected tool call from the item
+                    }
+                )
+
+            if rollouts_for_current_item:
+                # item is (prompt_tuple, answer_string)
+                # Create a unique item_id for the source prompt/item.
+                # Using self.iter which was incremented in get_next_item should give
+                # a reasonable ID for the item itself.
+                # source_item_id = f"item_{self.iter-1}"
+                # Use the static_id from the item tuple (item[2]) as the source_item_id
+                source_item_id = item[
+                    2
+                ]  # item is (prompt_tuple, answer_string, static_id_string)
+
+                item_data_to_save = {
+                    "item_id": source_item_id,
+                    "rollouts": rollouts_for_current_item,
+                }
+                self.rollouts_to_save_buffer.append(item_data_to_save)
+                self.processed_item_count += 1  # Increment per item (group)
+
+                # Check if it's time to save a batch of items (groups)
+                if (
+                    self.config.dump_rollouts
+                    and self.processed_item_count > 0
+                    and self.processed_item_count % 100
+                    == 0  # Save every 100 processed items (groups)
+                ):
+                    log_msg = (
+                        f"Reached {self.processed_item_count} processed items. "
+                        f"Triggering save for {len(self.rollouts_to_save_buffer)} item groups."
+                    )
+                    self.logger.info(log_msg)
+                    await self._save_rollouts_to_jsonl()
+
         return scored_data, to_backlog
 
     async def score(
@@ -328,6 +463,7 @@ class SingleToolCallingEnv(BaseEnv):
         scores["tokens"] = list()
         scores["masks"] = list()
         scores["scores"] = list()
+        scores["messages"] = list()
 
         # Extract the expected JSONs from the answer
         expected_jsons = self._extract_tool_call_jsons(rollout_group_data[0][1])
@@ -347,7 +483,9 @@ class SingleToolCallingEnv(BaseEnv):
             reward = 1 if self._compare_tool_calls(model_response, item[1]) else 0
 
             # Tokenize the conversation for learning
-            out_dict = tokenize_for_trainer(self.tokenizer, item[0])
+            out_dict = tokenize_for_trainer(
+                self.tokenizer, item[0], include_messages=True
+            )
             tokens = out_dict["tokens"]
             masks = out_dict["masks"]
 
@@ -358,6 +496,7 @@ class SingleToolCallingEnv(BaseEnv):
             scores["tokens"].append(tokens)
             scores["masks"].append(masks)
             scores["scores"].append(1.0 if reward else -1.0)
+            scores["messages"].append(out_dict.get("messages", item[0]))
 
             # Break once we have enough examples
             if len(scores["tokens"]) >= self.config.group_size:
@@ -400,7 +539,61 @@ class SingleToolCallingEnv(BaseEnv):
         if all(scores["scores"][0] == score for score in scores["scores"]):
             return None
 
+        # Calculate and log average score for the current group (mimicking swe_rl_env)
+        current_scores_tc = scores.get("scores", [])
+        if current_scores_tc:
+            average_score_tc = sum(current_scores_tc) / len(current_scores_tc)
+            log_message_main_tc = (
+                f"ToolCalling Group average score: {average_score_tc:.4f}"
+            )
+            if all(s == 1.0 for s in current_scores_tc):
+                self.logger.info(
+                    f"{log_message_main_tc} (All successes in this group!)"
+                )
+            elif all(
+                s == 0.0 or s == -1.0 for s in current_scores_tc
+            ):  # Assuming -1.0 is also a failure state
+                self.logger.info(f"{log_message_main_tc} (All failures in this group!)")
+            else:
+                self.logger.info(log_message_main_tc)
+
         return scores
+
+    async def _save_rollouts_to_jsonl(self):
+        """Saves the buffered rollouts to a JSONL file in the datadumps directory."""
+        if not self.rollouts_to_save_buffer:
+            self.logger.info("No rollouts in buffer to save.")
+            return
+
+        try:
+            if not os.path.exists(self.datadumps_dir):
+                os.makedirs(self.datadumps_dir)
+                self.logger.info(f"Created directory: {self.datadumps_dir}")
+        except OSError as e:
+            self.logger.error(f"Error creating directory {self.datadumps_dir}: {e}")
+            return  # Don't proceed if directory creation fails
+
+        file_path = os.path.join(
+            self.datadumps_dir,
+            f"tool_calling_rollouts_{self.run_uuid}_{self.save_file_batch_num:04d}.jsonl",
+        )
+
+        try:
+            with open(file_path, "w") as f:
+                for rollout_dict in self.rollouts_to_save_buffer:
+                    json.dump(rollout_dict, f)
+                    f.write("\n")
+            self.logger.info(
+                f"Successfully saved {len(self.rollouts_to_save_buffer)} rollouts to {file_path}"
+            )
+            self.rollouts_to_save_buffer.clear()  # Clear buffer after successful save
+            self.save_file_batch_num += 1
+        except IOError as e:
+            self.logger.error(f"Error writing rollouts to {file_path}: {e}")
+        except Exception as e:
+            self.logger.error(
+                f"An unexpected error occurred while saving rollouts to {file_path}: {e}"
+            )
 
     async def get_next_item(self):
         next_item = self.train[self.iter % len(self.train)]
@@ -408,6 +601,8 @@ class SingleToolCallingEnv(BaseEnv):
 
         # Extract conversation elements
         conversations = next_item["conversations"]
+        # Extract the static ID
+        static_id = next_item["dataset_static_id"]
 
         # Find system, human and gpt messages
         system_message = next(
@@ -440,7 +635,7 @@ class SingleToolCallingEnv(BaseEnv):
         # Return expected assistant response (the tool call JSON) as the "answer"
         answer = expected_gpt_message["value"] if expected_gpt_message else ""
 
-        return (tuple(prompt), answer)
+        return (tuple(prompt), answer, static_id)
 
     async def add_rollouts_for_wandb(
         self,
@@ -457,13 +652,37 @@ class SingleToolCallingEnv(BaseEnv):
                 (
                     self.tokenizer.decode(scored_data["tokens"][i]),
                     scored_data["scores"][i],
-                    item[1],  # Just keep the expected tool call JSON
+                    item[
+                        1
+                    ],  # item is (prompt_tuple, answer_string, static_id_string), so item[1] is the expected tool call
                 )
                 for i in range(num_keep)
             ]
         )
         if len(self.rollouts_for_wandb) > self.config.num_rollouts_to_keep:
             self.rollouts_for_wandb.pop(0)
+
+    async def close(self):
+        """Clean up and save any remaining rollouts before exiting."""
+        self.logger.info(
+            "Closing SingleToolCallingEnv. Attempting to save any remaining rollouts..."
+        )
+        if (
+            self.config.dump_rollouts and self.rollouts_to_save_buffer
+        ):  # Check if there's anything to save
+            self.logger.info(
+                f"Found {len(self.rollouts_to_save_buffer)} rollouts in buffer. Saving now."
+            )
+            await self._save_rollouts_to_jsonl()
+        else:
+            self.logger.info("No rollouts in buffer to save upon closing.")
+
+        # Call the superclass's close method if it exists and is async
+        if hasattr(super(), "close") and asyncio.iscoroutinefunction(super().close):
+            await super().close()
+        elif hasattr(super(), "close"):
+            super().close()  # Assuming it's a synchronous method
+        self.logger.info("SingleToolCallingEnv closed.")
 
 
 if __name__ == "__main__":
