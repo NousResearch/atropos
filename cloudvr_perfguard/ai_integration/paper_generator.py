@@ -48,15 +48,26 @@ class ResearchPaperGenerator:
     def check_ai_scientist_availability(self) -> bool:
         """Check if AI Scientist is available and properly configured"""
         
-        ai_scientist_dir = Path(self.ai_scientist_path)
+        # Try multiple possible paths
+        possible_paths = [
+            self.ai_scientist_path,
+            "AI-Scientist",
+            "../AI-Scientist",
+            "../../AI-Scientist"
+        ]
         
-        if not ai_scientist_dir.exists():
-            print(f"AI Scientist not found at {self.ai_scientist_path}")
+        for path in possible_paths:
+            ai_scientist_dir = Path(path)
+            if ai_scientist_dir.exists():
+                self.ai_scientist_path = str(ai_scientist_dir)
+                break
+        else:
+            print(f"AI Scientist not found in any of: {possible_paths}")
             print("Please clone: git clone https://github.com/SakanaAI/AI-Scientist.git")
             return False
         
         # Check for required files
-        required_files = ["aider_main.py", "requirements.txt"]
+        required_files = ["launch_scientist.py", "requirements.txt"]
         for file in required_files:
             if not (ai_scientist_dir / file).exists():
                 print(f"Required file {file} not found in AI Scientist directory")
@@ -211,7 +222,7 @@ class ResearchPaperGenerator:
                 # Run AI Scientist
                 cmd = [
                     "python", 
-                    os.path.join(self.ai_scientist_path, "aider_main.py"),
+                    os.path.join(self.ai_scientist_path, "launch_scientist.py"),
                     "--data-file", data_file,
                     "--spec-file", spec_file,
                     "--output-dir", temp_dir,

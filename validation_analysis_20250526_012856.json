@@ -1,0 +1,259 @@
+{
+  "total_validations": 25,
+  "successful_validations": 25,
+  "failed_validations": 0,
+  "performance_distribution": {
+    "mean": 0.9179435688800649,
+    "std": 0.11783186131873577,
+    "min": 0.5674850486483823,
+    "max": 1.0,
+    "median": 0.9857192417982498
+  },
+  "confirmed_patterns": [
+    "Higher glow intensity correlates with better performance (r=0.737)",
+    "Lower pulse frequency correlates with better performance (r=-0.446)"
+  ],
+  "refuted_patterns": [],
+  "top_performers": [
+    {
+      "cue": {
+        "glow": 0.9744744411789241,
+        "pulse_hz": 2.062527236724234,
+        "edge": 1.0,
+        "color_hue": 241.02369522512006,
+        "color_saturation": 0.9724532536916094,
+        "color_value": 0.998192981351938,
+        "particle_density": 0.0009548342606195881,
+        "particle_speed": 0.1,
+        "animation_type": 0,
+        "size_change_amplitude": 0.2526698352488629,
+        "blur_amount": 0.004959841528302399
+      },
+      "real_result": {
+        "touch_probability": 1.0,
+        "distance_error": 0.13005065987008815,
+        "task_success": true,
+        "reward": 1.0
+      },
+      "validation_status": "simulated_success",
+      "timestamp": "2025-05-26T01:28:50.622223"
+    },
+    {
+      "cue": {
+        "glow": 1.0,
+        "pulse_hz": 3.3070991695615026,
+        "edge": 0.9976899073831482,
+        "color_hue": 135.05211486477003,
+        "color_saturation": 0.512547339910177,
+        "color_value": 0.7874648394001968,
+        "particle_density": 0.23114624026517405,
+        "particle_speed": 0.1,
+        "animation_type": 0,
+        "size_change_amplitude": 0.1386920525227183,
+        "blur_amount": 0.1830052050160095
+      },
+      "real_result": {
+        "touch_probability": 1.0,
+        "distance_error": 0.1,
+        "task_success": true,
+        "reward": 1.0
+      },
+      "validation_status": "simulated_success",
+      "timestamp": "2025-05-26T01:28:49.786179"
+    },
+    {
+      "cue": {
+        "glow": 1.0,
+        "pulse_hz": 3.1708136902814736,
+        "edge": 1.0,
+        "color_hue": 129.50963288213418,
+        "color_saturation": 0.5,
+        "color_value": 0.7837061483521941,
+        "particle_density": 0.07877327656152444,
+        "particle_speed": 0.1,
+        "animation_type": 0,
+        "size_change_amplitude": 0.07569243696411102,
+        "blur_amount": 0.1035937385682276
+      },
+      "real_result": {
+        "touch_probability": 1.0,
+        "distance_error": 0.15677191596346438,
+        "task_success": true,
+        "reward": 1.0
+      },
+      "validation_status": "simulated_success",
+      "timestamp": "2025-05-26T01:28:51.609160"
+    },
+    {
+      "cue": {
+        "glow": 1.0,
+        "pulse_hz": 3.127376293031131,
+        "edge": 1.0,
+        "color_hue": 123.71423393409212,
+        "color_saturation": 0.9918345121088029,
+        "color_value": 0.8303103148650608,
+        "particle_density": 0.2827817498293014,
+        "particle_speed": 0.1,
+        "animation_type": 2.079454921144477,
+        "size_change_amplitude": 0.2341932962208647,
+        "blur_amount": 0.05539660503231479
+      },
+      "real_result": {
+        "touch_probability": 1.0,
+        "distance_error": 0.1,
+        "task_success": true,
+        "reward": 1.0
+      },
+      "validation_status": "simulated_success",
+      "timestamp": "2025-05-26T01:28:51.274370"
+    },
+    {
+      "cue": {
+        "glow": 0.980420390510927,
+        "pulse_hz": 2.3164866881340744,
+        "edge": 1.0,
+        "color_hue": 240.9044293667435,
+        "color_saturation": 0.8206378783662315,
+        "color_value": 0.7094063146146574,
+        "particle_density": 0.0,
+        "particle_speed": 0.11100598789488444,
+        "animation_type": 0,
+        "size_change_amplitude": 0.3,
+        "blur_amount": 0.0
+      },
+      "real_result": {
+        "touch_probability": 1.0,
+        "distance_error": 0.1275200378584178,
+        "task_success": true,
+        "reward": 1.0
+      },
+      "validation_status": "simulated_success",
+      "timestamp": "2025-05-26T01:28:51.226432"
+    }
+  ],
+  "worst_performers": [
+    {
+      "cue": {
+        "glow": 0.9834352024380105,
+        "pulse_hz": 0.5,
+        "edge": 1.0,
+        "color_hue": 247.6031730065073,
+        "color_saturation": 0.8550497760926414,
+        "color_value": 0.7,
+        "particle_density": 0.6201852710388945,
+        "particle_speed": 0.1,
+        "animation_type": 0,
+        "size_change_amplitude": 0.030709435487469794,
+        "blur_amount": 0.0
+      },
+      "real_result": {
+        "touch_probability": 0.8255284109717029,
+        "distance_error": 0.16351222245436747,
+        "task_success": true,
+        "reward": 0.8255284109717029
+      },
+      "validation_status": "simulated_success",
+      "timestamp": "2025-05-26T01:28:49.581899"
+    },
+    {
+      "cue": {
+        "glow": 0.9886996605474045,
+        "pulse_hz": 3.6812663831424732,
+        "edge": 1.0,
+        "color_hue": 247.57594470994283,
+        "color_saturation": 0.7227557293079451,
+        "color_value": 0.8486132501087815,
+        "particle_density": 0.6570208626259282,
+        "particle_speed": 0.1,
+        "animation_type": 0,
+        "size_change_amplitude": 0.20494382172178194,
+        "blur_amount": 0.011166981151267526
+      },
+      "real_result": {
+        "touch_probability": 0.7960465216868878,
+        "distance_error": 0.2546514291639051,
+        "task_success": true,
+        "reward": 0.7960465216868878
+      },
+      "validation_status": "simulated_success",
+      "timestamp": "2025-05-26T01:28:55.025923"
+    },
+    {
+      "cue": {
+        "glow": 0.846334095277256,
+        "pulse_hz": 4.364232402055636,
+        "edge": 1.0,
+        "color_hue": 236.4378986245514,
+        "color_saturation": 0.9077835939503196,
+        "color_value": 0.8985737221963891,
+        "particle_density": 0.00018405650865228638,
+        "particle_speed": 0.10128599648816092,
+        "animation_type": 0,
+        "size_change_amplitude": 0.21120702144454165,
+        "blur_amount": 0.02172231504332214
+      },
+      "real_result": {
+        "touch_probability": 0.7115138740777476,
+        "distance_error": 0.15392919345773698,
+        "task_success": true,
+        "reward": 0.7115138740777476
+      },
+      "validation_status": "simulated_success",
+      "timestamp": "2025-05-26T01:28:53.453698"
+    },
+    {
+      "cue": {
+        "glow": 0.8999635792021107,
+        "pulse_hz": 5.0,
+        "edge": 0.14235044759671056,
+        "color_hue": 202.35386377249483,
+        "color_saturation": 0.7841552085624206,
+        "color_value": 0.7,
+        "particle_density": 0.7092487087681819,
+        "particle_speed": 0.8212047718568583,
+        "animation_type": 0,
+        "size_change_amplitude": 0.3,
+        "blur_amount": 0.0
+      },
+      "real_result": {
+        "touch_probability": 0.6679525396233325,
+        "distance_error": 0.180318357730262,
+        "task_success": true,
+        "reward": 0.6679525396233325
+      },
+      "validation_status": "simulated_success",
+      "timestamp": "2025-05-26T01:28:56.388374"
+    },
+    {
+      "cue": {
+        "glow": 0.765027783962965,
+        "pulse_hz": 4.974554885753009,
+        "edge": 0.0,
+        "color_hue": 217.63575915747015,
+        "color_saturation": 0.7840472898312542,
+        "color_value": 0.74517222483612,
+        "particle_density": 0.975280753856538,
+        "particle_speed": 1.2612653856038052,
+        "animation_type": 0.448804739873504,
+        "size_change_amplitude": 0.275064871384045,
+        "blur_amount": 0.0
+      },
+      "real_result": {
+        "touch_probability": 0.5674850486483823,
+        "distance_error": 0.23948428257297893,
+        "task_success": false,
+        "reward": 0.0
+      },
+      "validation_status": "simulated_success",
+      "timestamp": "2025-05-26T01:28:56.462707"
+    }
+  ],
+  "statistical_insights": {},
+  "distance_distribution": {
+    "mean": 0.131030954259521,
+    "std": 0.04233323966773536,
+    "min": 0.1,
+    "max": 0.2546514291639051,
+    "median": 0.11159613760214526
+  }
+}

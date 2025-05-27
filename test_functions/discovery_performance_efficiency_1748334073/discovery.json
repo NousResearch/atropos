@@ -1,0 +1,23 @@
+{
+  "discovery_id": "discovery_performance_efficiency_1748334073",
+  "domain": "performance_efficiency",
+  "timestamp": "2025-05-27T01:21:13.681953",
+  "function_code": "\n# Auto-generated VR optimization function\n# Type: linear\n# Fitness: 0.0000\n\nimport numpy as np\n\ndef vr_optimization_function(features):\n    \"\"\"\n    VR optimization function discovered through evolutionary algorithm\n    \n    Args:\n        features: Array of input features [gpu_util, vram_usage, cpu_util, scene_complexity, duration, gpu_type]\n    \n    Returns:\n        Optimized output value\n    \"\"\"\n    \n    # Feature weights\n    weights = [0.8790465522632731, -1.3006541396594828, -1.2083172763579877, -0.38259623577751833, 1.0135228857542846, -0.9665032368745976]\n    x = np.dot(features, weights[:len(features)])\n    \n    # Linear function\n    result = x + 5.596096452060522\n    \n    return np.clip(result, -1e6, 1e6)\n\n# Example usage:\n# result = vr_optimization_function([gpu_util, vram_usage, cpu_util, scene_complexity, duration, gpu_type])\n",
+  "fitness_score": 0,
+  "discovery_method": "simple_evolution",
+  "generations_run": 25,
+  "population_size": 20,
+  "function_type": "linear",
+  "parameters": {
+    "weights": [
+      0.8790465522632731,
+      -1.3006541396594828,
+      -1.2083172763579877,
+      -0.38259623577751833,
+      1.0135228857542846,
+      -0.9665032368745976
+    ],
+    "bias": 5.596096452060522
+  },
+  "discovery_time": "2025-05-27T01:21:13.681774"
+}

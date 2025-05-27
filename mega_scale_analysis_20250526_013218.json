@@ -1,0 +1,9 @@
+{
+  "total_experiments": 22,
+  "successful_experiments": 0,
+  "failed_experiments": 22,
+  "total_discoveries": 0,
+  "discoveries_by_segment": {},
+  "performance_metrics": {},
+  "segment_analysis": {}
+}

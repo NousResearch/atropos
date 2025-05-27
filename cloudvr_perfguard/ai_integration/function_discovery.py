@@ -52,18 +52,34 @@ class OptimizationDiscovery:
     def check_funsearch_availability(self) -> bool:
         """Check if FunSearch is available"""
         
-        funsearch_dir = Path(self.funsearch_path)
+        # Try multiple possible paths
+        possible_paths = [
+            self.funsearch_path,
+            "funsearch",
+            "../funsearch",
+            "../../funsearch"
+        ]
         
-        if not funsearch_dir.exists():
-            print(f"FunSearch not found at {self.funsearch_path}")
-            print("Please clone: git clone https://github.com/deepmind/funsearch.git")
+        for path in possible_paths:
+            funsearch_dir = Path(path)
+            if funsearch_dir.exists():
+                self.funsearch_path = str(funsearch_dir)
+                break
+        else:
+            print(f"FunSearch not found in any of: {possible_paths}")
+            print("Please clone: git clone https://github.com/google-deepmind/funsearch.git")
             return False
         
         # Check for key files
-        required_files = ["funsearch.py", "requirements.txt"]
+        implementation_dir = funsearch_dir / "implementation"
+        if not implementation_dir.exists():
+            print(f"Implementation directory not found in FunSearch")
+            return False
+        
+        required_files = ["funsearch.py", "evaluator.py"]
         for file in required_files:
-            if not (funsearch_dir / file).exists():
-                print(f"Required file {file} not found in FunSearch directory")
+            if not (implementation_dir / file).exists():
+                print(f"Required file {file} not found in FunSearch implementation directory")
                 return False
         
         return True
@@ -192,7 +208,7 @@ class OptimizationDiscovery:
                 # Run FunSearch
                 cmd = [
                     "python",
-                    os.path.join(self.funsearch_path, "funsearch.py"),
+                    os.path.join(self.funsearch_path, "implementation", "funsearch.py"),
                     "--data-file", data_file,
                     "--config-file", config_file,
                     "--output-dir", temp_dir

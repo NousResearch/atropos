@@ -1,0 +1,79 @@
+{
+  "glow": {
+    "mean": 0.5,
+    "std": 0.0,
+    "min_observed": 0.5,
+    "max_observed": 0.5,
+    "convergence_strength": 1.0
+  },
+  "pulse_hz": {
+    "mean": 2.1,
+    "std": 0.0,
+    "min_observed": 2.1,
+    "max_observed": 2.1,
+    "convergence_strength": 1.0
+  },
+  "edge": {
+    "mean": 0.6,
+    "std": 0.0,
+    "min_observed": 0.6,
+    "max_observed": 0.6,
+    "convergence_strength": 1.0
+  },
+  "color_hue": {
+    "mean": 0.47931236467918303,
+    "std": 0.0,
+    "min_observed": 0.47931236467918303,
+    "max_observed": 0.47931236467918303,
+    "convergence_strength": 1.0
+  },
+  "color_saturation": {
+    "mean": 0.6734130476958882,
+    "std": 0.0,
+    "min_observed": 0.6734130476958882,
+    "max_observed": 0.6734130476958882,
+    "convergence_strength": 1.0
+  },
+  "color_value": {
+    "mean": 0.7606317076352963,
+    "std": 0.0,
+    "min_observed": 0.7606317076352963,
+    "max_observed": 0.7606317076352963,
+    "convergence_strength": 1.0
+  },
+  "particle_density": {
+    "mean": 0.5856409513560822,
+    "std": 0.0,
+    "min_observed": 0.5856409513560822,
+    "max_observed": 0.5856409513560822,
+    "convergence_strength": 1.0
+  },
+  "particle_speed": {
+    "mean": 1.1690093098639913,
+    "std": 0.0,
+    "min_observed": 1.1690093098639913,
+    "max_observed": 1.1690093098639913,
+    "convergence_strength": 1.0
+  },
+  "animation_type": {
+    "mean": 1.0,
+    "std": 0.0,
+    "min_observed": 1.0,
+    "max_observed": 1.0,
+    "convergence_strength": 1.0
+  },
+  "size_change_amplitude": {
+    "mean": 0.16654502121551182,
+    "std": 0.0,
+    "min_observed": 0.16654502121551182,
+    "max_observed": 0.16654502121551182,
+    "convergence_strength": 1.0
+  },
+  "blur_amount": {
+    "mean": 0.03200180403442532,
+    "std": 0.0,
+    "min_observed": 0.03200180403442532,
+    "max_observed": 0.03200180403442532,
+    "convergence_strength": 1.0
+  }
+}

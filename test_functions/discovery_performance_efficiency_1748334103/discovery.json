@@ -1,0 +1,28 @@
+{
+  "discovery_id": "discovery_performance_efficiency_1748334103",
+  "domain": "performance_efficiency",
+  "timestamp": "2025-05-27T01:21:43.543315",
+  "function_code": "\n# Auto-generated VR optimization function\n# Type: polynomial\n# Fitness: 0.0000\n\nimport numpy as np\n\ndef vr_optimization_function(features):\n    \"\"\"\n    VR optimization function discovered through evolutionary algorithm\n    \n    Args:\n        features: Array of input features [gpu_util, vram_usage, cpu_util, scene_complexity, duration, gpu_type]\n    \n    Returns:\n        Optimized output value\n    \"\"\"\n    \n    # Feature weights\n    weights = [-1.7195188866848152, 0.5966045106178974, -0.35159253635382814, 0.6851269947344978, 0.005824026968042961, -0.936694707724218]\n    x = np.dot(features, weights[:len(features)])\n    \n    # Polynomial function\n    result = (0.32905126833841103 * x**3 + 0.31997985379646066 * x**2 + \n              -0.42457118753421463 * x + -0.619282581095919)\n    \n    return np.clip(result, -1e6, 1e6)\n\n# Example usage:\n# result = vr_optimization_function([gpu_util, vram_usage, cpu_util, scene_complexity, duration, gpu_type])\n",
+  "fitness_score": 0,
+  "discovery_method": "simple_evolution",
+  "generations_run": 25,
+  "population_size": 20,
+  "function_type": "polynomial",
+  "parameters": {
+    "coefficients": [
+      0.32905126833841103,
+      0.31997985379646066,
+      -0.42457118753421463,
+      -0.619282581095919
+    ],
+    "weights": [
+      -1.7195188866848152,
+      0.5966045106178974,
+      -0.35159253635382814,
+      0.6851269947344978,
+      0.005824026968042961,
+      -0.936694707724218
+    ]
+  },
+  "discovery_time": "2025-05-27T01:21:43.543182"
+}
