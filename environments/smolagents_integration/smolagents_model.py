@@ -4,11 +4,10 @@ Process-safe implementation of the AtroposServerModel for SmolaGents.
 
 import logging
 import traceback
-from typing import Any, Dict, List, Optional
 
 from smolagents.models import ChatMessage, MessageRole, Model
 
-from environments.smolagents_integration.server_proxy import ServerProxy
+from .server_proxy import ServerProxy
 
 # Configure logger for the model class
 logger = logging.getLogger(__name__)
@@ -45,7 +44,8 @@ class ProcessSafeAtroposServerModel(Model):
 
         # Log the configuration
         logger.info(
-            f"Initializing ProcessSafeAtroposServerModel with model_id={model_id}, use_chat_completion={self.use_chat_completion}"
+            f"Initializing ProcessSafeAtroposServerModel with model_id={model_id}, "
+            f"use_chat_completion={self.use_chat_completion}"
         )
 
         super().__init__(model_id=model_id, **kwargs)
@@ -117,7 +117,12 @@ class ProcessSafeAtroposServerModel(Model):
                 openai_role = "user"
             elif role_str == "assistant":
                 openai_role = "assistant"
-            elif role_str in ("tool_call", "tool_response", "function_call", "function_response"):  
+            elif role_str in (
+                "tool_call",
+                "tool_response",
+                "function_call",
+                "function_response",
+            ):
                 # Silently map tool and function calls/responses to user roles
                 openai_role = "user"
             else:
@@ -172,8 +177,8 @@ class ProcessSafeAtroposServerModel(Model):
             messages=messages, stop_sequences=stop_sequences, **kwargs
         )
 
-        # Extract timeout from kwargs or use default
-        timeout = kwargs.pop("timeout", 120)  # Default 2 minutes
+        # Extract timeout from kwargs or use default (but not used in this method)
+        kwargs.pop("timeout", 120)  # Default 2 minutes
 
         try:
             # Use chat_completion if configured

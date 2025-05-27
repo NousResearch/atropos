@@ -78,7 +78,8 @@ python -m environments.smolagents_integration.smolagents_env process \
   --env.max_concurrent_processes 8 \
   --env.use_chat_completion true \
   --openai.model_name "gpt-4o" \
-  --openai.base_url "https://api.openai.com/v1"
+  --openai.base_url "https://api.openai.com/v1" \
+  --openai.api_key x
 ```
 
 ```bash
@@ -91,7 +92,8 @@ python -m environments.smolagents_integration.smolagents_env process \
   --env.max_concurrent_processes 8 \
   --env.use_chat_completion true \
   --openai.model_name "gpt-4o" \
-  --openai.base_url "https://api.openai.com/v1"
+  --openai.base_url "https://api.openai.com/v1" \
+  --openai.api_key x
 ```
 
 Note: The command syntax uses dots (`.`) to separate namespaces. Also, the OpenAI API key should be set in your environment variables as `OPENAI_API_KEY` or in a `.env` file in the project root.
@@ -118,8 +120,8 @@ python -m environments.smolagents_integration.smolagents_env serve \
   --env.use_chat_completion true \
   --env.max_concurrent_processes 5 \
   --env.group_size 8 \
-  --openai.model_name "gpt-4o" \
-  --openai.base_url "https://api.openai.com/v1"
+  --openai.model_name "your-model-name" \
+  --openai.base_url "http://localhost:8000/v1"
 ```
 
 ## How It Works
