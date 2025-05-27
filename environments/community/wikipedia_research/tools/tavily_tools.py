@@ -56,12 +56,16 @@ class TavilyExtractTool(Tool):
                 error_msg = f"No results in Tavily extraction response for {url}"
                 print(f"Error: {error_msg}")
                 print(f"Full response: {response}")
-                
+
                 # Provide user-friendly content with the error
                 return {
                     "url": url,
                     "title": "Content Extraction Failed",
-                    "content": "The content extraction service couldn't retrieve information from this page. This can happen with certain websites that have access restrictions or complex layouts. Try using a different source for this information.",
+                    "content": (
+                        "The content extraction service couldn't retrieve information from this page. "
+                        "This can happen with certain websites that have access restrictions or complex "
+                        "layouts. Try using a different source for this information."
+                    ),
                     "success": False,
                     "error": error_msg,
                 }
@@ -77,12 +81,15 @@ class TavilyExtractTool(Tool):
                 print(f"Response structure: {response.keys()}")
                 if "results" in response and response["results"]:
                     print(f"Result keys: {response['results'][0].keys()}")
-                
+
                 # Return partial data if available
                 content = response.get("results", [{}])[0].get("raw_content", "")
                 if not content:
-                    content = "The extraction service was able to access the page but returned incomplete content."
-            
+                    content = (
+                        "The extraction service was able to access the page but returned "
+                        "incomplete content."
+                    )
+
             title = response.get("results", [{}])[0].get("title", "Unknown title")
 
             # Format the content as a structured object
@@ -95,16 +102,21 @@ class TavilyExtractTool(Tool):
             }
         except Exception as e:
             import traceback
+
             error_msg = f"Error extracting content from {url}: {str(e)}"
             trace = traceback.format_exc()
             print(f"Error: {error_msg}")
             print(f"Traceback: {trace}")
-            
+
             # Provide a user-friendly error message
             return {
                 "url": url,
                 "title": "Page Access Error",
-                "content": "There was a technical problem accessing this page. This might be due to the website blocking automated access or requiring authentication. Try using a different source for this information.",
+                "content": (
+                    "There was a technical problem accessing this page. This might be due to the "
+                    "website blocking automated access or requiring authentication. Try using a "
+                    "different source for this information."
+                ),
                 "success": False,
                 "error": error_msg,
             }

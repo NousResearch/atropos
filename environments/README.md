@@ -461,4 +461,50 @@ python environments/community/cybersecurity_sigma/llm_judge_env.py
 - **W&B Integration**: Comprehensive experiment tracking and visualization
 - **Length Penalties**: Applied for overly verbose rule generation
 
+## 32. Wikipedia Article Research Environment
+
+**Location:** `environments/community/wikipedia_research/`  
+**Contributor:** [aniemerg](https://github.com/aniemerg)  
+**PR:** [#72](https://github.com/NousResearch/atropos/pull/72)
+
+### Core Features
+- **Multi-Step Research Process**: Web search and content extraction with Tavily API integration
+- **Factual Accuracy Evaluation**: OpenAI-powered line-by-line fact-checking against reference articles
+- **Wikipedia Blocking**: Prevents direct Wikipedia access to encourage diverse source usage
+- **Quality Assessment Framework**: Structure, comprehensiveness, and fact usage scoring
+
+### Technical Implementation
+- **Environment Name**: `WikipediaArticleCreator`
+- **Research Tools**: `web_search` and `visit_page` with error handling and filtering
+- **Evaluation System**: Dual scoring combining structural quality with factual accuracy
+- **Episode Management**: Tracks complete research sessions with conversation history
+
+### Research Applications
+- **Information Synthesis**: Training models to combine multiple sources into coherent articles
+- **Research Methodology**: Multi-step information gathering and fact verification
+- **Quality Assessment**: Comprehensive article evaluation across multiple dimensions
+- **Tool Usage Training**: Effective utilization of search and extraction capabilities
+
+### Setup and Usage
+```bash
+# Environment variables
+export TAVILY_API_KEY="your-tavily-key"    # Required for web research
+export OPENAI_API_KEY="your-openai-key"    # Required for LLM and evaluation
+
+# Direct usage
+cd environments/community/wikipedia_research
+python run_with_openai.py --topic "Climate change in Antarctica" --model "gpt-4o"
+
+# Training mode
+python -m atroposlib.cli.dpo \
+    --env-module "environments.community.wikipedia_research.wikipedia_article_creator"
+```
+
+### Performance Characteristics
+- **Research Efficiency**: 10-50 tool calls per article depending on complexity
+- **Quality Metrics**: Structure (0-1), comprehensiveness (0-1), fact usage (0-1)
+- **Accuracy Evaluation**: CORRECT/INCORRECT/UNKNOWN statement categorization
+- **Combined Scoring**: Overall article score in [-1, 1] range balancing quality and accuracy
+- **W&B Integration**: Complete research session tracking with tool usage analytics
+
 ---
