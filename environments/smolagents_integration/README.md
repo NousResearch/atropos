@@ -38,10 +38,6 @@ The integration consists of:
    ```
    pip install tavily-python
    ```
-5. Download the GAIA benchmark dataset:
-   ```
-   python -m environments.smolagents_integration.download_gaia
-   ```
 
 ## Environment Variables
 
