@@ -1,0 +1,24 @@
+{
+  "discovery_id": "discovery_frame_time_consistency_1748334744",
+  "domain": "frame_time_consistency",
+  "timestamp": "2025-05-27T01:32:24.729317",
+  "function_code": "\n# Auto-generated VR optimization function\n# Type: exponential\n# Fitness: -1000000000000.0000\n\nimport numpy as np\n\ndef vr_optimization_function(features):\n    \"\"\"\n    VR optimization function discovered through evolutionary algorithm\n    \n    Args:\n        features: Array of input features [gpu_util, vram_usage, cpu_util, scene_complexity, duration, gpu_type]\n    \n    Returns:\n        Optimized output value\n    \"\"\"\n    \n    # Feature weights\n    weights = [0.8853990025025649, 0.8356038890455189, -0.9642515498007673, -0.07744606350500605, -0.8524545510791419, -0.42670378074486504]\n    x = np.dot(features, weights[:len(features)])\n    \n    # Exponential function\n    exp_arg = np.clip(1.2844119380859922 * x, -50, 50)\n    result = np.exp(exp_arg) + 1.0399254586264748\n    \n    return np.clip(result, -1e6, 1e6)\n\n# Example usage:\n# result = vr_optimization_function([gpu_util, vram_usage, cpu_util, scene_complexity, duration, gpu_type])\n",
+  "fitness_score": -1000000000000.0,
+  "discovery_method": "simple_evolution",
+  "generations_run": 25,
+  "population_size": 20,
+  "function_type": "exponential",
+  "parameters": {
+    "scale": 1.2844119380859922,
+    "weights": [
+      0.8853990025025649,
+      0.8356038890455189,
+      -0.9642515498007673,
+      -0.07744606350500605,
+      -0.8524545510791419,
+      -0.42670378074486504
+    ],
+    "offset": 1.0399254586264748
+  },
+  "discovery_time": "2025-05-27T01:32:24.728734"
+}

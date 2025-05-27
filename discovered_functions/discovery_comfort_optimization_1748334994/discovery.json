@@ -1,0 +1,11 @@
+{
+  "discovery_id": "discovery_comfort_optimization_1748334994",
+  "domain": "comfort_optimization",
+  "timestamp": "2025-05-27T01:36:34.898926",
+  "function_code": "# FunSearch optimization function would be generated here",
+  "fitness_score": 0.85,
+  "discovery_method": "funsearch",
+  "generations_run": 50,
+  "population_size": 30,
+  "discovery_time": "2025-05-27T01:36:34.898398"
+}

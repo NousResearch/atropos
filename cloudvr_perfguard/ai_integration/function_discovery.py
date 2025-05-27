@@ -205,10 +205,11 @@ class OptimizationDiscovery:
                 with open(config_file, 'w') as f:
                     json.dump(funsearch_config, f, indent=2)
                 
-                # Run FunSearch
+                # Run FunSearch via wrapper
+                wrapper_path = os.path.join(os.path.dirname(__file__), "..", "..", "funsearch_wrapper.py")
                 cmd = [
                     "python",
-                    os.path.join(self.funsearch_path, "implementation", "funsearch.py"),
+                    wrapper_path,
                     "--data-file", data_file,
                     "--config-file", config_file,
                     "--output-dir", temp_dir

@@ -219,10 +219,11 @@ class ResearchPaperGenerator:
                 with open(spec_file, 'w') as f:
                     json.dump(paper_spec, f, indent=2)
                 
-                # Run AI Scientist
+                # Run AI Scientist via wrapper
+                wrapper_path = os.path.join(os.path.dirname(__file__), "..", "..", "ai_scientist_wrapper.py")
                 cmd = [
                     "python", 
-                    os.path.join(self.ai_scientist_path, "launch_scientist.py"),
+                    wrapper_path,
                     "--data-file", data_file,
                     "--spec-file", spec_file,
                     "--output-dir", temp_dir,
