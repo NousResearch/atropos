@@ -173,10 +173,9 @@ cython_debug/
 .pypirc
 
 # data
-*.jsonl
-*.html
-*.DStore
 *.json
+*.jsonl
+
 # wandb
 wandb
 

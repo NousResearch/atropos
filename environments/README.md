@@ -419,3 +419,46 @@ The environments follow a common interface with methods for:
 - `score()`: Computing rewards
 - `evaluate()`: Running evaluation on test set
 - `wandb_log()`: Logging metrics to Weights & Biases
+
+## 31. Cybersecurity Sigma Rule Generation Environment
+
+**Location:** `environments/community/cybersecurity_sigma/`
+**Contributor:** [Subrahmanyam2305](https://github.com/Subrahmanyam2305)
+**PR:** [#74](https://github.com/NousResearch/atropos/pull/74)
+
+### Core Features
+- **Dual Reward Systems**: Jaccard similarity scoring and LLM-as-a-judge evaluation
+- **Structured Output Generation**: Enforces YAML format with LaTeX `\boxed{}` wrapper
+- **Cybersecurity Domain**: Trains models to generate Sigma detection rules from threat prompts
+- **Dataset Integration**: Uses `mmaisel1/nous-rl-hackathon-sigma` from Hugging Face
+
+### Technical Implementation
+- **Environment Names**: `sigmarule` (Jaccard) and `llm_judge_sigmarule` (LLM judge)
+- **Output Format**: `<think>...</think>` reasoning tags + YAML in `\boxed{}`
+- **Reward Mechanisms**: Token-based Jaccard similarity vs. semantic LLM evaluation
+- **Model Configuration**: DeepHermes-3-Llama-3-3B-Preview with 2048 token limit
+
+### Research Applications
+- **Cybersecurity Training**: Automated threat detection rule generation
+- **Structured Generation**: Constrained output format research with YAML validation
+- **Evaluation Methodology**: Comparison of token-based vs. semantic reward functions
+- **Domain Expertise**: Training models on specialized cybersecurity knowledge
+
+### Setup and Usage
+```bash
+# Environment variables
+export OPENAI_API_KEY="your-key"  # For LLM judge (optional)
+export NOUS_API_KEY="your-key"    # For model inference
+
+# Run environments
+python environments/community/cybersecurity_sigma/jaccard_reward_env.py
+python environments/community/cybersecurity_sigma/llm_judge_env.py
+```
+
+### Performance Characteristics
+- **Jaccard Rewards**: 0.1-0.3 range, fast but structurally sensitive
+- **LLM Judge Rewards**: Binary 0.0/1.0, semantic understanding but API latency
+- **W&B Integration**: Comprehensive experiment tracking and visualization
+- **Length Penalties**: Applied for overly verbose rule generation
+
+---

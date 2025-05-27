@@ -1,9 +1,12 @@
+import os
 import random
+import re
 from typing import Dict, List, Optional, Tuple, TypedDict, Union
 
+import yaml
 from datasets import load_dataset
 from latex2sympy2_extended import NormalizationConfig
-from math_verify import LatexExtractionConfig, parse, verify
+from math_verify import LatexExtractionConfig, parse
 from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
@@ -15,21 +18,18 @@ from atroposlib.envs.base import (
 from atroposlib.type_definitions import Item, number
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
-import yaml
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics import jaccard_score
-
-import os
-import re
-
 os.environ["OPENAI_API_KEY"] = "x"
 
 system_prompt = """
-You are a systematic, deep-reasoning AI trained to solve detection engineering problems by constructing Sigma rules. You must first **think carefully** through the problem using structured internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as a YAML block enclosed in a LaTeX \\boxed{...} environment.
+You are a systematic, deep-reasoning AI trained to solve detection engineering problems by
+constructing Sigma rules. You must first **think carefully** through the problem using structured
+internal monologue enclosed in <think>...</think> tags, and then provide your final Sigma rule as
+a YAML block enclosed in a LaTeX \\boxed{...} environment.
 
 **You MUST follow this exact output format:**
 <think>
-Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about Sigma syntax, threat detection context, and how you chose each field.
+Step-by-step reasoning, outlining how you arrived at the rule. Include relevant knowledge about
+Sigma syntax, threat detection context, and how you chose each field.
 </think>
 
 \\boxed{
@@ -40,15 +40,20 @@ Step-by-step reasoning, outlining how you arrived at the rule. Include relevant 
 - DO NOT skip the <think> tags — all your thoughts must be inside them.
 - DO NOT skip the \\boxed{...} wrapper — your final YAML answer MUST go inside it.
 - DO NOT output anything outside the <think> and \\boxed{} blocks.
-- The content inside \\boxed{} must be **pure YAML**, with **no extra formatting characters** (no bullets, backticks, emojis, or markdown) so it can be passed **directly** to `yaml.safe_load()`.
+- The content inside \\boxed{} must be **pure YAML**, with **no extra formatting characters**
+  (no bullets, backticks, emojis, or markdown) so it can be passed **directly** to `yaml.safe_load()`.
 - You are allocated a maximum of 2048 tokens — be detailed but concise.
 - Your final output must be valid YAML for a Sigma rule, with correct indentation and field names.
-- Use Sigma best practices: include `detection.condition`, `detection.selection`, `logsource`, and `timeframe` when appropriate.
+- Use Sigma best practices: include `detection.condition`, `detection.selection`,
+  `logsource`, and `timeframe` when appropriate.
 - Match the format and style of this example:
 
 Example:
 <think>
-This rule is intended to detect potential lateral movement attempts by monitoring for excessive outbound connections. The condition 'selection | count(dst_ip) by src_ip > 10' flags when one source IP connects to more than 10 destination IPs. The log source is firewall logs, and the action is 'denied'.
+This rule is intended to detect potential lateral movement attempts by monitoring for excessive
+outbound connections. The condition 'selection | count(dst_ip) by src_ip > 10' flags when one
+source IP connects to more than 10 destination IPs. The log source is firewall logs, and the
+action is 'denied'.
 </think>
 
 \\boxed{
@@ -61,7 +66,8 @@ logsource:
   category: firewall
 }
 
-Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax exactly.
+Only produce answers in this format. Think first, then answer clearly in YAML. Follow YAML syntax
+exactly.
 """
 
 
@@ -72,7 +78,7 @@ class SigmaRuleEntry(TypedDict):
 
 class SigmaRuleEnv(BaseEnv):
 
-    name = "sigmarule"
+    name = "llm_judge_sigmarule"
 
     def __init__(
         self,
@@ -133,16 +139,15 @@ class SigmaRuleEnv(BaseEnv):
         await super().wandb_log(wandb_metrics)
 
     async def setup(self):
-        self.train = load_dataset("mmaisel1/nous-rl-hackathon-sigma", split="train").shuffle(seed=42)
-        test_data = load_dataset("mmaisel1/nous-rl-hackathon-sigma", split="test").shuffle(seed=42)
+        self.train = load_dataset(
+            "mmaisel1/nous-rl-hackathon-sigma", split="train"
+        ).shuffle(seed=42)
+        test_data = load_dataset(
+            "mmaisel1/nous-rl-hackathon-sigma", split="test"
+        ).shuffle(seed=42)
         self.test = list()
         for item in test_data:
-            self.test.append(
-                {
-                    "question": item["prompt"],
-                    "gold_answer": item["rule"]
-                }
-            )
+            self.test.append({"question": item["prompt"], "gold_answer": item["rule"]})
         self.iter = 0
 
     def save_checkpoint(self, step, data=None):
@@ -151,17 +156,47 @@ class SigmaRuleEnv(BaseEnv):
         data["iter"] = self.iter
         super().save_checkpoint(step, data)
 
-    def flatten_detection(self, det_dict):
-        if not isinstance(det_dict, dict):
-            return ""
-        return " ".join(f"{k}:{v}" for k, v in det_dict.items())
+    async def llm_judge_similarity(
+        self, gold_yaml_str: str, gen_yaml_str: str
+    ) -> float:
+        """
+        Uses an LLM to decide whether the generated Sigma rule is semantically equivalent
+        to the gold answer. Returns 1.0 if yes, 0.0 if no.
+        """
+        prompt = f"""
+            You are an expert in cybersecurity and YAML-based Sigma rules. Given a gold standard
+            Sigma rule and a generated rule, determine if the generated rule is functionally
+            equivalent and correct.
 
-    def jaccard_similarity(self, str1, str2):
-        vec = CountVectorizer(binary=True).fit([str1, str2])
-        v1 = vec.transform([str1]).toarray()[0]
-        v2 = vec.transform([str2]).toarray()[0]
-        print("vectors", v1, v2)
-        return jaccard_score(v1, v2) if (v1.any() and v2.any()) else 0.0
+            Only respond with "1" if the generated Sigma rule is correct and matches the intent
+            and structure of the gold rule.
+            Otherwise, respond with "0".
+
+            GOLD RULE:
+            {gold_yaml_str}
+
+            GENERATED RULE:
+            {gen_yaml_str}
+
+            Answer with only one character: "1" or "0".
+        """
+
+        try:
+            completion = await self.server.chat_completion(
+                messages=[
+                    {"role": "user", "content": prompt},
+                ],
+                n=1,
+                max_tokens=1,
+                temperature=0.0,
+                split="eval",
+            )
+            reply = completion.choices[0].message.content.strip()
+            return 1.0 if reply == "1" else 0.0
+
+        except Exception as e:
+            print(f"LLM Judge error: {e}")
+            return 0.0
 
     async def rollout_and_score_eval(self, question: str, answer: str) -> number:
         completion = await self.server.chat_completion(
@@ -198,9 +233,9 @@ class SigmaRuleEnv(BaseEnv):
             ],
             extraction_mode="first_match",
         )
-        score = self.jaccard_similarity(
-            self.flatten_detection(gold_parsed["detection"]),
-            self.flatten_detection(answer_parsed["detection"]),
+        score = self.llm_judge_similarity(
+            gold_parsed["detection"],
+            answer_parsed["detection"],
         )
         return score
 
@@ -252,14 +287,12 @@ class SigmaRuleEnv(BaseEnv):
         scores["masks"] = list()
         scores["scores"] = list()
 
-
         try:
             # gold_yaml = yaml.safe_load(rollout_group_data[0]["gold_answer"])
             gold_det = rollout_group_data[0]["gold_answer"]
         except yaml.YAMLError:
             reward = 0
 
-        import random
         random.shuffle(rollout_group_data)
 
         for item in rollout_group_data:
@@ -268,24 +301,24 @@ class SigmaRuleEnv(BaseEnv):
             )
             tokens = out_dict["tokens"]
             masks = out_dict["masks"]
-            boxed_match = re.search(r'\\boxed\{(.*)\}\s*$', item["messages"][-1]["content"], re.DOTALL)
+            boxed_match = re.search(
+                r"\\boxed\{(.*)\}\s*$", item["messages"][-1]["content"], re.DOTALL
+            )
             try:
                 if boxed_match:
                     yaml_str = boxed_match.group(1)
                     # gen_yaml = yaml.safe_load(yaml_str)
                     # gen_det = self.flatten_detection(gen_yaml.get("detection", {}))
-                    reward = self.jaccard_similarity(gold_det, yaml_str)
+                    reward = await self.llm_judge_similarity(gold_det, yaml_str)
                 else:
                     reward = 0
             except Exception as e:
                 print(e)
                 reward = 0
 
-
             print("GOLD ANSWER:", rollout_group_data[0]["gold_answer"])
             print("GEN OUTPUT:", item["messages"][-1]["content"])
             print("REWARD:", reward)
-
 
             # Optional: Add LLM-based score for semantic evaluation (not shown here)
 
@@ -324,7 +357,6 @@ class SigmaRuleEnv(BaseEnv):
         #     return None
 
         return scores if scores["tokens"] else None
-
 
     async def get_next_item(self) -> SigmaRuleEntry:
         next_item = self.train[self.iter % len(self.train)]
