@@ -7,6 +7,7 @@ import re
 from typing import Dict, List, Optional, Tuple, Union
 
 from dotenv import load_dotenv
+from openai import AsyncOpenAI
 
 from atroposlib.envs.base import (
     APIServerConfig,
@@ -262,11 +263,113 @@ class InfiniteMathEnv(BaseEnv):
 
         await super().wandb_log(wandb_metrics)
 
+    async def _convert_to_word_problem(self, raw_problem_text: str) -> str:
+        """Converts a raw math problem string into a word problem using an LLM."""
+        system_prompt_word_problem = (
+            "You are an expert creative writer. Your task is to transform a given raw "
+            "mathematical expression into an engaging and imaginative word problem.\n\n"
+            "**Critical Instructions:**\n"
+            "1.  **Strict Preservation:** The core mathematical question, ALL numbers, and ALL operations "
+            "from the raw problem MUST be EXACTLY preserved in the word problem. Do NOT change the calculation "
+            "required. For example, if the raw problem is 'A - B', the word problem must represent subtraction "
+            "of B from A, not any other operation.\n"
+            "2.  **Clarity:** The word problem must clearly and unambiguously lead to solving the original "
+            "mathematical expression.\n"
+            "3.  **Conciseness:** Keep the word problem relatively short and to the point.\n"
+            "4.  **Output Format:** Output ONLY the word problem text. Do NOT include any preambles, "
+            "self-references (like 'Here is a word problem:'), special tokens (like '<|start_header_id|>'), "
+            "or any text other than the word problem itself.\n\n"
+            "**Examples of Correct Transformation:**\n"
+            "Raw Problem: 5 * 3\n"
+            "Word Problem: Sarah is baking cookies, and each batch requires 3 eggs. If Sarah wants to bake 5 batches, "
+            "how many eggs will she need in total?\n\n"
+            "Raw Problem: |10 - 15|\n"
+            "Word Problem: A submarine is 10 meters below sea level. Another submarine is 15 meters below sea level. "
+            "What is the absolute difference in their depths in meters?\n\n"
+            "Raw Problem: sqrt(16)\n"
+            "Word Problem: A square piece of land has an area of 16 square units. What is the length of one of its "
+            "sides in units?\n\n"
+            "**Example of Incorrect Transformation (Operation Changed):**\n"
+            "Raw Problem: |3 - (-67)|  (This is 3 + 67)\n"
+            "Incorrect Word Problem: In a magical forest, there are 3 enchanted trees,"
+            " and each tree has 67 glowing fruits. "
+            "How many glowing fruits are there in total? (This became 3 * 67)\n"
+            "Correct Word Problem: A bird watcher is 3 meters up a tree. "
+            "She spots a rare bird 67 meters below ground level "
+            "in a cave. What is the total vertical distance between the bird watcher and the rare bird in meters?"
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt_word_problem},
+            {"role": "user", "content": f"Raw Problem: {raw_problem_text}"},
+        ]
+
+        try:
+            api_key_to_use = self.config.word_problem_openai_api_key or os.environ.get(
+                "OPENAI_API_KEY"
+            )
+            base_url_to_use = self.config.word_problem_openai_base_url
+            model_to_use = self.config.word_problem_model_name or "gpt-4.1-mini"
+
+            if not api_key_to_use:
+                logger.error(
+                    "OpenAI API key for word problem generation is not configured "
+                    "(checked config and OPENAI_API_KEY env var)."
+                )
+                return raw_problem_text
+
+            client = AsyncOpenAI(
+                api_key=api_key_to_use,
+                base_url=base_url_to_use,
+            )
+
+            chat_completions = await client.chat.completions.create(
+                model=model_to_use,
+                messages=messages,
+                n=1,
+                max_tokens=512,
+                temperature=0.7,
+                top_p=1.0,
+            )
+
+            generated_text = chat_completions.choices[0].message.content
+
+            original_llm_output = generated_text
+
+            cleaned_text = original_llm_output.strip()
+
+            if not cleaned_text:
+                logger.warning(
+                    f"Word problem conversion for '{raw_problem_text}' resulted in empty string after stripping. "
+                    f"Original LLM output was: '{original_llm_output}'. Falling back to raw problem."
+                )
+                return raw_problem_text
+
+            logger.info(
+                f"Converted raw problem '{raw_problem_text}' to word problem: '{cleaned_text}'"
+            )
+            return cleaned_text
+        except Exception as e:
+            log_message_error = (
+                f"Error converting to word problem for '{raw_problem_text}': {e}"
+            )
+            logger.error(log_message_error)
+            return raw_problem_text
+
     async def get_next_item(self):
         """Get the next problem based on current curriculum level."""
         raw_problem, solution, generator_id = self.curriculum.get_problem()
 
-        return (raw_problem, solution, generator_id)
+        raw_problem_stripped = self._strip_latex_delimiters(raw_problem)
+        solution_stripped = self._strip_latex_delimiters(solution)
+
+        word_problem_text = await self._convert_to_word_problem(raw_problem_stripped)
+
+        prompt = tuple(
+            [frozenset({"role": "user", "content": word_problem_text}.items())]
+        )
+
+        return (prompt, solution_stripped, generator_id)
 
     async def evaluate(self, *args, **kwargs):
         """Evaluate the model on test problems at the current curriculum level."""
@@ -328,7 +431,7 @@ class InfiniteMathEnv(BaseEnv):
     ) -> Tuple[int, bool]:
         """Evaluate a single problem."""
         try:
-            word_problem_text = problem
+            word_problem_text = await self._convert_to_word_problem(problem)
             logger.debug(
                 f"Evaluating level {level} word problem: {word_problem_text[:50]}... "
                 f"(Original raw: {problem[:30]}...)"

@@ -20,7 +20,19 @@ from atroposlib.envs.base import (
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 # Import the bootcamp registry
-from .bootcamp_registry import create_bootcamp, get_available_bootcamps
+try:
+    # Try relative import first (when imported as module)
+    from .bootcamp_registry import create_bootcamp, get_available_bootcamps
+except ImportError:
+    # Fall back to absolute import (when run directly)
+    import os
+    import sys
+
+    # Add the current directory to path for absolute imports
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    if current_dir not in sys.path:
+        sys.path.insert(0, current_dir)
+    from bootcamp_registry import create_bootcamp, get_available_bootcamps
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -159,6 +171,7 @@ class InternBootcampEnv(BaseEnv):
     async def collect_trajectories(self, item) -> Tuple[List, List]:
         """Collect trajectories for the current item."""
         messages, metadata = item
+        logger.info(f"Collecting trajectories for item: {messages}")
 
         # Get completions from the model using chat_completion
         completions = await self.server.chat_completion(
