@@ -118,8 +118,10 @@ class APIServerConfig(ServerBaseline):
     API server configuration.
     """
 
-    api_key: Optional[str] = Field(default="", description="API key for the server.")
-    base_url: Optional[str] = Field(default="", description="Base URL for the server.")
+    api_key: Optional[str] = Field(default=None, description="API key for the server.")
+    base_url: Optional[str] = Field(
+        default=None, description="Base URL for the server."
+    )
     n_kwarg_is_ignored: bool = Field(
         default=False, description="Whether the n kwarg is ignored by this API server."
     )
