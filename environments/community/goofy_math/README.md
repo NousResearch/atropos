@@ -61,4 +61,4 @@ python environments/hack0/goofy_math_server.py process \
 ### Future Work
 - Context-aware humor (different tones for different math concepts)
 - Age-appropriate adjustments for younger vs. older students
-- Personalized humor adaptation based on student feedback 
+- Personalized humor adaptation based on student feedback

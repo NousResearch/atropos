@@ -507,4 +507,59 @@ python -m atroposlib.cli.dpo \
 - **Combined Scoring**: Overall article score in [-1, 1] range balancing quality and accuracy
 - **W&B Integration**: Complete research session tracking with tool usage analytics
 
+## 33. Goofy Math Environment
+
+**Location:** `environments/community/goofy_math/`
+**Contributor:** [chinguun101](https://github.com/chinguun101)
+**PR:** [#91](https://github.com/NousResearch/atropos/pull/91)
+
+### Core Features
+- **Dual Reward System**: Mathematical correctness verification + goofiness scoring
+- **RLAIF-Based Judging**: AI feedback system for ranking entertaining vs. standard solutions
+- **GSM8K Integration**: Uses standard math dataset with humor enhancement overlay
+- **Position Bias Elimination**: Forward/reverse judgment pairs to ensure fair evaluation
+
+### Technical Implementation
+- **Environment Name**: `goofy_math`
+- **Correctness Verification**: Uses `math_verify` and `latex2sympy2_extended` for objective scoring
+- **Goofiness Assessment**: LLM judge evaluates entertainment value of mathematically correct solutions
+- **Reward Formula**: `score = correctness_score + (goofiness_bonus * 0.5)`
+- **Output Format**: `<think>...</think>` reasoning + `\boxed{answer}` format
+
+### Research Applications
+- **Educational AI**: Training math tutors that are both accurate and engaging
+- **Personality Injection**: Adding entertainment value while maintaining technical correctness
+- **Multi-Objective Optimization**: Balancing objective accuracy with subjective entertainment
+- **Humor in AI**: Systematic approach to training models for appropriate comedic timing
+
+### Setup and Usage
+```bash
+# Install requirements
+pip install -r environments/community/goofy_math/requirements.txt
+
+# Environment variables
+export OPENAI_API_KEY="your-key"
+
+# Process mode for examples
+python environments/community/goofy_math/goofy_math_server.py process \
+  --env.data_path_to_save_groups goofy_math_demo.jsonl \
+  --env.total_steps 3
+
+# Training mode
+python -m atroposlib.cli.dpo \
+    --env-module "environments.community.goofy_math.goofy_math_server"
+```
+
+### Performance Characteristics
+- **Correctness Requirement**: Solutions must pass mathematical verification to receive any reward
+- **Goofiness Scoring**: 0-1 range based on humor, sound effects, and creative explanations
+- **Reward Distribution**: Base 1.0 for correctness + up to 0.5 bonus for entertainment value
+- **Anti-Reward Hacking**: Goofiness only evaluated after correctness verification
+- **W&B Integration**: Tracks goofiness histograms, judgment tables, and accuracy metrics
+
+### Demo and Results
+- **Video Demo**: [1-minute demonstration](https://www.loom.com/share/8704f63e2d2e4b4db23eab673d7990a2)
+- **WandB Run**: [Experiment tracking](https://wandb.ai/goofymath/goofy_math/runs/z92gd2j4)
+- **Unique Metrics**: `train/avg_goofiness_score`, `train/goofiness_histogram`, `train/judgement_table`
+
 ---
