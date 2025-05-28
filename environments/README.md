@@ -507,4 +507,50 @@ python -m atroposlib.cli.dpo \
 - **Combined Scoring**: Overall article score in [-1, 1] range balancing quality and accuracy
 - **W&B Integration**: Complete research session tracking with tool usage analytics
 
+## 33. Options Implied Volatility Prediction Environment
+
+**Location:** `environments/community/options_iv_prediction/`
+**Contributor:** [michaelwaves](https://github.com/michaelwaves)
+**PR:** [#78](https://github.com/NousResearch/atropos/pull/78)
+
+### Core Features
+- **Real Market Data Integration**: Live options data fetching via Yahoo Finance API (`yahooquery`)
+- **Financial Analysis Training**: Teaches models options pricing relationships and implied volatility prediction
+- **Thinking Process Framework**: Encourages step-by-step reasoning with `<think>` tags for complex financial analysis
+- **Dual Scoring System**: Magnitude accuracy and binary correctness evaluation
+
+### Technical Implementation
+- **Environment Name**: `OptionsIVPrediction`
+- **Data Source**: Real-time UNH (UnitedHealth Group) options chain data
+- **Input Parameters**: Option price, stock price, strike price, time to expiry, risk-free rate
+- **Output Format**: Structured prediction with exact format requirement: "The implied volatility will be: {percentage}%"
+
+### Research Applications
+- **Financial AI Development**: Training models to understand complex options pricing mechanisms
+- **Quantitative Analysis**: Automated volatility prediction for trading and risk management
+- **Educational Applications**: Teaching AI systems fundamental financial concepts
+- **Real-World Integration**: Direct application to live market data and trading scenarios
+
+### Setup and Usage
+```bash
+# Dependencies
+pip install pandas wandb datasets tqdm yahooquery atroposlib
+
+# Training mode
+python environments/community/options_iv_prediction/options_iv_prediction.py serve \
+    --env.total_steps 2000 --env.batch_size 1024
+
+# Process mode (data generation)
+python environments/community/options_iv_prediction/options_iv_prediction.py process \
+    --env.data_path_to_save_groups ./outputs/options_rollouts.jsonl \
+    --openai.api_key YOUR_KEY
+```
+
+### Performance Characteristics
+- **Memory Usage**: ~2-4 GB RAM for typical configurations with live data processing
+- **Data Processing**: Automatic filtering of invalid options (negative prices, expired contracts)
+- **Scoring Metrics**: Magnitude accuracy (0-1 scale) and binary correctness (within 10% threshold)
+- **Combined Reward**: Weighted combination (70% magnitude + 30% binary) for balanced learning
+- **Market Integration**: Real-time data fetching with robust error handling for market anomalies
+
 ---

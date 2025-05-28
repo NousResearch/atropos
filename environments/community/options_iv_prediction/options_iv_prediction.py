@@ -1,14 +1,13 @@
 import random
 import re
-import pandas as pd
 from typing import Dict, List, Optional, Tuple, Union
 
-import wandb
-from datasets import load_dataset, Dataset
+import pandas as pd
+from datasets import Dataset
 from tqdm.asyncio import tqdm_asyncio
-
 from yahooquery import Ticker
 
+import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
@@ -26,17 +25,16 @@ You may use extremely long chains of thought to deeply consider the problem and 
 You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your final prediction."""  # noqa E501
 
 # User message template that contains task instructions
-user_message_template =user_message_template = (
+user_message_template = (
     "Your task is to analyze the following option data and predict the implied volatility of the option.\n\n"
     "Option Price: ${option_price:.2f}\n"
     "Stock Price: ${stock_price:.2f}\n"
     "Strike Price: ${strike_price:.2f}\n"
     "Time to Expiry: {time_to_expiry:.6f} years\n"
     "Risk-Free Rate: {risk_free_rate:.2f} \n\n"
-    "Your final answer MUST use the exact format: \"The implied volatility will be: {{answer}}\"\n"
+    'Your final answer MUST use the exact format: "The implied volatility will be: {{answer}}"\n'
     "Where {{answer}} is the implied volatility as a string in percent (e.g. 70%)"
 )
-
 
 
 class OptionsIVPrediction(BaseEnv):
@@ -95,61 +93,69 @@ class OptionsIVPrediction(BaseEnv):
         Set up the environment by loading and preparing the dataset.
         """
         # Use yahooquery to get option data
-        stocks = ['UNH']
+        stocks = ["UNH"]
         unh = Ticker(stocks)
         df = unh.option_chain
-        stock_price = unh.financial_data['UNH']['currentPrice']
+        stock_price = unh.financial_data["UNH"]["currentPrice"]
         risk_free_rate = 0.05  # Fixed risk-free rate
 
         # Process the options data
         processed_data = []
         for index, row in df.iterrows():
             try:
-                option_price = row['lastPrice']
-                strike_price = row['strike']
-                expiry = pd.Timestamp(index[1]) #expiry date
+                option_price = row["lastPrice"]
+                strike_price = row["strike"]
+                expiry = pd.Timestamp(index[1])  # expiry date
                 now = pd.Timestamp.now()
-                time_to_expiration = (expiry - now).total_seconds() / (365.25 * 24 * 60 * 60)
-                
+                time_to_expiration = (expiry - now).total_seconds() / (
+                    365.25 * 24 * 60 * 60
+                )
+
                 # Skip invalid options
                 if option_price <= 0 or time_to_expiration <= 0:
                     continue
-                
+
                 # Get the implied volatility directly from the row
-                iv = row['impliedVolatility']
-                
+                iv = row["impliedVolatility"]
+
                 # Format as a percentage
                 iv_percentage = f"{iv * 100:.2f}%"
-                
+
                 # Create context dictionary
                 context = {
                     "option_price": option_price,
                     "strike_price": strike_price,
                     "time_to_expiry": time_to_expiration,
                     "risk_free_rate": risk_free_rate,
-                    "stock_price": stock_price
+                    "stock_price": stock_price,
                 }
-                
-                processed_data.append({
-                    'context': context,
-                    'answer': iv_percentage,
-                    'raw_iv': iv * 100,  # Store raw value for scoring
-                })
+
+                processed_data.append(
+                    {
+                        "context": context,
+                        "answer": iv_percentage,
+                        "raw_iv": iv * 100,  # Store raw value for scoring
+                    }
+                )
             except Exception as e:
                 # Skip any options that cause errors
-                print(row['expiration'])
+                print(row["expiration"])
                 print(f"Skipping option due to error: {e}")
                 continue
-        
+
         # Convert to dataset
-        dataset = Dataset.from_dict({
-            'context': [item['context'] for item in processed_data],
-            'answer': [item['answer'] for item in processed_data],
-            'raw_iv': [item['raw_iv'] for item in processed_data],
-        })
-        
+        dataset = Dataset.from_dict(
+            {
+                "context": [item["context"] for item in processed_data],
+                "answer": [item["answer"] for item in processed_data],
+                "raw_iv": [item["raw_iv"] for item in processed_data],
+            }
+        )
+
         # Create train/test split (95% train, 5% test)
-        split_dataset = dataset.shuffle(seed=42).train_test_split(test_size=0.05, seed=42)
+        split_dataset = dataset.shuffle(seed=42).train_test_split(
+            test_size=0.05, seed=42
+        )
 
         self.train = split_dataset["train"]
         self.test = split_dataset["test"]
@@ -312,10 +318,10 @@ class OptionsIVPrediction(BaseEnv):
         try:
             # Convert predicted percentage to float
             if isinstance(predicted_iv, str) and "%" in predicted_iv:
-                pred_iv = float(predicted_iv.strip('%'))
+                pred_iv = float(predicted_iv.strip("%"))
             else:
                 pred_iv = float(predicted_iv)
-            
+
             # Expected IV is already a float
             exp_iv = float(expected_iv)
 
@@ -366,8 +372,7 @@ class OptionsIVPrediction(BaseEnv):
         scores["masks"] = list()
         scores["scores"] = list()
 
-        # Get the expected answer and raw IV
-        expected_answer = rollout_group_data[0][1]  # IV as percentage string
+        # Get the expected raw IV
         expected_raw_iv = rollout_group_data[0][2]  # Raw IV as float
 
         # Shuffle to avoid bias in selection
@@ -413,7 +418,7 @@ class OptionsIVPrediction(BaseEnv):
             # For tracking metrics
             if prediction is not None:
                 try:
-                    pred_iv = float(prediction.strip('%'))
+                    pred_iv = float(prediction.strip("%"))
                     accuracy = self._calculate_iv_score(pred_iv, expected_raw_iv)
                     self.percent_correct_buffer.append(1.0 if accuracy >= 0.7 else 0.0)
                     self.magnitude_accuracy_buffer.append(accuracy)
@@ -480,11 +485,11 @@ class OptionsIVPrediction(BaseEnv):
 
         # Calculate scores
         format_score = 1 if prediction is not None else 0
-        
+
         accuracy_score = 0
         if prediction is not None:
             try:
-                pred_iv = float(prediction.strip('%'))
+                pred_iv = float(prediction.strip("%"))
                 accuracy_score = self._calculate_iv_score(pred_iv, expected_raw_iv)
             except ValueError:
                 accuracy_score = 0
@@ -513,13 +518,23 @@ class OptionsIVPrediction(BaseEnv):
 
         # Calculate aggregate metrics
         format_scores = [score["format_score"] for score in all_scores]
-        accuracy_scores = [score["accuracy_score"] for score in all_scores if score["format_score"] == 1]
+        accuracy_scores = [
+            score["accuracy_score"]
+            for score in all_scores
+            if score["format_score"] == 1
+        ]
         binary_scores = [score["binary_score"] for score in all_scores]
 
         # Calculate and log metrics
-        format_accuracy = sum(format_scores) / len(format_scores) if format_scores else 0
-        iv_accuracy = sum(accuracy_scores) / len(accuracy_scores) if accuracy_scores else 0
-        binary_accuracy = sum(binary_scores) / len(binary_scores) if binary_scores else 0
+        format_accuracy = (
+            sum(format_scores) / len(format_scores) if format_scores else 0
+        )
+        iv_accuracy = (
+            sum(accuracy_scores) / len(accuracy_scores) if accuracy_scores else 0
+        )
+        binary_accuracy = (
+            sum(binary_scores) / len(binary_scores) if binary_scores else 0
+        )
 
         self.eval_metrics.append(("eval/format_accuracy", format_accuracy))
         self.eval_metrics.append(("eval/iv_accuracy", iv_accuracy))
