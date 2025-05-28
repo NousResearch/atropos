@@ -25,6 +25,7 @@ except ImportError:
     )
 
 import wandb
+
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
