@@ -3,11 +3,11 @@ import re
 from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
+import wandb
 from datasets import Dataset
 from tqdm.asyncio import tqdm_asyncio
 from yahooquery import Ticker
 
-import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
