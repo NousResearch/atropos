@@ -463,8 +463,8 @@ python environments/community/cybersecurity_sigma/llm_judge_env.py
 
 ## 32. Wikipedia Article Research Environment
 
-**Location:** `environments/community/wikipedia_research/`  
-**Contributor:** [aniemerg](https://github.com/aniemerg)  
+**Location:** `environments/community/wikipedia_research/`
+**Contributor:** [aniemerg](https://github.com/aniemerg)
 **PR:** [#72](https://github.com/NousResearch/atropos/pull/72)
 
 ### Core Features

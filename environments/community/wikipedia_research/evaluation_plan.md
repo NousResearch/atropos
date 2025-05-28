@@ -109,9 +109,9 @@ async def score(self, rollout_group_data: List[ScoredDataGroup]) -> List[ScoredD
     #   4. Calculate accuracy score
     #   5. Combine with existing quality metrics
     #   6. Update the score in the ScoredDataGroup
-    
+
     # Add accuracy metrics to article_quality_metrics for wandb logging
-    
+
     return rollout_group_data
 ```
 
@@ -162,15 +162,15 @@ def calculate_accuracy_score(evaluation_data):
     total_lines = len(evaluation_data)
     correct_count = sum(1 for item in evaluation_data.values() if item['accuracy'] == 'CORRECT')
     incorrect_count = sum(1 for item in evaluation_data.values() if item['accuracy'] == 'INCORRECT')
-    
+
     # Calculate percentages
     pct_correct = correct_count / total_lines if total_lines > 0 else 0
     pct_incorrect = incorrect_count / total_lines if total_lines > 0 else 0
-    
+
     # Convert to score between -1 and 1
     # Formula: correct% * 2 - 1 with adjustment for incorrect%
     score = pct_correct * 2 - 1 - (pct_incorrect * 0.5)
-    
+
     # Ensure score is within [-1, 1] range
     return max(-1, min(1, score))
 ```

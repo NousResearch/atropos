@@ -9,8 +9,9 @@ from typing import Any, Dict, List, Optional
 
 import pybullet as p
 import pybullet_data
-import wandb
 import websockets
+
+import wandb
 
 # LLM Service Import
 from .llm_services import get_anthropic_completion

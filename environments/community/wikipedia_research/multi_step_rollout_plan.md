@@ -69,26 +69,26 @@ This class will extend `BaseEnv` and implement:
 class WikipediaArticleCreatorEnv(BaseEnv):
     def __init__(self, config, server_configs, slurm=True, testing=False):
         # Initialize environment, tools, and tracking metrics
-        
+
     async def _execute_tool_call(self, tool_call: Dict) -> Dict:
         # Execute a tool call and return the result
-        
+
     def _parse_tool_calls(self, response: str) -> List[Dict]:
         # Extract tool calls from model response
-        
+
     def _extract_final_article(self, response: str) -> Optional[str]:
         # Extract final Wikipedia article markdown if present
-        
+
     async def _next_step(self, episode: EpisodeState) -> Tuple[bool, Dict]:
         # Process one step of article research interaction
         # Return (is_terminal, step_data)
-        
+
     async def collect_trajectories(self, item) -> Tuple[ScoredDataGroup, List]:
         # Manage full research trajectory collection
-        
+
     async def score(self, rollout_group_data) -> Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]:
         # Score model outputs based on article quality
-        
+
     async def evaluate(self):
         # Run evaluation on test set of topics
 ```
@@ -101,10 +101,10 @@ The core multi-step research logic will be:
 async def _next_step(self, episode: EpisodeState) -> Tuple[bool, Dict]:
     # Get current conversation history
     messages = episode.message_history.copy()
-    
+
     # Generate model response
     response = await self._get_model_response(messages)
-    
+
     # Check for final article
     final_article = self._extract_final_article(response)
     if final_article:
@@ -113,38 +113,38 @@ async def _next_step(self, episode: EpisodeState) -> Tuple[bool, Dict]:
         # Add response to history
         episode.message_history.append({"role": "assistant", "content": response})
         return True, {"response": response, "tool_calls": [], "tool_results": []}
-    
+
     # Extract tool calls for research
     tool_calls = self._parse_tool_calls(response)
-    
+
     # Execute research tool calls
     tool_results = []
     for tool_call in tool_calls:
         result = await self._execute_tool_call(tool_call)
         tool_results.append(result)
-    
+
     # Add response and tool results to history
     episode.message_history.append({"role": "assistant", "content": response})
-    
+
     # Format tool results as a user message
     tool_results_message = self._format_tool_results(tool_results)
     episode.message_history.append({"role": "user", "content": tool_results_message})
-    
+
     # Update episode state
     episode.steps_taken += 1
     episode.tool_calls.extend(tool_calls)
     episode.tool_results.extend(tool_results)
-    
+
     # Extract and store research facts for later evaluation
     self._extract_research_facts(tool_results, episode.research_facts)
-    
+
     # Check if max steps reached
     if episode.steps_taken >= self.config.max_steps:
         episode.is_terminal = True
-    
+
     return episode.is_terminal, {
-        "response": response, 
-        "tool_calls": tool_calls, 
+        "response": response,
+        "tool_calls": tool_calls,
         "tool_results": tool_results
     }
 ```
@@ -351,7 +351,7 @@ web_search(query="anti-racism movements Arab world Black Lives Matter influence"
 I now have gathered substantial information covering the historical context, contemporary manifestations, academic perspectives, and resistance efforts regarding anti-black racism in the Arab world. I can now write a comprehensive Wikipedia-style article on this topic, organizing the information into appropriate sections.
 </think>
 
-Final Step: ```markdown 
+Final Step: ```markdown
 # Anti-Black Racism in the Arab World
 
 Anti-Black racism in the Arab world refers to prejudice, discrimination, and systemic bias against people of African descent across Arab countries. This phenomenon has deep historical roots and continues to manifest in various forms in contemporary Arab societies. Despite growing awareness and resistance movements, anti-Black racism remains a significant social issue throughout the region.

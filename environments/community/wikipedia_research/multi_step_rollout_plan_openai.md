@@ -54,7 +54,7 @@ def config_init(cls) -> Tuple[WikipediaArticleCreatorConfig, List[APIServerConfi
         topics_file="topics.json",
         logging_active=True,
     )
-    
+
     # Configure OpenAI server
     server_configs = [
         APIServerConfig(
@@ -65,7 +65,7 @@ def config_init(cls) -> Tuple[WikipediaArticleCreatorConfig, List[APIServerConfi
             num_requests_for_eval=16,
         ),
     ]
-    
+
     return env_config, server_configs
 ```
 
@@ -128,39 +128,39 @@ async def main():
     """Run the environment with a specified model and topic"""
     # Create and initialize the environment
     env_config, server_configs = WikipediaArticleCreatorEnv.config_init()
-    
+
     # Override with command-line arguments if needed
     # env_config.max_steps = 5
     # server_configs[0].model_name = "gpt-3.5-turbo"
-    
+
     # Initialize the environment
     env = WikipediaArticleCreatorEnv(env_config, server_configs, slurm=False, testing=True)
     await env.setup()
-    
+
     # Run a single episode with a specific topic
     topic = "Climate change in Antarctica"
     episode_id = 1
-    
+
     logger.info(f"Starting research on topic: {topic}")
     episode = env._get_or_create_episode(episode_id, topic)
-    
+
     # Run until terminal state
     while not episode.is_terminal:
         is_terminal, step_data = await env._next_step(episode)
         response = step_data.get("response", "")
         tool_calls = step_data.get("tool_calls", [])
-        
+
         logger.info(f"Step {episode.steps_taken} completed")
         logger.info(f"Tool calls: {len(tool_calls)}")
-        
+
         if is_terminal and episode.final_article:
             logger.info("Article generated successfully")
             logger.info(f"Article length: {len(episode.final_article)} characters")
-            
+
             # Save the article to a file
             with open(f"article_{topic.replace(' ', '_')}.md", "w") as f:
                 f.write(episode.final_article)
-                
+
             # Evaluate article quality
             quality_metrics = env._assess_article_quality(
                 episode.final_article, episode.research_facts

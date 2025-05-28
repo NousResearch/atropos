@@ -91,7 +91,7 @@ python run_with_openai.py --topic "Climate change in Antarctica" --model "gpt-4o
 
 ### Quality Metrics (0-1 scale)
 - **Structure Score**: Article organization and section quality
-- **Comprehensiveness**: Coverage of important topic aspects  
+- **Comprehensiveness**: Coverage of important topic aspects
 - **Fact Usage**: Effective incorporation of researched information
 - **Overall Quality**: Combined structural and content quality
 

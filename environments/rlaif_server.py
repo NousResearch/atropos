@@ -3,9 +3,9 @@ import copy
 import random
 from typing import Dict, List, Optional, Tuple
 
-import wandb
 from datasets import load_dataset
 
+import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,

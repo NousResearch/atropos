@@ -14,11 +14,11 @@ import uuid  # Import uuid module
 from difflib import SequenceMatcher
 from typing import Dict, List, Optional, Tuple, Union
 
-import wandb
 from datasets import load_dataset  # Ensured import load_dataset is present
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
+import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,

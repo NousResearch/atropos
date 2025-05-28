@@ -5,12 +5,12 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
-import wandb
 import yaml
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
 from pydantic import Field
 
+import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
