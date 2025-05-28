@@ -1,0 +1,2902 @@
+[
+  {
+    "user_id": "user_000000",
+    "demographics": {
+      "culture": "South Asian",
+      "neurotype": "ADHD",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 180.25025938385707,
+      "ipd_mm": 67.19873818920959,
+      "motion_sensitivity": 0.17503218559894376,
+      "visual_acuity": 0.7288572637900688
+    },
+    "preferences": {
+      "interaction_speed": 0.5750591146783484,
+      "visual_complexity_tolerance": 0.4992861344311293,
+      "audio_sensitivity": 0.6329213629240651,
+      "social_interaction_preference": 0.7268953537886259,
+      "exploration_tendency": 0.4247060354629108
+    },
+    "comfort_thresholds": {
+      "min_fps": 90.01758974028908,
+      "max_latency_ms": 22.52067952826127,
+      "max_frame_time_ms": 11.255696280314908,
+      "comfort_score_threshold": 0.8139520110566271
+    },
+    "generated_at": "2025-05-28T06:10:18.990673"
+  },
+  {
+    "user_id": "user_000001",
+    "demographics": {
+      "culture": "Nordic",
+      "neurotype": "Depression",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 198.67770076750003,
+      "ipd_mm": 61.45873201536298,
+      "motion_sensitivity": 0.3646782986494076,
+      "visual_acuity": 1.247342779907246
+    },
+    "preferences": {
+      "interaction_speed": 0.9123593590527301,
+      "visual_complexity_tolerance": 0.4204845772493158,
+      "audio_sensitivity": 0.6328815710236864,
+      "social_interaction_preference": 0.5326644963899335,
+      "exploration_tendency": 0.5724978575652273
+    },
+    "comfort_thresholds": {
+      "min_fps": 81.49536528281645,
+      "max_latency_ms": 19.765451525971283,
+      "max_frame_time_ms": 12.635661177443733,
+      "comfort_score_threshold": 0.756595067371357
+    },
+    "generated_at": "2025-05-28T06:10:18.990692"
+  },
+  {
+    "user_id": "user_000002",
+    "demographics": {
+      "culture": "South Asian",
+      "neurotype": "Depression",
+      "age_group": "Young Adult (18-25)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 179.69933893122572,
+      "ipd_mm": 67.35954489107642,
+      "motion_sensitivity": 0.6772245873973962,
+      "visual_acuity": 0.5668426262013264
+    },
+    "preferences": {
+      "interaction_speed": 0.46145032546343034,
+      "visual_complexity_tolerance": 0.43617929687501156,
+      "audio_sensitivity": 0.37250720603961596,
+      "social_interaction_preference": 0.8264453024150189,
+      "exploration_tendency": 0.9347959173349285
+    },
+    "comfort_thresholds": {
+      "min_fps": 95.00884514485075,
+      "max_latency_ms": 17.49492748356067,
+      "max_frame_time_ms": 12.132995571609364,
+      "comfort_score_threshold": 0.8179913986149575
+    },
+    "generated_at": "2025-05-28T06:10:18.990700"
+  },
+  {
+    "user_id": "user_000003",
+    "demographics": {
+      "culture": "South Asian",
+      "neurotype": "OCD",
+      "age_group": "Senior (56-70)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 184.09706755001818,
+      "ipd_mm": 67.55356809072538,
+      "motion_sensitivity": 0.794588134383442,
+      "visual_acuity": 0.5253874416400269
+    },
+    "preferences": {
+      "interaction_speed": 0.6537746984738773,
+      "visual_complexity_tolerance": 0.40079360182118007,
+      "audio_sensitivity": 0.10308125735507326,
+      "social_interaction_preference": 0.4462358675290131,
+      "exploration_tendency": 0.23327736643953412
+    },
+    "comfort_thresholds": {
+      "min_fps": 91.47615755519168,
+      "max_latency_ms": 13.492186778861006,
+      "max_frame_time_ms": 13.372374650650011,
+      "comfort_score_threshold": 0.8360200942708498
+    },
+    "generated_at": "2025-05-28T06:10:18.990708"
+  },
+  {
+    "user_id": "user_000004",
+    "demographics": {
+      "culture": "South Asian",
+      "neurotype": "Bipolar",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 184.0227040467077,
+      "ipd_mm": 72.2530822752844,
+      "motion_sensitivity": 0.3978636671055227,
+      "visual_acuity": 1.6926945365030477
+    },
+    "preferences": {
+      "interaction_speed": 0.3778223413985627,
+      "visual_complexity_tolerance": 0.22972700070812976,
+      "audio_sensitivity": 0.6375115515889931,
+      "social_interaction_preference": 0.5717267609046635,
+      "exploration_tendency": 0.506117632930724
+    },
+    "comfort_thresholds": {
+      "min_fps": 83.76433644998042,
+      "max_latency_ms": 15.74386685020064,
+      "max_frame_time_ms": 11.33265637995836,
+      "comfort_score_threshold": 0.8174511771448367
+    },
+    "generated_at": "2025-05-28T06:10:18.990715"
+  },
+  {
+    "user_id": "user_000005",
+    "demographics": {
+      "culture": "Latin American",
+      "neurotype": "Sensory Processing",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 171.64008543956174,
+      "ipd_mm": 56.309030970554915,
+      "motion_sensitivity": 0.5753736091670307,
+      "visual_acuity": 1.0923667869503864
+    },
+    "preferences": {
+      "interaction_speed": 0.2817475021679011,
+      "visual_complexity_tolerance": 0.5573817014891118,
+      "audio_sensitivity": 0.31720573767608723,
+      "social_interaction_preference": 0.1465096583882213,
+      "exploration_tendency": 0.584930535815469
+    },
+    "comfort_thresholds": {
+      "min_fps": 96.02831558489457,
+      "max_latency_ms": 10.16108232167573,
+      "max_frame_time_ms": 11.86559396687211,
+      "comfort_score_threshold": 0.9476659214939828
+    },
+    "generated_at": "2025-05-28T06:10:18.990723"
+  },
+  {
+    "user_id": "user_000006",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "ADHD",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 157.4449604384678,
+      "ipd_mm": 71.49946049703408,
+      "motion_sensitivity": 0.8153065589889501,
+      "visual_acuity": 0.8588759906820483
+    },
+    "preferences": {
+      "interaction_speed": 0.7844436858882187,
+      "visual_complexity_tolerance": 0.17437164499117216,
+      "audio_sensitivity": 0.7239099302125385,
+      "social_interaction_preference": 0.837837819553508,
+      "exploration_tendency": 0.5977926991968373
+    },
+    "comfort_thresholds": {
+      "min_fps": 89.60772000507501,
+      "max_latency_ms": 13.614716295336436,
+      "max_frame_time_ms": 11.091276291827366,
+      "comfort_score_threshold": 0.7724872272364656
+    },
+    "generated_at": "2025-05-28T06:10:18.990732"
+  },
+  {
+    "user_id": "user_000007",
+    "demographics": {
+      "culture": "Western",
+      "neurotype": "OCD",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 178.31175042637244,
+      "ipd_mm": 67.76100049702015,
+      "motion_sensitivity": 0.22971552331107944,
+      "visual_acuity": 1.6326513613963494
+    },
+    "preferences": {
+      "interaction_speed": 0.7148428784985811,
+      "visual_complexity_tolerance": 0.2044760224943123,
+      "audio_sensitivity": 0.7906441724431936,
+      "social_interaction_preference": 0.6922227406617649,
+      "exploration_tendency": 0.9514304385093726
+    },
+    "comfort_thresholds": {
+      "min_fps": 93.25591788148529,
+      "max_latency_ms": 15.408146053608972,
+      "max_frame_time_ms": 11.1524847343218,
+      "comfort_score_threshold": 0.7627062980561872
+    },
+    "generated_at": "2025-05-28T06:10:18.990745"
+  },
+  {
+    "user_id": "user_000008",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "PTSD",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 170.04232008082752,
+      "ipd_mm": 60.42547312248142,
+      "motion_sensitivity": 0.14772348451096326,
+      "visual_acuity": 1.582212335317308
+    },
+    "preferences": {
+      "interaction_speed": 0.9985630522593472,
+      "visual_complexity_tolerance": 0.24344245544675502,
+      "audio_sensitivity": 0.12508774777260104,
+      "social_interaction_preference": 0.3815334664941966,
+      "exploration_tendency": 0.40033898713007005
+    },
+    "comfort_thresholds": {
+      "min_fps": 75.1032241464404,
+      "max_latency_ms": 14.534435548651933,
+      "max_frame_time_ms": 13.649489043728165,
+      "comfort_score_threshold": 0.9277508096745277
+    },
+    "generated_at": "2025-05-28T06:10:18.990753"
+  },
+  {
+    "user_id": "user_000009",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "Autism",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 151.48183477844373,
+      "ipd_mm": 72.6619325049809,
+      "motion_sensitivity": 0.2548687639378754,
+      "visual_acuity": 1.0825403201044779
+    },
+    "preferences": {
+      "interaction_speed": 0.3254102449706664,
+      "visual_complexity_tolerance": 0.5240327838642498,
+      "audio_sensitivity": 0.6123943571444713,
+      "social_interaction_preference": 0.027697409592077227,
+      "exploration_tendency": 0.4538725742553305
+    },
+    "comfort_thresholds": {
+      "min_fps": 83.56840023545497,
+      "max_latency_ms": 14.163876410332671,
+      "max_frame_time_ms": 12.655836282638155,
+      "comfort_score_threshold": 0.9731287017628364
+    },
+    "generated_at": "2025-05-28T06:10:18.990761"
+  },
+  {
+    "user_id": "user_000010",
+    "demographics": {
+      "culture": "Indigenous",
+      "neurotype": "Anxiety",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 181.01237305218012,
+      "ipd_mm": 59.22771506315698,
+      "motion_sensitivity": 0.7321193097104941,
+      "visual_acuity": 0.6598129564174442
+    },
+    "preferences": {
+      "interaction_speed": 0.6800829506953061,
+      "visual_complexity_tolerance": 0.3569364569991871,
+      "audio_sensitivity": 0.3641419393139965,
+      "social_interaction_preference": 0.3236953754309913,
+      "exploration_tendency": 0.6078249934349653
+    },
+    "comfort_thresholds": {
+      "min_fps": 94.76257091968174,
+      "max_latency_ms": 14.804290811970684,
+      "max_frame_time_ms": 11.307441021906552,
+      "comfort_score_threshold": 0.8662430161582518
+    },
+    "generated_at": "2025-05-28T06:10:18.990767"
+  },
+  {
+    "user_id": "user_000011",
+    "demographics": {
+      "culture": "Slavic",
+      "neurotype": "Depression",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 168.52296570066545,
+      "ipd_mm": 63.93124468489747,
+      "motion_sensitivity": 0.9470209163381433,
+      "visual_acuity": 0.9013887973283785
+    },
+    "preferences": {
+      "interaction_speed": 0.8419027661131548,
+      "visual_complexity_tolerance": 0.6441019068505969,
+      "audio_sensitivity": 0.3641463304523942,
+      "social_interaction_preference": 0.04898687260704726,
+      "exploration_tendency": 0.9560570526994324
+    },
+    "comfort_thresholds": {
+      "min_fps": 101.54384296712115,
+      "max_latency_ms": 14.12056700123333,
+      "max_frame_time_ms": 11.015990107374387,
+      "comfort_score_threshold": 0.8490729959555379
+    },
+    "generated_at": "2025-05-28T06:10:18.990774"
+  },
+  {
+    "user_id": "user_000012",
+    "demographics": {
+      "culture": "Slavic",
+      "neurotype": "ADHD",
+      "age_group": "Senior (56-70)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 152.11438931999263,
+      "ipd_mm": 72.72809704043169,
+      "motion_sensitivity": 0.9040652620545943,
+      "visual_acuity": 1.832810934474281
+    },
+    "preferences": {
+      "interaction_speed": 0.3831600902155904,
+      "visual_complexity_tolerance": 0.32868210814383386,
+      "audio_sensitivity": 0.6156392221593802,
+      "social_interaction_preference": 0.8537781670332002,
+      "exploration_tendency": 0.8443135441275023
+    },
+    "comfort_thresholds": {
+      "min_fps": 85.92058625160905,
+      "max_latency_ms": 15.545515177987975,
+      "max_frame_time_ms": 11.659593734358467,
+      "comfort_score_threshold": 0.8276043019996095
+    },
+    "generated_at": "2025-05-28T06:10:18.990780"
+  },
+  {
+    "user_id": "user_000013",
+    "demographics": {
+      "culture": "East Asian",
+      "neurotype": "ADHD",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 150.71947108560238,
+      "ipd_mm": 58.56869749065308,
+      "motion_sensitivity": 0.47548312519232727,
+      "visual_acuity": 0.9158425001946761
+    },
+    "preferences": {
+      "interaction_speed": 0.6178378237900941,
+      "visual_complexity_tolerance": 0.5078090836208158,
+      "audio_sensitivity": 0.14673566140356165,
+      "social_interaction_preference": 0.749045329240587,
+      "exploration_tendency": 0.7625418718683683
+    },
+    "comfort_thresholds": {
+      "min_fps": 90.34238722082927,
+      "max_latency_ms": 13.316261753882086,
+      "max_frame_time_ms": 10.53805079556232,
+      "comfort_score_threshold": 0.7446033933737198
+    },
+    "generated_at": "2025-05-28T06:10:18.990790"
+  },
+  {
+    "user_id": "user_000014",
+    "demographics": {
+      "culture": "South Asian",
+      "neurotype": "ADHD",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 159.3491126032093,
+      "ipd_mm": 69.35108380294128,
+      "motion_sensitivity": 0.714083419048021,
+      "visual_acuity": 1.4612559960068077
+    },
+    "preferences": {
+      "interaction_speed": 0.5622945464579454,
+      "visual_complexity_tolerance": 0.25949066587870806,
+      "audio_sensitivity": 0.8278646238148771,
+      "social_interaction_preference": 0.39054892611661507,
+      "exploration_tendency": 0.23625957145910093
+    },
+    "comfort_thresholds": {
+      "min_fps": 87.79528446871885,
+      "max_latency_ms": 14.748049548960326,
+      "max_frame_time_ms": 12.592772447573479,
+      "comfort_score_threshold": 0.8671065684282029
+    },
+    "generated_at": "2025-05-28T06:10:18.990797"
+  },
+  {
+    "user_id": "user_000015",
+    "demographics": {
+      "culture": "Nordic",
+      "neurotype": "OCD",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 164.16325764339928,
+      "ipd_mm": 61.382826595497264,
+      "motion_sensitivity": 0.12937903924367752,
+      "visual_acuity": 1.856407609942074
+    },
+    "preferences": {
+      "interaction_speed": 0.5691330551894191,
+      "visual_complexity_tolerance": 0.5472658196359,
+      "audio_sensitivity": 0.7340538848027551,
+      "social_interaction_preference": 0.38221726390015465,
+      "exploration_tendency": 1.0
+    },
+    "comfort_thresholds": {
+      "min_fps": 79.76667416664786,
+      "max_latency_ms": 19.029833682328373,
+      "max_frame_time_ms": 12.684044087403702,
+      "comfort_score_threshold": 0.8585381053479402
+    },
+    "generated_at": "2025-05-28T06:10:18.990804"
+  },
+  {
+    "user_id": "user_000016",
+    "demographics": {
+      "culture": "Slavic",
+      "neurotype": "ADHD",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 180.03909560379796,
+      "ipd_mm": 58.96874144925486,
+      "motion_sensitivity": 0.7946720682966504,
+      "visual_acuity": 1.810285353869444
+    },
+    "preferences": {
+      "interaction_speed": 0.8899194162929716,
+      "visual_complexity_tolerance": 0.300990281570811,
+      "audio_sensitivity": 0.5931149214738064,
+      "social_interaction_preference": 0.1701090144613412,
+      "exploration_tendency": 0.5557306697740347
+    },
+    "comfort_thresholds": {
+      "min_fps": 101.81757534177959,
+      "max_latency_ms": 15.826431173786434,
+      "max_frame_time_ms": 11.50919056460384,
+      "comfort_score_threshold": 0.8303804216235611
+    },
+    "generated_at": "2025-05-28T06:10:18.990810"
+  },
+  {
+    "user_id": "user_000017",
+    "demographics": {
+      "culture": "East Asian",
+      "neurotype": "OCD",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 180.58572219343765,
+      "ipd_mm": 67.54101499866621,
+      "motion_sensitivity": 0.5339700508575241,
+      "visual_acuity": 1.3598242887377674
+    },
+    "preferences": {
+      "interaction_speed": 0.31146591862355727,
+      "visual_complexity_tolerance": 0.5076009708705893,
+      "audio_sensitivity": 0.621149470089349,
+      "social_interaction_preference": 0.5440609376026724,
+      "exploration_tendency": 0.6472419449156592
+    },
+    "comfort_thresholds": {
+      "min_fps": 94.37166617088923,
+      "max_latency_ms": 18.377319344859917,
+      "max_frame_time_ms": 11.952826600125912,
+      "comfort_score_threshold": 0.8355137447469363
+    },
+    "generated_at": "2025-05-28T06:10:18.990817"
+  },
+  {
+    "user_id": "user_000018",
+    "demographics": {
+      "culture": "Indigenous",
+      "neurotype": "Anxiety",
+      "age_group": "Senior (56-70)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 198.75358819104613,
+      "ipd_mm": 55.42398439849563,
+      "motion_sensitivity": 0.8518549054997983,
+      "visual_acuity": 0.5704531998318997
+    },
+    "preferences": {
+      "interaction_speed": 0.4268890912030221,
+      "visual_complexity_tolerance": 0.44739214622781076,
+      "audio_sensitivity": 0.4491427929367029,
+      "social_interaction_preference": 0.19105057314715926,
+      "exploration_tendency": 0.33788233081152874
+    },
+    "comfort_thresholds": {
+      "min_fps": 98.88295541614634,
+      "max_latency_ms": 16.010837464301435,
+      "max_frame_time_ms": 12.061095870458725,
+      "comfort_score_threshold": 0.7479227296911418
+    },
+    "generated_at": "2025-05-28T06:10:18.990827"
+  },
+  {
+    "user_id": "user_000019",
+    "demographics": {
+      "culture": "African",
+      "neurotype": "PTSD",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 159.82812012329097,
+      "ipd_mm": 72.37017449884347,
+      "motion_sensitivity": 0.20198276882120064,
+      "visual_acuity": 1.0031118999702815
+    },
+    "preferences": {
+      "interaction_speed": 0.7514276288307753,
+      "visual_complexity_tolerance": 0.9758324476047096,
+      "audio_sensitivity": 0.5504666060844655,
+      "social_interaction_preference": 0.49617488638873697,
+      "exploration_tendency": 0.8191225631776651
+    },
+    "comfort_thresholds": {
+      "min_fps": 78.65965195857065,
+      "max_latency_ms": 16.36443355478463,
+      "max_frame_time_ms": 13.122452849220817,
+      "comfort_score_threshold": 0.8274238708450387
+    },
+    "generated_at": "2025-05-28T06:10:18.990833"
+  },
+  {
+    "user_id": "user_000020",
+    "demographics": {
+      "culture": "Western",
+      "neurotype": "Dyslexia",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 193.4898236717792,
+      "ipd_mm": 62.911047268332865,
+      "motion_sensitivity": 0.5735521631151407,
+      "visual_acuity": 0.7455513935113383
+    },
+    "preferences": {
+      "interaction_speed": 0.5469940113442391,
+      "visual_complexity_tolerance": 0.9987904263480021,
+      "audio_sensitivity": 0.570602569740393,
+      "social_interaction_preference": 0.7351573432329188,
+      "exploration_tendency": 0.9353349495909796
+    },
+    "comfort_thresholds": {
+      "min_fps": 86.36203043638467,
+      "max_latency_ms": 20.068279590929254,
+      "max_frame_time_ms": 12.250196841499616,
+      "comfort_score_threshold": 0.8243807418083923
+    },
+    "generated_at": "2025-05-28T06:10:18.990839"
+  },
+  {
+    "user_id": "user_000021",
+    "demographics": {
+      "culture": "East Asian",
+      "neurotype": "Autism",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 169.07902071074872,
+      "ipd_mm": 73.62478236211277,
+      "motion_sensitivity": 0.30974550091315445,
+      "visual_acuity": 1.720233269117269
+    },
+    "preferences": {
+      "interaction_speed": 0.9325976820746551,
+      "visual_complexity_tolerance": 0.19212858520180656,
+      "audio_sensitivity": 1.0,
+      "social_interaction_preference": 0.43533097977730045,
+      "exploration_tendency": 0.8006056583950907
+    },
+    "comfort_thresholds": {
+      "min_fps": 103.56759409971589,
+      "max_latency_ms": 17.573230668716796,
+      "max_frame_time_ms": 12.228166895974452,
+      "comfort_score_threshold": 0.8994700169453462
+    },
+    "generated_at": "2025-05-28T06:10:18.990846"
+  },
+  {
+    "user_id": "user_000022",
+    "demographics": {
+      "culture": "South Asian",
+      "neurotype": "PTSD",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 155.13635357221813,
+      "ipd_mm": 67.93019742949075,
+      "motion_sensitivity": 0.8637709952447271,
+      "visual_acuity": 0.6166431548392848
+    },
+    "preferences": {
+      "interaction_speed": 0.6968506022831686,
+      "visual_complexity_tolerance": 0.31546029161661676,
+      "audio_sensitivity": 0.11167340094157358,
+      "social_interaction_preference": 0.8492434170638329,
+      "exploration_tendency": 0.42339255540104975
+    },
+    "comfort_thresholds": {
+      "min_fps": 94.47123352692807,
+      "max_latency_ms": 12.769523419741812,
+      "max_frame_time_ms": 13.769303264901081,
+      "comfort_score_threshold": 0.7802199482819203
+    },
+    "generated_at": "2025-05-28T06:10:18.990852"
+  },
+  {
+    "user_id": "user_000023",
+    "demographics": {
+      "culture": "Nordic",
+      "neurotype": "Bipolar",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 190.95897376603813,
+      "ipd_mm": 68.55963320906478,
+      "motion_sensitivity": 0.5645471579856746,
+      "visual_acuity": 1.631216528874853
+    },
+    "preferences": {
+      "interaction_speed": 0.8670445814116206,
+      "visual_complexity_tolerance": 0.7716135420487513,
+      "audio_sensitivity": 0.259878322845045,
+      "social_interaction_preference": 0.06180057013360418,
+      "exploration_tendency": 0.6393215147370621
+    },
+    "comfort_thresholds": {
+      "min_fps": 80.97848562656831,
+      "max_latency_ms": 13.30539696937273,
+      "max_frame_time_ms": 13.862835054738575,
+      "comfort_score_threshold": 0.8238553143798286
+    },
+    "generated_at": "2025-05-28T06:10:18.990858"
+  },
+  {
+    "user_id": "user_000024",
+    "demographics": {
+      "culture": "Latin American",
+      "neurotype": "Depression",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 192.1374645404653,
+      "ipd_mm": 59.18126506020398,
+      "motion_sensitivity": 0.7650367465972505,
+      "visual_acuity": 1.3215277578050375
+    },
+    "preferences": {
+      "interaction_speed": 0.634545319307291,
+      "visual_complexity_tolerance": 0.37609979650100583,
+      "audio_sensitivity": 0.6588070333738627,
+      "social_interaction_preference": 0.8922528453394301,
+      "exploration_tendency": 0.8422026407411489
+    },
+    "comfort_thresholds": {
+      "min_fps": 88.59499608281585,
+      "max_latency_ms": 18.99279362261287,
+      "max_frame_time_ms": 12.515908722015407,
+      "comfort_score_threshold": 0.8092890915847345
+    },
+    "generated_at": "2025-05-28T06:10:18.990864"
+  },
+  {
+    "user_id": "user_000025",
+    "demographics": {
+      "culture": "East Asian",
+      "neurotype": "Sensory Processing",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 199.43537729676711,
+      "ipd_mm": 70.27360209630841,
+      "motion_sensitivity": 0.47990540868797293,
+      "visual_acuity": 0.5741838349986539
+    },
+    "preferences": {
+      "interaction_speed": 0.6888364405174039,
+      "visual_complexity_tolerance": 0.3141841908138431,
+      "audio_sensitivity": 0.1712856528329211,
+      "social_interaction_preference": 0.164345007484601,
+      "exploration_tendency": 0.6345765459160269
+    },
+    "comfort_thresholds": {
+      "min_fps": 101.5179877003918,
+      "max_latency_ms": 15.215626811545985,
+      "max_frame_time_ms": 12.196053345886002,
+      "comfort_score_threshold": 0.80634784983877
+    },
+    "generated_at": "2025-05-28T06:10:18.990871"
+  },
+  {
+    "user_id": "user_000026",
+    "demographics": {
+      "culture": "Indigenous",
+      "neurotype": "ADHD",
+      "age_group": "Senior (56-70)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 161.49388071215216,
+      "ipd_mm": 64.98829766990531,
+      "motion_sensitivity": 0.636519571952467,
+      "visual_acuity": 1.8841566143230728
+    },
+    "preferences": {
+      "interaction_speed": 0.3601918850253629,
+      "visual_complexity_tolerance": 0.29995000796370613,
+      "audio_sensitivity": 0.12017131919824459,
+      "social_interaction_preference": 0.7066069914259338,
+      "exploration_tendency": 0.8044790680754386
+    },
+    "comfort_thresholds": {
+      "min_fps": 97.44498148379256,
+      "max_latency_ms": 18.623870753586914,
+      "max_frame_time_ms": 12.458046527945697,
+      "comfort_score_threshold": 0.7799154447260285
+    },
+    "generated_at": "2025-05-28T06:10:18.990877"
+  },
+  {
+    "user_id": "user_000027",
+    "demographics": {
+      "culture": "Indigenous",
+      "neurotype": "ADHD",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 190.70029756545455,
+      "ipd_mm": 63.99479926431496,
+      "motion_sensitivity": 0.604161783838883,
+      "visual_acuity": 0.7591822702286254
+    },
+    "preferences": {
+      "interaction_speed": 1.0,
+      "visual_complexity_tolerance": 0.2671933905023083,
+      "audio_sensitivity": 0.7923825812504527,
+      "social_interaction_preference": 0.17865144423799006,
+      "exploration_tendency": 0.5093000785929436
+    },
+    "comfort_thresholds": {
+      "min_fps": 84.43022900487274,
+      "max_latency_ms": 18.08310678274222,
+      "max_frame_time_ms": 11.913117881933653,
+      "comfort_score_threshold": 0.8346359509937591
+    },
+    "generated_at": "2025-05-28T06:10:18.990883"
+  },
+  {
+    "user_id": "user_000028",
+    "demographics": {
+      "culture": "South Asian",
+      "neurotype": "ADHD",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 173.41471392980088,
+      "ipd_mm": 73.62695542934219,
+      "motion_sensitivity": 0.969824207510063,
+      "visual_acuity": 1.572631591904963
+    },
+    "preferences": {
+      "interaction_speed": 0.77357665785474,
+      "visual_complexity_tolerance": 0.18485131023519363,
+      "audio_sensitivity": 0.45978356016353494,
+      "social_interaction_preference": 0.07660880717700802,
+      "exploration_tendency": 0.6434197019961029
+    },
+    "comfort_thresholds": {
+      "min_fps": 97.70387992009563,
+      "max_latency_ms": 16.264423360481853,
+      "max_frame_time_ms": 10.968156463336662,
+      "comfort_score_threshold": 0.7939782279534763
+    },
+    "generated_at": "2025-05-28T06:10:18.990889"
+  },
+  {
+    "user_id": "user_000029",
+    "demographics": {
+      "culture": "Latin American",
+      "neurotype": "Dyslexia",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 198.51848534655784,
+      "ipd_mm": 61.94617528328464,
+      "motion_sensitivity": 0.7470678146455497,
+      "visual_acuity": 0.5063942078967036
+    },
+    "preferences": {
+      "interaction_speed": 0.7227069934598249,
+      "visual_complexity_tolerance": 0.3802425750831335,
+      "audio_sensitivity": 0.742818443083298,
+      "social_interaction_preference": 1.0,
+      "exploration_tendency": 0.6538719784980572
+    },
+    "comfort_thresholds": {
+      "min_fps": 101.0899872537493,
+      "max_latency_ms": 15.458525994739533,
+      "max_frame_time_ms": 13.270668350162799,
+      "comfort_score_threshold": 0.8590865161182084
+    },
+    "generated_at": "2025-05-28T06:10:18.990895"
+  },
+  {
+    "user_id": "user_000030",
+    "demographics": {
+      "culture": "South Asian",
+      "neurotype": "Anxiety",
+      "age_group": "Young Adult (18-25)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 180.93310422111756,
+      "ipd_mm": 67.0595167284889,
+      "motion_sensitivity": 0.7240077484044406,
+      "visual_acuity": 1.5306567085158245
+    },
+    "preferences": {
+      "interaction_speed": 0.45833606561299856,
+      "visual_complexity_tolerance": 0.4799965345717212,
+      "audio_sensitivity": 0.3104078752874918,
+      "social_interaction_preference": 0.1449607880669094,
+      "exploration_tendency": 0.394185594570172
+    },
+    "comfort_thresholds": {
+      "min_fps": 90.83224571317196,
+      "max_latency_ms": 12.984833969963693,
+      "max_frame_time_ms": 13.2236238158464,
+      "comfort_score_threshold": 0.9073509977240923
+    },
+    "generated_at": "2025-05-28T06:10:18.990902"
+  },
+  {
+    "user_id": "user_000031",
+    "demographics": {
+      "culture": "Nordic",
+      "neurotype": "Autism",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 164.88743526694722,
+      "ipd_mm": 71.02882568552322,
+      "motion_sensitivity": 0.9211886204918343,
+      "visual_acuity": 1.6167902670588081
+    },
+    "preferences": {
+      "interaction_speed": 0.9484133827584018,
+      "visual_complexity_tolerance": 0.28310028024384465,
+      "audio_sensitivity": 0.934440655634194,
+      "social_interaction_preference": 0.0469488836517411,
+      "exploration_tendency": 0.5775517459077589
+    },
+    "comfort_thresholds": {
+      "min_fps": 101.81807127472163,
+      "max_latency_ms": 11.989714012030731,
+      "max_frame_time_ms": 13.039861308206586,
+      "comfort_score_threshold": 0.8838684345869097
+    },
+    "generated_at": "2025-05-28T06:10:18.990908"
+  },
+  {
+    "user_id": "user_000032",
+    "demographics": {
+      "culture": "Indigenous",
+      "neurotype": "ADHD",
+      "age_group": "Young Adult (18-25)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 152.33784642262194,
+      "ipd_mm": 73.72216701333288,
+      "motion_sensitivity": 0.6358547637861193,
+      "visual_acuity": 1.4331391627729706
+    },
+    "preferences": {
+      "interaction_speed": 0.8953543850112835,
+      "visual_complexity_tolerance": 0.3697653313263383,
+      "audio_sensitivity": 0.19746336202522052,
+      "social_interaction_preference": 0.9254409758294079,
+      "exploration_tendency": 0.28888572533326146
+    },
+    "comfort_thresholds": {
+      "min_fps": 95.64054373479517,
+      "max_latency_ms": 16.78115524054504,
+      "max_frame_time_ms": 12.582719903072464,
+      "comfort_score_threshold": 0.7301634827389272
+    },
+    "generated_at": "2025-05-28T06:10:18.990914"
+  },
+  {
+    "user_id": "user_000033",
+    "demographics": {
+      "culture": "South Asian",
+      "neurotype": "Sensory Processing",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 192.94535433405005,
+      "ipd_mm": 68.69373012382545,
+      "motion_sensitivity": 0.7393039849213958,
+      "visual_acuity": 1.9298510070321677
+    },
+    "preferences": {
+      "interaction_speed": 0.44424637082065993,
+      "visual_complexity_tolerance": 0.8591054538651683,
+      "audio_sensitivity": 0.9508050876823537,
+      "social_interaction_preference": 0.15615500021928608,
+      "exploration_tendency": 0.6023623604183399
+    },
+    "comfort_thresholds": {
+      "min_fps": 111.7818958680719,
+      "max_latency_ms": 13.78287209058964,
+      "max_frame_time_ms": 13.345456449418819,
+      "comfort_score_threshold": 0.9785588528647851
+    },
+    "generated_at": "2025-05-28T06:10:18.990921"
+  },
+  {
+    "user_id": "user_000034",
+    "demographics": {
+      "culture": "East Asian",
+      "neurotype": "Dyslexia",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 175.80929040575236,
+      "ipd_mm": 70.35250573960101,
+      "motion_sensitivity": 0.6851331187098723,
+      "visual_acuity": 0.5944851603527057
+    },
+    "preferences": {
+      "interaction_speed": 0.49957712941627475,
+      "visual_complexity_tolerance": 0.910729147437942,
+      "audio_sensitivity": 0.20146705482495575,
+      "social_interaction_preference": 0.20167264115690733,
+      "exploration_tendency": 0.9567343991136096
+    },
+    "comfort_thresholds": {
+      "min_fps": 92.23735593409683,
+      "max_latency_ms": 16.077654244854063,
+      "max_frame_time_ms": 13.053440417896272,
+      "comfort_score_threshold": 0.7770468589578813
+    },
+    "generated_at": "2025-05-28T06:10:18.990927"
+  },
+  {
+    "user_id": "user_000035",
+    "demographics": {
+      "culture": "Latin American",
+      "neurotype": "Dyslexia",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 188.31886265308088,
+      "ipd_mm": 55.53769970330039,
+      "motion_sensitivity": 0.7145727625883267,
+      "visual_acuity": 0.7273127529041193
+    },
+    "preferences": {
+      "interaction_speed": 0.37994871059631297,
+      "visual_complexity_tolerance": 0.5006012029429008,
+      "audio_sensitivity": 0.22610975241977083,
+      "social_interaction_preference": 0.8403229068556629,
+      "exploration_tendency": 0.3465578264479008
+    },
+    "comfort_thresholds": {
+      "min_fps": 93.48701818473525,
+      "max_latency_ms": 18.105658335628245,
+      "max_frame_time_ms": 11.876671068274266,
+      "comfort_score_threshold": 0.8917200830437357
+    },
+    "generated_at": "2025-05-28T06:10:18.990933"
+  },
+  {
+    "user_id": "user_000036",
+    "demographics": {
+      "culture": "Nordic",
+      "neurotype": "ADHD",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 150.72479898988874,
+      "ipd_mm": 66.67648775254041,
+      "motion_sensitivity": 0.3522517925866029,
+      "visual_acuity": 1.0088005983183377
+    },
+    "preferences": {
+      "interaction_speed": 0.3231629928358366,
+      "visual_complexity_tolerance": 0.16903881916159125,
+      "audio_sensitivity": 0.5960358276985988,
+      "social_interaction_preference": 0.34107812258772113,
+      "exploration_tendency": 0.5361388350054505
+    },
+    "comfort_thresholds": {
+      "min_fps": 78.14661962643996,
+      "max_latency_ms": 17.168267560354707,
+      "max_frame_time_ms": 10.772296492460503,
+      "comfort_score_threshold": 0.8085818308307737
+    },
+    "generated_at": "2025-05-28T06:10:18.990939"
+  },
+  {
+    "user_id": "user_000037",
+    "demographics": {
+      "culture": "Slavic",
+      "neurotype": "Anxiety",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 160.5933996277431,
+      "ipd_mm": 67.46024608278391,
+      "motion_sensitivity": 0.7815558653446596,
+      "visual_acuity": 1.4601212290669363
+    },
+    "preferences": {
+      "interaction_speed": 0.5312363298093606,
+      "visual_complexity_tolerance": 0.6284350526992782,
+      "audio_sensitivity": 0.10106060260562166,
+      "social_interaction_preference": 0.2150588210322428,
+      "exploration_tendency": 0.5741693408283355
+    },
+    "comfort_thresholds": {
+      "min_fps": 87.64394248196659,
+      "max_latency_ms": 13.388314836098512,
+      "max_frame_time_ms": 12.825402434153384,
+      "comfort_score_threshold": 0.9392283171501005
+    },
+    "generated_at": "2025-05-28T06:10:18.990946"
+  },
+  {
+    "user_id": "user_000038",
+    "demographics": {
+      "culture": "Mediterranean",
+      "neurotype": "Sensory Processing",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 192.17900462567542,
+      "ipd_mm": 63.9890874269446,
+      "motion_sensitivity": 0.23508111456714903,
+      "visual_acuity": 1.629067414434735
+    },
+    "preferences": {
+      "interaction_speed": 0.8064833190588434,
+      "visual_complexity_tolerance": 0.708931863645605,
+      "audio_sensitivity": 0.1427659703181833,
+      "social_interaction_preference": 0.2821745741103273,
+      "exploration_tendency": 0.5578874979223623
+    },
+    "comfort_thresholds": {
+      "min_fps": 89.32454211705493,
+      "max_latency_ms": 13.161460891543824,
+      "max_frame_time_ms": 13.920952473541913,
+      "comfort_score_threshold": 0.9247727105161297
+    },
+    "generated_at": "2025-05-28T06:10:18.990952"
+  },
+  {
+    "user_id": "user_000039",
+    "demographics": {
+      "culture": "East Asian",
+      "neurotype": "Sensory Processing",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 165.4642997911832,
+      "ipd_mm": 61.52074346130361,
+      "motion_sensitivity": 0.8962269086889617,
+      "visual_acuity": 1.6095849927895423
+    },
+    "preferences": {
+      "interaction_speed": 0.9064716653263118,
+      "visual_complexity_tolerance": 0.20416191337945655,
+      "audio_sensitivity": 0.28340438172139415,
+      "social_interaction_preference": 0.5264410518179787,
+      "exploration_tendency": 0.4177090222496596
+    },
+    "comfort_thresholds": {
+      "min_fps": 111.8762272659376,
+      "max_latency_ms": 12.44448417614008,
+      "max_frame_time_ms": 13.268277264356605,
+      "comfort_score_threshold": 0.9312691422434464
+    },
+    "generated_at": "2025-05-28T06:10:18.990958"
+  },
+  {
+    "user_id": "user_000040",
+    "demographics": {
+      "culture": "Latin American",
+      "neurotype": "Sensory Processing",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 192.52764293002252,
+      "ipd_mm": 69.01257098024557,
+      "motion_sensitivity": 0.4925267506378683,
+      "visual_acuity": 1.3423689670001786
+    },
+    "preferences": {
+      "interaction_speed": 0.28904144229698814,
+      "visual_complexity_tolerance": 0.5591934925572605,
+      "audio_sensitivity": 0.14557110605258572,
+      "social_interaction_preference": 0.2677496873279404,
+      "exploration_tendency": 0.23684294494732427
+    },
+    "comfort_thresholds": {
+      "min_fps": 93.14349845665735,
+      "max_latency_ms": 14.419645393825107,
+      "max_frame_time_ms": 12.194327940931261,
+      "comfort_score_threshold": 0.7930433561703294
+    },
+    "generated_at": "2025-05-28T06:10:18.990964"
+  },
+  {
+    "user_id": "user_000041",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "Sensory Processing",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 190.8779917309323,
+      "ipd_mm": 68.92366147296228,
+      "motion_sensitivity": 0.20193601779998113,
+      "visual_acuity": 1.5761196732748175
+    },
+    "preferences": {
+      "interaction_speed": 0.5095155318229942,
+      "visual_complexity_tolerance": 0.6103210535540227,
+      "audio_sensitivity": 0.6507027360087835,
+      "social_interaction_preference": 0.28418848550342124,
+      "exploration_tendency": 0.41337023201965134
+    },
+    "comfort_thresholds": {
+      "min_fps": 100.31429274136177,
+      "max_latency_ms": 16.780440223437857,
+      "max_frame_time_ms": 12.875687936639507,
+      "comfort_score_threshold": 0.9487796488812267
+    },
+    "generated_at": "2025-05-28T06:10:18.990971"
+  },
+  {
+    "user_id": "user_000042",
+    "demographics": {
+      "culture": "Mediterranean",
+      "neurotype": "OCD",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 192.54332499758306,
+      "ipd_mm": 68.35055949897125,
+      "motion_sensitivity": 0.746262377116278,
+      "visual_acuity": 1.3217881863644336
+    },
+    "preferences": {
+      "interaction_speed": 0.6774940876373441,
+      "visual_complexity_tolerance": 0.6272285797861595,
+      "audio_sensitivity": 0.20276049051895528,
+      "social_interaction_preference": 0.3405599768338332,
+      "exploration_tendency": 0.9573915217096125
+    },
+    "comfort_thresholds": {
+      "min_fps": 100.05286945994595,
+      "max_latency_ms": 17.956940731965382,
+      "max_frame_time_ms": 13.724194140457776,
+      "comfort_score_threshold": 0.7952666686150881
+    },
+    "generated_at": "2025-05-28T06:10:18.990977"
+  },
+  {
+    "user_id": "user_000043",
+    "demographics": {
+      "culture": "Indigenous",
+      "neurotype": "Anxiety",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 196.18685612445807,
+      "ipd_mm": 69.5722759917486,
+      "motion_sensitivity": 0.3240809527995734,
+      "visual_acuity": 0.7140167733579723
+    },
+    "preferences": {
+      "interaction_speed": 0.513175466732832,
+      "visual_complexity_tolerance": 0.31629600035873157,
+      "audio_sensitivity": 0.4564129385586544,
+      "social_interaction_preference": 0.04493779620472298,
+      "exploration_tendency": 0.20926151828188688
+    },
+    "comfort_thresholds": {
+      "min_fps": 78.97615442350077,
+      "max_latency_ms": 16.30094725802377,
+      "max_frame_time_ms": 13.583508800465207,
+      "comfort_score_threshold": 0.7990995224659984
+    },
+    "generated_at": "2025-05-28T06:10:18.990983"
+  },
+  {
+    "user_id": "user_000044",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "Bipolar",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 153.66473558283442,
+      "ipd_mm": 69.90980836593054,
+      "motion_sensitivity": 0.7948206647912532,
+      "visual_acuity": 1.7140769564693117
+    },
+    "preferences": {
+      "interaction_speed": 0.42447371052810084,
+      "visual_complexity_tolerance": 0.2135840953082343,
+      "audio_sensitivity": 0.8015039617974393,
+      "social_interaction_preference": 0.035927426646293115,
+      "exploration_tendency": 0.9974860644377873
+    },
+    "comfort_thresholds": {
+      "min_fps": 99.46168287227682,
+      "max_latency_ms": 12.275237178496475,
+      "max_frame_time_ms": 13.896451559281982,
+      "comfort_score_threshold": 0.8056639268038913
+    },
+    "generated_at": "2025-05-28T06:10:18.990990"
+  },
+  {
+    "user_id": "user_000045",
+    "demographics": {
+      "culture": "Nordic",
+      "neurotype": "Depression",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 172.50882037793548,
+      "ipd_mm": 62.39102662685918,
+      "motion_sensitivity": 0.8489831606176441,
+      "visual_acuity": 0.5572911624078956
+    },
+    "preferences": {
+      "interaction_speed": 0.5195112199022887,
+      "visual_complexity_tolerance": 0.5564557871868341,
+      "audio_sensitivity": 0.8170689330299663,
+      "social_interaction_preference": 0.31054713839107706,
+      "exploration_tendency": 0.3739451409047009
+    },
+    "comfort_thresholds": {
+      "min_fps": 94.3097844749789,
+      "max_latency_ms": 13.0998576891041,
+      "max_frame_time_ms": 13.55851983560078,
+      "comfort_score_threshold": 0.8693082180162599
+    },
+    "generated_at": "2025-05-28T06:10:18.990998"
+  },
+  {
+    "user_id": "user_000046",
+    "demographics": {
+      "culture": "Mediterranean",
+      "neurotype": "Autism",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 180.44527418545636,
+      "ipd_mm": 71.66687227623748,
+      "motion_sensitivity": 0.17777847073869069,
+      "visual_acuity": 1.0729525220752214
+    },
+    "preferences": {
+      "interaction_speed": 0.741614381432949,
+      "visual_complexity_tolerance": 0.38423650910844376,
+      "audio_sensitivity": 1.0,
+      "social_interaction_preference": 1.0,
+      "exploration_tendency": 0.3057175083771049
+    },
+    "comfort_thresholds": {
+      "min_fps": 86.92399166606091,
+      "max_latency_ms": 11.454559465533658,
+      "max_frame_time_ms": 11.059183715414237,
+      "comfort_score_threshold": 0.9899779132757088
+    },
+    "generated_at": "2025-05-28T06:10:18.991005"
+  },
+  {
+    "user_id": "user_000047",
+    "demographics": {
+      "culture": "South Asian",
+      "neurotype": "PTSD",
+      "age_group": "Young Adult (18-25)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 178.29164947675542,
+      "ipd_mm": 60.06170703893076,
+      "motion_sensitivity": 0.20313026225865047,
+      "visual_acuity": 1.3102558022640607
+    },
+    "preferences": {
+      "interaction_speed": 0.6138447087337815,
+      "visual_complexity_tolerance": 0.9722425783061188,
+      "audio_sensitivity": 0.2921356366539334,
+      "social_interaction_preference": 0.06348780785289876,
+      "exploration_tendency": 0.47846291075685143
+    },
+    "comfort_thresholds": {
+      "min_fps": 84.12395225480736,
+      "max_latency_ms": 14.322822051043465,
+      "max_frame_time_ms": 13.800724254612579,
+      "comfort_score_threshold": 0.906265740037662
+    },
+    "generated_at": "2025-05-28T06:10:18.991011"
+  },
+  {
+    "user_id": "user_000048",
+    "demographics": {
+      "culture": "Slavic",
+      "neurotype": "Dyslexia",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 182.55808562873256,
+      "ipd_mm": 74.97944926468472,
+      "motion_sensitivity": 0.30732892609971046,
+      "visual_acuity": 0.6914013948511418
+    },
+    "preferences": {
+      "interaction_speed": 0.4902760998979437,
+      "visual_complexity_tolerance": 0.625747704246084,
+      "audio_sensitivity": 0.2529688530963536,
+      "social_interaction_preference": 0.4137291552711184,
+      "exploration_tendency": 0.3015310936779922
+    },
+    "comfort_thresholds": {
+      "min_fps": 86.45367406084577,
+      "max_latency_ms": 22.445327949721438,
+      "max_frame_time_ms": 11.104945904003054,
+      "comfort_score_threshold": 0.8173077293567428
+    },
+    "generated_at": "2025-05-28T06:10:18.991017"
+  },
+  {
+    "user_id": "user_000049",
+    "demographics": {
+      "culture": "Mediterranean",
+      "neurotype": "ADHD",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 157.5833062075279,
+      "ipd_mm": 64.63498988422447,
+      "motion_sensitivity": 0.9990383971464907,
+      "visual_acuity": 0.8127687142076644
+    },
+    "preferences": {
+      "interaction_speed": 0.9481361029578576,
+      "visual_complexity_tolerance": 0.47102403406309384,
+      "audio_sensitivity": 0.8687780576950483,
+      "social_interaction_preference": 1.0,
+      "exploration_tendency": 0.49773090379891843
+    },
+    "comfort_thresholds": {
+      "min_fps": 86.46197838683639,
+      "max_latency_ms": 10.507709716073812,
+      "max_frame_time_ms": 10.342587468040163,
+      "comfort_score_threshold": 0.7850730108938796
+    },
+    "generated_at": "2025-05-28T06:10:18.991023"
+  },
+  {
+    "user_id": "user_000050",
+    "demographics": {
+      "culture": "African",
+      "neurotype": "Autism",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 157.39412786034598,
+      "ipd_mm": 66.89539004306353,
+      "motion_sensitivity": 0.18535446806827255,
+      "visual_acuity": 0.6307445704094563
+    },
+    "preferences": {
+      "interaction_speed": 0.5793501971593853,
+      "visual_complexity_tolerance": 0.21725728992997473,
+      "audio_sensitivity": 1.0,
+      "social_interaction_preference": 0.48253522532461157,
+      "exploration_tendency": 1.0
+    },
+    "comfort_thresholds": {
+      "min_fps": 95.22794139009582,
+      "max_latency_ms": 13.716093963032753,
+      "max_frame_time_ms": 12.50752885878243,
+      "comfort_score_threshold": 0.9134692193243904
+    },
+    "generated_at": "2025-05-28T06:10:18.991032"
+  },
+  {
+    "user_id": "user_000051",
+    "demographics": {
+      "culture": "South Asian",
+      "neurotype": "OCD",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 165.1258481294139,
+      "ipd_mm": 67.58621156305793,
+      "motion_sensitivity": 0.5940724476914322,
+      "visual_acuity": 1.9767355196151906
+    },
+    "preferences": {
+      "interaction_speed": 0.26624663260910447,
+      "visual_complexity_tolerance": 0.6868837354495986,
+      "audio_sensitivity": 0.6088702323340132,
+      "social_interaction_preference": 0.10784049008709828,
+      "exploration_tendency": 0.32106471127525044
+    },
+    "comfort_thresholds": {
+      "min_fps": 99.61854302824628,
+      "max_latency_ms": 14.356930773831923,
+      "max_frame_time_ms": 12.326897347953299,
+      "comfort_score_threshold": 0.8843387616966916
+    },
+    "generated_at": "2025-05-28T06:10:18.991039"
+  },
+  {
+    "user_id": "user_000052",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "Neurotypical",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 186.31413369402367,
+      "ipd_mm": 70.40668077758804,
+      "motion_sensitivity": 0.2556375691257107,
+      "visual_acuity": 1.4847976889542909
+    },
+    "preferences": {
+      "interaction_speed": 0.9123061498062965,
+      "visual_complexity_tolerance": 0.8200594436745552,
+      "audio_sensitivity": 0.15503690735270953,
+      "social_interaction_preference": 0.9800813452174559,
+      "exploration_tendency": 0.2757975290950008
+    },
+    "comfort_thresholds": {
+      "min_fps": 90.75387314932611,
+      "max_latency_ms": 20.823480307577807,
+      "max_frame_time_ms": 12.113401020158815,
+      "comfort_score_threshold": 0.7416937591762619
+    },
+    "generated_at": "2025-05-28T06:10:18.991048"
+  },
+  {
+    "user_id": "user_000053",
+    "demographics": {
+      "culture": "Nordic",
+      "neurotype": "Sensory Processing",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 193.40383213488155,
+      "ipd_mm": 67.7433950356703,
+      "motion_sensitivity": 0.3588368940313237,
+      "visual_acuity": 0.6749033249384073
+    },
+    "preferences": {
+      "interaction_speed": 0.705059386250211,
+      "visual_complexity_tolerance": 0.37967117498622943,
+      "audio_sensitivity": 0.37169501460985344,
+      "social_interaction_preference": 0.14931685506962183,
+      "exploration_tendency": 0.8481635870921937
+    },
+    "comfort_thresholds": {
+      "min_fps": 103.14521877406064,
+      "max_latency_ms": 16.531884221880897,
+      "max_frame_time_ms": 11.492744716444205,
+      "comfort_score_threshold": 0.8082637405428921
+    },
+    "generated_at": "2025-05-28T06:10:18.991054"
+  },
+  {
+    "user_id": "user_000054",
+    "demographics": {
+      "culture": "Mediterranean",
+      "neurotype": "Anxiety",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 186.16781215512617,
+      "ipd_mm": 58.73221790596818,
+      "motion_sensitivity": 0.818280627373021,
+      "visual_acuity": 1.3115396264976245
+    },
+    "preferences": {
+      "interaction_speed": 0.8908491435906938,
+      "visual_complexity_tolerance": 0.2558437898627073,
+      "audio_sensitivity": 0.5973664082278554,
+      "social_interaction_preference": 0.5417768812990374,
+      "exploration_tendency": 0.17380995977099042
+    },
+    "comfort_thresholds": {
+      "min_fps": 84.02187698483208,
+      "max_latency_ms": 14.695185617866711,
+      "max_frame_time_ms": 12.43063542378278,
+      "comfort_score_threshold": 0.7516448510187635
+    },
+    "generated_at": "2025-05-28T06:10:18.991060"
+  },
+  {
+    "user_id": "user_000055",
+    "demographics": {
+      "culture": "Slavic",
+      "neurotype": "Neurotypical",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 155.80012027000504,
+      "ipd_mm": 59.516258271316794,
+      "motion_sensitivity": 0.7361808062183758,
+      "visual_acuity": 1.362939890368541
+    },
+    "preferences": {
+      "interaction_speed": 0.37143928169425133,
+      "visual_complexity_tolerance": 0.21975505374293247,
+      "audio_sensitivity": 0.27887567173135824,
+      "social_interaction_preference": 0.8946955622403758,
+      "exploration_tendency": 1.0
+    },
+    "comfort_thresholds": {
+      "min_fps": 88.99740144805422,
+      "max_latency_ms": 19.083704342702042,
+      "max_frame_time_ms": 12.429028350288377,
+      "comfort_score_threshold": 0.8508874482615737
+    },
+    "generated_at": "2025-05-28T06:10:18.991084"
+  },
+  {
+    "user_id": "user_000056",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "OCD",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 159.11970752015773,
+      "ipd_mm": 72.17266404000213,
+      "motion_sensitivity": 0.7883886720623708,
+      "visual_acuity": 1.1978410420706842
+    },
+    "preferences": {
+      "interaction_speed": 0.4304368527544648,
+      "visual_complexity_tolerance": 0.6983473586329241,
+      "audio_sensitivity": 0.7089246926148394,
+      "social_interaction_preference": 0.9724736144742242,
+      "exploration_tendency": 0.889127569130493
+    },
+    "comfort_thresholds": {
+      "min_fps": 98.90141524792791,
+      "max_latency_ms": 11.923625509362505,
+      "max_frame_time_ms": 11.86426242906971,
+      "comfort_score_threshold": 0.84392250050165
+    },
+    "generated_at": "2025-05-28T06:10:18.991091"
+  },
+  {
+    "user_id": "user_000057",
+    "demographics": {
+      "culture": "Mediterranean",
+      "neurotype": "OCD",
+      "age_group": "Young Adult (18-25)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 156.5473720030811,
+      "ipd_mm": 69.58034359145923,
+      "motion_sensitivity": 0.8869286626775604,
+      "visual_acuity": 0.9306028616761859
+    },
+    "preferences": {
+      "interaction_speed": 0.3388235072087204,
+      "visual_complexity_tolerance": 0.43348959481659444,
+      "audio_sensitivity": 0.7607140380677097,
+      "social_interaction_preference": 0.877773193653132,
+      "exploration_tendency": 0.3552903691757974
+    },
+    "comfort_thresholds": {
+      "min_fps": 97.42334386052087,
+      "max_latency_ms": 12.196175550182893,
+      "max_frame_time_ms": 13.748767073783549,
+      "comfort_score_threshold": 0.8927033271482192
+    },
+    "generated_at": "2025-05-28T06:10:18.991098"
+  },
+  {
+    "user_id": "user_000058",
+    "demographics": {
+      "culture": "Mediterranean",
+      "neurotype": "Autism",
+      "age_group": "Young Adult (18-25)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 150.5645626450156,
+      "ipd_mm": 66.59322983809118,
+      "motion_sensitivity": 0.5480078662045161,
+      "visual_acuity": 1.0247672723558086
+    },
+    "preferences": {
+      "interaction_speed": 0.33415765403768904,
+      "visual_complexity_tolerance": 0.1533166592849906,
+      "audio_sensitivity": 0.7924246986543261,
+      "social_interaction_preference": 0.2754761439325768,
+      "exploration_tendency": 0.8392779062627624
+    },
+    "comfort_thresholds": {
+      "min_fps": 88.89426713720185,
+      "max_latency_ms": 15.804261791811197,
+      "max_frame_time_ms": 12.588616200947357,
+      "comfort_score_threshold": 0.9155506018116467
+    },
+    "generated_at": "2025-05-28T06:10:18.991104"
+  },
+  {
+    "user_id": "user_000059",
+    "demographics": {
+      "culture": "East Asian",
+      "neurotype": "ADHD",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 155.43292462265902,
+      "ipd_mm": 62.49015319841453,
+      "motion_sensitivity": 0.8315372546663008,
+      "visual_acuity": 1.717211206292507
+    },
+    "preferences": {
+      "interaction_speed": 0.9542643568267268,
+      "visual_complexity_tolerance": 0.520260653912718,
+      "audio_sensitivity": 0.8106796212461059,
+      "social_interaction_preference": 0.19412980957698356,
+      "exploration_tendency": 0.9541551855341277
+    },
+    "comfort_thresholds": {
+      "min_fps": 97.67658012386772,
+      "max_latency_ms": 13.776836005484014,
+      "max_frame_time_ms": 10.808697810035733,
+      "comfort_score_threshold": 0.7729742934719146
+    },
+    "generated_at": "2025-05-28T06:10:18.991110"
+  },
+  {
+    "user_id": "user_000060",
+    "demographics": {
+      "culture": "Latin American",
+      "neurotype": "OCD",
+      "age_group": "Young Adult (18-25)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 168.0731023244817,
+      "ipd_mm": 66.05943965621427,
+      "motion_sensitivity": 0.3384667351706914,
+      "visual_acuity": 1.124081112496784
+    },
+    "preferences": {
+      "interaction_speed": 0.30866667455882457,
+      "visual_complexity_tolerance": 0.6244904664640112,
+      "audio_sensitivity": 0.5424830946716919,
+      "social_interaction_preference": 1.0,
+      "exploration_tendency": 0.3015582073068894
+    },
+    "comfort_thresholds": {
+      "min_fps": 90.17888431948226,
+      "max_latency_ms": 20.952338723075883,
+      "max_frame_time_ms": 12.068403230167098,
+      "comfort_score_threshold": 0.83421688231559
+    },
+    "generated_at": "2025-05-28T06:10:18.991116"
+  },
+  {
+    "user_id": "user_000061",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "Sensory Processing",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 150.96830749283677,
+      "ipd_mm": 61.95239878619104,
+      "motion_sensitivity": 0.7060776464071081,
+      "visual_acuity": 0.9717470991178055
+    },
+    "preferences": {
+      "interaction_speed": 0.6991654039165214,
+      "visual_complexity_tolerance": 0.7779118467240494,
+      "audio_sensitivity": 0.7861318141894491,
+      "social_interaction_preference": 0.6038281522507662,
+      "exploration_tendency": 0.5646406303916299
+    },
+    "comfort_thresholds": {
+      "min_fps": 103.43320618343458,
+      "max_latency_ms": 14.027045299744623,
+      "max_frame_time_ms": 12.416029221582864,
+      "comfort_score_threshold": 0.9240331910865094
+    },
+    "generated_at": "2025-05-28T06:10:18.991122"
+  },
+  {
+    "user_id": "user_000062",
+    "demographics": {
+      "culture": "Latin American",
+      "neurotype": "Bipolar",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 179.7903155335081,
+      "ipd_mm": 58.333019065023535,
+      "motion_sensitivity": 0.9952452450764909,
+      "visual_acuity": 1.3677928771417402
+    },
+    "preferences": {
+      "interaction_speed": 0.4483377724916946,
+      "visual_complexity_tolerance": 0.8402875968559889,
+      "audio_sensitivity": 0.967177185441886,
+      "social_interaction_preference": 0.5563945039905221,
+      "exploration_tendency": 0.8678122164525478
+    },
+    "comfort_thresholds": {
+      "min_fps": 93.14279645591512,
+      "max_latency_ms": 11.871335040916662,
+      "max_frame_time_ms": 13.790266367774805,
+      "comfort_score_threshold": 0.7910679963022846
+    },
+    "generated_at": "2025-05-28T06:10:18.991128"
+  },
+  {
+    "user_id": "user_000063",
+    "demographics": {
+      "culture": "East Asian",
+      "neurotype": "Anxiety",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 185.33473874706965,
+      "ipd_mm": 74.7687178388789,
+      "motion_sensitivity": 0.11984037123645597,
+      "visual_acuity": 0.7962648595242188
+    },
+    "preferences": {
+      "interaction_speed": 0.7848179212767035,
+      "visual_complexity_tolerance": 0.26928420025574534,
+      "audio_sensitivity": 0.31945935185518304,
+      "social_interaction_preference": 0.15511427995136717,
+      "exploration_tendency": 0.6131124538989075
+    },
+    "comfort_thresholds": {
+      "min_fps": 77.85660654035432,
+      "max_latency_ms": 19.790453943799015,
+      "max_frame_time_ms": 11.986337819140065,
+      "comfort_score_threshold": 0.7867801603343116
+    },
+    "generated_at": "2025-05-28T06:10:18.991134"
+  },
+  {
+    "user_id": "user_000064",
+    "demographics": {
+      "culture": "Western",
+      "neurotype": "OCD",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 156.8050022862317,
+      "ipd_mm": 71.22451873088566,
+      "motion_sensitivity": 0.3854896365603018,
+      "visual_acuity": 1.1619622463210537
+    },
+    "preferences": {
+      "interaction_speed": 0.6446224851724612,
+      "visual_complexity_tolerance": 0.30038941819908305,
+      "audio_sensitivity": 0.18072862748906,
+      "social_interaction_preference": 0.9980268773420199,
+      "exploration_tendency": 0.4377969597207309
+    },
+    "comfort_thresholds": {
+      "min_fps": 84.42376805566512,
+      "max_latency_ms": 18.548134346919024,
+      "max_frame_time_ms": 13.566218681445982,
+      "comfort_score_threshold": 0.78654762778986
+    },
+    "generated_at": "2025-05-28T06:10:18.991140"
+  },
+  {
+    "user_id": "user_000065",
+    "demographics": {
+      "culture": "Slavic",
+      "neurotype": "OCD",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 187.55618765373433,
+      "ipd_mm": 73.19039976911904,
+      "motion_sensitivity": 0.40232195889540934,
+      "visual_acuity": 0.9416191027614177
+    },
+    "preferences": {
+      "interaction_speed": 0.4202344684756742,
+      "visual_complexity_tolerance": 0.5993327873565262,
+      "audio_sensitivity": 0.12480450679697312,
+      "social_interaction_preference": 0.22116371610216456,
+      "exploration_tendency": 0.4317636363255165
+    },
+    "comfort_thresholds": {
+      "min_fps": 95.52812399442315,
+      "max_latency_ms": 13.855704886404636,
+      "max_frame_time_ms": 11.173024808344447,
+      "comfort_score_threshold": 0.7488328969103372
+    },
+    "generated_at": "2025-05-28T06:10:18.991147"
+  },
+  {
+    "user_id": "user_000066",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "Dyslexia",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 165.15406648925114,
+      "ipd_mm": 72.08842591269413,
+      "motion_sensitivity": 0.7108343412301128,
+      "visual_acuity": 0.7416633568879698
+    },
+    "preferences": {
+      "interaction_speed": 0.3830423045381256,
+      "visual_complexity_tolerance": 0.46773256051794493,
+      "audio_sensitivity": 0.7076318028070727,
+      "social_interaction_preference": 0.21171140078964212,
+      "exploration_tendency": 0.3757052124845064
+    },
+    "comfort_thresholds": {
+      "min_fps": 100.05053239380787,
+      "max_latency_ms": 16.644173056024208,
+      "max_frame_time_ms": 12.547061723873846,
+      "comfort_score_threshold": 0.8809037807980113
+    },
+    "generated_at": "2025-05-28T06:10:18.991152"
+  },
+  {
+    "user_id": "user_000067",
+    "demographics": {
+      "culture": "Latin American",
+      "neurotype": "Autism",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 195.42077496420546,
+      "ipd_mm": 68.61466724623732,
+      "motion_sensitivity": 0.1436209197569568,
+      "visual_acuity": 1.4834355750509192
+    },
+    "preferences": {
+      "interaction_speed": 0.8222284659499257,
+      "visual_complexity_tolerance": 0.19056874477709468,
+      "audio_sensitivity": 0.7945982635711488,
+      "social_interaction_preference": 0.0484716378337656,
+      "exploration_tendency": 0.6444715137781234
+    },
+    "comfort_thresholds": {
+      "min_fps": 98.01943553464166,
+      "max_latency_ms": 12.898737854033806,
+      "max_frame_time_ms": 13.246800830261108,
+      "comfort_score_threshold": 0.8392047163536903
+    },
+    "generated_at": "2025-05-28T06:10:18.991158"
+  },
+  {
+    "user_id": "user_000068",
+    "demographics": {
+      "culture": "Latin American",
+      "neurotype": "Dyslexia",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 196.40248454445728,
+      "ipd_mm": 56.62511630456378,
+      "motion_sensitivity": 0.6611753609670982,
+      "visual_acuity": 1.703667197202345
+    },
+    "preferences": {
+      "interaction_speed": 0.48292566319154595,
+      "visual_complexity_tolerance": 0.7484752924923099,
+      "audio_sensitivity": 0.7792796316480948,
+      "social_interaction_preference": 0.6855509658865162,
+      "exploration_tendency": 0.8607057702001519
+    },
+    "comfort_thresholds": {
+      "min_fps": 99.38468169239924,
+      "max_latency_ms": 16.77641013756747,
+      "max_frame_time_ms": 12.616892302032149,
+      "comfort_score_threshold": 0.7503259020547939
+    },
+    "generated_at": "2025-05-28T06:10:18.991165"
+  },
+  {
+    "user_id": "user_000069",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "Bipolar",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 155.47783784874116,
+      "ipd_mm": 71.43846387807511,
+      "motion_sensitivity": 0.8726881578305646,
+      "visual_acuity": 1.9606346994168113
+    },
+    "preferences": {
+      "interaction_speed": 0.9689534367041597,
+      "visual_complexity_tolerance": 0.7276408712759102,
+      "audio_sensitivity": 0.5002524247116005,
+      "social_interaction_preference": 0.790551079442922,
+      "exploration_tendency": 0.45524702345435797
+    },
+    "comfort_thresholds": {
+      "min_fps": 95.2961913065475,
+      "max_latency_ms": 12.552953589119488,
+      "max_frame_time_ms": 12.832178384657423,
+      "comfort_score_threshold": 0.8210201871657775
+    },
+    "generated_at": "2025-05-28T06:10:18.991171"
+  },
+  {
+    "user_id": "user_000070",
+    "demographics": {
+      "culture": "South Asian",
+      "neurotype": "Bipolar",
+      "age_group": "Senior (56-70)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 187.90654472809453,
+      "ipd_mm": 67.38557882996213,
+      "motion_sensitivity": 0.8444461042574092,
+      "visual_acuity": 1.236514621824669
+    },
+    "preferences": {
+      "interaction_speed": 0.5481668628426098,
+      "visual_complexity_tolerance": 0.3796459821524559,
+      "audio_sensitivity": 0.49045504192609246,
+      "social_interaction_preference": 0.9163645717660309,
+      "exploration_tendency": 0.5625058000344001
+    },
+    "comfort_thresholds": {
+      "min_fps": 97.74827692015054,
+      "max_latency_ms": 18.010416731876028,
+      "max_frame_time_ms": 13.863569800133781,
+      "comfort_score_threshold": 0.7156434981261127
+    },
+    "generated_at": "2025-05-28T06:10:18.991177"
+  },
+  {
+    "user_id": "user_000071",
+    "demographics": {
+      "culture": "Slavic",
+      "neurotype": "Bipolar",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 163.75949951895592,
+      "ipd_mm": 64.35086397834037,
+      "motion_sensitivity": 0.345469549761363,
+      "visual_acuity": 1.5493740999296417
+    },
+    "preferences": {
+      "interaction_speed": 0.6916517618969764,
+      "visual_complexity_tolerance": 0.8750375777054018,
+      "audio_sensitivity": 0.4629306179320356,
+      "social_interaction_preference": 0.32463763496949827,
+      "exploration_tendency": 0.8265883380360327
+    },
+    "comfort_thresholds": {
+      "min_fps": 80.47161349363883,
+      "max_latency_ms": 15.264628499280237,
+      "max_frame_time_ms": 12.024740479431514,
+      "comfort_score_threshold": 0.7221665319148194
+    },
+    "generated_at": "2025-05-28T06:10:18.991183"
+  },
+  {
+    "user_id": "user_000072",
+    "demographics": {
+      "culture": "Slavic",
+      "neurotype": "ADHD",
+      "age_group": "Senior (56-70)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 151.52913880522692,
+      "ipd_mm": 59.693929529139844,
+      "motion_sensitivity": 0.37716503562349457,
+      "visual_acuity": 1.1786182171377908
+    },
+    "preferences": {
+      "interaction_speed": 0.9976573249599348,
+      "visual_complexity_tolerance": 0.424230157846044,
+      "audio_sensitivity": 0.6003756960894744,
+      "social_interaction_preference": 0.7296153449773355,
+      "exploration_tendency": 0.9607344934495468
+    },
+    "comfort_thresholds": {
+      "min_fps": 82.98436594343094,
+      "max_latency_ms": 21.710995230260266,
+      "max_frame_time_ms": 12.398263723287613,
+      "comfort_score_threshold": 0.7912411401082566
+    },
+    "generated_at": "2025-05-28T06:10:18.991189"
+  },
+  {
+    "user_id": "user_000073",
+    "demographics": {
+      "culture": "Indigenous",
+      "neurotype": "Sensory Processing",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 194.66222483107384,
+      "ipd_mm": 67.98238543598629,
+      "motion_sensitivity": 0.8322221419617605,
+      "visual_acuity": 1.5890951164797955
+    },
+    "preferences": {
+      "interaction_speed": 0.7805874641431608,
+      "visual_complexity_tolerance": 0.21296758857677614,
+      "audio_sensitivity": 0.5113951990428174,
+      "social_interaction_preference": 0.17541002044992837,
+      "exploration_tendency": 0.7684411931945032
+    },
+    "comfort_thresholds": {
+      "min_fps": 108.2111290433351,
+      "max_latency_ms": 9.265585317435074,
+      "max_frame_time_ms": 13.84716318849351,
+      "comfort_score_threshold": 0.894739235388138
+    },
+    "generated_at": "2025-05-28T06:10:18.991195"
+  },
+  {
+    "user_id": "user_000074",
+    "demographics": {
+      "culture": "Indigenous",
+      "neurotype": "Dyslexia",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 159.55546993565693,
+      "ipd_mm": 55.31060129085956,
+      "motion_sensitivity": 0.1425495039495314,
+      "visual_acuity": 0.9872678235504098
+    },
+    "preferences": {
+      "interaction_speed": 0.7275134333132645,
+      "visual_complexity_tolerance": 0.38725752646325784,
+      "audio_sensitivity": 0.8374100825407844,
+      "social_interaction_preference": 0.2722872979076143,
+      "exploration_tendency": 0.48364540172789666
+    },
+    "comfort_thresholds": {
+      "min_fps": 84.78149099222848,
+      "max_latency_ms": 14.607165276258018,
+      "max_frame_time_ms": 12.166109574644159,
+      "comfort_score_threshold": 0.8649807852780153
+    },
+    "generated_at": "2025-05-28T06:10:18.991201"
+  },
+  {
+    "user_id": "user_000075",
+    "demographics": {
+      "culture": "Latin American",
+      "neurotype": "Neurotypical",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 166.78681382695405,
+      "ipd_mm": 67.98889940214494,
+      "motion_sensitivity": 0.780351366414242,
+      "visual_acuity": 1.0401225851559268
+    },
+    "preferences": {
+      "interaction_speed": 0.5827895956917193,
+      "visual_complexity_tolerance": 0.98128424383083,
+      "audio_sensitivity": 0.9833147674485848,
+      "social_interaction_preference": 0.046508287469119565,
+      "exploration_tendency": 0.6368925671237651
+    },
+    "comfort_thresholds": {
+      "min_fps": 102.74978353356799,
+      "max_latency_ms": 14.824691291342692,
+      "max_frame_time_ms": 12.157106175761639,
+      "comfort_score_threshold": 0.8214857064065142
+    },
+    "generated_at": "2025-05-28T06:10:18.991208"
+  },
+  {
+    "user_id": "user_000076",
+    "demographics": {
+      "culture": "East Asian",
+      "neurotype": "Autism",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 178.5701394376031,
+      "ipd_mm": 66.06032800405639,
+      "motion_sensitivity": 0.3085162337784827,
+      "visual_acuity": 1.5920305207710423
+    },
+    "preferences": {
+      "interaction_speed": 0.5823012695564884,
+      "visual_complexity_tolerance": 0.43548684791066306,
+      "audio_sensitivity": 1.0,
+      "social_interaction_preference": 0.745212904071724,
+      "exploration_tendency": 0.7398996299069456
+    },
+    "comfort_thresholds": {
+      "min_fps": 85.42318303471299,
+      "max_latency_ms": 15.279389454196348,
+      "max_frame_time_ms": 11.073040058419293,
+      "comfort_score_threshold": 0.9279659790897634
+    },
+    "generated_at": "2025-05-28T06:10:18.991214"
+  },
+  {
+    "user_id": "user_000077",
+    "demographics": {
+      "culture": "Slavic",
+      "neurotype": "PTSD",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 178.76844320943871,
+      "ipd_mm": 69.80454179871164,
+      "motion_sensitivity": 0.21420726073717017,
+      "visual_acuity": 0.8402556629854824
+    },
+    "preferences": {
+      "interaction_speed": 0.7804751967552019,
+      "visual_complexity_tolerance": 0.4147069220876379,
+      "audio_sensitivity": 0.23659311093392552,
+      "social_interaction_preference": 0.4645387680105647,
+      "exploration_tendency": 0.5144704414630238
+    },
+    "comfort_thresholds": {
+      "min_fps": 79.43876317285695,
+      "max_latency_ms": 16.76538601484967,
+      "max_frame_time_ms": 11.060908094049108,
+      "comfort_score_threshold": 0.8360638806290923
+    },
+    "generated_at": "2025-05-28T06:10:18.991221"
+  },
+  {
+    "user_id": "user_000078",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "Dyslexia",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 172.48342141101494,
+      "ipd_mm": 69.9807428766008,
+      "motion_sensitivity": 0.19029257783480902,
+      "visual_acuity": 1.8043542242554191
+    },
+    "preferences": {
+      "interaction_speed": 0.555119904364352,
+      "visual_complexity_tolerance": 0.8233867154537027,
+      "audio_sensitivity": 0.1796184351830456,
+      "social_interaction_preference": 0.8591919515591466,
+      "exploration_tendency": 0.40319942242682655
+    },
+    "comfort_thresholds": {
+      "min_fps": 89.09726957749037,
+      "max_latency_ms": 20.554508891767377,
+      "max_frame_time_ms": 11.270641505767163,
+      "comfort_score_threshold": 0.8231589653109668
+    },
+    "generated_at": "2025-05-28T06:10:18.991227"
+  },
+  {
+    "user_id": "user_000079",
+    "demographics": {
+      "culture": "Slavic",
+      "neurotype": "PTSD",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 166.02529811437276,
+      "ipd_mm": 69.70875109553998,
+      "motion_sensitivity": 0.8746126183414057,
+      "visual_acuity": 1.1715485197402784
+    },
+    "preferences": {
+      "interaction_speed": 0.6150917806313522,
+      "visual_complexity_tolerance": 0.988279135623084,
+      "audio_sensitivity": 0.19221498714086965,
+      "social_interaction_preference": 0.9155862196525035,
+      "exploration_tendency": 1.0
+    },
+    "comfort_thresholds": {
+      "min_fps": 87.70181561979209,
+      "max_latency_ms": 14.301146238076559,
+      "max_frame_time_ms": 11.704132541506947,
+      "comfort_score_threshold": 0.939336032790112
+    },
+    "generated_at": "2025-05-28T06:10:18.991233"
+  },
+  {
+    "user_id": "user_000080",
+    "demographics": {
+      "culture": "Nordic",
+      "neurotype": "ADHD",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 191.56127011644352,
+      "ipd_mm": 66.44500500574975,
+      "motion_sensitivity": 0.23185382344219332,
+      "visual_acuity": 1.022116800609663
+    },
+    "preferences": {
+      "interaction_speed": 1.0,
+      "visual_complexity_tolerance": 0.2962572485234157,
+      "audio_sensitivity": 0.8992877640689262,
+      "social_interaction_preference": 0.6906569571669876,
+      "exploration_tendency": 0.848623669941995
+    },
+    "comfort_thresholds": {
+      "min_fps": 90.16427295142257,
+      "max_latency_ms": 17.517817685445106,
+      "max_frame_time_ms": 11.70597255245291,
+      "comfort_score_threshold": 0.8421163225283229
+    },
+    "generated_at": "2025-05-28T06:10:18.991239"
+  },
+  {
+    "user_id": "user_000081",
+    "demographics": {
+      "culture": "Nordic",
+      "neurotype": "ADHD",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 176.71208275425855,
+      "ipd_mm": 60.03114320022141,
+      "motion_sensitivity": 0.6254284086462645,
+      "visual_acuity": 1.1005100985848688
+    },
+    "preferences": {
+      "interaction_speed": 0.6029624948113198,
+      "visual_complexity_tolerance": 0.2938463137055269,
+      "audio_sensitivity": 0.8650551276780402,
+      "social_interaction_preference": 0.06586591961198307,
+      "exploration_tendency": 0.3347577991233516
+    },
+    "comfort_thresholds": {
+      "min_fps": 84.92752665803559,
+      "max_latency_ms": 16.439043703381408,
+      "max_frame_time_ms": 12.025697524480485,
+      "comfort_score_threshold": 0.7549471269511489
+    },
+    "generated_at": "2025-05-28T06:10:18.991245"
+  },
+  {
+    "user_id": "user_000082",
+    "demographics": {
+      "culture": "Western",
+      "neurotype": "OCD",
+      "age_group": "Senior (56-70)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 175.60677240779142,
+      "ipd_mm": 59.11741322575189,
+      "motion_sensitivity": 0.6125054300932364,
+      "visual_acuity": 0.5608172736156848
+    },
+    "preferences": {
+      "interaction_speed": 0.4057765628782707,
+      "visual_complexity_tolerance": 0.2669794816886458,
+      "audio_sensitivity": 0.6186536118655788,
+      "social_interaction_preference": 0.7626699606057686,
+      "exploration_tendency": 0.9289776480135254
+    },
+    "comfort_thresholds": {
+      "min_fps": 94.10658969848133,
+      "max_latency_ms": 18.211186618890665,
+      "max_frame_time_ms": 12.188802655592514,
+      "comfort_score_threshold": 0.7116643873741001
+    },
+    "generated_at": "2025-05-28T06:10:18.991254"
+  },
+  {
+    "user_id": "user_000083",
+    "demographics": {
+      "culture": "Indigenous",
+      "neurotype": "Depression",
+      "age_group": "Senior (56-70)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 196.02073121639467,
+      "ipd_mm": 59.1170444496099,
+      "motion_sensitivity": 0.40158966715381195,
+      "visual_acuity": 1.3043029432373328
+    },
+    "preferences": {
+      "interaction_speed": 0.39156026631855495,
+      "visual_complexity_tolerance": 0.3519418467095267,
+      "audio_sensitivity": 0.6622304092536206,
+      "social_interaction_preference": 0.40511694689516153,
+      "exploration_tendency": 0.4690986976032842
+    },
+    "comfort_thresholds": {
+      "min_fps": 87.76854752927343,
+      "max_latency_ms": 19.7481281734878,
+      "max_frame_time_ms": 12.415534558161326,
+      "comfort_score_threshold": 0.7117214897341336
+    },
+    "generated_at": "2025-05-28T06:10:18.991260"
+  },
+  {
+    "user_id": "user_000084",
+    "demographics": {
+      "culture": "Latin American",
+      "neurotype": "Autism",
+      "age_group": "Young Adult (18-25)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 194.82352970822848,
+      "ipd_mm": 67.82362353152278,
+      "motion_sensitivity": 0.8172431185074152,
+      "visual_acuity": 1.7187048609784583
+    },
+    "preferences": {
+      "interaction_speed": 0.9552936902632392,
+      "visual_complexity_tolerance": 0.49569146214914545,
+      "audio_sensitivity": 0.1791146328402728,
+      "social_interaction_preference": 0.7926036129930906,
+      "exploration_tendency": 0.5186997485861268
+    },
+    "comfort_thresholds": {
+      "min_fps": 110.09087312802819,
+      "max_latency_ms": 11.260090566820399,
+      "max_frame_time_ms": 12.32553361463209,
+      "comfort_score_threshold": 0.89738296600161
+    },
+    "generated_at": "2025-05-28T06:10:18.991266"
+  },
+  {
+    "user_id": "user_000085",
+    "demographics": {
+      "culture": "East Asian",
+      "neurotype": "Depression",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 168.2194779826459,
+      "ipd_mm": 60.167332567538956,
+      "motion_sensitivity": 0.33991243786598435,
+      "visual_acuity": 0.661170768103784
+    },
+    "preferences": {
+      "interaction_speed": 0.5951228421548664,
+      "visual_complexity_tolerance": 0.7496740787714787,
+      "audio_sensitivity": 0.9932556685494371,
+      "social_interaction_preference": 0.592500409927792,
+      "exploration_tendency": 0.4234694653570051
+    },
+    "comfort_thresholds": {
+      "min_fps": 81.86630915975589,
+      "max_latency_ms": 20.12866585918229,
+      "max_frame_time_ms": 11.686967210540606,
+      "comfort_score_threshold": 0.7474981290691267
+    },
+    "generated_at": "2025-05-28T06:10:18.991272"
+  },
+  {
+    "user_id": "user_000086",
+    "demographics": {
+      "culture": "Indigenous",
+      "neurotype": "PTSD",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 198.77556573398203,
+      "ipd_mm": 68.43148625994282,
+      "motion_sensitivity": 0.3841239513367033,
+      "visual_acuity": 1.9605100195345404
+    },
+    "preferences": {
+      "interaction_speed": 0.7751117645371282,
+      "visual_complexity_tolerance": 0.7871796914792611,
+      "audio_sensitivity": 0.765052213465897,
+      "social_interaction_preference": 0.9930777748053727,
+      "exploration_tendency": 0.3380748273900026
+    },
+    "comfort_thresholds": {
+      "min_fps": 83.33689668131206,
+      "max_latency_ms": 18.09932665613105,
+      "max_frame_time_ms": 12.15718046738036,
+      "comfort_score_threshold": 0.7495365810556948
+    },
+    "generated_at": "2025-05-28T06:10:18.991278"
+  },
+  {
+    "user_id": "user_000087",
+    "demographics": {
+      "culture": "East Asian",
+      "neurotype": "OCD",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 150.2834454183303,
+      "ipd_mm": 64.8301005392891,
+      "motion_sensitivity": 0.2973922348397901,
+      "visual_acuity": 0.8894645411108477
+    },
+    "preferences": {
+      "interaction_speed": 0.4689645324569685,
+      "visual_complexity_tolerance": 0.7601572863437935,
+      "audio_sensitivity": 0.2381190260452895,
+      "social_interaction_preference": 0.7018176547287998,
+      "exploration_tendency": 1.0
+    },
+    "comfort_thresholds": {
+      "min_fps": 88.16148081432773,
+      "max_latency_ms": 21.228446870189135,
+      "max_frame_time_ms": 11.758516538226267,
+      "comfort_score_threshold": 0.8407111597008002
+    },
+    "generated_at": "2025-05-28T06:10:18.991284"
+  },
+  {
+    "user_id": "user_000088",
+    "demographics": {
+      "culture": "Western",
+      "neurotype": "Depression",
+      "age_group": "Elder (70+)",
+      "vr_experience": "Expert"
+    },
+    "physical": {
+      "height_cm": 190.14560545835488,
+      "ipd_mm": 72.62071462418112,
+      "motion_sensitivity": 0.26309996756103793,
+      "visual_acuity": 1.0932543673743473
+    },
+    "preferences": {
+      "interaction_speed": 0.392671418520504,
+      "visual_complexity_tolerance": 0.8316077343752873,
+      "audio_sensitivity": 0.5920414711151126,
+      "social_interaction_preference": 0.2501217002039273,
+      "exploration_tendency": 0.8376947368012615
+    },
+    "comfort_thresholds": {
+      "min_fps": 91.29032179334827,
+      "max_latency_ms": 18.893007067597036,
+      "max_frame_time_ms": 11.222369409857329,
+      "comfort_score_threshold": 0.7602795183707173
+    },
+    "generated_at": "2025-05-28T06:10:18.991290"
+  },
+  {
+    "user_id": "user_000089",
+    "demographics": {
+      "culture": "Slavic",
+      "neurotype": "OCD",
+      "age_group": "Young Adult (18-25)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 155.87133014950044,
+      "ipd_mm": 74.01838901757125,
+      "motion_sensitivity": 0.16898877593247408,
+      "visual_acuity": 1.3657790963033507
+    },
+    "preferences": {
+      "interaction_speed": 0.458465352560139,
+      "visual_complexity_tolerance": 0.4330258673568592,
+      "audio_sensitivity": 0.18308824550982594,
+      "social_interaction_preference": 0.26997502242843585,
+      "exploration_tendency": 0.7549073857818944
+    },
+    "comfort_thresholds": {
+      "min_fps": 88.00414656394376,
+      "max_latency_ms": 18.74713910967007,
+      "max_frame_time_ms": 12.958299120057486,
+      "comfort_score_threshold": 0.7711773293024055
+    },
+    "generated_at": "2025-05-28T06:10:18.991296"
+  },
+  {
+    "user_id": "user_000090",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "Depression",
+      "age_group": "Adult (26-40)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 164.27818461968383,
+      "ipd_mm": 59.934898812623835,
+      "motion_sensitivity": 0.828752499328213,
+      "visual_acuity": 1.3214089760679957
+    },
+    "preferences": {
+      "interaction_speed": 0.4400408965490268,
+      "visual_complexity_tolerance": 0.39745108009411834,
+      "audio_sensitivity": 0.15286244761823128,
+      "social_interaction_preference": 0.9449357162764913,
+      "exploration_tendency": 0.5942509069230162
+    },
+    "comfort_thresholds": {
+      "min_fps": 99.39324915234599,
+      "max_latency_ms": 15.10589523430991,
+      "max_frame_time_ms": 13.66561467740106,
+      "comfort_score_threshold": 0.8680086721162114
+    },
+    "generated_at": "2025-05-28T06:10:18.991301"
+  },
+  {
+    "user_id": "user_000091",
+    "demographics": {
+      "culture": "African",
+      "neurotype": "OCD",
+      "age_group": "Child (8-12)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 166.60453509364788,
+      "ipd_mm": 62.09648093666897,
+      "motion_sensitivity": 0.19102847345208046,
+      "visual_acuity": 1.597017390807214
+    },
+    "preferences": {
+      "interaction_speed": 0.9177810696370903,
+      "visual_complexity_tolerance": 0.5339749458677037,
+      "audio_sensitivity": 0.42120910004597023,
+      "social_interaction_preference": 0.5615757943536404,
+      "exploration_tendency": 1.0
+    },
+    "comfort_thresholds": {
+      "min_fps": 91.89900065471448,
+      "max_latency_ms": 16.72890995703918,
+      "max_frame_time_ms": 11.928097678104406,
+      "comfort_score_threshold": 0.814193609752879
+    },
+    "generated_at": "2025-05-28T06:10:18.991307"
+  },
+  {
+    "user_id": "user_000092",
+    "demographics": {
+      "culture": "Western",
+      "neurotype": "Depression",
+      "age_group": "Middle Age (41-55)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 187.78046961392465,
+      "ipd_mm": 64.44311999275853,
+      "motion_sensitivity": 0.8232006437807842,
+      "visual_acuity": 0.5316302264893407
+    },
+    "preferences": {
+      "interaction_speed": 0.709909903559727,
+      "visual_complexity_tolerance": 0.2790143958759339,
+      "audio_sensitivity": 0.3070363910413936,
+      "social_interaction_preference": 0.7959721975343497,
+      "exploration_tendency": 0.8763915508040847
+    },
+    "comfort_thresholds": {
+      "min_fps": 90.86837056517561,
+      "max_latency_ms": 16.576465952099326,
+      "max_frame_time_ms": 11.854449897513042,
+      "comfort_score_threshold": 0.7801558393035214
+    },
+    "generated_at": "2025-05-28T06:10:18.991316"
+  },
+  {
+    "user_id": "user_000093",
+    "demographics": {
+      "culture": "African",
+      "neurotype": "ADHD",
+      "age_group": "Young Adult (18-25)",
+      "vr_experience": "Novice"
+    },
+    "physical": {
+      "height_cm": 154.32014110114807,
+      "ipd_mm": 69.74173959980236,
+      "motion_sensitivity": 0.6512067818101508,
+      "visual_acuity": 1.9441465797498378
+    },
+    "preferences": {
+      "interaction_speed": 0.7896454218580126,
+      "visual_complexity_tolerance": 0.4023541821582605,
+      "audio_sensitivity": 0.744185784838475,
+      "social_interaction_preference": 0.6003501838315551,
+      "exploration_tendency": 0.7666033588090617
+    },
+    "comfort_thresholds": {
+      "min_fps": 82.74272352756203,
+      "max_latency_ms": 13.580246410707442,
+      "max_frame_time_ms": 11.92341447838874,
+      "comfort_score_threshold": 0.7722683008683073
+    },
+    "generated_at": "2025-05-28T06:10:18.991325"
+  },
+  {
+    "user_id": "user_000094",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "Neurotypical",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 185.40220831540228,
+      "ipd_mm": 71.99978006361988,
+      "motion_sensitivity": 0.2364995226357894,
+      "visual_acuity": 1.2693440639842497
+    },
+    "preferences": {
+      "interaction_speed": 0.6705305587056252,
+      "visual_complexity_tolerance": 0.7624215990174703,
+      "audio_sensitivity": 0.7976112219747762,
+      "social_interaction_preference": 0.9485973963026552,
+      "exploration_tendency": 1.0
+    },
+    "comfort_thresholds": {
+      "min_fps": 93.84034178527638,
+      "max_latency_ms": 22.219992510377462,
+      "max_frame_time_ms": 13.817004281689773,
+      "comfort_score_threshold": 0.8625597912129226
+    },
+    "generated_at": "2025-05-28T06:10:18.991331"
+  },
+  {
+    "user_id": "user_000095",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "Depression",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 161.32517263545733,
+      "ipd_mm": 72.067287678172,
+      "motion_sensitivity": 0.944159494048183,
+      "visual_acuity": 1.221631276323232
+    },
+    "preferences": {
+      "interaction_speed": 0.6579808760035386,
+      "visual_complexity_tolerance": 0.5603112012499173,
+      "audio_sensitivity": 0.41669537019033076,
+      "social_interaction_preference": 0.6901289266904134,
+      "exploration_tendency": 0.338826760652592
+    },
+    "comfort_thresholds": {
+      "min_fps": 87.95534399250573,
+      "max_latency_ms": 14.723418660985015,
+      "max_frame_time_ms": 12.928424652210728,
+      "comfort_score_threshold": 0.8589968275765719
+    },
+    "generated_at": "2025-05-28T06:10:18.991338"
+  },
+  {
+    "user_id": "user_000096",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "ADHD",
+      "age_group": "Young Adult (18-25)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 155.15425987062463,
+      "ipd_mm": 58.21679571167822,
+      "motion_sensitivity": 0.5360676229316413,
+      "visual_acuity": 1.3997173060273584
+    },
+    "preferences": {
+      "interaction_speed": 0.557381323947945,
+      "visual_complexity_tolerance": 0.38834074392585727,
+      "audio_sensitivity": 0.7332319238270263,
+      "social_interaction_preference": 0.07638188232378518,
+      "exploration_tendency": 0.3879721966797929
+    },
+    "comfort_thresholds": {
+      "min_fps": 87.77631619304013,
+      "max_latency_ms": 20.079766435573845,
+      "max_frame_time_ms": 12.402142100063532,
+      "comfort_score_threshold": 0.7367340556659097
+    },
+    "generated_at": "2025-05-28T06:10:18.991345"
+  },
+  {
+    "user_id": "user_000097",
+    "demographics": {
+      "culture": "Mediterranean",
+      "neurotype": "ADHD",
+      "age_group": "Teen (13-17)",
+      "vr_experience": "Intermediate"
+    },
+    "physical": {
+      "height_cm": 198.288797244735,
+      "ipd_mm": 72.51068803642929,
+      "motion_sensitivity": 0.9742009880433745,
+      "visual_acuity": 0.883169725368943
+    },
+    "preferences": {
+      "interaction_speed": 0.6170434499396216,
+      "visual_complexity_tolerance": 0.166865469147279,
+      "audio_sensitivity": 0.4024357914836889,
+      "social_interaction_preference": 0.945575313904079,
+      "exploration_tendency": 0.9628733987150101
+    },
+    "comfort_thresholds": {
+      "min_fps": 100.03493244792017,
+      "max_latency_ms": 17.684227127164572,
+      "max_frame_time_ms": 12.20628581682238,
+      "comfort_score_threshold": 0.888199376241022
+    },
+    "generated_at": "2025-05-28T06:10:18.991351"
+  },
+  {
+    "user_id": "user_000098",
+    "demographics": {
+      "culture": "Indigenous",
+      "neurotype": "OCD",
+      "age_group": "Senior (56-70)",
+      "vr_experience": "Advanced"
+    },
+    "physical": {
+      "height_cm": 182.02263087396813,
+      "ipd_mm": 74.94187082995165,
+      "motion_sensitivity": 0.2150065072109143,
+      "visual_acuity": 1.5174114106975445
+    },
+    "preferences": {
+      "interaction_speed": 0.6153870387794906,
+      "visual_complexity_tolerance": 0.4203531400081596,
+      "audio_sensitivity": 0.9236413784967126,
+      "social_interaction_preference": 0.5232139769018599,
+      "exploration_tendency": 0.9662826618572413
+    },
+    "comfort_thresholds": {
+      "min_fps": 83.59414849986283,
+      "max_latency_ms": 18.10882046209288,
+      "max_frame_time_ms": 13.886361278502736,
+      "comfort_score_threshold": 0.7269440807377681
+    },
+    "generated_at": "2025-05-28T06:10:18.991359"
+  },
+  {
+    "user_id": "user_000099",
+    "demographics": {
+      "culture": "Middle Eastern",
+      "neurotype": "Depression",
+      "age_group": "Senior (56-70)",
+      "vr_experience": "Beginner"
+    },
+    "physical": {
+      "height_cm": 180.5413531686943,
+      "ipd_mm": 69.71953577087864,
+      "motion_sensitivity": 0.38720653445131803,
+      "visual_acuity": 0.717316334515464
+    },
+    "preferences": {
+      "interaction_speed": 0.780482578961758,
+      "visual_complexity_tolerance": 0.47702346492414277,
+      "audio_sensitivity": 0.4029303859719323,
+      "social_interaction_preference": 0.9244639319813228,
+      "exploration_tendency": 0.8601065390322893
+    },
+    "comfort_thresholds": {
+      "min_fps": 77.9573108202371,
+      "max_latency_ms": 14.229861244593735,
+      "max_frame_time_ms": 12.523938937268788,
+      "comfort_score_threshold": 0.7383496921711669
+    },
+    "generated_at": "2025-05-28T06:10:18.991365"
+  }
+]

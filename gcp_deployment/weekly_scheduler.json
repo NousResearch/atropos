@@ -1,0 +1,13 @@
+{
+  "name": "projects/amien-research-pipeline/locations/us-central1/jobs/weekly-massive-experiments",
+  "schedule": "0 0 * * 1",
+  "timeZone": "UTC",
+  "httpTarget": {
+    "uri": "https://amien-api-service-amien-research-pipeline.a.run.app/experiments/massive",
+    "httpMethod": "POST",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"sample_size\": 5000}"
+  }
+}

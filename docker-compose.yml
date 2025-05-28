@@ -1,0 +1,29 @@
+services:
+  cloudvr-perfguard:
+    build: .
+    environment:
+    - ENVIRONMENT=production
+    - GEMINI_API_KEY=${GEMINI_API_KEY}
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - python
+      - -c
+      - import requests; requests.get('http://localhost:8000/health')
+      timeout: 10s
+    ports:
+    - 8000:8000
+    restart: unless-stopped
+    volumes:
+    - ./production:/app/production
+    - ./research_outputs:/app/research_outputs
+  monitoring:
+    image: prom/prometheus:latest
+    ports:
+    - 9090:9090
+    restart: unless-stopped
+    volumes:
+    - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+version: '3.8'

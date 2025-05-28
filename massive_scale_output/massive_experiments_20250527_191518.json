@@ -1,0 +1,1702 @@
+[
+  {
+    "experiment_id": "exp_000000",
+    "user_id": "user_000046",
+    "environment_id": "env_0007",
+    "performance": {
+      "fps": 62.55029339930177,
+      "frame_time": 16.78649200407621,
+      "gpu_utilization": 64.26997076938194,
+      "cpu_utilization": 55.508355745640145,
+      "vram_usage": 7324.400072946704,
+      "latency": 10.222888840137246
+    },
+    "comfort_score": 0.4469921978237554,
+    "duration": 229.89505500566625,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204317"
+  },
+  {
+    "experiment_id": "exp_000001",
+    "user_id": "user_000046",
+    "environment_id": "env_0000",
+    "performance": {
+      "fps": 91.90902074609804,
+      "frame_time": 11.424341065505013,
+      "gpu_utilization": 83.90000788950928,
+      "cpu_utilization": 65.61359100949042,
+      "vram_usage": 3057.8523916910576,
+      "latency": 17.315779112126684
+    },
+    "comfort_score": 0.5777156404713156,
+    "duration": 144.7093835231741,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204386"
+  },
+  {
+    "experiment_id": "exp_000002",
+    "user_id": "user_000046",
+    "environment_id": "env_0008",
+    "performance": {
+      "fps": 69.97440265066119,
+      "frame_time": 15.005487152809279,
+      "gpu_utilization": 87.11458890238134,
+      "cpu_utilization": 33.18958827463627,
+      "vram_usage": 5676.987058991432,
+      "latency": 21.831158711784663
+    },
+    "comfort_score": 0.42820923093597024,
+    "duration": 142.62221245093133,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204394"
+  },
+  {
+    "experiment_id": "exp_000003",
+    "user_id": "user_000046",
+    "environment_id": "env_0004",
+    "performance": {
+      "fps": 81.10152761041788,
+      "frame_time": 12.946735171793762,
+      "gpu_utilization": 82.67126754434295,
+      "cpu_utilization": 64.53215336495592,
+      "vram_usage": 6078.372469789101,
+      "latency": 12.208517067338697
+    },
+    "comfort_score": 0.5583951982142128,
+    "duration": 180.95548889098308,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204456"
+  },
+  {
+    "experiment_id": "exp_000004",
+    "user_id": "user_000046",
+    "environment_id": "env_0006",
+    "performance": {
+      "fps": 93.26851124491637,
+      "frame_time": 11.257818807065291,
+      "gpu_utilization": 70.17419469293718,
+      "cpu_utilization": 67.1401209052728,
+      "vram_usage": 4759.739741981874,
+      "latency": 19.45981535592073
+    },
+    "comfort_score": 0.4242317486880926,
+    "duration": 247.98645268245937,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204464"
+  },
+  {
+    "experiment_id": "exp_000005",
+    "user_id": "user_000046",
+    "environment_id": "env_0002",
+    "performance": {
+      "fps": 94.510061169829,
+      "frame_time": 11.109928265872265,
+      "gpu_utilization": 90.20554919691509,
+      "cpu_utilization": 69.14642229173887,
+      "vram_usage": 7828.766879398262,
+      "latency": 16.176674793598522
+    },
+    "comfort_score": 0.6762832297134136,
+    "duration": 80.88303350431963,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204470"
+  },
+  {
+    "experiment_id": "exp_000006",
+    "user_id": "user_000046",
+    "environment_id": "env_0009",
+    "performance": {
+      "fps": 73.52905568747137,
+      "frame_time": 14.280069153382447,
+      "gpu_utilization": 81.9953249159793,
+      "cpu_utilization": 35.03005524464856,
+      "vram_usage": 5578.148308964521,
+      "latency": 17.48768008578451
+    },
+    "comfort_score": 0.6112748053450962,
+    "duration": 44.58386475954556,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204558"
+  },
+  {
+    "experiment_id": "exp_000007",
+    "user_id": "user_000046",
+    "environment_id": "env_0003",
+    "performance": {
+      "fps": 98.35610492617123,
+      "frame_time": 10.675493918635338,
+      "gpu_utilization": 84.18193271594501,
+      "cpu_utilization": 51.008848859611696,
+      "vram_usage": 4646.110102384567,
+      "latency": 23.60559582426656
+    },
+    "comfort_score": 0.47333412297810057,
+    "duration": 162.50294559954213,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204576"
+  },
+  {
+    "experiment_id": "exp_000008",
+    "user_id": "user_000046",
+    "environment_id": "env_0005",
+    "performance": {
+      "fps": 76.72400824410688,
+      "frame_time": 13.685416390907207,
+      "gpu_utilization": 79.16930323790254,
+      "cpu_utilization": 66.69665704021725,
+      "vram_usage": 5381.9425515928215,
+      "latency": 12.214981445108329
+    },
+    "comfort_score": 0.44094385250727186,
+    "duration": 257.9110256631598,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204585"
+  },
+  {
+    "experiment_id": "exp_000009",
+    "user_id": "user_000046",
+    "environment_id": "env_0001",
+    "performance": {
+      "fps": 89.33926676101653,
+      "frame_time": 11.752950724441929,
+      "gpu_utilization": 89.98365707384409,
+      "cpu_utilization": 51.14590192186735,
+      "vram_usage": 7444.149640928321,
+      "latency": 12.887586263347481
+    },
+    "comfort_score": 0.7268042354414675,
+    "duration": 78.61436928902151,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204591"
+  },
+  {
+    "experiment_id": "exp_000010",
+    "user_id": "user_000087",
+    "environment_id": "env_0007",
+    "performance": {
+      "fps": 65.52887879926853,
+      "frame_time": 16.78649200407621,
+      "gpu_utilization": 89.90369503448252,
+      "cpu_utilization": 66.11750219749607,
+      "vram_usage": 4966.373887830542,
+      "latency": 22.2289356655726
+    },
+    "comfort_score": 0.4316836376633986,
+    "duration": 143.64727534113848,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204654"
+  },
+  {
+    "experiment_id": "exp_000011",
+    "user_id": "user_000087",
+    "environment_id": "env_0000",
+    "performance": {
+      "fps": 96.28564078162653,
+      "frame_time": 11.424341065505013,
+      "gpu_utilization": 68.88429195583782,
+      "cpu_utilization": 66.05945297781662,
+      "vram_usage": 2365.7816370942796,
+      "latency": 14.596151634290557
+    },
+    "comfort_score": 0.6485406686380285,
+    "duration": 152.82549637013628,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204660"
+  },
+  {
+    "experiment_id": "exp_000012",
+    "user_id": "user_000087",
+    "environment_id": "env_0008",
+    "performance": {
+      "fps": 73.30651706259745,
+      "frame_time": 15.005487152809279,
+      "gpu_utilization": 93.28482661831285,
+      "cpu_utilization": 45.59118596853361,
+      "vram_usage": 7092.590347047183,
+      "latency": 16.87766098375858
+    },
+    "comfort_score": 0.6737920077161278,
+    "duration": 38.36045793430276,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204666"
+  },
+  {
+    "experiment_id": "exp_000013",
+    "user_id": "user_000087",
+    "environment_id": "env_0004",
+    "performance": {
+      "fps": 84.96350511567587,
+      "frame_time": 12.946735171793762,
+      "gpu_utilization": 72.37322581711435,
+      "cpu_utilization": 30.73309199633112,
+      "vram_usage": 2732.5781351006053,
+      "latency": 12.218901031365826
+    },
+    "comfort_score": 0.7650592988440251,
+    "duration": 80.4763810882238,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204670"
+  },
+  {
+    "experiment_id": "exp_000014",
+    "user_id": "user_000087",
+    "environment_id": "env_0006",
+    "performance": {
+      "fps": 97.70986892324572,
+      "frame_time": 11.257818807065291,
+      "gpu_utilization": 94.71698508732268,
+      "cpu_utilization": 37.442517109967774,
+      "vram_usage": 5908.6692990759575,
+      "latency": 10.123549095313617
+    },
+    "comfort_score": 0.6326318239309887,
+    "duration": 202.91089116683267,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204675"
+  },
+  {
+    "experiment_id": "exp_000015",
+    "user_id": "user_000087",
+    "environment_id": "env_0002",
+    "performance": {
+      "fps": 99.0105402731542,
+      "frame_time": 11.109928265872265,
+      "gpu_utilization": 70.5542964316326,
+      "cpu_utilization": 67.16633954133214,
+      "vram_usage": 4636.928300608126,
+      "latency": 15.201096772957687
+    },
+    "comfort_score": 0.7661788480042241,
+    "duration": 64.57917398414173,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204748"
+  },
+  {
+    "experiment_id": "exp_000016",
+    "user_id": "user_000087",
+    "environment_id": "env_0009",
+    "performance": {
+      "fps": 77.03043929163667,
+      "frame_time": 14.280069153382447,
+      "gpu_utilization": 63.912037173472704,
+      "cpu_utilization": 61.32026144303437,
+      "vram_usage": 5739.118129301841,
+      "latency": 11.797717713695764
+    },
+    "comfort_score": 0.7840979353997705,
+    "duration": 40.57080397423103,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204755"
+  },
+  {
+    "experiment_id": "exp_000017",
+    "user_id": "user_000087",
+    "environment_id": "env_0003",
+    "performance": {
+      "fps": 103.03972897027462,
+      "frame_time": 10.675493918635338,
+      "gpu_utilization": 67.99151365685634,
+      "cpu_utilization": 56.36247964977631,
+      "vram_usage": 7734.401320370337,
+      "latency": 20.71699881706537
+    },
+    "comfort_score": 0.6042357294552627,
+    "duration": 118.45794100481629,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204760"
+  },
+  {
+    "experiment_id": "exp_000018",
+    "user_id": "user_000087",
+    "environment_id": "env_0005",
+    "performance": {
+      "fps": 80.37753244620721,
+      "frame_time": 13.685416390907207,
+      "gpu_utilization": 77.68028367945048,
+      "cpu_utilization": 31.891974366991587,
+      "vram_usage": 4187.7194484824795,
+      "latency": 10.484861170788502
+    },
+    "comfort_score": 0.7449749191633352,
+    "duration": 96.35863059327161,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204765"
+  },
+  {
+    "experiment_id": "exp_000019",
+    "user_id": "user_000087",
+    "environment_id": "env_0001",
+    "performance": {
+      "fps": 93.59351755916019,
+      "frame_time": 11.752950724441929,
+      "gpu_utilization": 77.87063589853469,
+      "cpu_utilization": 51.616383945008614,
+      "vram_usage": 5311.519537775067,
+      "latency": 12.771331726214306
+    },
+    "comfort_score": 0.7454204795768858,
+    "duration": 105.88492528523292,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204770"
+  },
+  {
+    "experiment_id": "exp_000020",
+    "user_id": "user_000043",
+    "environment_id": "env_0007",
+    "performance": {
+      "fps": 50.93381033943144,
+      "frame_time": 16.78649200407621,
+      "gpu_utilization": 71.88041758859926,
+      "cpu_utilization": 46.28666857918826,
+      "vram_usage": 3228.048523592991,
+      "latency": 13.94507649611622
+    },
+    "comfort_score": 0.3389150159124855,
+    "duration": 242.07702979837686,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204775"
+  },
+  {
+    "experiment_id": "exp_000021",
+    "user_id": "user_000043",
+    "environment_id": "env_0000",
+    "performance": {
+      "fps": 74.84020260753698,
+      "frame_time": 11.424341065505013,
+      "gpu_utilization": 89.21137490772564,
+      "cpu_utilization": 31.50782414462817,
+      "vram_usage": 3072.5991646082866,
+      "latency": 22.04559970282589
+    },
+    "comfort_score": 0.48129657855950136,
+    "duration": 89.6750038761748,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204833"
+  },
+  {
+    "experiment_id": "exp_000022",
+    "user_id": "user_000043",
+    "environment_id": "env_0008",
+    "performance": {
+      "fps": 56.979156444109826,
+      "frame_time": 15.005487152809279,
+      "gpu_utilization": 73.0103189917333,
+      "cpu_utilization": 60.85338638865147,
+      "vram_usage": 2811.719354030241,
+      "latency": 14.708366785951332
+    },
+    "comfort_score": 0.5259879378512299,
+    "duration": 64.79451351165565,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204838"
+  },
+  {
+    "experiment_id": "exp_000023",
+    "user_id": "user_000043",
+    "environment_id": "env_0004",
+    "performance": {
+      "fps": 66.0398153399117,
+      "frame_time": 12.946735171793762,
+      "gpu_utilization": 65.40105680675259,
+      "cpu_utilization": 34.08281848534233,
+      "vram_usage": 4841.974584401523,
+      "latency": 10.079075424365925
+    },
+    "comfort_score": 0.4577398009913424,
+    "duration": 219.20144459096477,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204843"
+  },
+  {
+    "experiment_id": "exp_000024",
+    "user_id": "user_000043",
+    "environment_id": "env_0006",
+    "performance": {
+      "fps": 75.9472162994319,
+      "frame_time": 11.257818807065291,
+      "gpu_utilization": 79.81582750292364,
+      "cpu_utilization": 41.45083605243174,
+      "vram_usage": 3135.092584349385,
+      "latency": 11.982730022455348
+    },
+    "comfort_score": 0.46967351530889934,
+    "duration": 221.8865144865097,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204848"
+  },
+  {
+    "experiment_id": "exp_000025",
+    "user_id": "user_000043",
+    "environment_id": "env_0002",
+    "performance": {
+      "fps": 76.95819266686075,
+      "frame_time": 11.109928265872265,
+      "gpu_utilization": 81.30665138519511,
+      "cpu_utilization": 50.062250676749386,
+      "vram_usage": 2900.3289460661463,
+      "latency": 18.811932867582218
+    },
+    "comfort_score": 0.4565063973172668,
+    "duration": 167.72235274302224,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204853"
+  },
+  {
+    "experiment_id": "exp_000026",
+    "user_id": "user_000043",
+    "environment_id": "env_0009",
+    "performance": {
+      "fps": 59.87365963122667,
+      "frame_time": 14.280069153382447,
+      "gpu_utilization": 77.19714461263315,
+      "cpu_utilization": 56.93888542313759,
+      "vram_usage": 6292.83105611236,
+      "latency": 13.589299755522887
+    },
+    "comfort_score": 0.42890673469288687,
+    "duration": 188.58380793004355,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204857"
+  },
+  {
+    "experiment_id": "exp_000027",
+    "user_id": "user_000043",
+    "environment_id": "env_0003",
+    "performance": {
+      "fps": 80.089971154168,
+      "frame_time": 10.675493918635338,
+      "gpu_utilization": 65.33737444176067,
+      "cpu_utilization": 50.55996600465406,
+      "vram_usage": 6248.0031790099165,
+      "latency": 24.718232631957694
+    },
+    "comfort_score": 0.4924144139954798,
+    "duration": 62.821484001324905,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.204862"
+  },
+  {
+    "experiment_id": "exp_000028",
+    "user_id": "user_000043",
+    "environment_id": "env_0005",
+    "performance": {
+      "fps": 62.47526385591561,
+      "frame_time": 13.685416390907207,
+      "gpu_utilization": 92.04323494961602,
+      "cpu_utilization": 53.87259192419009,
+      "vram_usage": 4467.514836542641,
+      "latency": 15.217571957065758
+    },
+    "comfort_score": 0.41544263602695,
+    "duration": 192.98133326191638,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205543"
+  },
+  {
+    "experiment_id": "exp_000029",
+    "user_id": "user_000043",
+    "environment_id": "env_0001",
+    "performance": {
+      "fps": 72.74768864825631,
+      "frame_time": 11.752950724441929,
+      "gpu_utilization": 89.07971242160625,
+      "cpu_utilization": 30.33734895535749,
+      "vram_usage": 5165.4905829732925,
+      "latency": 10.021228256305113
+    },
+    "comfort_score": 0.5754700262553674,
+    "duration": 146.0893897628602,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205550"
+  },
+  {
+    "experiment_id": "exp_000030",
+    "user_id": "user_000030",
+    "environment_id": "env_0007",
+    "performance": {
+      "fps": 47.65736639946802,
+      "frame_time": 16.78649200407621,
+      "gpu_utilization": 76.3265901565131,
+      "cpu_utilization": 51.46160320218521,
+      "vram_usage": 7884.681470816062,
+      "latency": 18.297404705267404
+    },
+    "comfort_score": 0.2868810802987585,
+    "duration": 260.35105676571055,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205556"
+  },
+  {
+    "experiment_id": "exp_000031",
+    "user_id": "user_000030",
+    "environment_id": "env_0000",
+    "performance": {
+      "fps": 70.02592056845565,
+      "frame_time": 11.424341065505013,
+      "gpu_utilization": 88.63059951823048,
+      "cpu_utilization": 38.166976250325085,
+      "vram_usage": 6634.0303769553,
+      "latency": 24.286600916934717
+    },
+    "comfort_score": 0.2900955597722141,
+    "duration": 273.8861406122877,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205561"
+  },
+  {
+    "experiment_id": "exp_000032",
+    "user_id": "user_000030",
+    "environment_id": "env_0008",
+    "performance": {
+      "fps": 53.31383059097996,
+      "frame_time": 15.005487152809279,
+      "gpu_utilization": 82.87626808049839,
+      "cpu_utilization": 53.14105643338675,
+      "vram_usage": 3906.6928250634655,
+      "latency": 20.86901409879004
+    },
+    "comfort_score": 0.3909808384786547,
+    "duration": 125.29775332783427,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205566"
+  },
+  {
+    "experiment_id": "exp_000033",
+    "user_id": "user_000030",
+    "environment_id": "env_0004",
+    "performance": {
+      "fps": 61.791640084127906,
+      "frame_time": 12.946735171793762,
+      "gpu_utilization": 70.13413290464742,
+      "cpu_utilization": 68.02719018218593,
+      "vram_usage": 6424.9357752555725,
+      "latency": 19.91313413831392
+    },
+    "comfort_score": 0.4680787090911176,
+    "duration": 101.73496096082286,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205573"
+  },
+  {
+    "experiment_id": "exp_000034",
+    "user_id": "user_000030",
+    "environment_id": "env_0006",
+    "performance": {
+      "fps": 71.06172285326961,
+      "frame_time": 11.257818807065291,
+      "gpu_utilization": 73.76372060816183,
+      "cpu_utilization": 49.95694804792455,
+      "vram_usage": 5548.00024505916,
+      "latency": 14.19241687146831
+    },
+    "comfort_score": 0.42986266236536735,
+    "duration": 244.4962679496124,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205578"
+  },
+  {
+    "experiment_id": "exp_000035",
+    "user_id": "user_000030",
+    "environment_id": "env_0002",
+    "performance": {
+      "fps": 72.00766565320305,
+      "frame_time": 11.109928265872265,
+      "gpu_utilization": 66.66979725435115,
+      "cpu_utilization": 58.017123860214156,
+      "vram_usage": 4260.64238522975,
+      "latency": 17.02713272487015
+    },
+    "comfort_score": 0.4657742372634159,
+    "duration": 188.55011805763914,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205582"
+  },
+  {
+    "experiment_id": "exp_000036",
+    "user_id": "user_000030",
+    "environment_id": "env_0009",
+    "performance": {
+      "fps": 56.02213766664485,
+      "frame_time": 14.280069153382447,
+      "gpu_utilization": 73.15878137926572,
+      "cpu_utilization": 69.60891045851412,
+      "vram_usage": 4933.553943404058,
+      "latency": 13.644730288747494
+    },
+    "comfort_score": 0.45015905070756346,
+    "duration": 180.25168837732525,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205632"
+  },
+  {
+    "experiment_id": "exp_000037",
+    "user_id": "user_000030",
+    "environment_id": "env_0003",
+    "performance": {
+      "fps": 74.93798470565427,
+      "frame_time": 10.675493918635338,
+      "gpu_utilization": 87.8201878133283,
+      "cpu_utilization": 43.21113596753629,
+      "vram_usage": 3119.7827492092356,
+      "latency": 22.164733842358956
+    },
+    "comfort_score": 0.4882120726201913,
+    "duration": 114.04495198705864,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205638"
+  },
+  {
+    "experiment_id": "exp_000038",
+    "user_id": "user_000030",
+    "environment_id": "env_0005",
+    "performance": {
+      "fps": 58.45638723360525,
+      "frame_time": 13.685416390907207,
+      "gpu_utilization": 63.40306273446227,
+      "cpu_utilization": 49.26358854695547,
+      "vram_usage": 5526.851930261743,
+      "latency": 16.233218937006995
+    },
+    "comfort_score": 0.3666046059920149,
+    "duration": 239.8929787819041,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205642"
+  },
+  {
+    "experiment_id": "exp_000039",
+    "user_id": "user_000030",
+    "environment_id": "env_0001",
+    "performance": {
+      "fps": 68.06801277029831,
+      "frame_time": 11.752950724441929,
+      "gpu_utilization": 78.03926796683282,
+      "cpu_utilization": 61.25061036612247,
+      "vram_usage": 2532.525520372332,
+      "latency": 11.248248990536094
+    },
+    "comfort_score": 0.4708883918629857,
+    "duration": 228.85684680808419,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205647"
+  },
+  {
+    "experiment_id": "exp_000040",
+    "user_id": "user_000070",
+    "environment_id": "env_0007",
+    "performance": {
+      "fps": 67.91174711924191,
+      "frame_time": 16.78649200407621,
+      "gpu_utilization": 75.99181458989571,
+      "cpu_utilization": 62.91128586264253,
+      "vram_usage": 2695.4579049376625,
+      "latency": 15.577262222088432
+    },
+    "comfort_score": 0.4159224183682226,
+    "duration": 212.87704064137236,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205652"
+  },
+  {
+    "experiment_id": "exp_000041",
+    "user_id": "user_000070",
+    "environment_id": "env_0000",
+    "performance": {
+      "fps": 99.7869368100493,
+      "frame_time": 11.424341065505013,
+      "gpu_utilization": 88.81702095632187,
+      "cpu_utilization": 56.94023445430945,
+      "vram_usage": 5735.309984577468,
+      "latency": 23.822677642036933
+    },
+    "comfort_score": 0.31487078485218106,
+    "duration": 299.7812537492878,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205657"
+  },
+  {
+    "experiment_id": "exp_000042",
+    "user_id": "user_000070",
+    "environment_id": "env_0008",
+    "performance": {
+      "fps": 75.97220859214643,
+      "frame_time": 15.005487152809279,
+      "gpu_utilization": 79.01515998662023,
+      "cpu_utilization": 69.68599948078798,
+      "vram_usage": 4817.346452974341,
+      "latency": 24.090622580919984
+    },
+    "comfort_score": 0.3288417765709986,
+    "duration": 236.83086653170596,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205661"
+  },
+  {
+    "experiment_id": "exp_000043",
+    "user_id": "user_000070",
+    "environment_id": "env_0004",
+    "performance": {
+      "fps": 88.05308711988225,
+      "frame_time": 12.946735171793762,
+      "gpu_utilization": 90.48590550919614,
+      "cpu_utilization": 43.981422036401106,
+      "vram_usage": 2725.3464747752005,
+      "latency": 12.669071209603919
+    },
+    "comfort_score": 0.4109910713788663,
+    "duration": 296.31371065038854,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205666"
+  },
+  {
+    "experiment_id": "exp_000044",
+    "user_id": "user_000070",
+    "environment_id": "env_0006",
+    "performance": {
+      "fps": 101.2629550659092,
+      "frame_time": 11.257818807065291,
+      "gpu_utilization": 67.97772237861803,
+      "cpu_utilization": 35.4183965085051,
+      "vram_usage": 3051.114016726479,
+      "latency": 21.69725326628761
+    },
+    "comfort_score": 0.5658006430546857,
+    "duration": 90.46340820775416,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205670"
+  },
+  {
+    "experiment_id": "exp_000045",
+    "user_id": "user_000070",
+    "environment_id": "env_0002",
+    "performance": {
+      "fps": 102.61092355581434,
+      "frame_time": 11.109928265872265,
+      "gpu_utilization": 68.160944449531,
+      "cpu_utilization": 69.28660809974834,
+      "vram_usage": 5527.937510320646,
+      "latency": 18.69458424577187
+    },
+    "comfort_score": 0.5604307469520109,
+    "duration": 131.98818599234028,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205736"
+  },
+  {
+    "experiment_id": "exp_000046",
+    "user_id": "user_000070",
+    "environment_id": "env_0009",
+    "performance": {
+      "fps": 79.83154617496889,
+      "frame_time": 14.280069153382447,
+      "gpu_utilization": 73.50616878527241,
+      "cpu_utilization": 64.71566726946611,
+      "vram_usage": 3979.138199988617,
+      "latency": 10.159038900735199
+    },
+    "comfort_score": 0.4912324473311812,
+    "duration": 235.2213745036021,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205747"
+  },
+  {
+    "experiment_id": "exp_000047",
+    "user_id": "user_000070",
+    "environment_id": "env_0003",
+    "performance": {
+      "fps": 106.78662820555732,
+      "frame_time": 10.675493918635338,
+      "gpu_utilization": 63.45316471367926,
+      "cpu_utilization": 33.404621131719466,
+      "vram_usage": 3378.4777182770376,
+      "latency": 17.22319040121245
+    },
+    "comfort_score": 0.5465261630459743,
+    "duration": 159.2986038123345,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205752"
+  },
+  {
+    "experiment_id": "exp_000048",
+    "user_id": "user_000070",
+    "environment_id": "env_0005",
+    "performance": {
+      "fps": 83.30035180788747,
+      "frame_time": 13.685416390907207,
+      "gpu_utilization": 81.70361959870505,
+      "cpu_utilization": 49.17541413605124,
+      "vram_usage": 5553.3693476392555,
+      "latency": 20.47689390269939
+    },
+    "comfort_score": 0.38427045699304196,
+    "duration": 244.5424410057749,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205762"
+  },
+  {
+    "experiment_id": "exp_000049",
+    "user_id": "user_000070",
+    "environment_id": "env_0001",
+    "performance": {
+      "fps": 96.99691819767509,
+      "frame_time": 11.752950724441929,
+      "gpu_utilization": 77.65202514833724,
+      "cpu_utilization": 37.69316268642039,
+      "vram_usage": 7626.750926447155,
+      "latency": 11.14005558494979
+    },
+    "comfort_score": 0.7041845105640123,
+    "duration": 102.86383317048339,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205767"
+  },
+  {
+    "experiment_id": "exp_000050",
+    "user_id": "user_000081",
+    "environment_id": "env_0007",
+    "performance": {
+      "fps": 64.51615976327982,
+      "frame_time": 16.78649200407621,
+      "gpu_utilization": 75.80153408153012,
+      "cpu_utilization": 59.01713986060359,
+      "vram_usage": 7571.259520000477,
+      "latency": 15.064092589731757
+    },
+    "comfort_score": 0.35094909421665016,
+    "duration": 217.82268535452562,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205772"
+  },
+  {
+    "experiment_id": "exp_000051",
+    "user_id": "user_000081",
+    "environment_id": "env_0000",
+    "performance": {
+      "fps": 94.79758996954683,
+      "frame_time": 11.424341065505013,
+      "gpu_utilization": 84.26857517830373,
+      "cpu_utilization": 53.533952241744984,
+      "vram_usage": 7115.296442808856,
+      "latency": 17.574598976432917
+    },
+    "comfort_score": 0.4796683388749519,
+    "duration": 151.32727874024903,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205777"
+  },
+  {
+    "experiment_id": "exp_000052",
+    "user_id": "user_000081",
+    "environment_id": "env_0008",
+    "performance": {
+      "fps": 72.1735981625391,
+      "frame_time": 15.005487152809279,
+      "gpu_utilization": 90.38178351521562,
+      "cpu_utilization": 56.0329701536626,
+      "vram_usage": 4293.148868103835,
+      "latency": 15.737760431640403
+    },
+    "comfort_score": 0.42466512688042196,
+    "duration": 160.2210178375089,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205782"
+  },
+  {
+    "experiment_id": "exp_000053",
+    "user_id": "user_000081",
+    "environment_id": "env_0004",
+    "performance": {
+      "fps": 83.65043276388815,
+      "frame_time": 12.946735171793762,
+      "gpu_utilization": 89.17506790937992,
+      "cpu_utilization": 40.16245225977387,
+      "vram_usage": 2834.879361270576,
+      "latency": 20.68619794787398
+    },
+    "comfort_score": 0.3684711690643957,
+    "duration": 206.8965084137919,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205786"
+  },
+  {
+    "experiment_id": "exp_000054",
+    "user_id": "user_000081",
+    "environment_id": "env_0006",
+    "performance": {
+      "fps": 96.19980731261373,
+      "frame_time": 11.257818807065291,
+      "gpu_utilization": 69.5475366840899,
+      "cpu_utilization": 53.09952421659518,
+      "vram_usage": 4103.862443656329,
+      "latency": 19.710209625380337
+    },
+    "comfort_score": 0.33917444547827974,
+    "duration": 265.9259942732145,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205791"
+  },
+  {
+    "experiment_id": "exp_000055",
+    "user_id": "user_000081",
+    "environment_id": "env_0002",
+    "performance": {
+      "fps": 97.48037737802362,
+      "frame_time": 11.109928265872265,
+      "gpu_utilization": 93.92128871898312,
+      "cpu_utilization": 31.240980089968406,
+      "vram_usage": 6610.828656833487,
+      "latency": 10.409290610113144
+    },
+    "comfort_score": 0.6380848804054841,
+    "duration": 89.38601914020008,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205950"
+  },
+  {
+    "experiment_id": "exp_000056",
+    "user_id": "user_000081",
+    "environment_id": "env_0009",
+    "performance": {
+      "fps": 75.83996886622045,
+      "frame_time": 14.280069153382447,
+      "gpu_utilization": 86.04554819926082,
+      "cpu_utilization": 44.48483947098815,
+      "vram_usage": 3447.5225106425105,
+      "latency": 17.566349415089558
+    },
+    "comfort_score": 0.47968613575839647,
+    "duration": 95.25354027323343,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205956"
+  },
+  {
+    "experiment_id": "exp_000057",
+    "user_id": "user_000081",
+    "environment_id": "env_0003",
+    "performance": {
+      "fps": 101.44729679527944,
+      "frame_time": 10.675493918635338,
+      "gpu_utilization": 63.68372362546368,
+      "cpu_utilization": 53.85141105585916,
+      "vram_usage": 7431.126904621003,
+      "latency": 16.807947985554875
+    },
+    "comfort_score": 0.34048716617057034,
+    "duration": 287.1677789435711,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205961"
+  },
+  {
+    "experiment_id": "exp_000058",
+    "user_id": "user_000081",
+    "environment_id": "env_0005",
+    "performance": {
+      "fps": 79.1353342174931,
+      "frame_time": 13.685416390907207,
+      "gpu_utilization": 79.46054832899185,
+      "cpu_utilization": 33.29169801162863,
+      "vram_usage": 3007.8033321152216,
+      "latency": 23.05138864552179
+    },
+    "comfort_score": 0.3425549910735549,
+    "duration": 192.1054375729825,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205966"
+  },
+  {
+    "experiment_id": "exp_000059",
+    "user_id": "user_000081",
+    "environment_id": "env_0001",
+    "performance": {
+      "fps": 92.14707228779132,
+      "frame_time": 11.752950724441929,
+      "gpu_utilization": 72.59466870743711,
+      "cpu_utilization": 49.435515876905306,
+      "vram_usage": 4406.161964533274,
+      "latency": 24.89816896088047
+    },
+    "comfort_score": 0.33807759254323233,
+    "duration": 217.79075795389545,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205971"
+  },
+  {
+    "experiment_id": "exp_000060",
+    "user_id": "user_000027",
+    "environment_id": "env_0007",
+    "performance": {
+      "fps": 65.52887879926853,
+      "frame_time": 16.78649200407621,
+      "gpu_utilization": 84.29428857237718,
+      "cpu_utilization": 56.97447813001029,
+      "vram_usage": 2682.527196288464,
+      "latency": 21.080517943803123
+    },
+    "comfort_score": 0.4211283218097807,
+    "duration": 172.14064881447507,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205975"
+  },
+  {
+    "experiment_id": "exp_000061",
+    "user_id": "user_000027",
+    "environment_id": "env_0000",
+    "performance": {
+      "fps": 96.28564078162653,
+      "frame_time": 11.424341065505013,
+      "gpu_utilization": 92.04500092764309,
+      "cpu_utilization": 60.25307568206682,
+      "vram_usage": 7360.541228673759,
+      "latency": 11.344821381530183
+    },
+    "comfort_score": 0.60613676734929,
+    "duration": 210.64214664636455,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205980"
+  },
+  {
+    "experiment_id": "exp_000062",
+    "user_id": "user_000027",
+    "environment_id": "env_0008",
+    "performance": {
+      "fps": 73.30651706259745,
+      "frame_time": 15.005487152809279,
+      "gpu_utilization": 65.78494617524869,
+      "cpu_utilization": 67.28299640777337,
+      "vram_usage": 7974.171409251033,
+      "latency": 20.288675128288624
+    },
+    "comfort_score": 0.4318345151514829,
+    "duration": 204.74776604074444,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205984"
+  },
+  {
+    "experiment_id": "exp_000063",
+    "user_id": "user_000027",
+    "environment_id": "env_0004",
+    "performance": {
+      "fps": 84.96350511567587,
+      "frame_time": 12.946735171793762,
+      "gpu_utilization": 82.63429684031647,
+      "cpu_utilization": 57.02697914353599,
+      "vram_usage": 2538.1102420783113,
+      "latency": 11.472554307369219
+    },
+    "comfort_score": 0.503581850154518,
+    "duration": 264.0453139898134,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205989"
+  },
+  {
+    "experiment_id": "exp_000064",
+    "user_id": "user_000027",
+    "environment_id": "env_0006",
+    "performance": {
+      "fps": 97.70986892324572,
+      "frame_time": 11.257818807065291,
+      "gpu_utilization": 72.83332432375163,
+      "cpu_utilization": 35.84949009253434,
+      "vram_usage": 6023.416849609475,
+      "latency": 18.265626909522595
+    },
+    "comfort_score": 0.517849415124251,
+    "duration": 212.19180913964288,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205993"
+  },
+  {
+    "experiment_id": "exp_000065",
+    "user_id": "user_000027",
+    "environment_id": "env_0002",
+    "performance": {
+      "fps": 99.0105402731542,
+      "frame_time": 11.109928265872265,
+      "gpu_utilization": 74.93683576576545,
+      "cpu_utilization": 46.476209750363736,
+      "vram_usage": 5168.225510021797,
+      "latency": 17.558219329297458
+    },
+    "comfort_score": 0.6969684963186011,
+    "duration": 86.75239329582064,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.205998"
+  },
+  {
+    "experiment_id": "exp_000066",
+    "user_id": "user_000027",
+    "environment_id": "env_0009",
+    "performance": {
+      "fps": 77.03043929163667,
+      "frame_time": 14.280069153382447,
+      "gpu_utilization": 89.39164284104481,
+      "cpu_utilization": 59.87707705262018,
+      "vram_usage": 6370.67227502215,
+      "latency": 13.540814398702707
+    },
+    "comfort_score": 0.649509232407732,
+    "duration": 118.23037098987261,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206003"
+  },
+  {
+    "experiment_id": "exp_000067",
+    "user_id": "user_000027",
+    "environment_id": "env_0003",
+    "performance": {
+      "fps": 103.03972897027462,
+      "frame_time": 10.675493918635338,
+      "gpu_utilization": 66.73927032631995,
+      "cpu_utilization": 55.119743950591314,
+      "vram_usage": 4656.812014183361,
+      "latency": 15.871843688022427
+    },
+    "comfort_score": 0.4416357800372916,
+    "duration": 287.2078464488922,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206007"
+  },
+  {
+    "experiment_id": "exp_000068",
+    "user_id": "user_000027",
+    "environment_id": "env_0005",
+    "performance": {
+      "fps": 80.37753244620721,
+      "frame_time": 13.685416390907207,
+      "gpu_utilization": 91.6924634489441,
+      "cpu_utilization": 34.5354268722855,
+      "vram_usage": 2822.686120853791,
+      "latency": 21.9085412071879
+    },
+    "comfort_score": 0.5354961594419219,
+    "duration": 120.22474757235554,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206011"
+  },
+  {
+    "experiment_id": "exp_000069",
+    "user_id": "user_000027",
+    "environment_id": "env_0001",
+    "performance": {
+      "fps": 93.59351755916019,
+      "frame_time": 11.752950724441929,
+      "gpu_utilization": 68.5980223524141,
+      "cpu_utilization": 43.996931772638206,
+      "vram_usage": 3005.8780321907607,
+      "latency": 16.66418727096123
+    },
+    "comfort_score": 0.6808664081778356,
+    "duration": 108.95381221213414,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206016"
+  },
+  {
+    "experiment_id": "exp_000070",
+    "user_id": "user_000001",
+    "environment_id": "env_0007",
+    "performance": {
+      "fps": 59.57170799933502,
+      "frame_time": 16.78649200407621,
+      "gpu_utilization": 67.82791836484037,
+      "cpu_utilization": 31.59150316594139,
+      "vram_usage": 2858.4176104634507,
+      "latency": 21.180184783773278
+    },
+    "comfort_score": 0.3825126025024711,
+    "duration": 121.68270263435528,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206020"
+  },
+  {
+    "experiment_id": "exp_000071",
+    "user_id": "user_000001",
+    "environment_id": "env_0000",
+    "performance": {
+      "fps": 87.53240071056956,
+      "frame_time": 11.424341065505013,
+      "gpu_utilization": 62.93320081143675,
+      "cpu_utilization": 65.61875767240262,
+      "vram_usage": 4634.317221395191,
+      "latency": 10.369842935540428
+    },
+    "comfort_score": 0.5203267617128988,
+    "duration": 217.70965697491218,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206024"
+  },
+  {
+    "experiment_id": "exp_000072",
+    "user_id": "user_000001",
+    "environment_id": "env_0008",
+    "performance": {
+      "fps": 66.64228823872494,
+      "frame_time": 15.005487152809279,
+      "gpu_utilization": 91.36580833367404,
+      "cpu_utilization": 46.01408798580361,
+      "vram_usage": 6327.076289631866,
+      "latency": 12.467192371664872
+    },
+    "comfort_score": 0.6121033909292064,
+    "duration": 47.7619676781692,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206030"
+  },
+  {
+    "experiment_id": "exp_000073",
+    "user_id": "user_000001",
+    "environment_id": "env_0004",
+    "performance": {
+      "fps": 77.23955010515988,
+      "frame_time": 12.946735171793762,
+      "gpu_utilization": 87.88386137380924,
+      "cpu_utilization": 54.303185958679734,
+      "vram_usage": 5962.783625495909,
+      "latency": 23.1525382877631
+    },
+    "comfort_score": 0.43531230141146654,
+    "duration": 121.07401997424155,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206035"
+  },
+  {
+    "experiment_id": "exp_000074",
+    "user_id": "user_000001",
+    "environment_id": "env_0006",
+    "performance": {
+      "fps": 88.82715356658701,
+      "frame_time": 11.257818807065291,
+      "gpu_utilization": 68.04273087307317,
+      "cpu_utilization": 60.81215417049176,
+      "vram_usage": 6095.226937460003,
+      "latency": 13.766687561291999
+    },
+    "comfort_score": 0.4904389532338762,
+    "duration": 216.36096904001326,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206039"
+  },
+  {
+    "experiment_id": "exp_000075",
+    "user_id": "user_000001",
+    "environment_id": "env_0002",
+    "performance": {
+      "fps": 90.00958206650381,
+      "frame_time": 11.109928265872265,
+      "gpu_utilization": 80.44487512129813,
+      "cpu_utilization": 45.81881522050459,
+      "vram_usage": 3505.7745496505713,
+      "latency": 22.785681969138643
+    },
+    "comfort_score": 0.4876333519745157,
+    "duration": 130.11869391141016,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206044"
+  },
+  {
+    "experiment_id": "exp_000076",
+    "user_id": "user_000001",
+    "environment_id": "env_0009",
+    "performance": {
+      "fps": 70.02767208330606,
+      "frame_time": 14.280069153382447,
+      "gpu_utilization": 64.98140511641446,
+      "cpu_utilization": 43.36185079400127,
+      "vram_usage": 5419.3624350358405,
+      "latency": 19.787214308103913
+    },
+    "comfort_score": 0.34342791523081556,
+    "duration": 232.98928776843246,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206048"
+  },
+  {
+    "experiment_id": "exp_000077",
+    "user_id": "user_000001",
+    "environment_id": "env_0003",
+    "performance": {
+      "fps": 93.67248088206783,
+      "frame_time": 10.675493918635338,
+      "gpu_utilization": 76.22695989390891,
+      "cpu_utilization": 40.470006384563604,
+      "vram_usage": 3361.7521363655615,
+      "latency": 14.385707109597648
+    },
+    "comfort_score": 0.3818487837716254,
+    "duration": 299.8106399179422,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206052"
+  },
+  {
+    "experiment_id": "exp_000078",
+    "user_id": "user_000001",
+    "environment_id": "env_0005",
+    "performance": {
+      "fps": 73.07048404200656,
+      "frame_time": 13.685416390907207,
+      "gpu_utilization": 82.38503781236057,
+      "cpu_utilization": 52.30982476367752,
+      "vram_usage": 5276.02902407152,
+      "latency": 10.08717439765258
+    },
+    "comfort_score": 0.6853240719920047,
+    "duration": 44.87000620556124,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206057"
+  },
+  {
+    "experiment_id": "exp_000079",
+    "user_id": "user_000001",
+    "environment_id": "env_0001",
+    "performance": {
+      "fps": 85.08501596287289,
+      "frame_time": 11.752950724441929,
+      "gpu_utilization": 91.04091298774732,
+      "cpu_utilization": 40.41612923321378,
+      "vram_usage": 2672.7518269171537,
+      "latency": 20.65472957321859
+    },
+    "comfort_score": 0.5177466835947581,
+    "duration": 107.61950768325342,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206061"
+  },
+  {
+    "experiment_id": "exp_000080",
+    "user_id": "user_000026",
+    "environment_id": "env_0007",
+    "performance": {
+      "fps": 67.91174711924191,
+      "frame_time": 16.78649200407621,
+      "gpu_utilization": 78.77891748945675,
+      "cpu_utilization": 45.52071899555111,
+      "vram_usage": 3037.0505365829813,
+      "latency": 19.146248200754428
+    },
+    "comfort_score": 0.3926341042577992,
+    "duration": 217.79167832731844,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206065"
+  },
+  {
+    "experiment_id": "exp_000081",
+    "user_id": "user_000026",
+    "environment_id": "env_0000",
+    "performance": {
+      "fps": 99.7869368100493,
+      "frame_time": 11.424341065505013,
+      "gpu_utilization": 60.631082551160524,
+      "cpu_utilization": 61.796092203918136,
+      "vram_usage": 6769.330959455167,
+      "latency": 24.32927154852114
+    },
+    "comfort_score": 0.33820534679652864,
+    "duration": 290.89307435076984,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206070"
+  },
+  {
+    "experiment_id": "exp_000082",
+    "user_id": "user_000026",
+    "environment_id": "env_0008",
+    "performance": {
+      "fps": 75.97220859214643,
+      "frame_time": 15.005487152809279,
+      "gpu_utilization": 73.30333698191824,
+      "cpu_utilization": 69.88741967424399,
+      "vram_usage": 4582.5497723059525,
+      "latency": 16.810596336268254
+    },
+    "comfort_score": 0.5157928017410388,
+    "duration": 163.38079332895654,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206074"
+  },
+  {
+    "experiment_id": "exp_000083",
+    "user_id": "user_000026",
+    "environment_id": "env_0004",
+    "performance": {
+      "fps": 88.05308711988225,
+      "frame_time": 12.946735171793762,
+      "gpu_utilization": 88.53805682184466,
+      "cpu_utilization": 53.227642913790774,
+      "vram_usage": 7762.569504947418,
+      "latency": 12.092063282309983
+    },
+    "comfort_score": 0.6716550104376625,
+    "duration": 136.65733668316722,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206078"
+  },
+  {
+    "experiment_id": "exp_000084",
+    "user_id": "user_000026",
+    "environment_id": "env_0006",
+    "performance": {
+      "fps": 101.2629550659092,
+      "frame_time": 11.257818807065291,
+      "gpu_utilization": 68.29179883650681,
+      "cpu_utilization": 64.97722988656835,
+      "vram_usage": 5692.926681035109,
+      "latency": 18.369191333622897
+    },
+    "comfort_score": 0.7024213590755123,
+    "duration": 49.923480772470654,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206083"
+  },
+  {
+    "experiment_id": "exp_000085",
+    "user_id": "user_000026",
+    "environment_id": "env_0002",
+    "performance": {
+      "fps": 102.61092355581434,
+      "frame_time": 11.109928265872265,
+      "gpu_utilization": 79.65155508722222,
+      "cpu_utilization": 37.071616538448644,
+      "vram_usage": 5606.291831447397,
+      "latency": 18.706069586895946
+    },
+    "comfort_score": 0.5105448216447485,
+    "duration": 196.92311015631412,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206087"
+  },
+  {
+    "experiment_id": "exp_000086",
+    "user_id": "user_000026",
+    "environment_id": "env_0009",
+    "performance": {
+      "fps": 79.83154617496889,
+      "frame_time": 14.280069153382447,
+      "gpu_utilization": 65.50018635377192,
+      "cpu_utilization": 44.562511241420665,
+      "vram_usage": 5412.020852629025,
+      "latency": 22.714173003512315
+    },
+    "comfort_score": 0.41290059180304545,
+    "duration": 202.86980194404063,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206092"
+  },
+  {
+    "experiment_id": "exp_000087",
+    "user_id": "user_000026",
+    "environment_id": "env_0003",
+    "performance": {
+      "fps": 106.78662820555732,
+      "frame_time": 10.675493918635338,
+      "gpu_utilization": 74.45927259775756,
+      "cpu_utilization": 68.61226706945263,
+      "vram_usage": 5707.1669395694935,
+      "latency": 16.430251113087866
+    },
+    "comfort_score": 0.573739635497294,
+    "duration": 170.69095250436226,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206096"
+  },
+  {
+    "experiment_id": "exp_000088",
+    "user_id": "user_000026",
+    "environment_id": "env_0005",
+    "performance": {
+      "fps": 83.30035180788747,
+      "frame_time": 13.685416390907207,
+      "gpu_utilization": 83.31891405965592,
+      "cpu_utilization": 59.23540747008025,
+      "vram_usage": 5232.463066454989,
+      "latency": 15.172679505330219
+    },
+    "comfort_score": 0.490786778206752,
+    "duration": 224.3498143174411,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206101"
+  },
+  {
+    "experiment_id": "exp_000089",
+    "user_id": "user_000026",
+    "environment_id": "env_0001",
+    "performance": {
+      "fps": 96.99691819767509,
+      "frame_time": 11.752950724441929,
+      "gpu_utilization": 78.20577262370271,
+      "cpu_utilization": 53.22674586474577,
+      "vram_usage": 2472.2747591859024,
+      "latency": 22.76750878989862
+    },
+    "comfort_score": 0.6313075964993549,
+    "duration": 47.211290153440146,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206105"
+  },
+  {
+    "experiment_id": "exp_000090",
+    "user_id": "user_000002",
+    "environment_id": "env_0007",
+    "performance": {
+      "fps": 50.04023471944142,
+      "frame_time": 16.78649200407621,
+      "gpu_utilization": 86.84220367003363,
+      "cpu_utilization": 47.90651773771502,
+      "vram_usage": 2831.5381895944884,
+      "latency": 13.662117775999599
+    },
+    "comfort_score": 0.3323164203929549,
+    "duration": 259.6512155539488,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206110"
+  },
+  {
+    "experiment_id": "exp_000091",
+    "user_id": "user_000002",
+    "environment_id": "env_0000",
+    "performance": {
+      "fps": 73.52721659687843,
+      "frame_time": 11.424341065505013,
+      "gpu_utilization": 77.49588154400868,
+      "cpu_utilization": 39.69532103439511,
+      "vram_usage": 2239.142158293302,
+      "latency": 11.072533668677712
+    },
+    "comfort_score": 0.5961175099915824,
+    "duration": 135.9130934369885,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206114"
+  },
+  {
+    "experiment_id": "exp_000092",
+    "user_id": "user_000002",
+    "environment_id": "env_0008",
+    "performance": {
+      "fps": 55.979522120528955,
+      "frame_time": 15.005487152809279,
+      "gpu_utilization": 82.48280464097216,
+      "cpu_utilization": 36.133476103791445,
+      "vram_usage": 4214.070984921017,
+      "latency": 11.664593252047537
+    },
+    "comfort_score": 0.3375423571121105,
+    "duration": 291.46460863492854,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206119"
+  },
+  {
+    "experiment_id": "exp_000093",
+    "user_id": "user_000002",
+    "environment_id": "env_0004",
+    "performance": {
+      "fps": 64.8812220883343,
+      "frame_time": 12.946735171793762,
+      "gpu_utilization": 85.05856413775865,
+      "cpu_utilization": 59.846135833099964,
+      "vram_usage": 6118.054293979628,
+      "latency": 17.196500586377688
+    },
+    "comfort_score": 0.35439977004218687,
+    "duration": 251.92580985782587,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206123"
+  },
+  {
+    "experiment_id": "exp_000094",
+    "user_id": "user_000002",
+    "environment_id": "env_0006",
+    "performance": {
+      "fps": 74.6148089959331,
+      "frame_time": 11.257818807065291,
+      "gpu_utilization": 91.17914644930292,
+      "cpu_utilization": 67.02229358701084,
+      "vram_usage": 6258.762146930402,
+      "latency": 10.762977983902067
+    },
+    "comfort_score": 0.5009961071930951,
+    "duration": 215.90957797948644,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206127"
+  },
+  {
+    "experiment_id": "exp_000095",
+    "user_id": "user_000002",
+    "environment_id": "env_0002",
+    "performance": {
+      "fps": 75.60804893586321,
+      "frame_time": 11.109928265872265,
+      "gpu_utilization": 81.34504712189745,
+      "cpu_utilization": 55.63563810392053,
+      "vram_usage": 6869.04262012318,
+      "latency": 24.315073764490368
+    },
+    "comfort_score": 0.5046847845591662,
+    "duration": 47.466564659623884,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206132"
+  },
+  {
+    "experiment_id": "exp_000096",
+    "user_id": "user_000002",
+    "environment_id": "env_0009",
+    "performance": {
+      "fps": 58.8232445499771,
+      "frame_time": 14.280069153382447,
+      "gpu_utilization": 67.76510417218638,
+      "cpu_utilization": 52.79482642548466,
+      "vram_usage": 7649.729201967232,
+      "latency": 17.828405354568716
+    },
+    "comfort_score": 0.4294611627000004,
+    "duration": 143.01533224733055,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206136"
+  },
+  {
+    "experiment_id": "exp_000097",
+    "user_id": "user_000002",
+    "environment_id": "env_0003",
+    "performance": {
+      "fps": 78.68488394093698,
+      "frame_time": 10.675493918635338,
+      "gpu_utilization": 88.50609259820521,
+      "cpu_utilization": 31.07267802917384,
+      "vram_usage": 5406.932082131562,
+      "latency": 18.911336868952638
+    },
+    "comfort_score": 0.613705639853817,
+    "duration": 43.86973653775384,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206141"
+  },
+  {
+    "experiment_id": "exp_000098",
+    "user_id": "user_000002",
+    "environment_id": "env_0005",
+    "performance": {
+      "fps": 61.37920659528551,
+      "frame_time": 13.685416390907207,
+      "gpu_utilization": 77.62461424676617,
+      "cpu_utilization": 54.41329043315169,
+      "vram_usage": 7283.827585116223,
+      "latency": 23.141279688551165
+    },
+    "comfort_score": 0.35679622027633895,
+    "duration": 158.3413471684884,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206145"
+  },
+  {
+    "experiment_id": "exp_000099",
+    "user_id": "user_000002",
+    "environment_id": "env_0001",
+    "performance": {
+      "fps": 71.47141340881323,
+      "frame_time": 11.752950724441929,
+      "gpu_utilization": 72.47589247956888,
+      "cpu_utilization": 33.21446202034183,
+      "vram_usage": 6696.8888495676865,
+      "latency": 12.503975110611076
+    },
+    "comfort_score": 0.6540769292286557,
+    "duration": 64.70528272916229,
+    "success": false,
+    "timestamp": "2025-05-28T02:15:18.206149"
+  }
+]

@@ -1,0 +1,40 @@
+{
+  "summary": {
+    "total_experiments": 4,
+    "success_rate": 0.0,
+    "avg_comfort_score": 0.5545426522293423,
+    "avg_fps": 80.26368038091127,
+    "unique_users": 2,
+    "unique_environments": 2
+  },
+  "cultural_insights": {
+    "Mediterranean": {
+      "avg_comfort": 0.5908966986732032,
+      "sample_size": 2
+    },
+    "Western": {
+      "avg_comfort": 0.5181886057854814,
+      "sample_size": 2
+    }
+  },
+  "neurotype_insights": {
+    "Anxiety": {
+      "avg_comfort": 0.5908966986732032,
+      "sample_size": 2
+    },
+    "Bipolar": {
+      "avg_comfort": 0.5181886057854814,
+      "sample_size": 2
+    }
+  },
+  "environment_insights": {
+    "Zero Friction": {
+      "avg_comfort": 0.5862092816458833,
+      "sample_size": 2
+    },
+    "Standard Physics": {
+      "avg_comfort": 0.5228760228128013,
+      "sample_size": 2
+    }
+  }
+}

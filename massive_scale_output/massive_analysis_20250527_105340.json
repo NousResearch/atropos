@@ -1,0 +1,120 @@
+{
+  "summary": {
+    "total_experiments": 2000,
+    "success_rate": 0.0,
+    "avg_comfort_score": 0.4335508048993972,
+    "avg_fps": 68.1381260656791,
+    "unique_users": 10,
+    "unique_environments": 200
+  },
+  "cultural_insights": {
+    "South Asian": {
+      "avg_comfort": 0.4187137928791559,
+      "sample_size": 600
+    },
+    "Slavic": {
+      "avg_comfort": 0.43808398955328887,
+      "sample_size": 600
+    },
+    "East Asian": {
+      "avg_comfort": 0.43358808649736846,
+      "sample_size": 200
+    },
+    "Mediterranean": {
+      "avg_comfort": 0.45518871936437805,
+      "sample_size": 200
+    },
+    "Middle Eastern": {
+      "avg_comfort": 0.4480283785258862,
+      "sample_size": 200
+    },
+    "Latin American": {
+      "avg_comfort": 0.42830951730901157,
+      "sample_size": 200
+    }
+  },
+  "neurotype_insights": {
+    "Autism": {
+      "avg_comfort": 0.3986812004684415,
+      "sample_size": 400
+    },
+    "ADHD": {
+      "avg_comfort": 0.42402171110536213,
+      "sample_size": 200
+    },
+    "OCD": {
+      "avg_comfort": 0.43358808649736846,
+      "sample_size": 200
+    },
+    "Neurotypical": {
+      "avg_comfort": 0.44973986745919187,
+      "sample_size": 400
+    },
+    "Dyslexia": {
+      "avg_comfort": 0.4480283785258862,
+      "sample_size": 200
+    },
+    "Anxiety": {
+      "avg_comfort": 0.45877897770058396,
+      "sample_size": 200
+    },
+    "PTSD": {
+      "avg_comfort": 0.42830951730901157,
+      "sample_size": 200
+    },
+    "Bipolar": {
+      "avg_comfort": 0.4459392420004988,
+      "sample_size": 200
+    }
+  },
+  "environment_insights": {
+    "Earthquake Simulation": {
+      "avg_comfort": 0.3774161213578556,
+      "sample_size": 140
+    },
+    "Dense Atmosphere": {
+      "avg_comfort": 0.4514115606177079,
+      "sample_size": 120
+    },
+    "Underwater": {
+      "avg_comfort": 0.4151062387154846,
+      "sample_size": 160
+    },
+    "Space": {
+      "avg_comfort": 0.46654778281619264,
+      "sample_size": 180
+    },
+    "Micro Gravity": {
+      "avg_comfort": 0.4393385479493137,
+      "sample_size": 150
+    },
+    "Elastic World": {
+      "avg_comfort": 0.41867089237144806,
+      "sample_size": 190
+    },
+    "Low Gravity": {
+      "avg_comfort": 0.4532427265946925,
+      "sample_size": 230
+    },
+    "High Gravity": {
+      "avg_comfort": 0.4281660075626652,
+      "sample_size": 180
+    },
+    "Wind Simulation": {
+      "avg_comfort": 0.4452378423234906,
+      "sample_size": 160
+    },
+    "Standard Physics": {
+      "avg_comfort": 0.4357346272075704,
+      "sample_size": 150
+    },
+    "High Friction": {
+      "avg_comfort": 0.44701919274063406,
+      "sample_size": 170
+    },
+    "Zero Friction": {
+      "avg_comfort": 0.41378173290203274,
+      "sample_size": 170
+    }
+  }
+}

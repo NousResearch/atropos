@@ -1,0 +1,17 @@
+{
+  "metrics": {
+    "papers_generated": 0,
+    "functions_discovered": 0,
+    "total_cost": 0.0,
+    "avg_quality": 0.0,
+    "uptime_hours": 0.0,
+    "error_rate": 0.0
+  },
+  "alerts": {
+    "cost_threshold": 100.0,
+    "quality_threshold": 75.0,
+    "error_threshold": 0.1
+  },
+  "monitoring_enabled": true,
+  "log_level": "INFO"
+}

@@ -1,11 +1,14 @@
 """
-AI Integration module for CloudVR-PerfGuard
-Provides interfaces to AI research tools for performance analysis
+AI Integration Module for CloudVR-PerfGuard
+Provides FunSearch evolution and AI Scientist paper generation capabilities
 """
 
-from .data_adapter import PerformanceDataAdapter
-from .paper_generator import ResearchPaperGenerator
-from .function_discovery import OptimizationDiscovery
+from .funsearch_integration import FunSearchIntegration
+from .ai_scientist_integration import AIScientistIntegration
+from .research_orchestrator import ResearchOrchestrator
 
-__version__ = "0.1.0"
-__all__ = ["PerformanceDataAdapter", "ResearchPaperGenerator", "OptimizationDiscovery"] 
+__all__ = [
+    'FunSearchIntegration',
+    'AIScientistIntegration', 
+    'ResearchOrchestrator'
+] 

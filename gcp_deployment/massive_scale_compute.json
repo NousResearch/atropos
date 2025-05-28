@@ -1,0 +1,42 @@
+{
+  "name": "amien-massive-scale-template",
+  "properties": {
+    "machineType": "zones/us-central1-a/machineTypes/c2-standard-16",
+    "disks": [
+      {
+        "boot": true,
+        "autoDelete": true,
+        "initializeParams": {
+          "sourceImage": "projects/debian-cloud/global/images/family/debian-11",
+          "diskSizeGb": "100"
+        }
+      }
+    ],
+    "networkInterfaces": [
+      {
+        "network": "global/networks/default",
+        "accessConfigs": [
+          {
+            "type": "ONE_TO_ONE_NAT"
+          }
+        ]
+      }
+    ],
+    "metadata": {
+      "items": [
+        {
+          "key": "startup-script",
+          "value": "#!/bin/bash\napt-get update\napt-get install -y python3 python3-pip git\ngit clone https://github.com/your-repo/amien.git /opt/amien\ncd /opt/amien\npip3 install -r requirements.txt\npython3 scale_to_production.py\n"
+        }
+      ]
+    },
+    "serviceAccounts": [
+      {
+        "email": "default",
+        "scopes": [
+          "https://www.googleapis.com/auth/cloud-platform"
+        ]
+      }
+    ]
+  }
+}

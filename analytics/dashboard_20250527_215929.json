@@ -1,0 +1,41 @@
+{
+  "timestamp": "2025-05-27T21:59:29.765550",
+  "system_health": {
+    "status": "healthy",
+    "health_score": 81.4,
+    "success_rate": 90.99,
+    "avg_comfort": 0.5,
+    "avg_fps": 60.0,
+    "total_experiments": 1110
+  },
+  "research_productivity": {
+    "productivity_score": 12.81,
+    "avg_quality": 15.26,
+    "avg_word_count": 877.0,
+    "papers_per_day": 0.57,
+    "total_papers": 4
+  },
+  "cost_efficiency": {
+    "total_cost": 115.5,
+    "cost_per_experiment": 0.05,
+    "cost_per_paper": 15.0,
+    "cost_per_quality_point": 1.8922,
+    "efficiency_score": 0
+  },
+  "quality_trends": {
+    "trend": "improving",
+    "trend_slope": 3.44,
+    "current_quality": 11.91,
+    "quality_variance": 96.5,
+    "trend_score": 84.4
+  },
+  "predictive_insights": {
+    "insights": [],
+    "recommendations": [],
+    "predictions": {
+      "daily_experiments": 1221.0,
+      "monthly_cost": 3631.5,
+      "quality_forecast": "stable"
+    }
+  }
+}

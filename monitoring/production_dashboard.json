@@ -1,0 +1,89 @@
+{
+  "displayName": "AMIEN Production Dashboard",
+  "mosaicLayout": {
+    "tiles": [
+      {
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Research Papers Generated",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "timeSeriesFilter": {
+                "filter": "metric.type=\"custom.googleapis.com/amien/papers_generated\""
+              }
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Experiments Completed",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"custom.googleapis.com/amien/experiments_completed\""
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "API Response Time",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "resource.type=\"cloud_run_revision\" resource.label.service_name=\"amien-api-service\""
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Daily Cost",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "timeSeriesFilter": {
+                "filter": "metric.type=\"custom.googleapis.com/amien/daily_cost\""
+              }
+            }
+          }
+        }
+      },
+      {
+        "width": 12,
+        "height": 4,
+        "widget": {
+          "title": "Research Quality Scores",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"custom.googleapis.com/amien/research_quality\""
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

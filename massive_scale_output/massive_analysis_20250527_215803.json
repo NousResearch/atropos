@@ -1,0 +1,92 @@
+{
+  "summary": {
+    "total_experiments": 100,
+    "success_rate": 0.0,
+    "avg_comfort_score": 0.41515608226827355,
+    "avg_fps": 63.66938804204922,
+    "unique_users": 10,
+    "unique_environments": 10
+  },
+  "cultural_insights": {
+    "Nordic": {
+      "avg_comfort": 0.4302480981683858,
+      "sample_size": 10
+    },
+    "Slavic": {
+      "avg_comfort": 0.4283616645323912,
+      "sample_size": 20
+    },
+    "Mediterranean": {
+      "avg_comfort": 0.44493885712223386,
+      "sample_size": 20
+    },
+    "Indigenous": {
+      "avg_comfort": 0.42532326402093323,
+      "sample_size": 20
+    },
+    "African": {
+      "avg_comfort": 0.374688384387744,
+      "sample_size": 30
+    }
+  },
+  "neurotype_insights": {
+    "Depression": {
+      "avg_comfort": 0.40097510137418313,
+      "sample_size": 20
+    },
+    "Dyslexia": {
+      "avg_comfort": 0.44225805064192564,
+      "sample_size": 30
+    },
+    "ADHD": {
+      "avg_comfort": 0.44938565742267966,
+      "sample_size": 20
+    },
+    "Bipolar": {
+      "avg_comfort": 0.4059984482721447,
+      "sample_size": 10
+    },
+    "OCD": {
+      "avg_comfort": 0.32088617169355843,
+      "sample_size": 10
+    },
+    "Neurotypical": {
+      "avg_comfort": 0.3971805331975288,
+      "sample_size": 10
+    }
+  },
+  "environment_insights": {
+    "Wind Simulation": {
+      "avg_comfort": 0.41608244177431447,
+      "sample_size": 20
+    },
+    "High Gravity": {
+      "avg_comfort": 0.3468865383882991,
+      "sample_size": 10
+    },
+    "Micro Gravity": {
+      "avg_comfort": 0.40903294141824614,
+      "sample_size": 10
+    },
+    "High Friction": {
+      "avg_comfort": 0.3706504538567238,
+      "sample_size": 10
+    },
+    "Earthquake Simulation": {
+      "avg_comfort": 0.39508819614993385,
+      "sample_size": 10
+    },
+    "Underwater": {
+      "avg_comfort": 0.4180003512020474,
+      "sample_size": 20
+    },
+    "Elastic World": {
+      "avg_comfort": 0.4471650226832075,
+      "sample_size": 10
+    },
+    "Dense Atmosphere": {
+      "avg_comfort": 0.5145720842336001,
+      "sample_size": 10
+    }
+  }
+}

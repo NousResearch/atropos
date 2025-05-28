@@ -1,0 +1,40 @@
+{
+  "summary": {
+    "total_experiments": 4,
+    "success_rate": 0.0,
+    "avg_comfort_score": 0.4551722771241416,
+    "avg_fps": 66.89179131739748,
+    "unique_users": 2,
+    "unique_environments": 2
+  },
+  "cultural_insights": {
+    "East Asian": {
+      "avg_comfort": 0.44255372046601804,
+      "sample_size": 2
+    },
+    "Latin American": {
+      "avg_comfort": 0.46779083378226516,
+      "sample_size": 2
+    }
+  },
+  "neurotype_insights": {
+    "Bipolar": {
+      "avg_comfort": 0.44255372046601804,
+      "sample_size": 2
+    },
+    "ADHD": {
+      "avg_comfort": 0.46779083378226516,
+      "sample_size": 2
+    }
+  },
+  "environment_insights": {
+    "Wind Simulation": {
+      "avg_comfort": 0.4444069055853179,
+      "sample_size": 2
+    },
+    "High Friction": {
+      "avg_comfort": 0.4659376486629653,
+      "sample_size": 2
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "schedule": {
+    "daily_research": true,
+    "weekly_comprehensive": true,
+    "monthly_deep_analysis": true,
+    "real_time_triggers": true,
+    "daily_hour": 2,
+    "weekly_day": 0,
+    "monthly_day": 1,
+    "min_data_points": 20,
+    "max_cost_per_day": 100.0,
+    "min_quality_score": 80.0
+  },
+  "deployment": {
+    "system_name": "CloudVR-PerfGuard AI Research System",
+    "version": "1.0.0",
+    "deployment_date": "2025-05-27T03:18:52.312685",
+    "environment": "production",
+    "features": [
+      "Real-time VR performance analysis",
+      "Gemini AI-powered research generation",
+      "Automated paper and function discovery",
+      "24/7 continuous operation",
+      "Multi-application scaling",
+      "Cost-controlled research pipeline"
+    ]
+  }
+}

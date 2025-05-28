@@ -1,0 +1,59 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "amien-api-service",
+    "annotations": {
+      "run.googleapis.com/ingress": "all"
+    }
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "100",
+          "run.googleapis.com/memory": "2Gi",
+          "run.googleapis.com/cpu": "2"
+        }
+      },
+      "spec": {
+        "containerConcurrency": 10,
+        "containers": [
+          {
+            "image": "gcr.io/amien-research-pipeline/amien-api-service:latest",
+            "ports": [
+              {
+                "containerPort": 8080
+              }
+            ],
+            "env": [
+              {
+                "name": "PROJECT_ID",
+                "value": "amien-research-pipeline"
+              },
+              {
+                "name": "REGION",
+                "value": "us-central1"
+              },
+              {
+                "name": "GEMINI_API_KEY",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "gemini-api-key",
+                    "key": "key"
+                  }
+                }
+              }
+            ],
+            "resources": {
+              "limits": {
+                "memory": "2Gi",
+                "cpu": "2"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

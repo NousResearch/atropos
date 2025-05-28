@@ -1,0 +1,46 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "amien-funsearch"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "30",
+          "run.googleapis.com/memory": "4Gi",
+          "run.googleapis.com/cpu": "4"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "image": "gcr.io/amien-research-pipeline/amien-funsearch:latest",
+            "env": [
+              {
+                "name": "PROJECT_ID",
+                "value": "amien-research-pipeline"
+              },
+              {
+                "name": "GEMINI_API_KEY",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "gemini-api-key",
+                    "key": "key"
+                  }
+                }
+              }
+            ],
+            "resources": {
+              "limits": {
+                "memory": "4Gi",
+                "cpu": "4"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

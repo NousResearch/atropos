@@ -1,0 +1,63 @@
+name: CloudVR-PerfGuard AI Research System CI/CD
+'on':
+  push:
+    branches:
+    - main
+    - develop
+  pull_request:
+    branches:
+    - main
+  schedule:
+  - cron: 0 2 * * *
+env:
+  PYTHON_VERSION: '3.9'
+  PROJECT_NAME: cloudvr-perfguard-ai
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+        - '3.8'
+        - '3.9'
+        - '3.10'
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: pip install -r cloudvr_perfguard/requirements.txt
+    - name: Run unit tests
+      run: python -m pytest tests/ -v
+    - name: Run integration tests
+      run: python test_practical_ai_integration.py
+    - name: Run AI validation tests
+      run: python test_gemini_integration.py
+    - name: Run performance tests
+      run: python test_week4_continuous_pipeline.py
+  deploy-staging:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    steps:
+    - uses: actions/checkout@v3
+    - name: Deploy to staging
+      run: python cicd_integration.py --deploy staging
+    - name: Run staging validation
+      run: python cicd_integration.py --validate staging
+  deploy-production:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+    - uses: actions/checkout@v3
+    - name: Deploy to production
+      run: python cicd_integration.py --deploy production
+    - name: Run production validation
+      run: python cicd_integration.py --validate production
+    - name: Start monitoring
+      run: python cicd_integration.py --monitor production

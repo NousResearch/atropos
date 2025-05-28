@@ -1,0 +1,70 @@
+[
+  {
+    "experiment_id": "exp_000000",
+    "user_id": "user_000026",
+    "environment_id": "env_0004",
+    "performance": {
+      "fps": 77.6952023843993,
+      "frame_time": 15.444969099417035,
+      "gpu_utilization": 63.4088374310402,
+      "cpu_utilization": 41.88665219734719,
+      "vram_usage": 7290.528887889522,
+      "latency": 13.605947126862839
+    },
+    "comfort_score": 0.6804185316708632,
+    "duration": 48.30257581119305,
+    "success": false,
+    "timestamp": "2025-05-28T05:01:02.077067"
+  },
+  {
+    "experiment_id": "exp_000001",
+    "user_id": "user_000026",
+    "environment_id": "env_0002",
+    "performance": {
+      "fps": 82.83215837742324,
+      "frame_time": 14.487127022963975,
+      "gpu_utilization": 72.69217756411165,
+      "cpu_utilization": 41.68912191925703,
+      "vram_usage": 7826.751150460587,
+      "latency": 24.03756962041738
+    },
+    "comfort_score": 0.5013748656755432,
+    "duration": 87.89599187286333,
+    "success": false,
+    "timestamp": "2025-05-28T05:01:02.077134"
+  },
+  {
+    "experiment_id": "exp_000002",
+    "user_id": "user_000044",
+    "environment_id": "env_0004",
+    "performance": {
+      "fps": 77.6952023843993,
+      "frame_time": 15.444969099417035,
+      "gpu_utilization": 75.34414677225462,
+      "cpu_utilization": 59.65724472810468,
+      "vram_usage": 7684.890944068773,
+      "latency": 16.856752316210127
+    },
+    "comfort_score": 0.4920000316209034,
+    "duration": 172.74741331726966,
+    "success": false,
+    "timestamp": "2025-05-28T05:01:02.077142"
+  },
+  {
+    "experiment_id": "exp_000003",
+    "user_id": "user_000044",
+    "environment_id": "env_0002",
+    "performance": {
+      "fps": 82.83215837742324,
+      "frame_time": 14.487127022963975,
+      "gpu_utilization": 60.26338745898868,
+      "cpu_utilization": 35.29963883330642,
+      "vram_usage": 3444.9733887066645,
+      "latency": 18.300265572461075
+    },
+    "comfort_score": 0.5443771799500594,
+    "duration": 130.4957044098079,
+    "success": false,
+    "timestamp": "2025-05-28T05:01:02.077232"
+  }
+]

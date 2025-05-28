@@ -1,0 +1,25 @@
+{
+  "package_created": "2025-05-27T03:20:31.153070",
+  "components": {
+    "github_actions": ".github/workflows/cicd.yml",
+    "docker": [
+      "Dockerfile",
+      "docker-compose.yml"
+    ],
+    "kubernetes": [
+      "k8s/deployment.yaml",
+      "k8s/service.yaml"
+    ],
+    "monitoring": [
+      "monitoring/prometheus.yml",
+      "monitoring/grafana_dashboard.json"
+    ]
+  },
+  "deployment_commands": {
+    "staging": "python cicd_integration.py --deploy staging",
+    "production": "python cicd_integration.py --deploy production",
+    "validate": "python cicd_integration.py --validate <environment>",
+    "monitor": "python cicd_integration.py --monitor <environment>"
+  },
+  "success_rate": 1.0
+}

@@ -1,0 +1,12 @@
+{
+  "name": "projects/amien-research-pipeline/locations/us-central1/jobs/daily-research",
+  "schedule": "0 2 * * *",
+  "timeZone": "UTC",
+  "httpTarget": {
+    "uri": "https://amien-api-service-amien-research-pipeline.a.run.app/research/generate",
+    "httpMethod": "POST",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

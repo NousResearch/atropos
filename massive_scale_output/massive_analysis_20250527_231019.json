@@ -1,0 +1,92 @@
+{
+  "summary": {
+    "total_experiments": 100,
+    "success_rate": 1.0,
+    "avg_comfort_score": 0.446328845443146,
+    "avg_fps": 67.0348003027122,
+    "unique_users": 10,
+    "unique_environments": 10
+  },
+  "cultural_insights": {
+    "Latin American": {
+      "avg_comfort": 0.35913331468960524,
+      "sample_size": 10
+    },
+    "Middle Eastern": {
+      "avg_comfort": 0.4682068188470092,
+      "sample_size": 40
+    },
+    "Mediterranean": {
+      "avg_comfort": 0.40079052680792565,
+      "sample_size": 20
+    },
+    "Slavic": {
+      "avg_comfort": 0.4810735835147469,
+      "sample_size": 20
+    },
+    "Indigenous": {
+      "avg_comfort": 0.4675996437084722,
+      "sample_size": 10
+    }
+  },
+  "neurotype_insights": {
+    "Autism": {
+      "avg_comfort": 0.36185793084764656,
+      "sample_size": 20
+    },
+    "Depression": {
+      "avg_comfort": 0.42720878741983037,
+      "sample_size": 20
+    },
+    "Dyslexia": {
+      "avg_comfort": 0.4915587518830158,
+      "sample_size": 10
+    },
+    "Neurotypical": {
+      "avg_comfort": 0.5454908227304933,
+      "sample_size": 10
+    },
+    "ADHD": {
+      "avg_comfort": 0.47025926076317753,
+      "sample_size": 20
+    },
+    "OCD": {
+      "avg_comfort": 0.4369985066101636,
+      "sample_size": 10
+    },
+    "PTSD": {
+      "avg_comfort": 0.47058841514647787,
+      "sample_size": 10
+    }
+  },
+  "environment_insights": {
+    "High Gravity": {
+      "avg_comfort": 0.4192683653801472,
+      "sample_size": 10
+    },
+    "Elastic World": {
+      "avg_comfort": 0.3863883767523754,
+      "sample_size": 10
+    },
+    "Wind Simulation": {
+      "avg_comfort": 0.38766996899669126,
+      "sample_size": 10
+    },
+    "Zero Friction": {
+      "avg_comfort": 0.41521081237192037,
+      "sample_size": 20
+    },
+    "Dense Atmosphere": {
+      "avg_comfort": 0.44474229001361526,
+      "sample_size": 30
+    },
+    "Micro Gravity": {
+      "avg_comfort": 0.5448080229260794,
+      "sample_size": 10
+    },
+    "High Friction": {
+      "avg_comfort": 0.5605052255914799,
+      "sample_size": 10
+    }
+  }
+}

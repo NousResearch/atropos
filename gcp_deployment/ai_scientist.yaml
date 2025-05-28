@@ -1,0 +1,55 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "amien-ai-scientist"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "20",
+          "run.googleapis.com/memory": "8Gi",
+          "run.googleapis.com/cpu": "4"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "image": "gcr.io/amien-research-pipeline/amien-ai-scientist:latest",
+            "env": [
+              {
+                "name": "PROJECT_ID",
+                "value": "amien-research-pipeline"
+              },
+              {
+                "name": "GEMINI_API_KEY",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "gemini-api-key",
+                    "key": "key"
+                  }
+                }
+              },
+              {
+                "name": "OPENAI_API_KEY",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "openai-api-key",
+                    "key": "key"
+                  }
+                }
+              }
+            ],
+            "resources": {
+              "limits": {
+                "memory": "8Gi",
+                "cpu": "4"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

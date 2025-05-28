@@ -1,0 +1,18 @@
+{
+  "displayName": "AMIEN High Error Rate",
+  "conditions": [
+    {
+      "displayName": "High error rate condition",
+      "conditionThreshold": {
+        "filter": "resource.type=\"cloud_run_revision\" resource.label.service_name=\"amien-api-service\"",
+        "comparison": "COMPARISON_GREATER_THAN",
+        "thresholdValue": 0.1,
+        "duration": "300s"
+      }
+    }
+  ],
+  "notificationChannels": [],
+  "alertStrategy": {
+    "autoClose": "1800s"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "timestamp": "2025-05-27T23:09:47.305633",
+  "system_health": {
+    "status": "healthy",
+    "health_score": 81.48,
+    "success_rate": 90.99,
+    "avg_comfort": 0.503,
+    "avg_fps": 60.3,
+    "total_experiments": 1110
+  },
+  "research_productivity": {
+    "productivity_score": 14.72,
+    "avg_quality": 11.83,
+    "avg_word_count": 972.0,
+    "papers_per_day": 1.14,
+    "total_papers": 8
+  },
+  "cost_efficiency": {
+    "total_cost": 175.5,
+    "cost_per_experiment": 0.05,
+    "cost_per_paper": 15.0,
+    "cost_per_quality_point": 1.8542,
+    "efficiency_score": 0
+  },
+  "quality_trends": {
+    "trend": "declining",
+    "trend_slope": -0.9296,
+    "current_quality": 8.07,
+    "quality_variance": 60.15,
+    "trend_score": 40.70357142857143
+  },
+  "predictive_insights": {
+    "insights": [
+      "Recent paper quality decline detected"
+    ],
+    "recommendations": [
+      "Review AI model parameters and training data"
+    ],
+    "predictions": {
+      "daily_experiments": 1221.0,
+      "monthly_cost": 5431.5,
+      "quality_forecast": "stable"
+    }
+  }
+}

@@ -1,0 +1,5002 @@
+[
+  {
+    "experiment_id": "exp_0000",
+    "user_id": "user_000",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927249",
+    "performance_metrics": {
+      "fps_avg": 97.47778817469882,
+      "fps_min": 71.13813595931482,
+      "fps_max": 123.81744039008281,
+      "frame_time_avg": 10.258747338499402,
+      "gpu_utilization": 80.54267562487439,
+      "vram_usage": 6735.2593407579325,
+      "cpu_utilization": 43.49897356970304,
+      "comfort_score": 0.7094637891050959,
+      "scene_complexity": 0.5831749121410719
+    },
+    "test_results": {
+      "success": false,
+      "duration": 253.69071410086795,
+      "error_count": 2
+    },
+    "fps": 97.47778817469882,
+    "comfort_score": 0.774715657542205
+  },
+  {
+    "experiment_id": "exp_0001",
+    "user_id": "user_001",
+    "user_type": "casual",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927262",
+    "performance_metrics": {
+      "fps_avg": 82.83367559314812,
+      "fps_min": 68.26176656666414,
+      "fps_max": 97.4055846196321,
+      "frame_time_avg": 12.072384725647966,
+      "gpu_utilization": 69.28672291968863,
+      "vram_usage": 4565.408503893034,
+      "cpu_utilization": 52.26518802500368,
+      "comfort_score": 0.7941472817226671,
+      "scene_complexity": 0.533168723147226
+    },
+    "test_results": {
+      "success": true,
+      "duration": 144.5165920455981,
+      "error_count": 3
+    },
+    "fps": 82.83367559314812,
+    "comfort_score": 0.7284976800630211
+  },
+  {
+    "experiment_id": "exp_0002",
+    "user_id": "user_002",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927268",
+    "performance_metrics": {
+      "fps_avg": 115.10499696333154,
+      "fps_min": 86.47425546404718,
+      "fps_max": 143.73573846261593,
+      "frame_time_avg": 8.687720137107213,
+      "gpu_utilization": 79.62687312798036,
+      "vram_usage": 3372.23137242519,
+      "cpu_utilization": 61.02893285688921,
+      "comfort_score": 0.9240038804600559,
+      "scene_complexity": 0.3266295161724144
+    },
+    "test_results": {
+      "success": true,
+      "duration": 287.3274781098308,
+      "error_count": 1
+    },
+    "fps": 115.10499696333154,
+    "comfort_score": 0.8597943938647814
+  },
+  {
+    "experiment_id": "exp_0003",
+    "user_id": "user_003",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927272",
+    "performance_metrics": {
+      "fps_avg": 109.20616804741525,
+      "fps_min": 95.69099968194207,
+      "fps_max": 122.72133641288842,
+      "frame_time_avg": 9.156991934428273,
+      "gpu_utilization": 92.89766268789299,
+      "vram_usage": 6727.411681987602,
+      "cpu_utilization": 44.4824384421625,
+      "comfort_score": 0.8797516870069935,
+      "scene_complexity": 0.6761815126326092
+    },
+    "test_results": {
+      "success": false,
+      "duration": 136.72290127903187,
+      "error_count": 3
+    },
+    "fps": 109.20616804741525,
+    "comfort_score": 0.7273561046225703
+  },
+  {
+    "experiment_id": "exp_0004",
+    "user_id": "user_004",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927276",
+    "performance_metrics": {
+      "fps_avg": 82.00087914579672,
+      "fps_min": 63.28784162443734,
+      "fps_max": 100.71391666715608,
+      "frame_time_avg": 12.194991205179768,
+      "gpu_utilization": 91.34174569123064,
+      "vram_usage": 4378.054637979629,
+      "cpu_utilization": 52.151932051496956,
+      "comfort_score": 0.7601663006462326,
+      "scene_complexity": 0.5710682220223469
+    },
+    "test_results": {
+      "success": true,
+      "duration": 208.78837844895753,
+      "error_count": 0
+    },
+    "fps": 82.00087914579672,
+    "comfort_score": 0.9473413752573093
+  },
+  {
+    "experiment_id": "exp_0005",
+    "user_id": "user_005",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927280",
+    "performance_metrics": {
+      "fps_avg": 101.85878379780365,
+      "fps_min": 84.47966619785088,
+      "fps_max": 119.23790139775643,
+      "frame_time_avg": 9.817513646982723,
+      "gpu_utilization": 83.91993126067348,
+      "vram_usage": 5967.232906540112,
+      "cpu_utilization": 67.41705588871767,
+      "comfort_score": 0.8141971872894855,
+      "scene_complexity": 0.8087642664655348
+    },
+    "test_results": {
+      "success": true,
+      "duration": 105.19455239760192,
+      "error_count": 2
+    },
+    "fps": 101.85878379780365,
+    "comfort_score": 0.8642468960376753
+  },
+  {
+    "experiment_id": "exp_0006",
+    "user_id": "user_006",
+    "user_type": "professional",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927284",
+    "performance_metrics": {
+      "fps_avg": 103.47398123759282,
+      "fps_min": 73.49870147609394,
+      "fps_max": 133.4492609990917,
+      "frame_time_avg": 9.664265238851108,
+      "gpu_utilization": 72.24669751116296,
+      "vram_usage": 6512.001298322497,
+      "cpu_utilization": 50.70342165231335,
+      "comfort_score": 0.9061696089915865,
+      "scene_complexity": 0.7871956000556191
+    },
+    "test_results": {
+      "success": true,
+      "duration": 273.7875360873718,
+      "error_count": 3
+    },
+    "fps": 103.47398123759282,
+    "comfort_score": 0.9273030582708482
+  },
+  {
+    "experiment_id": "exp_0007",
+    "user_id": "user_007",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927290",
+    "performance_metrics": {
+      "fps_avg": 108.95650520232243,
+      "fps_min": 92.98062992517534,
+      "fps_max": 124.93238047946954,
+      "frame_time_avg": 9.177974258105012,
+      "gpu_utilization": 76.27806802322698,
+      "vram_usage": 3841.0818791371803,
+      "cpu_utilization": 68.5004508234428,
+      "comfort_score": 0.8651698428824943,
+      "scene_complexity": 0.41101576130284145
+    },
+    "test_results": {
+      "success": true,
+      "duration": 263.3615477842251,
+      "error_count": 3
+    },
+    "fps": 108.95650520232243,
+    "comfort_score": 0.9448426109687997
+  },
+  {
+    "experiment_id": "exp_0008",
+    "user_id": "user_008",
+    "user_type": "researcher",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927297",
+    "performance_metrics": {
+      "fps_avg": 103.78794356206832,
+      "fps_min": 79.61255929219583,
+      "fps_max": 127.96332783194082,
+      "frame_time_avg": 9.635030483111652,
+      "gpu_utilization": 61.94951278392393,
+      "vram_usage": 6398.3228769295365,
+      "cpu_utilization": 55.23123453991161,
+      "comfort_score": 0.8578420203913485,
+      "scene_complexity": 0.4215761678786076
+    },
+    "test_results": {
+      "success": false,
+      "duration": 47.909164161730004,
+      "error_count": 1
+    },
+    "fps": 103.78794356206832,
+    "comfort_score": 0.783999176339389
+  },
+  {
+    "experiment_id": "exp_0009",
+    "user_id": "user_009",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927304",
+    "performance_metrics": {
+      "fps_avg": 111.51863709055792,
+      "fps_min": 89.06672619400393,
+      "fps_max": 133.9705479871119,
+      "frame_time_avg": 8.967111023675416,
+      "gpu_utilization": 70.96588031476223,
+      "vram_usage": 7966.767906627541,
+      "cpu_utilization": 60.840766518209534,
+      "comfort_score": 0.774423107242184,
+      "scene_complexity": 0.8542811659835019
+    },
+    "test_results": {
+      "success": false,
+      "duration": 113.15928445389164,
+      "error_count": 3
+    },
+    "fps": 111.51863709055792,
+    "comfort_score": 0.8795490008854366
+  },
+  {
+    "experiment_id": "exp_0010",
+    "user_id": "user_010",
+    "user_type": "casual",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927308",
+    "performance_metrics": {
+      "fps_avg": 102.55285495703254,
+      "fps_min": 81.60730767743634,
+      "fps_max": 123.49840223662873,
+      "frame_time_avg": 9.751069342915697,
+      "gpu_utilization": 82.05703891272036,
+      "vram_usage": 6416.463147652378,
+      "cpu_utilization": 54.8976993669562,
+      "comfort_score": 0.7625428446293859,
+      "scene_complexity": 0.4292471397754904
+    },
+    "test_results": {
+      "success": false,
+      "duration": 289.2788744321675,
+      "error_count": 3
+    },
+    "fps": 102.55285495703254,
+    "comfort_score": 0.7240677711692783
+  },
+  {
+    "experiment_id": "exp_0011",
+    "user_id": "user_011",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927311",
+    "performance_metrics": {
+      "fps_avg": 87.1673481770459,
+      "fps_min": 65.29511238744277,
+      "fps_max": 109.03958396664903,
+      "frame_time_avg": 11.472185639614693,
+      "gpu_utilization": 84.16241449243509,
+      "vram_usage": 6233.168904375769,
+      "cpu_utilization": 30.428445067027564,
+      "comfort_score": 0.7695905224378159,
+      "scene_complexity": 0.8710307471180185
+    },
+    "test_results": {
+      "success": false,
+      "duration": 299.26465614063244,
+      "error_count": 1
+    },
+    "fps": 87.1673481770459,
+    "comfort_score": 0.8827551866483654
+  },
+  {
+    "experiment_id": "exp_0012",
+    "user_id": "user_012",
+    "user_type": "researcher",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927315",
+    "performance_metrics": {
+      "fps_avg": 113.58105074812089,
+      "fps_min": 91.84810365020651,
+      "fps_max": 135.31399784603525,
+      "frame_time_avg": 8.8042855160551,
+      "gpu_utilization": 88.57160895703478,
+      "vram_usage": 7694.003851463105,
+      "cpu_utilization": 41.65501226605271,
+      "comfort_score": 0.7097131942652273,
+      "scene_complexity": 0.8556766414580679
+    },
+    "test_results": {
+      "success": false,
+      "duration": 44.97265974498289,
+      "error_count": 2
+    },
+    "fps": 113.58105074812089,
+    "comfort_score": 0.8301010746691472
+  },
+  {
+    "experiment_id": "exp_0013",
+    "user_id": "user_013",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927318",
+    "performance_metrics": {
+      "fps_avg": 117.96437993436643,
+      "fps_min": 101.03346129596204,
+      "fps_max": 134.89529857277083,
+      "frame_time_avg": 8.477135221296333,
+      "gpu_utilization": 89.66369131634424,
+      "vram_usage": 4242.692671241504,
+      "cpu_utilization": 44.221985891531176,
+      "comfort_score": 0.8674608686876424,
+      "scene_complexity": 0.4348119715748208
+    },
+    "test_results": {
+      "success": false,
+      "duration": 30.411222459925057,
+      "error_count": 0
+    },
+    "fps": 117.96437993436643,
+    "comfort_score": 0.7470201511823953
+  },
+  {
+    "experiment_id": "exp_0014",
+    "user_id": "user_014",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927321",
+    "performance_metrics": {
+      "fps_avg": 107.11266564836944,
+      "fps_min": 93.10466254196913,
+      "fps_max": 121.12066875476975,
+      "frame_time_avg": 9.335964089277828,
+      "gpu_utilization": 85.42228218128523,
+      "vram_usage": 5917.523031771858,
+      "cpu_utilization": 45.474877802236676,
+      "comfort_score": 0.7981236082210976,
+      "scene_complexity": 0.7383078510041245
+    },
+    "test_results": {
+      "success": false,
+      "duration": 124.52383306701637,
+      "error_count": 2
+    },
+    "fps": 107.11266564836944,
+    "comfort_score": 0.9230202086861332
+  },
+  {
+    "experiment_id": "exp_0015",
+    "user_id": "user_015",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927324",
+    "performance_metrics": {
+      "fps_avg": 115.9907158937742,
+      "fps_min": 103.24352254841757,
+      "fps_max": 128.7379092391308,
+      "frame_time_avg": 8.621379670729967,
+      "gpu_utilization": 88.61538964615417,
+      "vram_usage": 7118.997510029162,
+      "cpu_utilization": 40.60854408414205,
+      "comfort_score": 0.9450943561143614,
+      "scene_complexity": 0.39812687895917687
+    },
+    "test_results": {
+      "success": true,
+      "duration": 45.667763802478696,
+      "error_count": 1
+    },
+    "fps": 115.9907158937742,
+    "comfort_score": 0.8497656015966475
+  },
+  {
+    "experiment_id": "exp_0016",
+    "user_id": "user_016",
+    "user_type": "professional",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927328",
+    "performance_metrics": {
+      "fps_avg": 76.96584224747579,
+      "fps_min": 64.541194680843,
+      "fps_max": 89.39048981410858,
+      "frame_time_avg": 12.992776675977927,
+      "gpu_utilization": 78.48539606945384,
+      "vram_usage": 3831.8662423073342,
+      "cpu_utilization": 57.41248162151603,
+      "comfort_score": 0.7089776230166331,
+      "scene_complexity": 0.8891379251932503
+    },
+    "test_results": {
+      "success": false,
+      "duration": 167.74407274001834,
+      "error_count": 3
+    },
+    "fps": 76.96584224747579,
+    "comfort_score": 0.8593173476884899
+  },
+  {
+    "experiment_id": "exp_0017",
+    "user_id": "user_017",
+    "user_type": "professional",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927331",
+    "performance_metrics": {
+      "fps_avg": 85.14091823005518,
+      "fps_min": 73.7003774540959,
+      "fps_max": 96.58145900601444,
+      "frame_time_avg": 11.745233910890509,
+      "gpu_utilization": 63.862599818935855,
+      "vram_usage": 7705.991221479999,
+      "cpu_utilization": 40.554078593399396,
+      "comfort_score": 0.7254028156230676,
+      "scene_complexity": 0.38147848104076376
+    },
+    "test_results": {
+      "success": true,
+      "duration": 285.6488257837726,
+      "error_count": 3
+    },
+    "fps": 85.14091823005518,
+    "comfort_score": 0.8685286352616357
+  },
+  {
+    "experiment_id": "exp_0018",
+    "user_id": "user_018",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927334",
+    "performance_metrics": {
+      "fps_avg": 80.32900333129123,
+      "fps_min": 60.941236040931976,
+      "fps_max": 99.7167706216505,
+      "frame_time_avg": 12.44880377608845,
+      "gpu_utilization": 90.94017007590858,
+      "vram_usage": 2888.4463802314476,
+      "cpu_utilization": 58.76000337786078,
+      "comfort_score": 0.7686249242025172,
+      "scene_complexity": 0.527122562990487
+    },
+    "test_results": {
+      "success": true,
+      "duration": 246.8719692614706,
+      "error_count": 2
+    },
+    "fps": 80.32900333129123,
+    "comfort_score": 0.7018906005409156
+  },
+  {
+    "experiment_id": "exp_0019",
+    "user_id": "user_019",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927337",
+    "performance_metrics": {
+      "fps_avg": 89.14723042631715,
+      "fps_min": 74.11820492306343,
+      "fps_max": 104.17625592957087,
+      "frame_time_avg": 11.21739840057656,
+      "gpu_utilization": 66.84087784200516,
+      "vram_usage": 7012.861393306209,
+      "cpu_utilization": 53.568541652974886,
+      "comfort_score": 0.851962951188155,
+      "scene_complexity": 0.4069268120124231
+    },
+    "test_results": {
+      "success": true,
+      "duration": 107.62634450676889,
+      "error_count": 1
+    },
+    "fps": 89.14723042631715,
+    "comfort_score": 0.8724763662951579
+  },
+  {
+    "experiment_id": "exp_0020",
+    "user_id": "user_020",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927339",
+    "performance_metrics": {
+      "fps_avg": 108.50897720237464,
+      "fps_min": 88.560611330215,
+      "fps_max": 128.4573430745343,
+      "frame_time_avg": 9.215827351638845,
+      "gpu_utilization": 69.14517098887126,
+      "vram_usage": 4267.326651082802,
+      "cpu_utilization": 38.170887635136445,
+      "comfort_score": 0.7722602459992639,
+      "scene_complexity": 0.7555744353715517
+    },
+    "test_results": {
+      "success": false,
+      "duration": 110.16891344884796,
+      "error_count": 0
+    },
+    "fps": 108.50897720237464,
+    "comfort_score": 0.7018693604527773
+  },
+  {
+    "experiment_id": "exp_0021",
+    "user_id": "user_021",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927343",
+    "performance_metrics": {
+      "fps_avg": 94.82636274507182,
+      "fps_min": 69.97002996345948,
+      "fps_max": 119.68269552668417,
+      "frame_time_avg": 10.545590604253885,
+      "gpu_utilization": 84.72575229326323,
+      "vram_usage": 7580.51484490542,
+      "cpu_utilization": 67.80220757645664,
+      "comfort_score": 0.819233582716298,
+      "scene_complexity": 0.834023222677317
+    },
+    "test_results": {
+      "success": false,
+      "duration": 108.00886670002551,
+      "error_count": 0
+    },
+    "fps": 94.82636274507182,
+    "comfort_score": 0.7933404724587519
+  },
+  {
+    "experiment_id": "exp_0022",
+    "user_id": "user_022",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927345",
+    "performance_metrics": {
+      "fps_avg": 119.95138795003022,
+      "fps_min": 99.0999048737204,
+      "fps_max": 140.80287102634003,
+      "frame_time_avg": 8.336710538243906,
+      "gpu_utilization": 64.54729665413339,
+      "vram_usage": 4347.275485000726,
+      "cpu_utilization": 66.7701845644128,
+      "comfort_score": 0.846905412275857,
+      "scene_complexity": 0.36354767328489673
+    },
+    "test_results": {
+      "success": false,
+      "duration": 127.6008016290277,
+      "error_count": 0
+    },
+    "fps": 119.95138795003022,
+    "comfort_score": 0.9425556417559924
+  },
+  {
+    "experiment_id": "exp_0023",
+    "user_id": "user_023",
+    "user_type": "researcher",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927349",
+    "performance_metrics": {
+      "fps_avg": 99.14725680362224,
+      "fps_min": 75.56506984178564,
+      "fps_max": 122.72944376545884,
+      "frame_time_avg": 10.086007744830173,
+      "gpu_utilization": 89.81050565627581,
+      "vram_usage": 3291.0935852265757,
+      "cpu_utilization": 58.107186619836924,
+      "comfort_score": 0.830460543239987,
+      "scene_complexity": 0.6514745954599386
+    },
+    "test_results": {
+      "success": true,
+      "duration": 213.13785802939836,
+      "error_count": 1
+    },
+    "fps": 99.14725680362224,
+    "comfort_score": 0.9076366282428006
+  },
+  {
+    "experiment_id": "exp_0024",
+    "user_id": "user_024",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927352",
+    "performance_metrics": {
+      "fps_avg": 101.22705966525307,
+      "fps_min": 77.69976351070274,
+      "fps_max": 124.7543558198034,
+      "frame_time_avg": 9.878781457318743,
+      "gpu_utilization": 85.7916927464585,
+      "vram_usage": 3795.8745183267138,
+      "cpu_utilization": 55.3300886460201,
+      "comfort_score": 0.9035329199351531,
+      "scene_complexity": 0.5058209625112966
+    },
+    "test_results": {
+      "success": true,
+      "duration": 53.28429566909238,
+      "error_count": 0
+    },
+    "fps": 101.22705966525307,
+    "comfort_score": 0.7458782697592767
+  },
+  {
+    "experiment_id": "exp_0025",
+    "user_id": "user_025",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927355",
+    "performance_metrics": {
+      "fps_avg": 119.89413953156387,
+      "fps_min": 100.63186599166652,
+      "fps_max": 139.1564130714612,
+      "frame_time_avg": 8.340691245686246,
+      "gpu_utilization": 78.45502789728394,
+      "vram_usage": 3245.3094793214377,
+      "cpu_utilization": 35.13385350787273,
+      "comfort_score": 0.7918825621437853,
+      "scene_complexity": 0.6272843381406983
+    },
+    "test_results": {
+      "success": true,
+      "duration": 254.3793713368595,
+      "error_count": 0
+    },
+    "fps": 119.89413953156387,
+    "comfort_score": 0.7126162618101689
+  },
+  {
+    "experiment_id": "exp_0026",
+    "user_id": "user_026",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927358",
+    "performance_metrics": {
+      "fps_avg": 100.71410915839627,
+      "fps_min": 72.43474403513702,
+      "fps_max": 128.99347428165552,
+      "frame_time_avg": 9.929095420258033,
+      "gpu_utilization": 60.30027481050166,
+      "vram_usage": 4204.2167141801165,
+      "cpu_utilization": 40.298823028108586,
+      "comfort_score": 0.8167249242414698,
+      "scene_complexity": 0.8697839018404008
+    },
+    "test_results": {
+      "success": true,
+      "duration": 167.04507461820253,
+      "error_count": 0
+    },
+    "fps": 100.71410915839627,
+    "comfort_score": 0.8512729909816992
+  },
+  {
+    "experiment_id": "exp_0027",
+    "user_id": "user_027",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927363",
+    "performance_metrics": {
+      "fps_avg": 77.23730190154058,
+      "fps_min": 68.08906610874205,
+      "fps_max": 86.3855376943391,
+      "frame_time_avg": 12.94711202204817,
+      "gpu_utilization": 61.933299725533075,
+      "vram_usage": 7098.353401505169,
+      "cpu_utilization": 52.76835719671432,
+      "comfort_score": 0.8944408911970222,
+      "scene_complexity": 0.8400621987475729
+    },
+    "test_results": {
+      "success": true,
+      "duration": 224.72909580831382,
+      "error_count": 3
+    },
+    "fps": 77.23730190154058,
+    "comfort_score": 0.7662160739536876
+  },
+  {
+    "experiment_id": "exp_0028",
+    "user_id": "user_028",
+    "user_type": "researcher",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927366",
+    "performance_metrics": {
+      "fps_avg": 73.49463346666502,
+      "fps_min": 53.56750777466904,
+      "fps_max": 93.421759158661,
+      "frame_time_avg": 13.606435637964916,
+      "gpu_utilization": 87.0818293135178,
+      "vram_usage": 4582.7507765062555,
+      "cpu_utilization": 41.28810257591738,
+      "comfort_score": 0.83363265880664,
+      "scene_complexity": 0.5388483403246436
+    },
+    "test_results": {
+      "success": true,
+      "duration": 289.58272386478086,
+      "error_count": 1
+    },
+    "fps": 73.49463346666502,
+    "comfort_score": 0.7183184912155722
+  },
+  {
+    "experiment_id": "exp_0029",
+    "user_id": "user_029",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927369",
+    "performance_metrics": {
+      "fps_avg": 94.19307196001279,
+      "fps_min": 68.86557326657483,
+      "fps_max": 119.52057065345073,
+      "frame_time_avg": 10.616492053943457,
+      "gpu_utilization": 74.5993074795943,
+      "vram_usage": 6391.114069045781,
+      "cpu_utilization": 51.53381627002311,
+      "comfort_score": 0.8431566624502704,
+      "scene_complexity": 0.532670933843207
+    },
+    "test_results": {
+      "success": true,
+      "duration": 116.96204150167928,
+      "error_count": 0
+    },
+    "fps": 94.19307196001279,
+    "comfort_score": 0.8228656746915803
+  },
+  {
+    "experiment_id": "exp_0030",
+    "user_id": "user_030",
+    "user_type": "professional",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927372",
+    "performance_metrics": {
+      "fps_avg": 93.48853660557484,
+      "fps_min": 69.45016322503858,
+      "fps_max": 117.5269099861111,
+      "frame_time_avg": 10.696498590185106,
+      "gpu_utilization": 76.1485717639743,
+      "vram_usage": 3645.5601904325886,
+      "cpu_utilization": 64.51258334962424,
+      "comfort_score": 0.8271312403349205,
+      "scene_complexity": 0.46194593728955496
+    },
+    "test_results": {
+      "success": true,
+      "duration": 129.57644005206748,
+      "error_count": 3
+    },
+    "fps": 93.48853660557484,
+    "comfort_score": 0.7456820565858203
+  },
+  {
+    "experiment_id": "exp_0031",
+    "user_id": "user_031",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927375",
+    "performance_metrics": {
+      "fps_avg": 97.35899873829601,
+      "fps_min": 81.24668775491794,
+      "fps_max": 113.47130972167407,
+      "frame_time_avg": 10.271264217579217,
+      "gpu_utilization": 79.31403778390337,
+      "vram_usage": 3279.4938329534775,
+      "cpu_utilization": 55.365744080589764,
+      "comfort_score": 0.7644363070378952,
+      "scene_complexity": 0.7037258943325138
+    },
+    "test_results": {
+      "success": true,
+      "duration": 44.881452776070475,
+      "error_count": 2
+    },
+    "fps": 97.35899873829601,
+    "comfort_score": 0.7706038170032313
+  },
+  {
+    "experiment_id": "exp_0032",
+    "user_id": "user_032",
+    "user_type": "gamer",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927378",
+    "performance_metrics": {
+      "fps_avg": 96.17104374140426,
+      "fps_min": 72.31731253978022,
+      "fps_max": 120.0247749430283,
+      "frame_time_avg": 10.398140241556645,
+      "gpu_utilization": 75.66360150878602,
+      "vram_usage": 3348.9915024027723,
+      "cpu_utilization": 61.59688258489183,
+      "comfort_score": 0.7508993875190504,
+      "scene_complexity": 0.6207687781705992
+    },
+    "test_results": {
+      "success": true,
+      "duration": 85.4237577071684,
+      "error_count": 3
+    },
+    "fps": 96.17104374140426,
+    "comfort_score": 0.9209574431123329
+  },
+  {
+    "experiment_id": "exp_0033",
+    "user_id": "user_033",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927381",
+    "performance_metrics": {
+      "fps_avg": 87.71000952316717,
+      "fps_min": 66.74134411279702,
+      "fps_max": 108.67867493353731,
+      "frame_time_avg": 11.401207290210888,
+      "gpu_utilization": 62.71726805814204,
+      "vram_usage": 5163.85651836073,
+      "cpu_utilization": 35.234674493203165,
+      "comfort_score": 0.8370446539974914,
+      "scene_complexity": 0.47735925001410384
+    },
+    "test_results": {
+      "success": true,
+      "duration": 274.0700798947039,
+      "error_count": 0
+    },
+    "fps": 87.71000952316717,
+    "comfort_score": 0.8555107531147784
+  },
+  {
+    "experiment_id": "exp_0034",
+    "user_id": "user_034",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927384",
+    "performance_metrics": {
+      "fps_avg": 115.13396324800762,
+      "fps_min": 98.86977716392511,
+      "fps_max": 131.39814933209013,
+      "frame_time_avg": 8.685534413906359,
+      "gpu_utilization": 66.48166397902916,
+      "vram_usage": 5133.017584614463,
+      "cpu_utilization": 49.11445042738545,
+      "comfort_score": 0.9165523606888533,
+      "scene_complexity": 0.8717656210529419
+    },
+    "test_results": {
+      "success": true,
+      "duration": 205.1396719384475,
+      "error_count": 2
+    },
+    "fps": 115.13396324800762,
+    "comfort_score": 0.71125833122922
+  },
+  {
+    "experiment_id": "exp_0035",
+    "user_id": "user_035",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927388",
+    "performance_metrics": {
+      "fps_avg": 104.54786284090974,
+      "fps_min": 80.51827954124302,
+      "fps_max": 128.57744614057646,
+      "frame_time_avg": 9.564997053279777,
+      "gpu_utilization": 80.84730758255279,
+      "vram_usage": 3603.5298319545013,
+      "cpu_utilization": 58.204788242184534,
+      "comfort_score": 0.7737520214544413,
+      "scene_complexity": 0.8929750698106758
+    },
+    "test_results": {
+      "success": false,
+      "duration": 122.68233494764047,
+      "error_count": 3
+    },
+    "fps": 104.54786284090974,
+    "comfort_score": 0.7607529706885277
+  },
+  {
+    "experiment_id": "exp_0036",
+    "user_id": "user_036",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927393",
+    "performance_metrics": {
+      "fps_avg": 103.93664343099944,
+      "fps_min": 78.09444541136234,
+      "fps_max": 129.77884145063655,
+      "frame_time_avg": 9.621245856990479,
+      "gpu_utilization": 64.45931525246162,
+      "vram_usage": 3962.3178334767827,
+      "cpu_utilization": 35.024237384775,
+      "comfort_score": 0.9274873884297644,
+      "scene_complexity": 0.7597401449920282
+    },
+    "test_results": {
+      "success": true,
+      "duration": 156.42387835854947,
+      "error_count": 0
+    },
+    "fps": 103.93664343099944,
+    "comfort_score": 0.7659363889508856
+  },
+  {
+    "experiment_id": "exp_0037",
+    "user_id": "user_037",
+    "user_type": "professional",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927399",
+    "performance_metrics": {
+      "fps_avg": 77.36975691012947,
+      "fps_min": 58.233024738347034,
+      "fps_max": 96.5064890819119,
+      "frame_time_avg": 12.924946903498377,
+      "gpu_utilization": 76.55825780407338,
+      "vram_usage": 3813.7221937327417,
+      "cpu_utilization": 35.31518456603351,
+      "comfort_score": 0.754676835609897,
+      "scene_complexity": 0.7306200920771745
+    },
+    "test_results": {
+      "success": true,
+      "duration": 124.48396647946603,
+      "error_count": 2
+    },
+    "fps": 77.36975691012947,
+    "comfort_score": 0.8931771289938091
+  },
+  {
+    "experiment_id": "exp_0038",
+    "user_id": "user_038",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927402",
+    "performance_metrics": {
+      "fps_avg": 103.96992688990508,
+      "fps_min": 77.74025583404025,
+      "fps_max": 130.1995979457699,
+      "frame_time_avg": 9.618165847696625,
+      "gpu_utilization": 60.604238808577314,
+      "vram_usage": 2025.528541293671,
+      "cpu_utilization": 66.06521527468931,
+      "comfort_score": 0.899342689525072,
+      "scene_complexity": 0.377829543037279
+    },
+    "test_results": {
+      "success": false,
+      "duration": 72.79384310331696,
+      "error_count": 1
+    },
+    "fps": 103.96992688990508,
+    "comfort_score": 0.7007127577499506
+  },
+  {
+    "experiment_id": "exp_0039",
+    "user_id": "user_039",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927405",
+    "performance_metrics": {
+      "fps_avg": 78.03977425646538,
+      "fps_min": 64.3086262713236,
+      "fps_max": 91.77092224160715,
+      "frame_time_avg": 12.813978634967063,
+      "gpu_utilization": 72.4938132070858,
+      "vram_usage": 3040.484326735421,
+      "cpu_utilization": 40.022456869705536,
+      "comfort_score": 0.7642081013859179,
+      "scene_complexity": 0.7762275666834129
+    },
+    "test_results": {
+      "success": true,
+      "duration": 270.3833754470222,
+      "error_count": 1
+    },
+    "fps": 78.03977425646538,
+    "comfort_score": 0.7354912969624616
+  },
+  {
+    "experiment_id": "exp_0040",
+    "user_id": "user_040",
+    "user_type": "professional",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927408",
+    "performance_metrics": {
+      "fps_avg": 89.52598137474992,
+      "fps_min": 76.83735384886737,
+      "fps_max": 102.21460890063247,
+      "frame_time_avg": 11.16994178275539,
+      "gpu_utilization": 74.08452825981547,
+      "vram_usage": 4428.961216666399,
+      "cpu_utilization": 49.90545665697456,
+      "comfort_score": 0.9148343812522197,
+      "scene_complexity": 0.8452406472170195
+    },
+    "test_results": {
+      "success": true,
+      "duration": 44.16531505243184,
+      "error_count": 0
+    },
+    "fps": 89.52598137474992,
+    "comfort_score": 0.7655031306765184
+  },
+  {
+    "experiment_id": "exp_0041",
+    "user_id": "user_041",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927412",
+    "performance_metrics": {
+      "fps_avg": 101.67867022034673,
+      "fps_min": 84.67868852319725,
+      "fps_max": 118.67865191749623,
+      "frame_time_avg": 9.834904388825217,
+      "gpu_utilization": 91.10476718833011,
+      "vram_usage": 2799.067527756817,
+      "cpu_utilization": 68.35128126355102,
+      "comfort_score": 0.8786752703506922,
+      "scene_complexity": 0.4533004048539391
+    },
+    "test_results": {
+      "success": true,
+      "duration": 73.16981394139185,
+      "error_count": 0
+    },
+    "fps": 101.67867022034673,
+    "comfort_score": 0.8943164939405602
+  },
+  {
+    "experiment_id": "exp_0042",
+    "user_id": "user_042",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927415",
+    "performance_metrics": {
+      "fps_avg": 86.59222121857762,
+      "fps_min": 65.91916854462085,
+      "fps_max": 107.2652738925344,
+      "frame_time_avg": 11.548381435738694,
+      "gpu_utilization": 83.27625857498771,
+      "vram_usage": 5173.713910159069,
+      "cpu_utilization": 47.284609434079385,
+      "comfort_score": 0.8691674919693699,
+      "scene_complexity": 0.33975357070721013
+    },
+    "test_results": {
+      "success": true,
+      "duration": 183.6645773233171,
+      "error_count": 2
+    },
+    "fps": 86.59222121857762,
+    "comfort_score": 0.9081695739185474
+  },
+  {
+    "experiment_id": "exp_0043",
+    "user_id": "user_043",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927418",
+    "performance_metrics": {
+      "fps_avg": 108.88156949990085,
+      "fps_min": 88.9036746361522,
+      "fps_max": 128.8594643636495,
+      "frame_time_avg": 9.18429082711662,
+      "gpu_utilization": 87.78629912518262,
+      "vram_usage": 6108.146962198266,
+      "cpu_utilization": 51.23739168462251,
+      "comfort_score": 0.7654869290588171,
+      "scene_complexity": 0.7276250554406338
+    },
+    "test_results": {
+      "success": true,
+      "duration": 193.13287451195873,
+      "error_count": 3
+    },
+    "fps": 108.88156949990085,
+    "comfort_score": 0.9131245303654705
+  },
+  {
+    "experiment_id": "exp_0044",
+    "user_id": "user_044",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927421",
+    "performance_metrics": {
+      "fps_avg": 104.25351509692628,
+      "fps_min": 90.60156119743627,
+      "fps_max": 117.90546899641629,
+      "frame_time_avg": 9.592002716361964,
+      "gpu_utilization": 85.31731625347129,
+      "vram_usage": 3504.642693297409,
+      "cpu_utilization": 47.97849370818486,
+      "comfort_score": 0.9320205359564606,
+      "scene_complexity": 0.736830617290084
+    },
+    "test_results": {
+      "success": true,
+      "duration": 54.15394752122674,
+      "error_count": 2
+    },
+    "fps": 104.25351509692628,
+    "comfort_score": 0.7240475110349673
+  },
+  {
+    "experiment_id": "exp_0045",
+    "user_id": "user_045",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927424",
+    "performance_metrics": {
+      "fps_avg": 91.74506196478356,
+      "fps_min": 71.79351820621046,
+      "fps_max": 111.69660572335665,
+      "frame_time_avg": 10.899769192851503,
+      "gpu_utilization": 83.40984066578571,
+      "vram_usage": 6375.356713535849,
+      "cpu_utilization": 45.73514527182305,
+      "comfort_score": 0.7074976242068902,
+      "scene_complexity": 0.4381504133029298
+    },
+    "test_results": {
+      "success": true,
+      "duration": 212.0092912462532,
+      "error_count": 0
+    },
+    "fps": 91.74506196478356,
+    "comfort_score": 0.7276453720320799
+  },
+  {
+    "experiment_id": "exp_0046",
+    "user_id": "user_046",
+    "user_type": "researcher",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927427",
+    "performance_metrics": {
+      "fps_avg": 74.85159224045941,
+      "fps_min": 66.32157953390798,
+      "fps_max": 83.38160494701084,
+      "frame_time_avg": 13.359769245622962,
+      "gpu_utilization": 80.39002779991037,
+      "vram_usage": 7699.738276164458,
+      "cpu_utilization": 36.44125890205747,
+      "comfort_score": 0.7907812238526006,
+      "scene_complexity": 0.4794723404738428
+    },
+    "test_results": {
+      "success": true,
+      "duration": 192.39133940759743,
+      "error_count": 3
+    },
+    "fps": 74.85159224045941,
+    "comfort_score": 0.8495372205847966
+  },
+  {
+    "experiment_id": "exp_0047",
+    "user_id": "user_047",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927430",
+    "performance_metrics": {
+      "fps_avg": 77.74059857487133,
+      "fps_min": 61.73554289224434,
+      "fps_max": 93.74565425749832,
+      "frame_time_avg": 12.863291746292747,
+      "gpu_utilization": 79.6459294761276,
+      "vram_usage": 6516.844008524242,
+      "cpu_utilization": 60.98235297172248,
+      "comfort_score": 0.7616940071161625,
+      "scene_complexity": 0.5410878694269312
+    },
+    "test_results": {
+      "success": true,
+      "duration": 229.25900598913407,
+      "error_count": 1
+    },
+    "fps": 77.74059857487133,
+    "comfort_score": 0.9100558333416133
+  },
+  {
+    "experiment_id": "exp_0048",
+    "user_id": "user_048",
+    "user_type": "professional",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927435",
+    "performance_metrics": {
+      "fps_avg": 73.76238928443837,
+      "fps_min": 64.34447691842527,
+      "fps_max": 83.18030165045147,
+      "frame_time_avg": 13.557044581946178,
+      "gpu_utilization": 65.97370823775326,
+      "vram_usage": 3366.83124808258,
+      "cpu_utilization": 32.45202968965003,
+      "comfort_score": 0.7378319858722322,
+      "scene_complexity": 0.6483003395116058
+    },
+    "test_results": {
+      "success": true,
+      "duration": 237.4020583022586,
+      "error_count": 3
+    },
+    "fps": 73.76238928443837,
+    "comfort_score": 0.9353601037111077
+  },
+  {
+    "experiment_id": "exp_0049",
+    "user_id": "user_049",
+    "user_type": "professional",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927438",
+    "performance_metrics": {
+      "fps_avg": 103.60587891928846,
+      "fps_min": 92.05079895033033,
+      "fps_max": 115.16095888824658,
+      "frame_time_avg": 9.651961939138847,
+      "gpu_utilization": 63.15152662067447,
+      "vram_usage": 4413.472701204941,
+      "cpu_utilization": 42.731598640913,
+      "comfort_score": 0.7022005227865875,
+      "scene_complexity": 0.48380959932312784
+    },
+    "test_results": {
+      "success": true,
+      "duration": 121.61895009472615,
+      "error_count": 1
+    },
+    "fps": 103.60587891928846,
+    "comfort_score": 0.7090011163725279
+  },
+  {
+    "experiment_id": "exp_0050",
+    "user_id": "user_000",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927441",
+    "performance_metrics": {
+      "fps_avg": 80.28695401155613,
+      "fps_min": 66.80275873475071,
+      "fps_max": 93.77114928836156,
+      "frame_time_avg": 12.455323686287372,
+      "gpu_utilization": 61.89911036796402,
+      "vram_usage": 4731.999899611837,
+      "cpu_utilization": 65.11831667936623,
+      "comfort_score": 0.8475847485260928,
+      "scene_complexity": 0.726434307006552
+    },
+    "test_results": {
+      "success": true,
+      "duration": 199.59785917276142,
+      "error_count": 2
+    },
+    "fps": 80.28695401155613,
+    "comfort_score": 0.7872550419242139
+  },
+  {
+    "experiment_id": "exp_0051",
+    "user_id": "user_001",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927444",
+    "performance_metrics": {
+      "fps_avg": 101.49222676031931,
+      "fps_min": 72.44326004194026,
+      "fps_max": 130.54119347869837,
+      "frame_time_avg": 9.852971325198796,
+      "gpu_utilization": 88.13472826822255,
+      "vram_usage": 2653.972526920777,
+      "cpu_utilization": 32.63060481953139,
+      "comfort_score": 0.8481677611236452,
+      "scene_complexity": 0.7601808077639851
+    },
+    "test_results": {
+      "success": true,
+      "duration": 152.53876711998595,
+      "error_count": 1
+    },
+    "fps": 101.49222676031931,
+    "comfort_score": 0.7184032745149985
+  },
+  {
+    "experiment_id": "exp_0052",
+    "user_id": "user_002",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927447",
+    "performance_metrics": {
+      "fps_avg": 99.47947818802896,
+      "fps_min": 71.84649802138276,
+      "fps_max": 127.11245835467517,
+      "frame_time_avg": 10.05232454185045,
+      "gpu_utilization": 64.25057885421215,
+      "vram_usage": 2961.3522711213354,
+      "cpu_utilization": 47.44527479352222,
+      "comfort_score": 0.9172462873633219,
+      "scene_complexity": 0.8905084138751969
+    },
+    "test_results": {
+      "success": true,
+      "duration": 95.69616112072316,
+      "error_count": 3
+    },
+    "fps": 99.47947818802896,
+    "comfort_score": 0.8313626755986194
+  },
+  {
+    "experiment_id": "exp_0053",
+    "user_id": "user_003",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927450",
+    "performance_metrics": {
+      "fps_avg": 87.32092241672865,
+      "fps_min": 62.823856206642674,
+      "fps_max": 111.81798862681462,
+      "frame_time_avg": 11.45200912133772,
+      "gpu_utilization": 87.74022005427624,
+      "vram_usage": 2698.374254346016,
+      "cpu_utilization": 63.0145200325965,
+      "comfort_score": 0.9291255003002211,
+      "scene_complexity": 0.7619094140787157
+    },
+    "test_results": {
+      "success": false,
+      "duration": 287.1800225376828,
+      "error_count": 2
+    },
+    "fps": 87.32092241672865,
+    "comfort_score": 0.9104609493946683
+  },
+  {
+    "experiment_id": "exp_0054",
+    "user_id": "user_004",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927453",
+    "performance_metrics": {
+      "fps_avg": 106.92865319240317,
+      "fps_min": 78.4197175807527,
+      "fps_max": 135.43758880405366,
+      "frame_time_avg": 9.352030257041017,
+      "gpu_utilization": 80.23402713098373,
+      "vram_usage": 6089.504583136522,
+      "cpu_utilization": 68.82623239982588,
+      "comfort_score": 0.8380402310820354,
+      "scene_complexity": 0.5450435218366163
+    },
+    "test_results": {
+      "success": true,
+      "duration": 35.244975783990455,
+      "error_count": 2
+    },
+    "fps": 106.92865319240317,
+    "comfort_score": 0.702562506958635
+  },
+  {
+    "experiment_id": "exp_0055",
+    "user_id": "user_005",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927456",
+    "performance_metrics": {
+      "fps_avg": 88.31008699673262,
+      "fps_min": 69.22408799695812,
+      "fps_max": 107.39608599650713,
+      "frame_time_avg": 11.323734739803834,
+      "gpu_utilization": 94.59028741229287,
+      "vram_usage": 4800.278565200588,
+      "cpu_utilization": 67.7756779934634,
+      "comfort_score": 0.7043933792085909,
+      "scene_complexity": 0.7014381387228829
+    },
+    "test_results": {
+      "success": true,
+      "duration": 257.5602210267849,
+      "error_count": 0
+    },
+    "fps": 88.31008699673262,
+    "comfort_score": 0.869226874492728
+  },
+  {
+    "experiment_id": "exp_0056",
+    "user_id": "user_006",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927459",
+    "performance_metrics": {
+      "fps_avg": 85.31899717482487,
+      "fps_min": 69.11383942949678,
+      "fps_max": 101.52415492015297,
+      "frame_time_avg": 11.720719102580716,
+      "gpu_utilization": 61.47527538370668,
+      "vram_usage": 3705.703246443828,
+      "cpu_utilization": 37.101179329966484,
+      "comfort_score": 0.8884216198728683,
+      "scene_complexity": 0.6966161142573528
+    },
+    "test_results": {
+      "success": true,
+      "duration": 264.5156771243725,
+      "error_count": 0
+    },
+    "fps": 85.31899717482487,
+    "comfort_score": 0.7156664082173657
+  },
+  {
+    "experiment_id": "exp_0057",
+    "user_id": "user_007",
+    "user_type": "researcher",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927462",
+    "performance_metrics": {
+      "fps_avg": 95.9981136984962,
+      "fps_min": 79.32449628427398,
+      "fps_max": 112.67173111271842,
+      "frame_time_avg": 10.416871347500914,
+      "gpu_utilization": 90.16629452942868,
+      "vram_usage": 3119.3328211130956,
+      "cpu_utilization": 32.485780633659886,
+      "comfort_score": 0.8440725360199126,
+      "scene_complexity": 0.7041108448340561
+    },
+    "test_results": {
+      "success": true,
+      "duration": 72.12977416597528,
+      "error_count": 3
+    },
+    "fps": 95.9981136984962,
+    "comfort_score": 0.9012027271156409
+  },
+  {
+    "experiment_id": "exp_0058",
+    "user_id": "user_008",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927465",
+    "performance_metrics": {
+      "fps_avg": 87.62410745488266,
+      "fps_min": 68.18610818066891,
+      "fps_max": 107.06210672909641,
+      "frame_time_avg": 11.412384434442274,
+      "gpu_utilization": 73.95711772575666,
+      "vram_usage": 2267.255191223485,
+      "cpu_utilization": 68.62993485130507,
+      "comfort_score": 0.7256952477782005,
+      "scene_complexity": 0.6441766491033468
+    },
+    "test_results": {
+      "success": true,
+      "duration": 78.68155169289862,
+      "error_count": 1
+    },
+    "fps": 87.62410745488266,
+    "comfort_score": 0.7397523475530043
+  },
+  {
+    "experiment_id": "exp_0059",
+    "user_id": "user_009",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927468",
+    "performance_metrics": {
+      "fps_avg": 92.81003334057121,
+      "fps_min": 68.40496069402286,
+      "fps_max": 117.21510598711956,
+      "frame_time_avg": 10.774697131402252,
+      "gpu_utilization": 72.62386855056013,
+      "vram_usage": 5972.989823965985,
+      "cpu_utilization": 42.853656696229166,
+      "comfort_score": 0.7882276929536473,
+      "scene_complexity": 0.8713930393062463
+    },
+    "test_results": {
+      "success": true,
+      "duration": 70.91081305166085,
+      "error_count": 1
+    },
+    "fps": 92.81003334057121,
+    "comfort_score": 0.7041605251805161
+  },
+  {
+    "experiment_id": "exp_0060",
+    "user_id": "user_010",
+    "user_type": "casual",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927471",
+    "performance_metrics": {
+      "fps_avg": 100.12232012412177,
+      "fps_min": 79.82750107782628,
+      "fps_max": 120.41713917041726,
+      "frame_time_avg": 9.987782931521151,
+      "gpu_utilization": 82.61599246875483,
+      "vram_usage": 7549.916000596191,
+      "cpu_utilization": 50.950162644004614,
+      "comfort_score": 0.8926111302045812,
+      "scene_complexity": 0.4351228876200648
+    },
+    "test_results": {
+      "success": false,
+      "duration": 173.23032906170258,
+      "error_count": 3
+    },
+    "fps": 100.12232012412177,
+    "comfort_score": 0.9298336281266228
+  },
+  {
+    "experiment_id": "exp_0061",
+    "user_id": "user_011",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927474",
+    "performance_metrics": {
+      "fps_avg": 75.10992919581145,
+      "fps_min": 56.07515354948336,
+      "fps_max": 94.14470484213955,
+      "frame_time_avg": 13.313818967835822,
+      "gpu_utilization": 94.06023040928056,
+      "vram_usage": 5144.363321949582,
+      "cpu_utilization": 55.812095146267765,
+      "comfort_score": 0.9408001811324114,
+      "scene_complexity": 0.4549524409242831
+    },
+    "test_results": {
+      "success": false,
+      "duration": 199.80223162297924,
+      "error_count": 0
+    },
+    "fps": 75.10992919581145,
+    "comfort_score": 0.7204790870991092
+  },
+  {
+    "experiment_id": "exp_0062",
+    "user_id": "user_012",
+    "user_type": "professional",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927477",
+    "performance_metrics": {
+      "fps_avg": 112.64332246554497,
+      "fps_min": 83.91280488174036,
+      "fps_max": 141.37384004934958,
+      "frame_time_avg": 8.877579053173589,
+      "gpu_utilization": 89.2501729318189,
+      "vram_usage": 2551.2553152927667,
+      "cpu_utilization": 66.39492519546538,
+      "comfort_score": 0.9025309329108235,
+      "scene_complexity": 0.5599847091091101
+    },
+    "test_results": {
+      "success": true,
+      "duration": 295.14257738148734,
+      "error_count": 0
+    },
+    "fps": 112.64332246554497,
+    "comfort_score": 0.8452783343033838
+  },
+  {
+    "experiment_id": "exp_0063",
+    "user_id": "user_013",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927481",
+    "performance_metrics": {
+      "fps_avg": 89.24406361172692,
+      "fps_min": 73.0406509785439,
+      "fps_max": 105.44747624490994,
+      "frame_time_avg": 11.205227098921538,
+      "gpu_utilization": 81.10723168971171,
+      "vram_usage": 2177.124538558932,
+      "cpu_utilization": 61.136233552473115,
+      "comfort_score": 0.7978373786244288,
+      "scene_complexity": 0.8512782601718341
+    },
+    "test_results": {
+      "success": true,
+      "duration": 200.38841612731093,
+      "error_count": 3
+    },
+    "fps": 89.24406361172692,
+    "comfort_score": 0.8027287566337851
+  },
+  {
+    "experiment_id": "exp_0064",
+    "user_id": "user_014",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927484",
+    "performance_metrics": {
+      "fps_avg": 95.54401495875607,
+      "fps_min": 76.6167968565789,
+      "fps_max": 114.47123306093323,
+      "frame_time_avg": 10.466380342417834,
+      "gpu_utilization": 72.92669073068109,
+      "vram_usage": 3464.9914622505576,
+      "cpu_utilization": 69.80558318151418,
+      "comfort_score": 0.8097563063807071,
+      "scene_complexity": 0.4110504250717866
+    },
+    "test_results": {
+      "success": true,
+      "duration": 78.7328586858707,
+      "error_count": 1
+    },
+    "fps": 95.54401495875607,
+    "comfort_score": 0.9445707760816839
+  },
+  {
+    "experiment_id": "exp_0065",
+    "user_id": "user_015",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927487",
+    "performance_metrics": {
+      "fps_avg": 100.0672557531528,
+      "fps_min": 75.6176214084081,
+      "fps_max": 124.51689009789752,
+      "frame_time_avg": 9.993278944980892,
+      "gpu_utilization": 80.16246753323874,
+      "vram_usage": 4371.145046745487,
+      "cpu_utilization": 41.00016730501113,
+      "comfort_score": 0.7913905495480658,
+      "scene_complexity": 0.6345502482630513
+    },
+    "test_results": {
+      "success": true,
+      "duration": 55.10730623334737,
+      "error_count": 2
+    },
+    "fps": 100.0672557531528,
+    "comfort_score": 0.7117617613128089
+  },
+  {
+    "experiment_id": "exp_0066",
+    "user_id": "user_016",
+    "user_type": "researcher",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927490",
+    "performance_metrics": {
+      "fps_avg": 75.45540100895961,
+      "fps_min": 60.90824357355474,
+      "fps_max": 90.00255844436448,
+      "frame_time_avg": 13.252861778327299,
+      "gpu_utilization": 62.4979484379579,
+      "vram_usage": 2852.0473690917443,
+      "cpu_utilization": 59.441679061129875,
+      "comfort_score": 0.8403652992226368,
+      "scene_complexity": 0.6702945992231855
+    },
+    "test_results": {
+      "success": true,
+      "duration": 260.11224045886945,
+      "error_count": 3
+    },
+    "fps": 75.45540100895961,
+    "comfort_score": 0.8786701480825748
+  },
+  {
+    "experiment_id": "exp_0067",
+    "user_id": "user_017",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927494",
+    "performance_metrics": {
+      "fps_avg": 109.97715603052484,
+      "fps_min": 93.31940549249097,
+      "fps_max": 126.6349065685587,
+      "frame_time_avg": 9.092797414423444,
+      "gpu_utilization": 77.75507247803053,
+      "vram_usage": 4287.132331321531,
+      "cpu_utilization": 63.67546269843628,
+      "comfort_score": 0.8435811255203087,
+      "scene_complexity": 0.6151829203445571
+    },
+    "test_results": {
+      "success": false,
+      "duration": 185.25217618623077,
+      "error_count": 0
+    },
+    "fps": 109.97715603052484,
+    "comfort_score": 0.9416619371701886
+  },
+  {
+    "experiment_id": "exp_0068",
+    "user_id": "user_018",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927497",
+    "performance_metrics": {
+      "fps_avg": 112.28386287539192,
+      "fps_min": 79.79625247340289,
+      "fps_max": 144.77147327738095,
+      "frame_time_avg": 8.905999262866112,
+      "gpu_utilization": 61.82508777866157,
+      "vram_usage": 2658.052910089147,
+      "cpu_utilization": 42.23036432298124,
+      "comfort_score": 0.8671786820134133,
+      "scene_complexity": 0.5152487107155238
+    },
+    "test_results": {
+      "success": true,
+      "duration": 44.885351076482856,
+      "error_count": 1
+    },
+    "fps": 112.28386287539192,
+    "comfort_score": 0.9477702446198337
+  },
+  {
+    "experiment_id": "exp_0069",
+    "user_id": "user_019",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927500",
+    "performance_metrics": {
+      "fps_avg": 89.88086412927629,
+      "fps_min": 70.57913863833575,
+      "fps_max": 109.18258962021683,
+      "frame_time_avg": 11.125838738729668,
+      "gpu_utilization": 69.97465534113678,
+      "vram_usage": 7732.692566615381,
+      "cpu_utilization": 49.16539620994996,
+      "comfort_score": 0.9255960949006607,
+      "scene_complexity": 0.4626591024692165
+    },
+    "test_results": {
+      "success": true,
+      "duration": 85.4913247884162,
+      "error_count": 0
+    },
+    "fps": 89.88086412927629,
+    "comfort_score": 0.8755880348573389
+  },
+  {
+    "experiment_id": "exp_0070",
+    "user_id": "user_020",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927503",
+    "performance_metrics": {
+      "fps_avg": 117.88398918789126,
+      "fps_min": 100.49666182665443,
+      "fps_max": 135.27131654912807,
+      "frame_time_avg": 8.482916186405383,
+      "gpu_utilization": 84.33140195295739,
+      "vram_usage": 5472.035965718356,
+      "cpu_utilization": 34.333185778952085,
+      "comfort_score": 0.7030813162196065,
+      "scene_complexity": 0.8938564911627624
+    },
+    "test_results": {
+      "success": true,
+      "duration": 183.13293313499213,
+      "error_count": 1
+    },
+    "fps": 117.88398918789126,
+    "comfort_score": 0.7554456298002323
+  },
+  {
+    "experiment_id": "exp_0071",
+    "user_id": "user_021",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927506",
+    "performance_metrics": {
+      "fps_avg": 86.79323335566099,
+      "fps_min": 63.6463268500106,
+      "fps_max": 109.94013986131137,
+      "frame_time_avg": 11.521635516241268,
+      "gpu_utilization": 62.66129664321835,
+      "vram_usage": 7931.86817171051,
+      "cpu_utilization": 67.57256072109901,
+      "comfort_score": 0.7990265510486343,
+      "scene_complexity": 0.306192620357701
+    },
+    "test_results": {
+      "success": false,
+      "duration": 197.33628419622696,
+      "error_count": 3
+    },
+    "fps": 86.79323335566099,
+    "comfort_score": 0.8128224421009712
+  },
+  {
+    "experiment_id": "exp_0072",
+    "user_id": "user_022",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927509",
+    "performance_metrics": {
+      "fps_avg": 89.50239812654226,
+      "fps_min": 73.99818023487225,
+      "fps_max": 105.00661601821227,
+      "frame_time_avg": 11.172884983329249,
+      "gpu_utilization": 73.69886372567939,
+      "vram_usage": 7603.15905473595,
+      "cpu_utilization": 39.818552759068595,
+      "comfort_score": 0.7068504965148092,
+      "scene_complexity": 0.31438791892303897
+    },
+    "test_results": {
+      "success": true,
+      "duration": 294.96586738047375,
+      "error_count": 0
+    },
+    "fps": 89.50239812654226,
+    "comfort_score": 0.786465863416929
+  },
+  {
+    "experiment_id": "exp_0073",
+    "user_id": "user_023",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927512",
+    "performance_metrics": {
+      "fps_avg": 84.62536610836422,
+      "fps_min": 68.57681151160914,
+      "fps_max": 100.6739207051193,
+      "frame_time_avg": 11.816787873265836,
+      "gpu_utilization": 80.22038309544921,
+      "vram_usage": 7780.557086980705,
+      "cpu_utilization": 50.411619395380825,
+      "comfort_score": 0.7062172302294577,
+      "scene_complexity": 0.885692544835494
+    },
+    "test_results": {
+      "success": true,
+      "duration": 204.62382595009257,
+      "error_count": 0
+    },
+    "fps": 84.62536610836422,
+    "comfort_score": 0.8536892927590632
+  },
+  {
+    "experiment_id": "exp_0074",
+    "user_id": "user_024",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927515",
+    "performance_metrics": {
+      "fps_avg": 72.46547854410909,
+      "fps_min": 52.182270795794565,
+      "fps_max": 92.74868629242361,
+      "frame_time_avg": 13.799674273748277,
+      "gpu_utilization": 94.47910460606414,
+      "vram_usage": 3399.5442455662633,
+      "cpu_utilization": 34.37889788934572,
+      "comfort_score": 0.8881037856678676,
+      "scene_complexity": 0.6069106719303325
+    },
+    "test_results": {
+      "success": true,
+      "duration": 281.0176278814838,
+      "error_count": 0
+    },
+    "fps": 72.46547854410909,
+    "comfort_score": 0.8340273348754997
+  },
+  {
+    "experiment_id": "exp_0075",
+    "user_id": "user_025",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927518",
+    "performance_metrics": {
+      "fps_avg": 103.41953206809384,
+      "fps_min": 92.74536537276516,
+      "fps_max": 114.09369876342252,
+      "frame_time_avg": 9.669353361041864,
+      "gpu_utilization": 69.53111110578435,
+      "vram_usage": 5080.832967197719,
+      "cpu_utilization": 43.16892597645013,
+      "comfort_score": 0.7191406388081181,
+      "scene_complexity": 0.7201142192732981
+    },
+    "test_results": {
+      "success": false,
+      "duration": 87.46607879806596,
+      "error_count": 2
+    },
+    "fps": 103.41953206809384,
+    "comfort_score": 0.8411647333746446
+  },
+  {
+    "experiment_id": "exp_0076",
+    "user_id": "user_026",
+    "user_type": "professional",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927521",
+    "performance_metrics": {
+      "fps_avg": 108.17617655149971,
+      "fps_min": 89.30700327623843,
+      "fps_max": 127.04534982676098,
+      "frame_time_avg": 9.244179558554904,
+      "gpu_utilization": 79.56897691152632,
+      "vram_usage": 5024.162681400867,
+      "cpu_utilization": 55.28748694269744,
+      "comfort_score": 0.7829384391797517,
+      "scene_complexity": 0.7619695286239905
+    },
+    "test_results": {
+      "success": true,
+      "duration": 44.93043132992223,
+      "error_count": 2
+    },
+    "fps": 108.17617655149971,
+    "comfort_score": 0.7790380447231515
+  },
+  {
+    "experiment_id": "exp_0077",
+    "user_id": "user_027",
+    "user_type": "professional",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927525",
+    "performance_metrics": {
+      "fps_avg": 106.85868705334238,
+      "fps_min": 75.54141552574129,
+      "fps_max": 138.17595858094347,
+      "frame_time_avg": 9.358153535059007,
+      "gpu_utilization": 67.75299472538784,
+      "vram_usage": 5816.890690507474,
+      "cpu_utilization": 41.38298883003624,
+      "comfort_score": 0.8251138096911109,
+      "scene_complexity": 0.653078868057462
+    },
+    "test_results": {
+      "success": true,
+      "duration": 81.40526305384438,
+      "error_count": 3
+    },
+    "fps": 106.85868705334238,
+    "comfort_score": 0.7108749928055138
+  },
+  {
+    "experiment_id": "exp_0078",
+    "user_id": "user_028",
+    "user_type": "professional",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927529",
+    "performance_metrics": {
+      "fps_avg": 91.10116586277431,
+      "fps_min": 76.81548500637273,
+      "fps_max": 105.38684671917589,
+      "frame_time_avg": 10.976807931374886,
+      "gpu_utilization": 68.57133770201033,
+      "vram_usage": 4008.9547628043447,
+      "cpu_utilization": 68.2881707308834,
+      "comfort_score": 0.9116932302036359,
+      "scene_complexity": 0.4177521440357379
+    },
+    "test_results": {
+      "success": true,
+      "duration": 244.9661848734038,
+      "error_count": 2
+    },
+    "fps": 91.10116586277431,
+    "comfort_score": 0.798886030024034
+  },
+  {
+    "experiment_id": "exp_0079",
+    "user_id": "user_029",
+    "user_type": "casual",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927532",
+    "performance_metrics": {
+      "fps_avg": 91.84796691778385,
+      "fps_min": 79.26639170479052,
+      "fps_max": 104.42954213077718,
+      "frame_time_avg": 10.88755727053962,
+      "gpu_utilization": 61.014724758859515,
+      "vram_usage": 5116.556233698029,
+      "cpu_utilization": 49.13329520316023,
+      "comfort_score": 0.8945692606946702,
+      "scene_complexity": 0.8512810181354777
+    },
+    "test_results": {
+      "success": true,
+      "duration": 202.1372106566576,
+      "error_count": 1
+    },
+    "fps": 91.84796691778385,
+    "comfort_score": 0.9353954779303015
+  },
+  {
+    "experiment_id": "exp_0080",
+    "user_id": "user_030",
+    "user_type": "casual",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927536",
+    "performance_metrics": {
+      "fps_avg": 116.66035863362382,
+      "fps_min": 93.69814642538216,
+      "fps_max": 139.62257084186547,
+      "frame_time_avg": 8.57189204381359,
+      "gpu_utilization": 80.45926636494168,
+      "vram_usage": 2227.6614040872673,
+      "cpu_utilization": 69.25464363527496,
+      "comfort_score": 0.7564614099683472,
+      "scene_complexity": 0.805621523994922
+    },
+    "test_results": {
+      "success": true,
+      "duration": 150.00574028168316,
+      "error_count": 1
+    },
+    "fps": 116.66035863362382,
+    "comfort_score": 0.795565330704738
+  },
+  {
+    "experiment_id": "exp_0081",
+    "user_id": "user_031",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927539",
+    "performance_metrics": {
+      "fps_avg": 75.83560280110723,
+      "fps_min": 58.52685719708346,
+      "fps_max": 93.144348405131,
+      "frame_time_avg": 13.186418556237804,
+      "gpu_utilization": 90.03847709403578,
+      "vram_usage": 3108.583712317257,
+      "cpu_utilization": 31.621852457582005,
+      "comfort_score": 0.7031692752144866,
+      "scene_complexity": 0.8946741750157508
+    },
+    "test_results": {
+      "success": true,
+      "duration": 44.23906001834615,
+      "error_count": 0
+    },
+    "fps": 75.83560280110723,
+    "comfort_score": 0.8558406652627609
+  },
+  {
+    "experiment_id": "exp_0082",
+    "user_id": "user_032",
+    "user_type": "casual",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927542",
+    "performance_metrics": {
+      "fps_avg": 119.90849008983076,
+      "fps_min": 99.99150135865477,
+      "fps_max": 139.82547882100675,
+      "frame_time_avg": 8.339693038006224,
+      "gpu_utilization": 69.46668469940103,
+      "vram_usage": 6653.886272165644,
+      "cpu_utilization": 58.90620551900252,
+      "comfort_score": 0.7601690592178472,
+      "scene_complexity": 0.8379275232156953
+    },
+    "test_results": {
+      "success": true,
+      "duration": 94.65735260010216,
+      "error_count": 3
+    },
+    "fps": 119.90849008983076,
+    "comfort_score": 0.817144796817699
+  },
+  {
+    "experiment_id": "exp_0083",
+    "user_id": "user_033",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927546",
+    "performance_metrics": {
+      "fps_avg": 114.67760249268365,
+      "fps_min": 92.7631308338712,
+      "fps_max": 136.5920741514961,
+      "frame_time_avg": 8.720098591735027,
+      "gpu_utilization": 74.02392480952665,
+      "vram_usage": 2755.7684747499375,
+      "cpu_utilization": 46.59252024776022,
+      "comfort_score": 0.7414262225393979,
+      "scene_complexity": 0.7907489602234918
+    },
+    "test_results": {
+      "success": true,
+      "duration": 172.59213422790475,
+      "error_count": 2
+    },
+    "fps": 114.67760249268365,
+    "comfort_score": 0.9480000800260777
+  },
+  {
+    "experiment_id": "exp_0084",
+    "user_id": "user_034",
+    "user_type": "researcher",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927548",
+    "performance_metrics": {
+      "fps_avg": 87.46565766010723,
+      "fps_min": 74.75541194837432,
+      "fps_max": 100.17590337184014,
+      "frame_time_avg": 11.433058719869392,
+      "gpu_utilization": 80.05956639087202,
+      "vram_usage": 6708.053202084417,
+      "cpu_utilization": 46.18482459449704,
+      "comfort_score": 0.800617527300511,
+      "scene_complexity": 0.8807883047980523
+    },
+    "test_results": {
+      "success": true,
+      "duration": 241.46658552793778,
+      "error_count": 2
+    },
+    "fps": 87.46565766010723,
+    "comfort_score": 0.7450401350552054
+  },
+  {
+    "experiment_id": "exp_0085",
+    "user_id": "user_035",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927551",
+    "performance_metrics": {
+      "fps_avg": 116.34472160509517,
+      "fps_min": 103.85838875720891,
+      "fps_max": 128.83105445298142,
+      "frame_time_avg": 8.595147130045703,
+      "gpu_utilization": 88.5766758196679,
+      "vram_usage": 7148.351826431332,
+      "cpu_utilization": 40.32477230528565,
+      "comfort_score": 0.7341963640693607,
+      "scene_complexity": 0.5675330639436984
+    },
+    "test_results": {
+      "success": true,
+      "duration": 217.98466710429716,
+      "error_count": 0
+    },
+    "fps": 116.34472160509517,
+    "comfort_score": 0.9283994797956399
+  },
+  {
+    "experiment_id": "exp_0086",
+    "user_id": "user_036",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927554",
+    "performance_metrics": {
+      "fps_avg": 101.74833120538608,
+      "fps_min": 78.250455682061,
+      "fps_max": 125.24620672871116,
+      "frame_time_avg": 9.82817101915343,
+      "gpu_utilization": 83.6016150457284,
+      "vram_usage": 2361.352168286042,
+      "cpu_utilization": 66.74839112392304,
+      "comfort_score": 0.8576865660238104,
+      "scene_complexity": 0.5003804814025308
+    },
+    "test_results": {
+      "success": true,
+      "duration": 88.73884074617172,
+      "error_count": 2
+    },
+    "fps": 101.74833120538608,
+    "comfort_score": 0.8172956428632864
+  },
+  {
+    "experiment_id": "exp_0087",
+    "user_id": "user_037",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927558",
+    "performance_metrics": {
+      "fps_avg": 115.04045262802396,
+      "fps_min": 102.69863093547403,
+      "fps_max": 127.38227432057387,
+      "frame_time_avg": 8.692594449653608,
+      "gpu_utilization": 88.55380234246732,
+      "vram_usage": 2254.3359732046843,
+      "cpu_utilization": 60.70321403171201,
+      "comfort_score": 0.7042283611730844,
+      "scene_complexity": 0.4730918293718277
+    },
+    "test_results": {
+      "success": true,
+      "duration": 122.6914414935292,
+      "error_count": 2
+    },
+    "fps": 115.04045262802396,
+    "comfort_score": 0.8325378370254762
+  },
+  {
+    "experiment_id": "exp_0088",
+    "user_id": "user_038",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927561",
+    "performance_metrics": {
+      "fps_avg": 98.78478094337794,
+      "fps_min": 77.5958928515409,
+      "fps_max": 119.97366903521498,
+      "frame_time_avg": 10.123016829618583,
+      "gpu_utilization": 86.82526273449322,
+      "vram_usage": 5600.822268292439,
+      "cpu_utilization": 56.59812461918373,
+      "comfort_score": 0.8611881324150251,
+      "scene_complexity": 0.6881063047033439
+    },
+    "test_results": {
+      "success": true,
+      "duration": 288.93798121191446,
+      "error_count": 3
+    },
+    "fps": 98.78478094337794,
+    "comfort_score": 0.8132151365421147
+  },
+  {
+    "experiment_id": "exp_0089",
+    "user_id": "user_039",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927564",
+    "performance_metrics": {
+      "fps_avg": 109.37555566762413,
+      "fps_min": 92.02774275962732,
+      "fps_max": 126.72336857562094,
+      "frame_time_avg": 9.142810693815807,
+      "gpu_utilization": 86.74791111275485,
+      "vram_usage": 6081.158418106124,
+      "cpu_utilization": 48.82484175554332,
+      "comfort_score": 0.8599886119874814,
+      "scene_complexity": 0.5827556802617897
+    },
+    "test_results": {
+      "success": false,
+      "duration": 215.06045219090615,
+      "error_count": 0
+    },
+    "fps": 109.37555566762413,
+    "comfort_score": 0.7550458907696621
+  },
+  {
+    "experiment_id": "exp_0090",
+    "user_id": "user_040",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927567",
+    "performance_metrics": {
+      "fps_avg": 111.38938410322007,
+      "fps_min": 86.41744542696468,
+      "fps_max": 136.36132277947547,
+      "frame_time_avg": 8.9775161973545,
+      "gpu_utilization": 84.6386734354829,
+      "vram_usage": 3859.9046211927416,
+      "cpu_utilization": 61.61277547387465,
+      "comfort_score": 0.8300640052312523,
+      "scene_complexity": 0.5240233923065569
+    },
+    "test_results": {
+      "success": false,
+      "duration": 41.63049481384234,
+      "error_count": 3
+    },
+    "fps": 111.38938410322007,
+    "comfort_score": 0.8833405451191441
+  },
+  {
+    "experiment_id": "exp_0091",
+    "user_id": "user_041",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927570",
+    "performance_metrics": {
+      "fps_avg": 78.67265906414411,
+      "fps_min": 61.20886237248419,
+      "fps_max": 96.13645575580404,
+      "frame_time_avg": 12.710896160058233,
+      "gpu_utilization": 68.86211451058283,
+      "vram_usage": 6272.620629606079,
+      "cpu_utilization": 30.73328238124819,
+      "comfort_score": 0.8972573430978368,
+      "scene_complexity": 0.6152858333557698
+    },
+    "test_results": {
+      "success": false,
+      "duration": 50.689125475614865,
+      "error_count": 0
+    },
+    "fps": 78.67265906414411,
+    "comfort_score": 0.8476423801482179
+  },
+  {
+    "experiment_id": "exp_0092",
+    "user_id": "user_042",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927574",
+    "performance_metrics": {
+      "fps_avg": 80.03379580538292,
+      "fps_min": 57.53605543381798,
+      "fps_max": 102.53153617694785,
+      "frame_time_avg": 12.49472163524127,
+      "gpu_utilization": 85.26946253135499,
+      "vram_usage": 4962.42093983485,
+      "cpu_utilization": 50.47280092214949,
+      "comfort_score": 0.8320264859122412,
+      "scene_complexity": 0.8981411714168692
+    },
+    "test_results": {
+      "success": true,
+      "duration": 67.9211807117508,
+      "error_count": 3
+    },
+    "fps": 80.03379580538292,
+    "comfort_score": 0.7185536177328171
+  },
+  {
+    "experiment_id": "exp_0093",
+    "user_id": "user_043",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927577",
+    "performance_metrics": {
+      "fps_avg": 80.35087635544225,
+      "fps_min": 58.31305863664517,
+      "fps_max": 102.38869407423934,
+      "frame_time_avg": 12.445414976886795,
+      "gpu_utilization": 85.94149990558006,
+      "vram_usage": 6917.255441003257,
+      "cpu_utilization": 66.40262203885379,
+      "comfort_score": 0.7151559156639616,
+      "scene_complexity": 0.6479838076167082
+    },
+    "test_results": {
+      "success": true,
+      "duration": 100.53905033504275,
+      "error_count": 0
+    },
+    "fps": 80.35087635544225,
+    "comfort_score": 0.7019223184195897
+  },
+  {
+    "experiment_id": "exp_0094",
+    "user_id": "user_044",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927580",
+    "performance_metrics": {
+      "fps_avg": 103.86473755828328,
+      "fps_min": 72.73242100612228,
+      "fps_max": 134.99705411044428,
+      "frame_time_avg": 9.627906674667656,
+      "gpu_utilization": 69.14486381744811,
+      "vram_usage": 4733.4091894633675,
+      "cpu_utilization": 51.72747758126174,
+      "comfort_score": 0.7161965878314291,
+      "scene_complexity": 0.7859088366121025
+    },
+    "test_results": {
+      "success": true,
+      "duration": 227.8790437936068,
+      "error_count": 3
+    },
+    "fps": 103.86473755828328,
+    "comfort_score": 0.8395469430363018
+  },
+  {
+    "experiment_id": "exp_0095",
+    "user_id": "user_045",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927583",
+    "performance_metrics": {
+      "fps_avg": 105.10320642834908,
+      "fps_min": 89.48489133491445,
+      "fps_max": 120.72152152178371,
+      "frame_time_avg": 9.514457588710384,
+      "gpu_utilization": 71.74690501957824,
+      "vram_usage": 3133.586490523225,
+      "cpu_utilization": 31.85823462537592,
+      "comfort_score": 0.8223475599647123,
+      "scene_complexity": 0.3531883552119771
+    },
+    "test_results": {
+      "success": true,
+      "duration": 192.89271806213412,
+      "error_count": 3
+    },
+    "fps": 105.10320642834908,
+    "comfort_score": 0.9259951697784179
+  },
+  {
+    "experiment_id": "exp_0096",
+    "user_id": "user_046",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927586",
+    "performance_metrics": {
+      "fps_avg": 95.40216489291839,
+      "fps_min": 76.34388716401286,
+      "fps_max": 114.46044262182393,
+      "frame_time_avg": 10.48194242890005,
+      "gpu_utilization": 67.43356713749029,
+      "vram_usage": 5342.713661127491,
+      "cpu_utilization": 49.61238990637176,
+      "comfort_score": 0.8112749348860038,
+      "scene_complexity": 0.7966368377086332
+    },
+    "test_results": {
+      "success": true,
+      "duration": 87.8753799239006,
+      "error_count": 2
+    },
+    "fps": 95.40216489291839,
+    "comfort_score": 0.7840943009571296
+  },
+  {
+    "experiment_id": "exp_0097",
+    "user_id": "user_047",
+    "user_type": "casual",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927589",
+    "performance_metrics": {
+      "fps_avg": 78.98885890428666,
+      "fps_min": 56.980522424461185,
+      "fps_max": 100.99719538411213,
+      "frame_time_avg": 12.660013245813971,
+      "gpu_utilization": 86.56293937591131,
+      "vram_usage": 7225.112131557033,
+      "cpu_utilization": 31.136048512655563,
+      "comfort_score": 0.8049359668104793,
+      "scene_complexity": 0.40865466938693096
+    },
+    "test_results": {
+      "success": false,
+      "duration": 189.8380608203368,
+      "error_count": 2
+    },
+    "fps": 78.98885890428666,
+    "comfort_score": 0.7367302114058416
+  },
+  {
+    "experiment_id": "exp_0098",
+    "user_id": "user_048",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927592",
+    "performance_metrics": {
+      "fps_avg": 107.06409917350634,
+      "fps_min": 95.24804355892934,
+      "fps_max": 118.88015478808333,
+      "frame_time_avg": 9.340199074382687,
+      "gpu_utilization": 73.25582441448567,
+      "vram_usage": 6252.498390160735,
+      "cpu_utilization": 67.55494955875291,
+      "comfort_score": 0.9081153104411025,
+      "scene_complexity": 0.8430885206604883
+    },
+    "test_results": {
+      "success": true,
+      "duration": 154.90994453164018,
+      "error_count": 2
+    },
+    "fps": 107.06409917350634,
+    "comfort_score": 0.8394566453557285
+  },
+  {
+    "experiment_id": "exp_0099",
+    "user_id": "user_049",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927595",
+    "performance_metrics": {
+      "fps_avg": 102.00602750907106,
+      "fps_min": 81.21063239330418,
+      "fps_max": 122.80142262483795,
+      "frame_time_avg": 9.80334225750604,
+      "gpu_utilization": 91.64058609709556,
+      "vram_usage": 4816.916781956352,
+      "cpu_utilization": 52.62121762353189,
+      "comfort_score": 0.9040816862704875,
+      "scene_complexity": 0.4677418049392572
+    },
+    "test_results": {
+      "success": true,
+      "duration": 145.70389898462705,
+      "error_count": 0
+    },
+    "fps": 102.00602750907106,
+    "comfort_score": 0.809328773406976
+  },
+  {
+    "experiment_id": "exp_0100",
+    "user_id": "user_000",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927598",
+    "performance_metrics": {
+      "fps_avg": 83.12893165866326,
+      "fps_min": 59.51264989351733,
+      "fps_max": 106.7452134238092,
+      "frame_time_avg": 12.029506214588592,
+      "gpu_utilization": 66.78024873538106,
+      "vram_usage": 3885.73143907677,
+      "cpu_utilization": 44.29996112771847,
+      "comfort_score": 0.7402918331306435,
+      "scene_complexity": 0.49069585275842553
+    },
+    "test_results": {
+      "success": true,
+      "duration": 114.68996100123888,
+      "error_count": 0
+    },
+    "fps": 83.12893165866326,
+    "comfort_score": 0.8377415946006573
+  },
+  {
+    "experiment_id": "exp_0101",
+    "user_id": "user_001",
+    "user_type": "gamer",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927601",
+    "performance_metrics": {
+      "fps_avg": 86.3590199390171,
+      "fps_min": 73.71426023959594,
+      "fps_max": 99.00377963843826,
+      "frame_time_avg": 11.579566334890734,
+      "gpu_utilization": 81.09612882329864,
+      "vram_usage": 7411.109830634471,
+      "cpu_utilization": 46.29536796953566,
+      "comfort_score": 0.9262033737550832,
+      "scene_complexity": 0.6033529951507778
+    },
+    "test_results": {
+      "success": true,
+      "duration": 44.70122511919011,
+      "error_count": 1
+    },
+    "fps": 86.3590199390171,
+    "comfort_score": 0.763912209827685
+  },
+  {
+    "experiment_id": "exp_0102",
+    "user_id": "user_002",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927604",
+    "performance_metrics": {
+      "fps_avg": 84.60212029490081,
+      "fps_min": 74.71070668765138,
+      "fps_max": 94.49353390215025,
+      "frame_time_avg": 11.820034728612736,
+      "gpu_utilization": 94.52432272220138,
+      "vram_usage": 7828.230670546311,
+      "cpu_utilization": 62.45685879844055,
+      "comfort_score": 0.7277769764312673,
+      "scene_complexity": 0.33275666793980757
+    },
+    "test_results": {
+      "success": true,
+      "duration": 225.73784639942377,
+      "error_count": 1
+    },
+    "fps": 84.60212029490081,
+    "comfort_score": 0.8431797209901193
+  },
+  {
+    "experiment_id": "exp_0103",
+    "user_id": "user_003",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927607",
+    "performance_metrics": {
+      "fps_avg": 117.3795325664382,
+      "fps_min": 82.73804128948021,
+      "fps_max": 152.0210238433962,
+      "frame_time_avg": 8.519372825360232,
+      "gpu_utilization": 78.3705140387805,
+      "vram_usage": 7559.577846948025,
+      "cpu_utilization": 38.650933747345285,
+      "comfort_score": 0.8470589101752007,
+      "scene_complexity": 0.4225331169414851
+    },
+    "test_results": {
+      "success": false,
+      "duration": 135.07644686503625,
+      "error_count": 2
+    },
+    "fps": 117.3795325664382,
+    "comfort_score": 0.7250700356533842
+  },
+  {
+    "experiment_id": "exp_0104",
+    "user_id": "user_004",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927610",
+    "performance_metrics": {
+      "fps_avg": 72.53327919044317,
+      "fps_min": 60.208103415199524,
+      "fps_max": 84.8584549656868,
+      "frame_time_avg": 13.786774997093444,
+      "gpu_utilization": 88.60406975835795,
+      "vram_usage": 6863.925322883127,
+      "cpu_utilization": 55.38079370838031,
+      "comfort_score": 0.7151214972013974,
+      "scene_complexity": 0.8353823351138931
+    },
+    "test_results": {
+      "success": true,
+      "duration": 258.02762561166674,
+      "error_count": 2
+    },
+    "fps": 72.53327919044317,
+    "comfort_score": 0.7770307276897336
+  },
+  {
+    "experiment_id": "exp_0105",
+    "user_id": "user_005",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927613",
+    "performance_metrics": {
+      "fps_avg": 96.90643894720557,
+      "fps_min": 72.55329536976272,
+      "fps_max": 121.25958252464842,
+      "frame_time_avg": 10.319231733866497,
+      "gpu_utilization": 74.91298823100148,
+      "vram_usage": 4871.26588946893,
+      "cpu_utilization": 57.58142506380999,
+      "comfort_score": 0.8676515100675941,
+      "scene_complexity": 0.6942506760722496
+    },
+    "test_results": {
+      "success": true,
+      "duration": 201.50097126546228,
+      "error_count": 0
+    },
+    "fps": 96.90643894720557,
+    "comfort_score": 0.8957538063620663
+  },
+  {
+    "experiment_id": "exp_0106",
+    "user_id": "user_006",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927616",
+    "performance_metrics": {
+      "fps_avg": 75.53494349548252,
+      "fps_min": 60.84665147553985,
+      "fps_max": 90.22323551542519,
+      "frame_time_avg": 13.23890577954568,
+      "gpu_utilization": 71.23282696017196,
+      "vram_usage": 5599.826940326284,
+      "cpu_utilization": 46.668159460509656,
+      "comfort_score": 0.818347687552165,
+      "scene_complexity": 0.5193207782644936
+    },
+    "test_results": {
+      "success": true,
+      "duration": 169.64272700811466,
+      "error_count": 1
+    },
+    "fps": 75.53494349548252,
+    "comfort_score": 0.7082291691818301
+  },
+  {
+    "experiment_id": "exp_0107",
+    "user_id": "user_007",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927618",
+    "performance_metrics": {
+      "fps_avg": 94.48517337013745,
+      "fps_min": 82.50533028372284,
+      "fps_max": 106.46501645655205,
+      "frame_time_avg": 10.583671112954272,
+      "gpu_utilization": 80.07753859122867,
+      "vram_usage": 7585.712051656581,
+      "cpu_utilization": 55.38604281027755,
+      "comfort_score": 0.8018022614911506,
+      "scene_complexity": 0.721672337415918
+    },
+    "test_results": {
+      "success": true,
+      "duration": 278.9209696047219,
+      "error_count": 3
+    },
+    "fps": 94.48517337013745,
+    "comfort_score": 0.9480501835953032
+  },
+  {
+    "experiment_id": "exp_0108",
+    "user_id": "user_008",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927621",
+    "performance_metrics": {
+      "fps_avg": 90.38795317078569,
+      "fps_min": 65.19541364676117,
+      "fps_max": 115.58049269481022,
+      "frame_time_avg": 11.06342122949201,
+      "gpu_utilization": 92.25272447261781,
+      "vram_usage": 4032.4061063880986,
+      "cpu_utilization": 54.16595997855815,
+      "comfort_score": 0.8902217066719597,
+      "scene_complexity": 0.7410634260304569
+    },
+    "test_results": {
+      "success": true,
+      "duration": 229.17144394117187,
+      "error_count": 2
+    },
+    "fps": 90.38795317078569,
+    "comfort_score": 0.9210635440813761
+  },
+  {
+    "experiment_id": "exp_0109",
+    "user_id": "user_009",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927625",
+    "performance_metrics": {
+      "fps_avg": 90.83195084194439,
+      "fps_min": 76.67229627308171,
+      "fps_max": 104.99160541080707,
+      "frame_time_avg": 11.009341875086314,
+      "gpu_utilization": 84.97998647767425,
+      "vram_usage": 2371.8145214389788,
+      "cpu_utilization": 68.94953947261102,
+      "comfort_score": 0.8901999862973481,
+      "scene_complexity": 0.5773887195865932
+    },
+    "test_results": {
+      "success": true,
+      "duration": 257.8334470199183,
+      "error_count": 3
+    },
+    "fps": 90.83195084194439,
+    "comfort_score": 0.8468231265355599
+  },
+  {
+    "experiment_id": "exp_0110",
+    "user_id": "user_010",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927628",
+    "performance_metrics": {
+      "fps_avg": 99.09889316835829,
+      "fps_min": 87.9267760072222,
+      "fps_max": 110.27101032949437,
+      "frame_time_avg": 10.090930060148182,
+      "gpu_utilization": 62.029460190729644,
+      "vram_usage": 7468.029136910139,
+      "cpu_utilization": 47.830892357275125,
+      "comfort_score": 0.8996317900823245,
+      "scene_complexity": 0.4083999508440749
+    },
+    "test_results": {
+      "success": true,
+      "duration": 86.67521215642691,
+      "error_count": 0
+    },
+    "fps": 99.09889316835829,
+    "comfort_score": 0.8136224845531348
+  },
+  {
+    "experiment_id": "exp_0111",
+    "user_id": "user_011",
+    "user_type": "gamer",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927631",
+    "performance_metrics": {
+      "fps_avg": 90.57262498119033,
+      "fps_min": 65.50451000026662,
+      "fps_max": 115.64073996211404,
+      "frame_time_avg": 11.040863618644982,
+      "gpu_utilization": 76.07224716643098,
+      "vram_usage": 4077.3390566595604,
+      "cpu_utilization": 49.040335739095596,
+      "comfort_score": 0.754191796419556,
+      "scene_complexity": 0.49456708385854525
+    },
+    "test_results": {
+      "success": true,
+      "duration": 218.47220282499845,
+      "error_count": 3
+    },
+    "fps": 90.57262498119033,
+    "comfort_score": 0.9279312864421932
+  },
+  {
+    "experiment_id": "exp_0112",
+    "user_id": "user_012",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927634",
+    "performance_metrics": {
+      "fps_avg": 93.9222650919578,
+      "fps_min": 81.53596266006876,
+      "fps_max": 106.30856752384683,
+      "frame_time_avg": 10.647102676036571,
+      "gpu_utilization": 91.81509862748936,
+      "vram_usage": 3007.7021872940186,
+      "cpu_utilization": 62.11895505970577,
+      "comfort_score": 0.8731950914329293,
+      "scene_complexity": 0.7665142932449369
+    },
+    "test_results": {
+      "success": true,
+      "duration": 263.7755545458773,
+      "error_count": 2
+    },
+    "fps": 93.9222650919578,
+    "comfort_score": 0.8744753961110554
+  },
+  {
+    "experiment_id": "exp_0113",
+    "user_id": "user_013",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927637",
+    "performance_metrics": {
+      "fps_avg": 80.64587583874854,
+      "fps_min": 72.4811461659938,
+      "fps_max": 88.81060551150325,
+      "frame_time_avg": 12.3998901320075,
+      "gpu_utilization": 71.66559094175959,
+      "vram_usage": 3346.4819157205266,
+      "cpu_utilization": 59.06719611825788,
+      "comfort_score": 0.7891196922343429,
+      "scene_complexity": 0.4570964521242367
+    },
+    "test_results": {
+      "success": true,
+      "duration": 148.41383568567966,
+      "error_count": 3
+    },
+    "fps": 80.64587583874854,
+    "comfort_score": 0.8838373617917931
+  },
+  {
+    "experiment_id": "exp_0114",
+    "user_id": "user_014",
+    "user_type": "casual",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927640",
+    "performance_metrics": {
+      "fps_avg": 77.55951025920179,
+      "fps_min": 69.7437651366884,
+      "fps_max": 85.37525538171519,
+      "frame_time_avg": 12.893325353113074,
+      "gpu_utilization": 88.18937707006157,
+      "vram_usage": 5819.179949646739,
+      "cpu_utilization": 61.50360158904152,
+      "comfort_score": 0.714565041705167,
+      "scene_complexity": 0.6112639897398614
+    },
+    "test_results": {
+      "success": true,
+      "duration": 40.0059595862462,
+      "error_count": 3
+    },
+    "fps": 77.55951025920179,
+    "comfort_score": 0.9049078586112338
+  },
+  {
+    "experiment_id": "exp_0115",
+    "user_id": "user_015",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927643",
+    "performance_metrics": {
+      "fps_avg": 95.14844903076404,
+      "fps_min": 70.13897223317473,
+      "fps_max": 120.15792582835336,
+      "frame_time_avg": 10.509892806310203,
+      "gpu_utilization": 89.64299325721404,
+      "vram_usage": 2340.5145209103835,
+      "cpu_utilization": 62.791281541004864,
+      "comfort_score": 0.8782993995765678,
+      "scene_complexity": 0.7930987256551864
+    },
+    "test_results": {
+      "success": true,
+      "duration": 292.86161091454323,
+      "error_count": 1
+    },
+    "fps": 95.14844903076404,
+    "comfort_score": 0.9486910307460972
+  },
+  {
+    "experiment_id": "exp_0116",
+    "user_id": "user_016",
+    "user_type": "researcher",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927646",
+    "performance_metrics": {
+      "fps_avg": 106.85481099626648,
+      "fps_min": 77.40553853012584,
+      "fps_max": 136.3040834624071,
+      "frame_time_avg": 9.358492993216188,
+      "gpu_utilization": 65.2421622351239,
+      "vram_usage": 4189.926187931954,
+      "cpu_utilization": 66.29773204601254,
+      "comfort_score": 0.8184158944779641,
+      "scene_complexity": 0.5546593322253119
+    },
+    "test_results": {
+      "success": true,
+      "duration": 179.3188409354909,
+      "error_count": 2
+    },
+    "fps": 106.85481099626648,
+    "comfort_score": 0.842219621648092
+  },
+  {
+    "experiment_id": "exp_0117",
+    "user_id": "user_017",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927649",
+    "performance_metrics": {
+      "fps_avg": 92.58440688742269,
+      "fps_min": 79.88019215342261,
+      "fps_max": 105.28862162142276,
+      "frame_time_avg": 10.800954865066451,
+      "gpu_utilization": 89.56799059862891,
+      "vram_usage": 4303.851756624959,
+      "cpu_utilization": 32.0057347164207,
+      "comfort_score": 0.7582474662289878,
+      "scene_complexity": 0.8123466924826686
+    },
+    "test_results": {
+      "success": true,
+      "duration": 197.7251965222306,
+      "error_count": 3
+    },
+    "fps": 92.58440688742269,
+    "comfort_score": 0.7080796458726485
+  },
+  {
+    "experiment_id": "exp_0118",
+    "user_id": "user_018",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927652",
+    "performance_metrics": {
+      "fps_avg": 79.22585463897227,
+      "fps_min": 57.81732041675917,
+      "fps_max": 100.63438886118536,
+      "frame_time_avg": 12.622142159992384,
+      "gpu_utilization": 90.33610740061006,
+      "vram_usage": 7344.982362636315,
+      "cpu_utilization": 30.544603538568392,
+      "comfort_score": 0.8287636966333727,
+      "scene_complexity": 0.737565435295431
+    },
+    "test_results": {
+      "success": true,
+      "duration": 42.24698276938804,
+      "error_count": 2
+    },
+    "fps": 79.22585463897227,
+    "comfort_score": 0.7374047063149718
+  },
+  {
+    "experiment_id": "exp_0119",
+    "user_id": "user_019",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927656",
+    "performance_metrics": {
+      "fps_avg": 110.94412610882733,
+      "fps_min": 79.19964652310873,
+      "fps_max": 142.68860569454597,
+      "frame_time_avg": 9.01354614320978,
+      "gpu_utilization": 84.00460393737609,
+      "vram_usage": 5696.653347980504,
+      "cpu_utilization": 33.44676625971936,
+      "comfort_score": 0.7538825636217703,
+      "scene_complexity": 0.6717845256719192
+    },
+    "test_results": {
+      "success": true,
+      "duration": 199.18835457466997,
+      "error_count": 2
+    },
+    "fps": 110.94412610882733,
+    "comfort_score": 0.9185520277123227
+  },
+  {
+    "experiment_id": "exp_0120",
+    "user_id": "user_020",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927658",
+    "performance_metrics": {
+      "fps_avg": 77.65406842371173,
+      "fps_min": 54.82473443750098,
+      "fps_max": 100.4834024099225,
+      "frame_time_avg": 12.87762534917809,
+      "gpu_utilization": 73.71022344342116,
+      "vram_usage": 4609.756587770629,
+      "cpu_utilization": 40.2925906141783,
+      "comfort_score": 0.7630731731735969,
+      "scene_complexity": 0.5900555210768921
+    },
+    "test_results": {
+      "success": false,
+      "duration": 69.61754504008701,
+      "error_count": 1
+    },
+    "fps": 77.65406842371173,
+    "comfort_score": 0.8085641127863072
+  },
+  {
+    "experiment_id": "exp_0121",
+    "user_id": "user_021",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927661",
+    "performance_metrics": {
+      "fps_avg": 106.53571621888238,
+      "fps_min": 94.12012017453938,
+      "fps_max": 118.9513122632254,
+      "frame_time_avg": 9.386523463600277,
+      "gpu_utilization": 66.03600561959469,
+      "vram_usage": 6685.995197702968,
+      "cpu_utilization": 50.35260138608322,
+      "comfort_score": 0.8570669247160199,
+      "scene_complexity": 0.8133849934128616
+    },
+    "test_results": {
+      "success": false,
+      "duration": 272.6681034402924,
+      "error_count": 3
+    },
+    "fps": 106.53571621888238,
+    "comfort_score": 0.8891485750373068
+  },
+  {
+    "experiment_id": "exp_0122",
+    "user_id": "user_022",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927664",
+    "performance_metrics": {
+      "fps_avg": 108.94702784043363,
+      "fps_min": 91.51955583859335,
+      "fps_max": 126.37449984227392,
+      "frame_time_avg": 9.178772655134965,
+      "gpu_utilization": 74.0869982746444,
+      "vram_usage": 2369.908920834331,
+      "cpu_utilization": 58.55621853964105,
+      "comfort_score": 0.7165383645564182,
+      "scene_complexity": 0.41584767858079585
+    },
+    "test_results": {
+      "success": false,
+      "duration": 66.71794298644902,
+      "error_count": 3
+    },
+    "fps": 108.94702784043363,
+    "comfort_score": 0.8364284816498022
+  },
+  {
+    "experiment_id": "exp_0123",
+    "user_id": "user_023",
+    "user_type": "researcher",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927667",
+    "performance_metrics": {
+      "fps_avg": 74.90541922513069,
+      "fps_min": 63.123482847480325,
+      "fps_max": 86.68735560278104,
+      "frame_time_avg": 13.350168924286603,
+      "gpu_utilization": 88.91890552528464,
+      "vram_usage": 7890.3418965316305,
+      "cpu_utilization": 33.732847684535955,
+      "comfort_score": 0.8561154216989084,
+      "scene_complexity": 0.8870775125863388
+    },
+    "test_results": {
+      "success": false,
+      "duration": 123.62987609158003,
+      "error_count": 2
+    },
+    "fps": 74.90541922513069,
+    "comfort_score": 0.8423985197666145
+  },
+  {
+    "experiment_id": "exp_0124",
+    "user_id": "user_024",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927671",
+    "performance_metrics": {
+      "fps_avg": 93.0026260125319,
+      "fps_min": 75.7132338309911,
+      "fps_max": 110.29201819407271,
+      "frame_time_avg": 10.75238456025158,
+      "gpu_utilization": 87.11672802485676,
+      "vram_usage": 6527.872593251803,
+      "cpu_utilization": 62.74005895853158,
+      "comfort_score": 0.9495640708398112,
+      "scene_complexity": 0.3157979076624193
+    },
+    "test_results": {
+      "success": false,
+      "duration": 169.29350306541613,
+      "error_count": 3
+    },
+    "fps": 93.0026260125319,
+    "comfort_score": 0.9152478788672777
+  },
+  {
+    "experiment_id": "exp_0125",
+    "user_id": "user_025",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927674",
+    "performance_metrics": {
+      "fps_avg": 90.0321380749508,
+      "fps_min": 75.58584209501967,
+      "fps_max": 104.47843405488192,
+      "frame_time_avg": 11.107144863843072,
+      "gpu_utilization": 89.27383612625829,
+      "vram_usage": 3384.5661962103127,
+      "cpu_utilization": 30.78885420846426,
+      "comfort_score": 0.7414995824984097,
+      "scene_complexity": 0.3105854341243998
+    },
+    "test_results": {
+      "success": true,
+      "duration": 220.57101437776194,
+      "error_count": 0
+    },
+    "fps": 90.0321380749508,
+    "comfort_score": 0.7655492843146708
+  },
+  {
+    "experiment_id": "exp_0126",
+    "user_id": "user_026",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927678",
+    "performance_metrics": {
+      "fps_avg": 86.59795196895867,
+      "fps_min": 60.99057146422049,
+      "fps_max": 112.20533247369684,
+      "frame_time_avg": 11.547617204139579,
+      "gpu_utilization": 79.76892407285126,
+      "vram_usage": 7279.7763475504935,
+      "cpu_utilization": 35.336402577342525,
+      "comfort_score": 0.8777930876243826,
+      "scene_complexity": 0.7848234059705461
+    },
+    "test_results": {
+      "success": true,
+      "duration": 294.1833019695403,
+      "error_count": 2
+    },
+    "fps": 86.59795196895867,
+    "comfort_score": 0.7505317345294176
+  },
+  {
+    "experiment_id": "exp_0127",
+    "user_id": "user_027",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927681",
+    "performance_metrics": {
+      "fps_avg": 109.28543469107306,
+      "fps_min": 92.94908297808746,
+      "fps_max": 125.62178640405867,
+      "frame_time_avg": 9.150350207479978,
+      "gpu_utilization": 71.17689148064999,
+      "vram_usage": 4141.942456399507,
+      "cpu_utilization": 42.60087418600293,
+      "comfort_score": 0.8365366486090756,
+      "scene_complexity": 0.41365612424664355
+    },
+    "test_results": {
+      "success": false,
+      "duration": 122.23800059191316,
+      "error_count": 2
+    },
+    "fps": 109.28543469107306,
+    "comfort_score": 0.9345683831904531
+  },
+  {
+    "experiment_id": "exp_0128",
+    "user_id": "user_028",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927684",
+    "performance_metrics": {
+      "fps_avg": 94.38080823665621,
+      "fps_min": 69.01528948856782,
+      "fps_max": 119.7463269847446,
+      "frame_time_avg": 10.59537440591247,
+      "gpu_utilization": 88.98943010700295,
+      "vram_usage": 3590.1093147007214,
+      "cpu_utilization": 69.87450786076555,
+      "comfort_score": 0.7763341519359334,
+      "scene_complexity": 0.7443216097542417
+    },
+    "test_results": {
+      "success": false,
+      "duration": 95.960764359376,
+      "error_count": 1
+    },
+    "fps": 94.38080823665621,
+    "comfort_score": 0.7926227195127898
+  },
+  {
+    "experiment_id": "exp_0129",
+    "user_id": "user_029",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927690",
+    "performance_metrics": {
+      "fps_avg": 79.56565840672032,
+      "fps_min": 69.10254035851027,
+      "fps_max": 90.02877645493037,
+      "frame_time_avg": 12.568236347498603,
+      "gpu_utilization": 71.09879439170165,
+      "vram_usage": 2180.6025132146833,
+      "cpu_utilization": 57.85991515619754,
+      "comfort_score": 0.7011471450820047,
+      "scene_complexity": 0.7449309247277429
+    },
+    "test_results": {
+      "success": true,
+      "duration": 170.61064962351335,
+      "error_count": 3
+    },
+    "fps": 79.56565840672032,
+    "comfort_score": 0.8737022893746891
+  },
+  {
+    "experiment_id": "exp_0130",
+    "user_id": "user_030",
+    "user_type": "casual",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927693",
+    "performance_metrics": {
+      "fps_avg": 101.48911631236174,
+      "fps_min": 90.23922882092964,
+      "fps_max": 112.73900380379385,
+      "frame_time_avg": 9.85327329998829,
+      "gpu_utilization": 66.69215635858625,
+      "vram_usage": 4337.197938317342,
+      "cpu_utilization": 67.30393021015914,
+      "comfort_score": 0.7264361670730523,
+      "scene_complexity": 0.6628079819400448
+    },
+    "test_results": {
+      "success": false,
+      "duration": 139.48320666180197,
+      "error_count": 3
+    },
+    "fps": 101.48911631236174,
+    "comfort_score": 0.9326697164625974
+  },
+  {
+    "experiment_id": "exp_0131",
+    "user_id": "user_031",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927696",
+    "performance_metrics": {
+      "fps_avg": 88.37869050734119,
+      "fps_min": 78.63810074863353,
+      "fps_max": 98.11928026604885,
+      "frame_time_avg": 11.31494474810005,
+      "gpu_utilization": 82.61895467240991,
+      "vram_usage": 7416.92317208443,
+      "cpu_utilization": 50.886781425206685,
+      "comfort_score": 0.9019155132937238,
+      "scene_complexity": 0.8739196590341722
+    },
+    "test_results": {
+      "success": true,
+      "duration": 152.48966624372005,
+      "error_count": 3
+    },
+    "fps": 88.37869050734119,
+    "comfort_score": 0.735263643269434
+  },
+  {
+    "experiment_id": "exp_0132",
+    "user_id": "user_032",
+    "user_type": "professional",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927699",
+    "performance_metrics": {
+      "fps_avg": 79.54491031026008,
+      "fps_min": 64.21981808790893,
+      "fps_max": 94.87000253261121,
+      "frame_time_avg": 12.571514583391457,
+      "gpu_utilization": 64.05809300535074,
+      "vram_usage": 5182.5320283377205,
+      "cpu_utilization": 37.84556513222754,
+      "comfort_score": 0.8074811270812889,
+      "scene_complexity": 0.6039699267802539
+    },
+    "test_results": {
+      "success": true,
+      "duration": 107.65998843803284,
+      "error_count": 0
+    },
+    "fps": 79.54491031026008,
+    "comfort_score": 0.7804218447771083
+  },
+  {
+    "experiment_id": "exp_0133",
+    "user_id": "user_033",
+    "user_type": "professional",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927702",
+    "performance_metrics": {
+      "fps_avg": 103.47217754719173,
+      "fps_min": 87.53653657056579,
+      "fps_max": 119.40781852381768,
+      "frame_time_avg": 9.66443370290452,
+      "gpu_utilization": 88.20060035505243,
+      "vram_usage": 3195.6237927166444,
+      "cpu_utilization": 57.734095327530284,
+      "comfort_score": 0.94705472131494,
+      "scene_complexity": 0.7215808796983154
+    },
+    "test_results": {
+      "success": false,
+      "duration": 68.91540239078383,
+      "error_count": 0
+    },
+    "fps": 103.47217754719173,
+    "comfort_score": 0.7458302193545451
+  },
+  {
+    "experiment_id": "exp_0134",
+    "user_id": "user_034",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927704",
+    "performance_metrics": {
+      "fps_avg": 94.19097432550414,
+      "fps_min": 78.57327986971886,
+      "fps_max": 109.80866878128943,
+      "frame_time_avg": 10.616728483391741,
+      "gpu_utilization": 65.02311938393484,
+      "vram_usage": 3254.89443581502,
+      "cpu_utilization": 33.00875773650076,
+      "comfort_score": 0.7160293710363282,
+      "scene_complexity": 0.4094900488420473
+    },
+    "test_results": {
+      "success": true,
+      "duration": 125.33300046849482,
+      "error_count": 1
+    },
+    "fps": 94.19097432550414,
+    "comfort_score": 0.7267088521197753
+  },
+  {
+    "experiment_id": "exp_0135",
+    "user_id": "user_035",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927707",
+    "performance_metrics": {
+      "fps_avg": 105.11788858145356,
+      "fps_min": 91.62198273802059,
+      "fps_max": 118.61379442488652,
+      "frame_time_avg": 9.51312867386146,
+      "gpu_utilization": 66.52438253306556,
+      "vram_usage": 3867.972540381903,
+      "cpu_utilization": 59.82484888109609,
+      "comfort_score": 0.9284615374114464,
+      "scene_complexity": 0.5742118190722209
+    },
+    "test_results": {
+      "success": true,
+      "duration": 35.732654397221914,
+      "error_count": 1
+    },
+    "fps": 105.11788858145356,
+    "comfort_score": 0.8374848167659774
+  },
+  {
+    "experiment_id": "exp_0136",
+    "user_id": "user_036",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927710",
+    "performance_metrics": {
+      "fps_avg": 108.86193524534261,
+      "fps_min": 82.6266824276481,
+      "fps_max": 135.09718806303712,
+      "frame_time_avg": 9.18594729871645,
+      "gpu_utilization": 69.88782491505876,
+      "vram_usage": 7415.629446560988,
+      "cpu_utilization": 52.91068399349437,
+      "comfort_score": 0.849141418066975,
+      "scene_complexity": 0.5708100376565759
+    },
+    "test_results": {
+      "success": true,
+      "duration": 191.69072968107838,
+      "error_count": 3
+    },
+    "fps": 108.86193524534261,
+    "comfort_score": 0.8686771451986628
+  },
+  {
+    "experiment_id": "exp_0137",
+    "user_id": "user_037",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927713",
+    "performance_metrics": {
+      "fps_avg": 119.5716793953905,
+      "fps_min": 101.75632350496561,
+      "fps_max": 137.3870352858154,
+      "frame_time_avg": 8.363184368208765,
+      "gpu_utilization": 79.80056766770075,
+      "vram_usage": 4172.48763000619,
+      "cpu_utilization": 53.15895732052617,
+      "comfort_score": 0.9028334685251552,
+      "scene_complexity": 0.44243724994462835
+    },
+    "test_results": {
+      "success": false,
+      "duration": 239.52397657220052,
+      "error_count": 1
+    },
+    "fps": 119.5716793953905,
+    "comfort_score": 0.8224878780673307
+  },
+  {
+    "experiment_id": "exp_0138",
+    "user_id": "user_038",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927716",
+    "performance_metrics": {
+      "fps_avg": 114.23229468010138,
+      "fps_min": 91.08643763282343,
+      "fps_max": 137.37815172737933,
+      "frame_time_avg": 8.754091851174152,
+      "gpu_utilization": 77.62144350008816,
+      "vram_usage": 7428.848810771996,
+      "cpu_utilization": 55.198704724187266,
+      "comfort_score": 0.8858713840688551,
+      "scene_complexity": 0.37221064480409577
+    },
+    "test_results": {
+      "success": true,
+      "duration": 277.4788870884912,
+      "error_count": 3
+    },
+    "fps": 114.23229468010138,
+    "comfort_score": 0.7024279715587124
+  },
+  {
+    "experiment_id": "exp_0139",
+    "user_id": "user_039",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927720",
+    "performance_metrics": {
+      "fps_avg": 73.23032771925148,
+      "fps_min": 60.228474904873416,
+      "fps_max": 86.23218053362953,
+      "frame_time_avg": 13.655544514750417,
+      "gpu_utilization": 62.78255204445373,
+      "vram_usage": 7510.904409382388,
+      "cpu_utilization": 67.3030436940129,
+      "comfort_score": 0.7382433567686035,
+      "scene_complexity": 0.4639420764710993
+    },
+    "test_results": {
+      "success": false,
+      "duration": 108.1980329235336,
+      "error_count": 2
+    },
+    "fps": 73.23032771925148,
+    "comfort_score": 0.7891960112909939
+  },
+  {
+    "experiment_id": "exp_0140",
+    "user_id": "user_040",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927723",
+    "performance_metrics": {
+      "fps_avg": 107.47371153548363,
+      "fps_min": 87.0143698330545,
+      "fps_max": 127.93305323791274,
+      "frame_time_avg": 9.304600964393408,
+      "gpu_utilization": 77.94561193557746,
+      "vram_usage": 3771.7683757639807,
+      "cpu_utilization": 66.92369474518185,
+      "comfort_score": 0.908524675734857,
+      "scene_complexity": 0.34077452180498224
+    },
+    "test_results": {
+      "success": true,
+      "duration": 167.78957141617244,
+      "error_count": 1
+    },
+    "fps": 107.47371153548363,
+    "comfort_score": 0.8806827357435587
+  },
+  {
+    "experiment_id": "exp_0141",
+    "user_id": "user_041",
+    "user_type": "professional",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927726",
+    "performance_metrics": {
+      "fps_avg": 96.04876113558157,
+      "fps_min": 73.78958401920451,
+      "fps_max": 118.30793825195863,
+      "frame_time_avg": 10.411378430882715,
+      "gpu_utilization": 84.81909338522931,
+      "vram_usage": 2128.526372443128,
+      "cpu_utilization": 50.991285260862114,
+      "comfort_score": 0.8663088512420647,
+      "scene_complexity": 0.7301616075787202
+    },
+    "test_results": {
+      "success": true,
+      "duration": 110.05592448170628,
+      "error_count": 1
+    },
+    "fps": 96.04876113558157,
+    "comfort_score": 0.7521805502413972
+  },
+  {
+    "experiment_id": "exp_0142",
+    "user_id": "user_042",
+    "user_type": "gamer",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927729",
+    "performance_metrics": {
+      "fps_avg": 86.1284369373914,
+      "fps_min": 77.37566443784908,
+      "fps_max": 94.88120943693372,
+      "frame_time_avg": 11.610567143194777,
+      "gpu_utilization": 65.49996751477524,
+      "vram_usage": 5156.144373058816,
+      "cpu_utilization": 47.620205047646735,
+      "comfort_score": 0.7661990314066509,
+      "scene_complexity": 0.4121727044808384
+    },
+    "test_results": {
+      "success": true,
+      "duration": 246.32432279896037,
+      "error_count": 3
+    },
+    "fps": 86.1284369373914,
+    "comfort_score": 0.7327927340618523
+  },
+  {
+    "experiment_id": "exp_0143",
+    "user_id": "user_043",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927732",
+    "performance_metrics": {
+      "fps_avg": 76.94479500786333,
+      "fps_min": 54.27167429130213,
+      "fps_max": 99.61791572442452,
+      "frame_time_avg": 12.996330679649033,
+      "gpu_utilization": 68.18856499448005,
+      "vram_usage": 2771.0883960378287,
+      "cpu_utilization": 56.08810363337402,
+      "comfort_score": 0.8130173535168884,
+      "scene_complexity": 0.5173959191467739
+    },
+    "test_results": {
+      "success": true,
+      "duration": 228.42677089688692,
+      "error_count": 1
+    },
+    "fps": 76.94479500786333,
+    "comfort_score": 0.746767798836838
+  },
+  {
+    "experiment_id": "exp_0144",
+    "user_id": "user_044",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927735",
+    "performance_metrics": {
+      "fps_avg": 99.5169947723781,
+      "fps_min": 72.22035235938847,
+      "fps_max": 126.81363718536771,
+      "frame_time_avg": 10.048534949103583,
+      "gpu_utilization": 83.1665578679461,
+      "vram_usage": 5001.95751536709,
+      "cpu_utilization": 42.2754885282588,
+      "comfort_score": 0.7996379267016951,
+      "scene_complexity": 0.8194414728979074
+    },
+    "test_results": {
+      "success": true,
+      "duration": 251.3463135094853,
+      "error_count": 2
+    },
+    "fps": 99.5169947723781,
+    "comfort_score": 0.8871930755767596
+  },
+  {
+    "experiment_id": "exp_0145",
+    "user_id": "user_045",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927738",
+    "performance_metrics": {
+      "fps_avg": 103.70444997016767,
+      "fps_min": 73.72494302713557,
+      "fps_max": 133.68395691319978,
+      "frame_time_avg": 9.642787751997785,
+      "gpu_utilization": 64.00159303328104,
+      "vram_usage": 4168.788999734475,
+      "cpu_utilization": 46.34723646100203,
+      "comfort_score": 0.7286243730342545,
+      "scene_complexity": 0.5942512419319417
+    },
+    "test_results": {
+      "success": false,
+      "duration": 202.98852002222262,
+      "error_count": 3
+    },
+    "fps": 103.70444997016767,
+    "comfort_score": 0.8444882783577529
+  },
+  {
+    "experiment_id": "exp_0146",
+    "user_id": "user_046",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927741",
+    "performance_metrics": {
+      "fps_avg": 104.39059026719991,
+      "fps_min": 93.7380015212321,
+      "fps_max": 115.04317901316773,
+      "frame_time_avg": 9.579407468052276,
+      "gpu_utilization": 82.15510640250476,
+      "vram_usage": 5600.904588386611,
+      "cpu_utilization": 31.31849186310115,
+      "comfort_score": 0.7082821605874564,
+      "scene_complexity": 0.5630032940309895
+    },
+    "test_results": {
+      "success": false,
+      "duration": 248.26177678744028,
+      "error_count": 1
+    },
+    "fps": 104.39059026719991,
+    "comfort_score": 0.9481640883389391
+  },
+  {
+    "experiment_id": "exp_0147",
+    "user_id": "user_047",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927744",
+    "performance_metrics": {
+      "fps_avg": 108.96025109367758,
+      "fps_min": 93.10961036971578,
+      "fps_max": 124.81089181763939,
+      "frame_time_avg": 9.177658733002175,
+      "gpu_utilization": 74.06567514356968,
+      "vram_usage": 2693.5597862425793,
+      "cpu_utilization": 64.6258474988601,
+      "comfort_score": 0.7652761910530521,
+      "scene_complexity": 0.44882731590321334
+    },
+    "test_results": {
+      "success": true,
+      "duration": 156.0272746030172,
+      "error_count": 2
+    },
+    "fps": 108.96025109367758,
+    "comfort_score": 0.8212999125429143
+  },
+  {
+    "experiment_id": "exp_0148",
+    "user_id": "user_048",
+    "user_type": "researcher",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927747",
+    "performance_metrics": {
+      "fps_avg": 114.69969664332359,
+      "fps_min": 93.70974678365874,
+      "fps_max": 135.68964650298844,
+      "frame_time_avg": 8.718418873501072,
+      "gpu_utilization": 78.5400614452064,
+      "vram_usage": 2461.9125437202215,
+      "cpu_utilization": 30.18722504545904,
+      "comfort_score": 0.800867248237693,
+      "scene_complexity": 0.42319021355535746
+    },
+    "test_results": {
+      "success": true,
+      "duration": 90.26061242670207,
+      "error_count": 0
+    },
+    "fps": 114.69969664332359,
+    "comfort_score": 0.8683475563982995
+  },
+  {
+    "experiment_id": "exp_0149",
+    "user_id": "user_049",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927750",
+    "performance_metrics": {
+      "fps_avg": 85.87328471765161,
+      "fps_min": 71.75824864666332,
+      "fps_max": 99.98832078863991,
+      "frame_time_avg": 11.645065206111136,
+      "gpu_utilization": 77.27051225251819,
+      "vram_usage": 4439.908959892877,
+      "cpu_utilization": 36.914198809208486,
+      "comfort_score": 0.8413982824978274,
+      "scene_complexity": 0.6665575326348733
+    },
+    "test_results": {
+      "success": true,
+      "duration": 223.76835628998367,
+      "error_count": 0
+    },
+    "fps": 85.87328471765161,
+    "comfort_score": 0.8123180835375063
+  },
+  {
+    "experiment_id": "exp_0150",
+    "user_id": "user_000",
+    "user_type": "gamer",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927753",
+    "performance_metrics": {
+      "fps_avg": 76.73469365876069,
+      "fps_min": 54.18186175832191,
+      "fps_max": 99.28752555919948,
+      "frame_time_avg": 13.03191493077436,
+      "gpu_utilization": 91.19154426854044,
+      "vram_usage": 5362.218933799825,
+      "cpu_utilization": 49.56608701779926,
+      "comfort_score": 0.9111618707656587,
+      "scene_complexity": 0.6689028556894803
+    },
+    "test_results": {
+      "success": false,
+      "duration": 35.10575845180525,
+      "error_count": 1
+    },
+    "fps": 76.73469365876069,
+    "comfort_score": 0.7859706844218672
+  },
+  {
+    "experiment_id": "exp_0151",
+    "user_id": "user_001",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927756",
+    "performance_metrics": {
+      "fps_avg": 117.93378150720494,
+      "fps_min": 100.88211990191037,
+      "fps_max": 134.9854431124995,
+      "frame_time_avg": 8.479334650512389,
+      "gpu_utilization": 63.624796630076034,
+      "vram_usage": 4900.252331822403,
+      "cpu_utilization": 51.66897306693812,
+      "comfort_score": 0.7227856536687555,
+      "scene_complexity": 0.751638005371797
+    },
+    "test_results": {
+      "success": false,
+      "duration": 70.87210807927977,
+      "error_count": 3
+    },
+    "fps": 117.93378150720494,
+    "comfort_score": 0.8194569103849307
+  },
+  {
+    "experiment_id": "exp_0152",
+    "user_id": "user_002",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927759",
+    "performance_metrics": {
+      "fps_avg": 87.3514988967559,
+      "fps_min": 73.84706564529083,
+      "fps_max": 100.85593214822097,
+      "frame_time_avg": 11.448000465131555,
+      "gpu_utilization": 62.00107541470891,
+      "vram_usage": 3994.197513402349,
+      "cpu_utilization": 61.985647614967824,
+      "comfort_score": 0.8670340181699958,
+      "scene_complexity": 0.46581559427955077
+    },
+    "test_results": {
+      "success": true,
+      "duration": 30.426419496974162,
+      "error_count": 2
+    },
+    "fps": 87.3514988967559,
+    "comfort_score": 0.7439640547891425
+  },
+  {
+    "experiment_id": "exp_0153",
+    "user_id": "user_003",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927762",
+    "performance_metrics": {
+      "fps_avg": 119.29750363896572,
+      "fps_min": 91.77331199657755,
+      "fps_max": 146.8216952813539,
+      "frame_time_avg": 8.382405075518895,
+      "gpu_utilization": 82.48670648581611,
+      "vram_usage": 6436.343293199571,
+      "cpu_utilization": 31.680569506044563,
+      "comfort_score": 0.8398397146940217,
+      "scene_complexity": 0.8825560488187392
+    },
+    "test_results": {
+      "success": false,
+      "duration": 209.04468429471913,
+      "error_count": 2
+    },
+    "fps": 119.29750363896572,
+    "comfort_score": 0.7704195673904686
+  },
+  {
+    "experiment_id": "exp_0154",
+    "user_id": "user_004",
+    "user_type": "researcher",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927765",
+    "performance_metrics": {
+      "fps_avg": 79.51890692751917,
+      "fps_min": 68.48623019622264,
+      "fps_max": 90.5515836588157,
+      "frame_time_avg": 12.57562557935425,
+      "gpu_utilization": 83.75126227983415,
+      "vram_usage": 5968.443114358033,
+      "cpu_utilization": 44.88126032107862,
+      "comfort_score": 0.7900041509272921,
+      "scene_complexity": 0.454335141535105
+    },
+    "test_results": {
+      "success": true,
+      "duration": 62.60642540555807,
+      "error_count": 0
+    },
+    "fps": 79.51890692751917,
+    "comfort_score": 0.7129445488730087
+  },
+  {
+    "experiment_id": "exp_0155",
+    "user_id": "user_005",
+    "user_type": "professional",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927768",
+    "performance_metrics": {
+      "fps_avg": 81.41924704422196,
+      "fps_min": 70.91884343381894,
+      "fps_max": 91.919650654625,
+      "frame_time_avg": 12.282108178387613,
+      "gpu_utilization": 69.84706885018522,
+      "vram_usage": 5485.418465760315,
+      "cpu_utilization": 38.71467440597165,
+      "comfort_score": 0.7955881366719898,
+      "scene_complexity": 0.8388656911248158
+    },
+    "test_results": {
+      "success": true,
+      "duration": 37.039975526384715,
+      "error_count": 1
+    },
+    "fps": 81.41924704422196,
+    "comfort_score": 0.9354370622383608
+  },
+  {
+    "experiment_id": "exp_0156",
+    "user_id": "user_006",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927771",
+    "performance_metrics": {
+      "fps_avg": 101.00313330617612,
+      "fps_min": 90.17100759468254,
+      "fps_max": 111.83525901766971,
+      "frame_time_avg": 9.900682951771875,
+      "gpu_utilization": 62.88419395952356,
+      "vram_usage": 4372.091224770102,
+      "cpu_utilization": 60.7273729388385,
+      "comfort_score": 0.7903594589622345,
+      "scene_complexity": 0.38451517039702265
+    },
+    "test_results": {
+      "success": true,
+      "duration": 84.98559788938456,
+      "error_count": 1
+    },
+    "fps": 101.00313330617612,
+    "comfort_score": 0.9056552819426518
+  },
+  {
+    "experiment_id": "exp_0157",
+    "user_id": "user_007",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927774",
+    "performance_metrics": {
+      "fps_avg": 83.06899670306191,
+      "fps_min": 62.11614343657455,
+      "fps_max": 104.02184996954927,
+      "frame_time_avg": 12.038185600996192,
+      "gpu_utilization": 73.74677043288958,
+      "vram_usage": 5308.082629286371,
+      "cpu_utilization": 56.7862627815783,
+      "comfort_score": 0.817424253178492,
+      "scene_complexity": 0.42465604759032133
+    },
+    "test_results": {
+      "success": true,
+      "duration": 87.79555942337524,
+      "error_count": 0
+    },
+    "fps": 83.06899670306191,
+    "comfort_score": 0.9377878753456408
+  },
+  {
+    "experiment_id": "exp_0158",
+    "user_id": "user_008",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927777",
+    "performance_metrics": {
+      "fps_avg": 114.50332240507996,
+      "fps_min": 90.57030102794162,
+      "fps_max": 138.4363437822183,
+      "frame_time_avg": 8.733371041080245,
+      "gpu_utilization": 81.29801942015573,
+      "vram_usage": 5113.573431983346,
+      "cpu_utilization": 44.96981693964198,
+      "comfort_score": 0.8199965118342969,
+      "scene_complexity": 0.7935659939369004
+    },
+    "test_results": {
+      "success": false,
+      "duration": 102.11150187393277,
+      "error_count": 0
+    },
+    "fps": 114.50332240507996,
+    "comfort_score": 0.91213030268153
+  },
+  {
+    "experiment_id": "exp_0159",
+    "user_id": "user_009",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927780",
+    "performance_metrics": {
+      "fps_avg": 113.8935855363688,
+      "fps_min": 81.88791246613899,
+      "fps_max": 145.89925860659864,
+      "frame_time_avg": 8.780125722538408,
+      "gpu_utilization": 82.89048232989406,
+      "vram_usage": 6799.116634568377,
+      "cpu_utilization": 44.08486257043801,
+      "comfort_score": 0.8703567074412857,
+      "scene_complexity": 0.5125632212142277
+    },
+    "test_results": {
+      "success": false,
+      "duration": 72.74010947907217,
+      "error_count": 0
+    },
+    "fps": 113.8935855363688,
+    "comfort_score": 0.8935233156957743
+  },
+  {
+    "experiment_id": "exp_0160",
+    "user_id": "user_010",
+    "user_type": "gamer",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927783",
+    "performance_metrics": {
+      "fps_avg": 76.64567201852014,
+      "fps_min": 61.622937495940775,
+      "fps_max": 91.66840654109951,
+      "frame_time_avg": 13.047051107574172,
+      "gpu_utilization": 68.48997741312638,
+      "vram_usage": 6167.728662923947,
+      "cpu_utilization": 39.57503252041063,
+      "comfort_score": 0.7884026253669909,
+      "scene_complexity": 0.653898475237726
+    },
+    "test_results": {
+      "success": false,
+      "duration": 124.47238427974087,
+      "error_count": 1
+    },
+    "fps": 76.64567201852014,
+    "comfort_score": 0.8407520091790923
+  },
+  {
+    "experiment_id": "exp_0161",
+    "user_id": "user_011",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927786",
+    "performance_metrics": {
+      "fps_avg": 89.59476512106937,
+      "fps_min": 79.34817143869844,
+      "fps_max": 99.8413588034403,
+      "frame_time_avg": 11.161366388412318,
+      "gpu_utilization": 62.38927534563925,
+      "vram_usage": 5422.903510666183,
+      "cpu_utilization": 35.469779715211025,
+      "comfort_score": 0.8654112714285254,
+      "scene_complexity": 0.3681642583513656
+    },
+    "test_results": {
+      "success": true,
+      "duration": 138.1178048298559,
+      "error_count": 1
+    },
+    "fps": 89.59476512106937,
+    "comfort_score": 0.8395113090905763
+  },
+  {
+    "experiment_id": "exp_0162",
+    "user_id": "user_012",
+    "user_type": "professional",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927789",
+    "performance_metrics": {
+      "fps_avg": 97.42531807105124,
+      "fps_min": 78.82062985617151,
+      "fps_max": 116.03000628593097,
+      "frame_time_avg": 10.264272365738757,
+      "gpu_utilization": 69.54498239154782,
+      "vram_usage": 6548.719141082498,
+      "cpu_utilization": 55.45018071867755,
+      "comfort_score": 0.7118743982354694,
+      "scene_complexity": 0.3476121980050638
+    },
+    "test_results": {
+      "success": true,
+      "duration": 202.953462383505,
+      "error_count": 2
+    },
+    "fps": 97.42531807105124,
+    "comfort_score": 0.8857131965376217
+  },
+  {
+    "experiment_id": "exp_0163",
+    "user_id": "user_013",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927791",
+    "performance_metrics": {
+      "fps_avg": 116.34888841740894,
+      "fps_min": 95.93002823029659,
+      "fps_max": 136.7677486045213,
+      "frame_time_avg": 8.594839311334349,
+      "gpu_utilization": 79.74252142593438,
+      "vram_usage": 4341.692618604821,
+      "cpu_utilization": 36.29977335016817,
+      "comfort_score": 0.8370946841336115,
+      "scene_complexity": 0.5704905443653203
+    },
+    "test_results": {
+      "success": true,
+      "duration": 273.73945246477734,
+      "error_count": 3
+    },
+    "fps": 116.34888841740894,
+    "comfort_score": 0.8417021852594166
+  },
+  {
+    "experiment_id": "exp_0164",
+    "user_id": "user_014",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927794",
+    "performance_metrics": {
+      "fps_avg": 101.07711136207217,
+      "fps_min": 88.49683398525663,
+      "fps_max": 113.65738873888772,
+      "frame_time_avg": 9.893436669533045,
+      "gpu_utilization": 71.45988491965798,
+      "vram_usage": 2730.8696546517604,
+      "cpu_utilization": 57.34038624143196,
+      "comfort_score": 0.8097638692790462,
+      "scene_complexity": 0.5158540222907932
+    },
+    "test_results": {
+      "success": true,
+      "duration": 201.98722937520796,
+      "error_count": 1
+    },
+    "fps": 101.07711136207217,
+    "comfort_score": 0.8872837475685552
+  },
+  {
+    "experiment_id": "exp_0165",
+    "user_id": "user_015",
+    "user_type": "casual",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927798",
+    "performance_metrics": {
+      "fps_avg": 84.61322196945947,
+      "fps_min": 72.80358383624429,
+      "fps_max": 96.42286010267466,
+      "frame_time_avg": 11.818483881407362,
+      "gpu_utilization": 86.28106056449079,
+      "vram_usage": 5162.315247553901,
+      "cpu_utilization": 48.60727680698364,
+      "comfort_score": 0.7478406823648093,
+      "scene_complexity": 0.35843441114947805
+    },
+    "test_results": {
+      "success": true,
+      "duration": 118.10689130957786,
+      "error_count": 1
+    },
+    "fps": 84.61322196945947,
+    "comfort_score": 0.7291786773907731
+  },
+  {
+    "experiment_id": "exp_0166",
+    "user_id": "user_016",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927802",
+    "performance_metrics": {
+      "fps_avg": 80.6562771665107,
+      "fps_min": 72.2187824276001,
+      "fps_max": 89.0937719054213,
+      "frame_time_avg": 12.398291058432461,
+      "gpu_utilization": 88.20184530791211,
+      "vram_usage": 6487.518833535407,
+      "cpu_utilization": 32.82047730381775,
+      "comfort_score": 0.7510530627715566,
+      "scene_complexity": 0.4672771418459885
+    },
+    "test_results": {
+      "success": true,
+      "duration": 52.99013570867194,
+      "error_count": 1
+    },
+    "fps": 80.6562771665107,
+    "comfort_score": 0.8303819796074992
+  },
+  {
+    "experiment_id": "exp_0167",
+    "user_id": "user_017",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927805",
+    "performance_metrics": {
+      "fps_avg": 93.609099435269,
+      "fps_min": 83.39849652220116,
+      "fps_max": 103.81970234833685,
+      "frame_time_avg": 10.682722150227535,
+      "gpu_utilization": 68.22594128791985,
+      "vram_usage": 7336.588294588603,
+      "cpu_utilization": 46.520825885729025,
+      "comfort_score": 0.8629917292763712,
+      "scene_complexity": 0.44651937971414446
+    },
+    "test_results": {
+      "success": true,
+      "duration": 147.86678832875958,
+      "error_count": 3
+    },
+    "fps": 93.609099435269,
+    "comfort_score": 0.7313485104400204
+  },
+  {
+    "experiment_id": "exp_0168",
+    "user_id": "user_018",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927808",
+    "performance_metrics": {
+      "fps_avg": 113.75442682823751,
+      "fps_min": 82.17863689875034,
+      "fps_max": 145.3302167577247,
+      "frame_time_avg": 8.790866675544338,
+      "gpu_utilization": 76.62599043151616,
+      "vram_usage": 4020.775517066866,
+      "cpu_utilization": 66.74534245272358,
+      "comfort_score": 0.8629972300513309,
+      "scene_complexity": 0.7660734119313583
+    },
+    "test_results": {
+      "success": false,
+      "duration": 50.39709774290616,
+      "error_count": 1
+    },
+    "fps": 113.75442682823751,
+    "comfort_score": 0.8035323481565356
+  },
+  {
+    "experiment_id": "exp_0169",
+    "user_id": "user_019",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927811",
+    "performance_metrics": {
+      "fps_avg": 88.08190801082185,
+      "fps_min": 75.48450990299851,
+      "fps_max": 100.67930611864519,
+      "frame_time_avg": 11.353069235025412,
+      "gpu_utilization": 61.222781223183375,
+      "vram_usage": 7602.836865348519,
+      "cpu_utilization": 39.58947396679133,
+      "comfort_score": 0.8491832340761448,
+      "scene_complexity": 0.35917622815948713
+    },
+    "test_results": {
+      "success": true,
+      "duration": 119.8196576408515,
+      "error_count": 3
+    },
+    "fps": 88.08190801082185,
+    "comfort_score": 0.8578679191505088
+  },
+  {
+    "experiment_id": "exp_0170",
+    "user_id": "user_020",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927814",
+    "performance_metrics": {
+      "fps_avg": 92.98510783193392,
+      "fps_min": 72.11439152712686,
+      "fps_max": 113.85582413674098,
+      "frame_time_avg": 10.754410284789383,
+      "gpu_utilization": 86.94265443921046,
+      "vram_usage": 4514.412262572281,
+      "cpu_utilization": 45.51988747253795,
+      "comfort_score": 0.7771836417900329,
+      "scene_complexity": 0.6003780764776447
+    },
+    "test_results": {
+      "success": true,
+      "duration": 79.5379968515866,
+      "error_count": 3
+    },
+    "fps": 92.98510783193392,
+    "comfort_score": 0.7165012323680864
+  },
+  {
+    "experiment_id": "exp_0171",
+    "user_id": "user_021",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927817",
+    "performance_metrics": {
+      "fps_avg": 77.09513054524761,
+      "fps_min": 59.78311001810039,
+      "fps_max": 94.40715107239483,
+      "frame_time_avg": 12.970987829290902,
+      "gpu_utilization": 63.921553655512234,
+      "vram_usage": 3939.8718577057784,
+      "cpu_utilization": 58.23337279104389,
+      "comfort_score": 0.7713334142902277,
+      "scene_complexity": 0.47268815700787115
+    },
+    "test_results": {
+      "success": true,
+      "duration": 71.65182646793971,
+      "error_count": 0
+    },
+    "fps": 77.09513054524761,
+    "comfort_score": 0.7548096267978932
+  },
+  {
+    "experiment_id": "exp_0172",
+    "user_id": "user_022",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927820",
+    "performance_metrics": {
+      "fps_avg": 89.06016512441093,
+      "fps_min": 78.81218820349504,
+      "fps_max": 99.30814204532682,
+      "frame_time_avg": 11.228364539893551,
+      "gpu_utilization": 85.66904617577167,
+      "vram_usage": 7060.9508053973,
+      "cpu_utilization": 52.539813053998245,
+      "comfort_score": 0.7469268085413237,
+      "scene_complexity": 0.7522384275288945
+    },
+    "test_results": {
+      "success": false,
+      "duration": 104.80922668852341,
+      "error_count": 1
+    },
+    "fps": 89.06016512441093,
+    "comfort_score": 0.9048279896051978
+  },
+  {
+    "experiment_id": "exp_0173",
+    "user_id": "user_023",
+    "user_type": "gamer",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927823",
+    "performance_metrics": {
+      "fps_avg": 94.17353385521804,
+      "fps_min": 76.93462956345732,
+      "fps_max": 111.41243814697876,
+      "frame_time_avg": 10.618694648725782,
+      "gpu_utilization": 82.04799294196903,
+      "vram_usage": 4462.987040067124,
+      "cpu_utilization": 51.87730920848769,
+      "comfort_score": 0.7241466375777594,
+      "scene_complexity": 0.30495482245534195
+    },
+    "test_results": {
+      "success": true,
+      "duration": 36.759366878926315,
+      "error_count": 2
+    },
+    "fps": 94.17353385521804,
+    "comfort_score": 0.7525013828060523
+  },
+  {
+    "experiment_id": "exp_0174",
+    "user_id": "user_024",
+    "user_type": "researcher",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927826",
+    "performance_metrics": {
+      "fps_avg": 77.37793624089387,
+      "fps_min": 60.984467172917576,
+      "fps_max": 93.77140530887019,
+      "frame_time_avg": 12.923580655948081,
+      "gpu_utilization": 66.35432530786422,
+      "vram_usage": 4974.902444520478,
+      "cpu_utilization": 45.721954814191434,
+      "comfort_score": 0.9072875181703776,
+      "scene_complexity": 0.7176262754576846
+    },
+    "test_results": {
+      "success": true,
+      "duration": 131.4019928924062,
+      "error_count": 0
+    },
+    "fps": 77.37793624089387,
+    "comfort_score": 0.7050105693641453
+  },
+  {
+    "experiment_id": "exp_0175",
+    "user_id": "user_025",
+    "user_type": "professional",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927830",
+    "performance_metrics": {
+      "fps_avg": 106.64254210210859,
+      "fps_min": 93.34243167896865,
+      "fps_max": 119.94265252524853,
+      "frame_time_avg": 9.377120802714131,
+      "gpu_utilization": 88.92703928270384,
+      "vram_usage": 7818.105268960995,
+      "cpu_utilization": 41.573460237030666,
+      "comfort_score": 0.7095077845391373,
+      "scene_complexity": 0.7029285070649839
+    },
+    "test_results": {
+      "success": true,
+      "duration": 129.62349760789007,
+      "error_count": 0
+    },
+    "fps": 106.64254210210859,
+    "comfort_score": 0.949960626559796
+  },
+  {
+    "experiment_id": "exp_0176",
+    "user_id": "user_026",
+    "user_type": "gamer",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927833",
+    "performance_metrics": {
+      "fps_avg": 118.87206518847287,
+      "fps_min": 103.24650090338898,
+      "fps_max": 134.49762947355677,
+      "frame_time_avg": 8.41240537391598,
+      "gpu_utilization": 83.41335415072625,
+      "vram_usage": 5746.4067492331405,
+      "cpu_utilization": 53.262194414729876,
+      "comfort_score": 0.8269123156644268,
+      "scene_complexity": 0.6510909039011911
+    },
+    "test_results": {
+      "success": true,
+      "duration": 72.73520255828282,
+      "error_count": 1
+    },
+    "fps": 118.87206518847287,
+    "comfort_score": 0.8060128352406818
+  },
+  {
+    "experiment_id": "exp_0177",
+    "user_id": "user_027",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927836",
+    "performance_metrics": {
+      "fps_avg": 103.73089324063105,
+      "fps_min": 74.18402434796796,
+      "fps_max": 133.27776213329412,
+      "frame_time_avg": 9.640329594774022,
+      "gpu_utilization": 78.93592622951165,
+      "vram_usage": 7724.071126312867,
+      "cpu_utilization": 69.09565695163057,
+      "comfort_score": 0.8466084978706795,
+      "scene_complexity": 0.5252093035705703
+    },
+    "test_results": {
+      "success": true,
+      "duration": 110.31965967064441,
+      "error_count": 1
+    },
+    "fps": 103.73089324063105,
+    "comfort_score": 0.8170379616692656
+  },
+  {
+    "experiment_id": "exp_0178",
+    "user_id": "user_028",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927839",
+    "performance_metrics": {
+      "fps_avg": 110.97108064660762,
+      "fps_min": 81.44638495729565,
+      "fps_max": 140.49577633591957,
+      "frame_time_avg": 9.011356780281746,
+      "gpu_utilization": 77.9627795868359,
+      "vram_usage": 3331.3495552839213,
+      "cpu_utilization": 35.73822320828133,
+      "comfort_score": 0.7416603864821847,
+      "scene_complexity": 0.576361587502755
+    },
+    "test_results": {
+      "success": true,
+      "duration": 89.23118088718157,
+      "error_count": 0
+    },
+    "fps": 110.97108064660762,
+    "comfort_score": 0.7987525681018457
+  },
+  {
+    "experiment_id": "exp_0179",
+    "user_id": "user_029",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927842",
+    "performance_metrics": {
+      "fps_avg": 75.43466901363306,
+      "fps_min": 57.809053530113125,
+      "fps_max": 93.06028449715299,
+      "frame_time_avg": 13.256504112442958,
+      "gpu_utilization": 93.46925242082511,
+      "vram_usage": 3382.361169418422,
+      "cpu_utilization": 49.73550454350416,
+      "comfort_score": 0.9318427292468107,
+      "scene_complexity": 0.5042476670497523
+    },
+    "test_results": {
+      "success": true,
+      "duration": 267.19696270963726,
+      "error_count": 2
+    },
+    "fps": 75.43466901363306,
+    "comfort_score": 0.7238409417212882
+  },
+  {
+    "experiment_id": "exp_0180",
+    "user_id": "user_030",
+    "user_type": "professional",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927846",
+    "performance_metrics": {
+      "fps_avg": 104.66661111197578,
+      "fps_min": 90.06249094445161,
+      "fps_max": 119.27073127949996,
+      "frame_time_avg": 9.554145198511941,
+      "gpu_utilization": 88.31034190572493,
+      "vram_usage": 2011.6222112500752,
+      "cpu_utilization": 63.109573241157634,
+      "comfort_score": 0.748597104067279,
+      "scene_complexity": 0.3071182742782801
+    },
+    "test_results": {
+      "success": true,
+      "duration": 113.742698168039,
+      "error_count": 3
+    },
+    "fps": 104.66661111197578,
+    "comfort_score": 0.7410218975797439
+  },
+  {
+    "experiment_id": "exp_0181",
+    "user_id": "user_031",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927849",
+    "performance_metrics": {
+      "fps_avg": 81.99382879014297,
+      "fps_min": 66.9708298951987,
+      "fps_max": 97.01682768508724,
+      "frame_time_avg": 12.196039808793717,
+      "gpu_utilization": 70.45580720595346,
+      "vram_usage": 6521.212344301579,
+      "cpu_utilization": 40.57240031460391,
+      "comfort_score": 0.8217396483643078,
+      "scene_complexity": 0.432667928278917
+    },
+    "test_results": {
+      "success": true,
+      "duration": 185.93932073445697,
+      "error_count": 2
+    },
+    "fps": 81.99382879014297,
+    "comfort_score": 0.814506846205054
+  },
+  {
+    "experiment_id": "exp_0182",
+    "user_id": "user_032",
+    "user_type": "gamer",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927852",
+    "performance_metrics": {
+      "fps_avg": 100.7468038434929,
+      "fps_min": 76.54305832713975,
+      "fps_max": 124.95054935984605,
+      "frame_time_avg": 9.92587319746113,
+      "gpu_utilization": 65.43667743800563,
+      "vram_usage": 5761.216167502025,
+      "cpu_utilization": 53.71180732900837,
+      "comfort_score": 0.7100311030995934,
+      "scene_complexity": 0.5260789134393478
+    },
+    "test_results": {
+      "success": false,
+      "duration": 56.450486035896915,
+      "error_count": 3
+    },
+    "fps": 100.7468038434929,
+    "comfort_score": 0.8585098548538312
+  },
+  {
+    "experiment_id": "exp_0183",
+    "user_id": "user_033",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927855",
+    "performance_metrics": {
+      "fps_avg": 88.6101950324574,
+      "fps_min": 64.38377020558514,
+      "fps_max": 112.83661985932966,
+      "frame_time_avg": 11.285383128134475,
+      "gpu_utilization": 68.03654104652591,
+      "vram_usage": 7641.117815337903,
+      "cpu_utilization": 44.57220828245555,
+      "comfort_score": 0.903626315561818,
+      "scene_complexity": 0.6682141868979248
+    },
+    "test_results": {
+      "success": true,
+      "duration": 244.11002567549275,
+      "error_count": 1
+    },
+    "fps": 88.6101950324574,
+    "comfort_score": 0.931663577791527
+  },
+  {
+    "experiment_id": "exp_0184",
+    "user_id": "user_034",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927858",
+    "performance_metrics": {
+      "fps_avg": 86.53026502319807,
+      "fps_min": 73.50300816061257,
+      "fps_max": 99.55752188578357,
+      "frame_time_avg": 11.556650146996638,
+      "gpu_utilization": 71.26972954442053,
+      "vram_usage": 3557.7879271831534,
+      "cpu_utilization": 52.818245989273045,
+      "comfort_score": 0.8698159705147762,
+      "scene_complexity": 0.3969978332572716
+    },
+    "test_results": {
+      "success": true,
+      "duration": 234.42107868285632,
+      "error_count": 0
+    },
+    "fps": 86.53026502319807,
+    "comfort_score": 0.8775533304487052
+  },
+  {
+    "experiment_id": "exp_0185",
+    "user_id": "user_035",
+    "user_type": "casual",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927861",
+    "performance_metrics": {
+      "fps_avg": 86.46054147739223,
+      "fps_min": 61.08245136579356,
+      "fps_max": 111.83863158899089,
+      "frame_time_avg": 11.56596966561308,
+      "gpu_utilization": 78.5642526758132,
+      "vram_usage": 5990.996715099593,
+      "cpu_utilization": 32.69691553636167,
+      "comfort_score": 0.9491824149899106,
+      "scene_complexity": 0.7903549537701671
+    },
+    "test_results": {
+      "success": true,
+      "duration": 167.84856677902306,
+      "error_count": 1
+    },
+    "fps": 86.46054147739223,
+    "comfort_score": 0.7961788713579894
+  },
+  {
+    "experiment_id": "exp_0186",
+    "user_id": "user_036",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927864",
+    "performance_metrics": {
+      "fps_avg": 92.90254057287076,
+      "fps_min": 71.23679065654711,
+      "fps_max": 114.56829048919441,
+      "frame_time_avg": 10.763968281530701,
+      "gpu_utilization": 66.50465445018632,
+      "vram_usage": 7868.225534371615,
+      "cpu_utilization": 62.43770381303421,
+      "comfort_score": 0.7306019042593135,
+      "scene_complexity": 0.791352140313323
+    },
+    "test_results": {
+      "success": true,
+      "duration": 123.57952077557887,
+      "error_count": 1
+    },
+    "fps": 92.90254057287076,
+    "comfort_score": 0.7289047646029728
+  },
+  {
+    "experiment_id": "exp_0187",
+    "user_id": "user_037",
+    "user_type": "professional",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927867",
+    "performance_metrics": {
+      "fps_avg": 105.61221905331672,
+      "fps_min": 94.53594983503832,
+      "fps_max": 116.68848827159512,
+      "frame_time_avg": 9.46860135090207,
+      "gpu_utilization": 77.38306649893077,
+      "vram_usage": 2308.371548322042,
+      "cpu_utilization": 69.87558456946377,
+      "comfort_score": 0.7243963754262212,
+      "scene_complexity": 0.31205578721723376
+    },
+    "test_results": {
+      "success": true,
+      "duration": 96.0784910613955,
+      "error_count": 3
+    },
+    "fps": 105.61221905331672,
+    "comfort_score": 0.855855320079967
+  },
+  {
+    "experiment_id": "exp_0188",
+    "user_id": "user_038",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927870",
+    "performance_metrics": {
+      "fps_avg": 86.91155423444232,
+      "fps_min": 75.72597138253563,
+      "fps_max": 98.09713708634901,
+      "frame_time_avg": 11.505950029411721,
+      "gpu_utilization": 79.56682235079711,
+      "vram_usage": 5803.587039701792,
+      "cpu_utilization": 49.032610514963466,
+      "comfort_score": 0.8644170810781572,
+      "scene_complexity": 0.6296458394678813
+    },
+    "test_results": {
+      "success": true,
+      "duration": 270.36395600547706,
+      "error_count": 2
+    },
+    "fps": 86.91155423444232,
+    "comfort_score": 0.8434854258362563
+  },
+  {
+    "experiment_id": "exp_0189",
+    "user_id": "user_039",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927900",
+    "performance_metrics": {
+      "fps_avg": 109.87366087452733,
+      "fps_min": 77.23688497217967,
+      "fps_max": 142.51043677687497,
+      "frame_time_avg": 9.101362346904708,
+      "gpu_utilization": 62.250352616342056,
+      "vram_usage": 3570.0246662435375,
+      "cpu_utilization": 59.107723478892076,
+      "comfort_score": 0.9489249195004319,
+      "scene_complexity": 0.5328751652792717
+    },
+    "test_results": {
+      "success": false,
+      "duration": 260.21771303739575,
+      "error_count": 0
+    },
+    "fps": 109.87366087452733,
+    "comfort_score": 0.8557228847897445
+  },
+  {
+    "experiment_id": "exp_0190",
+    "user_id": "user_040",
+    "user_type": "professional",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927904",
+    "performance_metrics": {
+      "fps_avg": 80.4845992943388,
+      "fps_min": 67.59473167098116,
+      "fps_max": 93.37446691769645,
+      "frame_time_avg": 12.424737263621301,
+      "gpu_utilization": 64.714514592027,
+      "vram_usage": 3950.262288547732,
+      "cpu_utilization": 47.077889006412136,
+      "comfort_score": 0.8624056655624841,
+      "scene_complexity": 0.6989914919213015
+    },
+    "test_results": {
+      "success": false,
+      "duration": 227.51189936612093,
+      "error_count": 1
+    },
+    "fps": 80.4845992943388,
+    "comfort_score": 0.839333401041878
+  },
+  {
+    "experiment_id": "exp_0191",
+    "user_id": "user_041",
+    "user_type": "casual",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927907",
+    "performance_metrics": {
+      "fps_avg": 98.62091714799999,
+      "fps_min": 74.01238969405006,
+      "fps_max": 123.22944460194992,
+      "frame_time_avg": 10.139836749837809,
+      "gpu_utilization": 66.35570666731697,
+      "vram_usage": 4360.9360142934365,
+      "cpu_utilization": 52.0988605641362,
+      "comfort_score": 0.8855298896901937,
+      "scene_complexity": 0.8885589211170355
+    },
+    "test_results": {
+      "success": true,
+      "duration": 170.79411965103534,
+      "error_count": 2
+    },
+    "fps": 98.62091714799999,
+    "comfort_score": 0.9125800116484274
+  },
+  {
+    "experiment_id": "exp_0192",
+    "user_id": "user_042",
+    "user_type": "researcher",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927910",
+    "performance_metrics": {
+      "fps_avg": 82.50114342818837,
+      "fps_min": 61.24410637382282,
+      "fps_max": 103.75818048255393,
+      "frame_time_avg": 12.121044126745128,
+      "gpu_utilization": 71.98136358307053,
+      "vram_usage": 4077.8105782780885,
+      "cpu_utilization": 30.72863294133061,
+      "comfort_score": 0.8325974094930375,
+      "scene_complexity": 0.6618457601454922
+    },
+    "test_results": {
+      "success": true,
+      "duration": 99.30844097471797,
+      "error_count": 2
+    },
+    "fps": 82.50114342818837,
+    "comfort_score": 0.8686698381674463
+  },
+  {
+    "experiment_id": "exp_0193",
+    "user_id": "user_043",
+    "user_type": "gamer",
+    "app_name": "SpatialWorkshop",
+    "timestamp": "2025-05-28T07:34:26.927913",
+    "performance_metrics": {
+      "fps_avg": 107.23000462880795,
+      "fps_min": 95.42001126009406,
+      "fps_max": 119.03999799752184,
+      "frame_time_avg": 9.325747988742922,
+      "gpu_utilization": 75.41521908452029,
+      "vram_usage": 7627.296870949188,
+      "cpu_utilization": 69.40661569189095,
+      "comfort_score": 0.8924743031023193,
+      "scene_complexity": 0.3023413959229968
+    },
+    "test_results": {
+      "success": false,
+      "duration": 31.10791776504476,
+      "error_count": 3
+    },
+    "fps": 107.23000462880795,
+    "comfort_score": 0.9386041019939957
+  },
+  {
+    "experiment_id": "exp_0194",
+    "user_id": "user_044",
+    "user_type": "researcher",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927916",
+    "performance_metrics": {
+      "fps_avg": 75.01846793586414,
+      "fps_min": 63.15664995933955,
+      "fps_max": 86.88028591238873,
+      "frame_time_avg": 13.330050952985795,
+      "gpu_utilization": 90.28609480095412,
+      "vram_usage": 2232.3026558927327,
+      "cpu_utilization": 51.5167507775611,
+      "comfort_score": 0.7590682641521467,
+      "scene_complexity": 0.6605072098609477
+    },
+    "test_results": {
+      "success": true,
+      "duration": 171.47639065301925,
+      "error_count": 1
+    },
+    "fps": 75.01846793586414,
+    "comfort_score": 0.9316352271332577
+  },
+  {
+    "experiment_id": "exp_0195",
+    "user_id": "user_045",
+    "user_type": "professional",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927919",
+    "performance_metrics": {
+      "fps_avg": 93.40636633719153,
+      "fps_min": 81.0764285844766,
+      "fps_max": 105.73630408990645,
+      "frame_time_avg": 10.705908378772154,
+      "gpu_utilization": 93.12247529742581,
+      "vram_usage": 6930.390988102637,
+      "cpu_utilization": 60.34515619178231,
+      "comfort_score": 0.7211310647361107,
+      "scene_complexity": 0.6258407963544117
+    },
+    "test_results": {
+      "success": true,
+      "duration": 216.77854181493362,
+      "error_count": 0
+    },
+    "fps": 93.40636633719153,
+    "comfort_score": 0.794828085225616
+  },
+  {
+    "experiment_id": "exp_0196",
+    "user_id": "user_046",
+    "user_type": "casual",
+    "app_name": "VRTraining",
+    "timestamp": "2025-05-28T07:34:26.927922",
+    "performance_metrics": {
+      "fps_avg": 81.50607949567652,
+      "fps_min": 64.49415486220256,
+      "fps_max": 98.51800412915047,
+      "frame_time_avg": 12.269023442024897,
+      "gpu_utilization": 84.62589577035631,
+      "vram_usage": 5767.07125620009,
+      "cpu_utilization": 55.17711550037338,
+      "comfort_score": 0.840573330293125,
+      "scene_complexity": 0.44700699196439087
+    },
+    "test_results": {
+      "success": true,
+      "duration": 67.27894416306253,
+      "error_count": 2
+    },
+    "fps": 81.50607949567652,
+    "comfort_score": 0.8058178212049776
+  },
+  {
+    "experiment_id": "exp_0197",
+    "user_id": "user_047",
+    "user_type": "casual",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927925",
+    "performance_metrics": {
+      "fps_avg": 97.09080577277672,
+      "fps_min": 80.3550713067425,
+      "fps_max": 113.82654023881092,
+      "frame_time_avg": 10.2996364284,
+      "gpu_utilization": 90.64624474843973,
+      "vram_usage": 6189.170319195498,
+      "cpu_utilization": 63.73168127529403,
+      "comfort_score": 0.7331174642965164,
+      "scene_complexity": 0.6047391635229398
+    },
+    "test_results": {
+      "success": false,
+      "duration": 159.22203596920122,
+      "error_count": 3
+    },
+    "fps": 97.09080577277672,
+    "comfort_score": 0.9008864159132921
+  },
+  {
+    "experiment_id": "exp_0198",
+    "user_id": "user_048",
+    "user_type": "researcher",
+    "app_name": "VRExplorer",
+    "timestamp": "2025-05-28T07:34:26.927928",
+    "performance_metrics": {
+      "fps_avg": 95.60205239978704,
+      "fps_min": 82.25094875874467,
+      "fps_max": 108.95315604082941,
+      "frame_time_avg": 10.460026483722514,
+      "gpu_utilization": 65.77597596827795,
+      "vram_usage": 5336.734707422303,
+      "cpu_utilization": 66.18453312940062,
+      "comfort_score": 0.8879664586591782,
+      "scene_complexity": 0.43824026126690396
+    },
+    "test_results": {
+      "success": true,
+      "duration": 89.81336512903513,
+      "error_count": 3
+    },
+    "fps": 95.60205239978704,
+    "comfort_score": 0.7355058952527216
+  },
+  {
+    "experiment_id": "exp_0199",
+    "user_id": "user_049",
+    "user_type": "gamer",
+    "app_name": "MetaverseClient",
+    "timestamp": "2025-05-28T07:34:26.927931",
+    "performance_metrics": {
+      "fps_avg": 85.78406155140843,
+      "fps_min": 68.87407057524187,
+      "fps_max": 102.69405252757498,
+      "frame_time_avg": 11.657177124922242,
+      "gpu_utilization": 77.46604435607141,
+      "vram_usage": 4170.223937598884,
+      "cpu_utilization": 40.32791103979068,
+      "comfort_score": 0.8105721359360072,
+      "scene_complexity": 0.7698753898352019
+    },
+    "test_results": {
+      "success": true,
+      "duration": 293.1898935027314,
+      "error_count": 3
+    },
+    "fps": 85.78406155140843,
+    "comfort_score": 0.9017603004736812
+  }
+]

@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 15s
+scrape_configs:
+- job_name: cloudvr-perfguard-ai
+  metrics_path: /metrics
+  scrape_interval: 30s
+  static_configs:
+  - targets:
+    - localhost:8000

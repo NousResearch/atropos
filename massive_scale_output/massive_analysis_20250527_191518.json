@@ -1,0 +1,100 @@
+{
+  "summary": {
+    "total_experiments": 100,
+    "success_rate": 0.0,
+    "avg_comfort_score": 0.4999734654508755,
+    "avg_fps": 80.02284616822307,
+    "unique_users": 10,
+    "unique_environments": 10
+  },
+  "cultural_insights": {
+    "Western": {
+      "avg_comfort": 0.5364184262118696,
+      "sample_size": 10
+    },
+    "African": {
+      "avg_comfort": 0.6796615348392047,
+      "sample_size": 10
+    },
+    "South Asian": {
+      "avg_comfort": 0.4642353056911409,
+      "sample_size": 10
+    },
+    "Slavic": {
+      "avg_comfort": 0.4564787698296975,
+      "sample_size": 30
+    },
+    "Middle Eastern": {
+      "avg_comfort": 0.47015839602305415,
+      "sample_size": 20
+    },
+    "Indigenous": {
+      "avg_comfort": 0.4856674816353639,
+      "sample_size": 10
+    },
+    "Latin American": {
+      "avg_comfort": 0.5239988045959736,
+      "sample_size": 10
+    }
+  },
+  "neurotype_insights": {
+    "Anxiety": {
+      "avg_comfort": 0.5022140581734302,
+      "sample_size": 20
+    },
+    "PTSD": {
+      "avg_comfort": 0.6796615348392047,
+      "sample_size": 10
+    },
+    "Dyslexia": {
+      "avg_comfort": 0.5063680001442057,
+      "sample_size": 20
+    },
+    "Bipolar": {
+      "avg_comfort": 0.46737626272060095,
+      "sample_size": 20
+    },
+    "OCD": {
+      "avg_comfort": 0.4723071019111174,
+      "sample_size": 10
+    },
+    "Sensory Processing": {
+      "avg_comfort": 0.4101818940465938,
+      "sample_size": 10
+    },
+    "Neurotypical": {
+      "avg_comfort": 0.4856674816353639,
+      "sample_size": 10
+    }
+  },
+  "environment_insights": {
+    "Underwater": {
+      "avg_comfort": 0.3799934893246276,
+      "sample_size": 10
+    },
+    "Zero Friction": {
+      "avg_comfort": 0.4865268204612928,
+      "sample_size": 30
+    },
+    "Earthquake Simulation": {
+      "avg_comfort": 0.48784394356514904,
+      "sample_size": 20
+    },
+    "High Gravity": {
+      "avg_comfort": 0.5763089794152847,
+      "sample_size": 10
+    },
+    "Standard Physics": {
+      "avg_comfort": 0.5080656011376486,
+      "sample_size": 10
+    },
+    "Space": {
+      "avg_comfort": 0.49561395074256076,
+      "sample_size": 10
+    },
+    "Elastic World": {
+      "avg_comfort": 0.6044842853744556,
+      "sample_size": 10
+    }
+  }
+}

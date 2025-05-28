@@ -1,0 +1,14 @@
+{
+  "analysis_timestamp": "2025-05-27T21:45:57.412332",
+  "completion_timestamp": "2025-05-27T21:45:58.001557",
+  "duration_minutes": 0.009820433333333333,
+  "data_summary": {
+    "experiments_analyzed": 1150,
+    "papers_analyzed": 3,
+    "system_health": "healthy",
+    "overall_score": 81.52
+  },
+  "key_insights": [],
+  "top_recommendations": [],
+  "next_analysis": "2025-05-28T21:45:58.001564"
+}

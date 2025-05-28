@@ -1,0 +1,43 @@
+{
+  "dashboard": {
+    "title": "CloudVR-PerfGuard AI Research System",
+    "panels": [
+      {
+        "title": "Research Papers Generated",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "papers_generated_total"
+          }
+        ]
+      },
+      {
+        "title": "Functions Discovered",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "functions_discovered_total"
+          }
+        ]
+      },
+      {
+        "title": "Research Quality Score",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "avg_research_quality"
+          }
+        ]
+      },
+      {
+        "title": "Daily Research Cost",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "daily_research_cost"
+          }
+        ]
+      }
+    ]
+  }
+}

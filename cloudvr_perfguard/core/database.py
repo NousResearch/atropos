@@ -1,11 +1,12 @@
 """
 Database Manager for CloudVR-PerfGuard
-Handles storage and retrieval of test jobs, performance data, and regression analysis data
+Handles storage and retrieval of test jobs, performance data, regression analysis data,
+FunSearch evolved functions, and AI Scientist generated papers.
 """
 
 import asyncio
 import json
-import sqlite3
+import sqlite3 # Although aiosqlite is used, this import might be present from earlier versions or for type hinting.
 import aiosqlite
 from typing import Dict, List, Any, Optional
 from datetime import datetime
@@ -26,8 +27,12 @@ class DatabaseManager:
         
         try:
             # Create database directory if it doesn't exist
-            os.makedirs(os.path.dirname(self.db_path) if os.path.dirname(self.db_path) else ".", exist_ok=True)
-            
+            db_dir = os.path.dirname(self.db_path)
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir)
+            elif not db_dir: # Handle case where db_path is just a filename in the current directory
+                 os.makedirs(".", exist_ok=True)
+
             # Connect to database
             self.connection = await aiosqlite.connect(self.db_path)
             
@@ -92,6 +97,39 @@ class DatabaseManager:
             )
         """)
         
+        # FunSearch evolved functions table
+        await self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS funsearch_evolved_functions (
+                function_id TEXT PRIMARY KEY,
+                job_id TEXT,
+                program_name TEXT NOT NULL,
+                evolution_iteration INTEGER NOT NULL,
+                evolved_function_code TEXT NOT NULL,
+                evaluation_score REAL,
+                discovery_timestamp TEXT NOT NULL,
+                metadata TEXT,
+                FOREIGN KEY (job_id) REFERENCES test_jobs (job_id)
+            )
+        """)
+
+        # AI Scientist papers table
+        await self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS ai_scientist_papers (
+                paper_id TEXT PRIMARY KEY,
+                job_id TEXT,
+                title TEXT NOT NULL,
+                abstract TEXT,
+                full_text_path TEXT,
+                generation_status TEXT DEFAULT 'draft',
+                peer_review_feedback TEXT,
+                generation_cost REAL,
+                publication_details TEXT,
+                creation_timestamp TEXT NOT NULL,
+                last_updated_timestamp TEXT NOT NULL,
+                FOREIGN KEY (job_id) REFERENCES test_jobs (job_id)
+            )
+        """)
+        
         # Create indexes for better performance
         await self.connection.execute("""
             CREATE INDEX IF NOT EXISTS idx_test_jobs_app_version 
@@ -109,7 +147,178 @@ class DatabaseManager:
         """)
         
         await self.connection.commit()
-    
+
+    async def store_evolved_function(
+        self,
+        function_id: str,
+        program_name: str,
+        evolution_iteration: int,
+        evolved_function_code: str,
+        discovery_timestamp: str,
+        job_id: Optional[str] = None,
+        evaluation_score: Optional[float] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Store a FunSearch evolved function."""
+        try:
+            await self.connection.execute("""
+                INSERT INTO funsearch_evolved_functions (
+                    function_id, job_id, program_name, evolution_iteration,
+                    evolved_function_code, evaluation_score, discovery_timestamp, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                function_id, job_id, program_name, evolution_iteration,
+                evolved_function_code, evaluation_score, discovery_timestamp,
+                json.dumps(metadata) if metadata else None
+            ))
+            await self.connection.commit()
+            return True
+        except Exception as e:
+            print(f"ERROR storing evolved function {function_id}: {e}")
+            return False
+
+    async def get_evolved_function(self, function_id: str) -> Optional[Dict[str, Any]]:
+        """Get an evolved function by its ID."""
+        try:
+            cursor = await self.connection.execute("""
+                SELECT * FROM funsearch_evolved_functions WHERE function_id = ?
+            """, (function_id,))
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            columns = [description[0] for description in cursor.description]
+            func_data = dict(zip(columns, row))
+            if func_data.get("metadata"):
+                func_data["metadata"] = json.loads(func_data["metadata"])
+            return func_data
+        except Exception as e:
+            print(f"ERROR getting evolved function {function_id}: {e}")
+            return None
+
+    async def get_evolved_functions_for_job(self, job_id: str) -> List[Dict[str, Any]]:
+        """Get all evolved functions for a given job ID."""
+        try:
+            cursor = await self.connection.execute("""
+                SELECT * FROM funsearch_evolved_functions WHERE job_id = ?
+                ORDER BY evolution_iteration
+            """, (job_id,))
+            rows = await cursor.fetchall()
+            functions = []
+            for row_data in rows:
+                columns = [description[0] for description in cursor.description]
+                func_data = dict(zip(columns, row_data))
+                if func_data.get("metadata"):
+                    func_data["metadata"] = json.loads(func_data["metadata"])
+                functions.append(func_data)
+            return functions
+        except Exception as e:
+            print(f"ERROR getting evolved functions for job {job_id}: {e}")
+            return []
+
+    async def store_ai_paper(
+        self,
+        paper_id: str,
+        title: str,
+        creation_timestamp: str,
+        last_updated_timestamp: str,
+        job_id: Optional[str] = None,
+        abstract: Optional[str] = None,
+        full_text_path: Optional[str] = None,
+        generation_status: str = 'draft',
+        peer_review_feedback: Optional[str] = None,
+        generation_cost: Optional[float] = None,
+        publication_details: Optional[str] = None
+    ) -> bool:
+        """Store an AI Scientist generated paper."""
+        try:
+            await self.connection.execute("""
+                INSERT INTO ai_scientist_papers (
+                    paper_id, job_id, title, abstract, full_text_path,
+                    generation_status, peer_review_feedback, generation_cost,
+                    publication_details, creation_timestamp, last_updated_timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                paper_id, job_id, title, abstract, full_text_path,
+                generation_status, peer_review_feedback, generation_cost,
+                publication_details, creation_timestamp, last_updated_timestamp
+            ))
+            await self.connection.commit()
+            return True
+        except Exception as e:
+            print(f"ERROR storing AI paper {paper_id}: {e}")
+            return False
+
+    async def get_ai_paper(self, paper_id: str) -> Optional[Dict[str, Any]]:
+        """Get an AI paper by its ID."""
+        try:
+            cursor = await self.connection.execute("""
+                SELECT * FROM ai_scientist_papers WHERE paper_id = ?
+            """, (paper_id,))
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            columns = [description[0] for description in cursor.description]
+            paper_data = dict(zip(columns, row))
+            return paper_data
+        except Exception as e:
+            print(f"ERROR getting AI paper {paper_id}: {e}")
+            return None
+
+    async def get_ai_papers_for_job(self, job_id: str) -> List[Dict[str, Any]]:
+        """Get all AI papers for a given job ID."""
+        try:
+            cursor = await self.connection.execute("""
+                SELECT * FROM ai_scientist_papers WHERE job_id = ?
+                ORDER BY creation_timestamp DESC
+            """, (job_id,))
+            rows = await cursor.fetchall()
+            papers = []
+            for row_data in rows:
+                columns = [description[0] for description in cursor.description]
+                papers.append(dict(zip(columns, row_data)))
+            return papers
+        except Exception as e:
+            print(f"ERROR getting AI papers for job {job_id}: {e}")
+            return []
+
+    async def update_ai_paper_status(
+        self,
+        paper_id: str,
+        generation_status: str,
+        last_updated_timestamp: str,
+        abstract: Optional[str] = None,
+        full_text_path: Optional[str] = None,
+        peer_review_feedback: Optional[str] = None,
+        generation_cost: Optional[float] = None,
+        publication_details: Optional[str] = None
+    ) -> bool:
+        """Update status and other fields of an AI paper."""
+        try:
+            update_fields = {
+                "generation_status": generation_status,
+                "last_updated_timestamp": last_updated_timestamp
+            }
+            # Add optional fields to update_fields only if they are provided
+            if abstract is not None: update_fields["abstract"] = abstract
+            if full_text_path is not None: update_fields["full_text_path"] = full_text_path
+            if peer_review_feedback is not None: update_fields["peer_review_feedback"] = peer_review_feedback
+            if generation_cost is not None: update_fields["generation_cost"] = generation_cost
+            if publication_details is not None: update_fields["publication_details"] = publication_details
+            
+            set_clause = ", ".join([f"{key} = ?" for key in update_fields.keys()])
+            params = list(update_fields.values()) + [paper_id] # paper_id is the last parameter for WHERE clause
+            
+            await self.connection.execute(f"""
+                UPDATE ai_scientist_papers
+                SET {set_clause}
+                WHERE paper_id = ?
+            """, params)
+            await self.connection.commit()
+            return True
+        except Exception as e:
+            print(f"ERROR updating AI paper {paper_id}: {e}")
+            return False
+
     async def create_test_job(
         self,
         job_id: str,
@@ -246,14 +455,14 @@ class DatabaseManager:
             
             # Convert row to dictionary
             columns = [description[0] for description in cursor.description]
-            results = dict(zip(columns, row))
+            results_data = dict(zip(columns, row)) # Renamed to avoid conflict
             
             # Parse JSON fields
-            results["config"] = json.loads(results["config"])
-            results["individual_results"] = json.loads(results["individual_results"])
-            results["aggregated_metrics"] = json.loads(results["aggregated_metrics"])
+            results_data["config"] = json.loads(results_data["config"])
+            results_data["individual_results"] = json.loads(results_data["individual_results"])
+            results_data["aggregated_metrics"] = json.loads(results_data["aggregated_metrics"])
             
-            return results
+            return results_data
             
         except Exception as e:
             print(f"ERROR getting performance results for {job_id}: {e}")
@@ -303,15 +512,15 @@ class DatabaseManager:
             
             # Convert row to dictionary
             columns = [description[0] for description in cursor.description]
-            analysis = dict(zip(columns, row))
+            analysis_data = dict(zip(columns, row)) # Renamed to avoid conflict
             
             # Parse JSON fields
-            analysis["regressions"] = json.loads(analysis["regressions"])
-            analysis["statistical_analysis"] = json.loads(analysis["statistical_analysis"])
-            analysis["comparison"] = json.loads(analysis["comparison"])
-            analysis["regression_score"] = json.loads(analysis["regression_score"])
+            analysis_data["regressions"] = json.loads(analysis_data["regressions"])
+            analysis_data["statistical_analysis"] = json.loads(analysis_data["statistical_analysis"])
+            analysis_data["comparison"] = json.loads(analysis_data["comparison"])
+            analysis_data["regression_score"] = json.loads(analysis_data["regression_score"])
             
-            return analysis
+            return analysis_data
             
         except Exception as e:
             print(f"ERROR getting regression analysis for {job_id}: {e}")
@@ -360,11 +569,11 @@ class DatabaseManager:
             rows = await cursor.fetchall()
             
             baselines = []
-            for row in rows:
+            for row_data in rows: # Renamed to avoid conflict
                 baselines.append({
-                    "version": row[0],
-                    "created_at": row[1],
-                    "status": row[2]
+                    "version": row_data[0],
+                    "created_at": row_data[1],
+                    "status": row_data[2]
                 })
             
             return baselines
@@ -387,14 +596,14 @@ class DatabaseManager:
             rows = await cursor.fetchall()
             
             jobs = []
-            for row in rows:
+            for row_data in rows: # Renamed to avoid conflict
                 jobs.append({
-                    "job_id": row[0],
-                    "app_name": row[1],
-                    "build_version": row[2],
-                    "submission_type": row[3],
-                    "status": row[4],
-                    "created_at": row[5]
+                    "job_id": row_data[0],
+                    "app_name": row_data[1],
+                    "build_version": row_data[2],
+                    "submission_type": row_data[3],
+                    "status": row_data[4],
+                    "created_at": row_data[5]
                 })
             
             return jobs
@@ -426,11 +635,11 @@ class DatabaseManager:
             rows = await cursor.fetchall()
             
             history = []
-            for row in rows:
-                metrics = json.loads(row[2]) if row[2] else {}
+            for row_data in rows: # Renamed to avoid conflict
+                metrics = json.loads(row_data[2]) if row_data[2] else {}
                 history.append({
-                    "version": row[0],
-                    "timestamp": row[1],
+                    "version": row_data[0],
+                    "timestamp": row_data[1],
                     "avg_fps": metrics.get("overall_avg_fps", 0),
                     "min_fps": metrics.get("overall_min_fps", 0),
                     "avg_frame_time": metrics.get("overall_avg_frame_time", 0),
@@ -447,4 +656,4 @@ class DatabaseManager:
         """Close database connection"""
         if self.connection:
             await self.connection.close()
-            print("INFO: Database connection closed") 
+            print("INFO: Database connection closed")

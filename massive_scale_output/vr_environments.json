@@ -1,0 +1,212 @@
+[
+  {
+    "environment_id": "env_0000",
+    "physics": {
+      "type": "Dense Atmosphere",
+      "gravity": 9.81,
+      "friction": 1.397434375035257,
+      "air_resistance": 0.3726023212483573
+    },
+    "context": {
+      "type": "Aircraft",
+      "lighting": "Strobe",
+      "scene_complexity": 0.26365091249876293,
+      "object_count": 424,
+      "texture_quality": "Ultra"
+    },
+    "audio": {
+      "ambient_volume": 0.37136519835345794,
+      "reverb_intensity": 0.19275994620538062
+    },
+    "generated_at": "2025-05-28T06:10:18.995284"
+  },
+  {
+    "environment_id": "env_0001",
+    "physics": {
+      "type": "Wind Simulation",
+      "gravity": 9.81,
+      "friction": 0.9308553974688856,
+      "air_resistance": 0.03254690358685125
+    },
+    "context": {
+      "type": "Outdoor",
+      "lighting": "Candlelight",
+      "scene_complexity": 0.9460381424308133,
+      "object_count": 399,
+      "texture_quality": "High"
+    },
+    "audio": {
+      "ambient_volume": 0.5700273086617637,
+      "reverb_intensity": 0.3371077930013807
+    },
+    "generated_at": "2025-05-28T06:10:18.995291"
+  },
+  {
+    "environment_id": "env_0002",
+    "physics": {
+      "type": "High Gravity",
+      "gravity": 18.356715716215035,
+      "friction": 1.5837045959165852,
+      "air_resistance": 0.0443874265606059
+    },
+    "context": {
+      "type": "Spacecraft",
+      "lighting": "Bright Daylight",
+      "scene_complexity": 0.476879096240243,
+      "object_count": 407,
+      "texture_quality": "High"
+    },
+    "audio": {
+      "ambient_volume": 0.7978058493074514,
+      "reverb_intensity": 0.1878352799215306
+    },
+    "generated_at": "2025-05-28T06:10:18.995297"
+  },
+  {
+    "environment_id": "env_0003",
+    "physics": {
+      "type": "Elastic World",
+      "gravity": 9.81,
+      "friction": 0.81497513566712,
+      "air_resistance": 0.20466504765072102
+    },
+    "context": {
+      "type": "City",
+      "lighting": "Strobe",
+      "scene_complexity": 0.9702092770730346,
+      "object_count": 322,
+      "texture_quality": "Ultra"
+    },
+    "audio": {
+      "ambient_volume": 0.1606108198432503,
+      "reverb_intensity": 0.13978392883952662
+    },
+    "generated_at": "2025-05-28T06:10:18.995301"
+  },
+  {
+    "environment_id": "env_0004",
+    "physics": {
+      "type": "Zero Friction",
+      "gravity": 9.81,
+      "friction": 1.6245730503391973,
+      "air_resistance": 0.397609610546353
+    },
+    "context": {
+      "type": "Mall",
+      "lighting": "Bright Daylight",
+      "scene_complexity": 0.4660102254210027,
+      "object_count": 428,
+      "texture_quality": "Medium"
+    },
+    "audio": {
+      "ambient_volume": 0.42525888165592174,
+      "reverb_intensity": 0.21309620841184662
+    },
+    "generated_at": "2025-05-28T06:10:18.995306"
+  },
+  {
+    "environment_id": "env_0005",
+    "physics": {
+      "type": "High Friction",
+      "gravity": 9.81,
+      "friction": 1.809456331069211,
+      "air_resistance": 0.4663892336168735
+    },
+    "context": {
+      "type": "Desert",
+      "lighting": "Neon",
+      "scene_complexity": 0.8253294713522961,
+      "object_count": 205,
+      "texture_quality": "Low"
+    },
+    "audio": {
+      "ambient_volume": 0.7439299504529912,
+      "reverb_intensity": 0.7517237432053452
+    },
+    "generated_at": "2025-05-28T06:10:18.995311"
+  },
+  {
+    "environment_id": "env_0006",
+    "physics": {
+      "type": "Dense Atmosphere",
+      "gravity": 9.81,
+      "friction": 1.7727694697910403,
+      "air_resistance": 0.14202649271021578
+    },
+    "context": {
+      "type": "Stadium",
+      "lighting": "Strobe",
+      "scene_complexity": 0.9029613070748514,
+      "object_count": 361,
+      "texture_quality": "High"
+    },
+    "audio": {
+      "ambient_volume": 0.16880181491417218,
+      "reverb_intensity": 0.31892945978953524
+    },
+    "generated_at": "2025-05-28T06:10:18.995316"
+  },
+  {
+    "environment_id": "env_0007",
+    "physics": {
+      "type": "Micro Gravity",
+      "gravity": 0.3166674792692,
+      "friction": 0.5128919519204544,
+      "air_resistance": 0.1371561502781931
+    },
+    "context": {
+      "type": "Factory",
+      "lighting": "Overcast",
+      "scene_complexity": 0.4359154711165621,
+      "object_count": 162,
+      "texture_quality": "Low"
+    },
+    "audio": {
+      "ambient_volume": 0.7264317581309518,
+      "reverb_intensity": 0.5757527291437461
+    },
+    "generated_at": "2025-05-28T06:10:18.995324"
+  },
+  {
+    "environment_id": "env_0008",
+    "physics": {
+      "type": "Dense Atmosphere",
+      "gravity": 9.81,
+      "friction": 0.47511753815348867,
+      "air_resistance": 0.4973228628210406
+    },
+    "context": {
+      "type": "Desert",
+      "lighting": "Strobe",
+      "scene_complexity": 0.2214185719964374,
+      "object_count": 322,
+      "texture_quality": "Medium"
+    },
+    "audio": {
+      "ambient_volume": 0.1885916609422072,
+      "reverb_intensity": 0.5643563628300966
+    },
+    "generated_at": "2025-05-28T06:10:18.995330"
+  },
+  {
+    "environment_id": "env_0009",
+    "physics": {
+      "type": "Zero Friction",
+      "gravity": 9.81,
+      "friction": 1.66834035935427,
+      "air_resistance": 0.18194821810851197
+    },
+    "context": {
+      "type": "Laboratory",
+      "lighting": "Overcast",
+      "scene_complexity": 0.886126784827197,
+      "object_count": 142,
+      "texture_quality": "Medium"
+    },
+    "audio": {
+      "ambient_volume": 0.714968496088971,
+      "reverb_intensity": 0.05239993333503534
+    },
+    "generated_at": "2025-05-28T06:10:18.995334"
+  }
+]
