@@ -9,9 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from pydantic import Field
-
 import wandb
+from pydantic import Field
 from atroposlib.envs.base import (
     APIServer,
     APIServerConfig,
