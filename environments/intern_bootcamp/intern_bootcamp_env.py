@@ -26,15 +26,23 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 # System prompt for reasoning tasks
-SYSTEM_PROMPT = """You are an expert problem solver with strong reasoning abilities.
-
-When solving problems:
-1. Think step by step through the problem
-2. Show your work clearly
-3. Verify your answer before finalizing
-4. Format your final answer as requested
-
-For problems requiring a specific format (like \\boxed{} for math), make sure to follow it exactly."""
+SYSTEM_PROMPT = (
+    "You are a deep thinking AI with strong reasoning abilities. You may use "
+    "extremely long chains of thought to deeply consider the problem and "
+    "deliberate with yourself via systematic reasoning processes to help come "
+    "to a correct solution.\n\n"
+    "You should enclose your thoughts and internal monologue inside <think> "
+    "</think> tags, and then provide your solution or response to the problem. "
+    "Please think in English, even if the problem is presented in another "
+    "language.\n\n"
+    "When solving problems:\n"
+    "1. Think step by step through the problem inside <think> tags\n"
+    "2. Show your work clearly in your thinking\n"
+    "3. Verify your answer before finalizing\n"
+    "4. Always format your final answer using \\boxed{} notation\n\n"
+    "For mathematical problems requiring a specific format, make sure to follow "
+    "it exactly. Your final answer must be enclosed in \\boxed{your answer here}."
+)
 
 
 class InternBootcampEnvConfig(BaseEnvConfig):
@@ -138,12 +146,9 @@ class InternBootcampEnv(BaseEnv):
             {"role": "user", "content": prompt},
         ]
 
-        # Convert to the expected prompt format
-        prompt_tuple = tuple([frozenset(messages)])
-
         # Return item with metadata
         return (
-            prompt_tuple,
+            messages,
             {
                 "identity": identity,
                 "task_name": self.current_task_name,
@@ -153,20 +158,11 @@ class InternBootcampEnv(BaseEnv):
 
     async def collect_trajectories(self, item) -> Tuple[List, List]:
         """Collect trajectories for the current item."""
-        prompt_tuple, metadata = item
+        messages, metadata = item
 
-        # Reconstruct messages for the model
-        messages = [
-            {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": metadata["raw_prompt"]},
-        ]
-
-        # Apply chat template
-        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
-
-        # Get completions from the model
-        completions = await self.server.completion(
-            prompt=prompt,
+        # Get completions from the model using chat_completion
+        completions = await self.server.chat_completion(
+            messages=messages,
             n=self.config.group_size,
             max_tokens=self.config.max_token_length,
             temperature=self.config.temperature,
@@ -176,11 +172,7 @@ class InternBootcampEnv(BaseEnv):
         to_score = []
 
         for i, completion in enumerate(completions.choices):
-            model_response = (
-                completion.text
-                if hasattr(completion, "text")
-                else completion.message.content
-            )
+            model_response = completion.message.content
 
             # Create full conversation for scoring
             full_messages = messages + [
@@ -302,14 +294,9 @@ class InternBootcampEnv(BaseEnv):
                 {"role": "user", "content": prompt},
             ]
 
-            # Apply chat template
-            formatted_prompt = self.tokenizer.apply_chat_template(
-                messages, tokenize=False
-            )
-
-            # Get model response
-            completion = await self.server.completion(
-                prompt=formatted_prompt,
+            # Get model response using chat_completion
+            completion = await self.server.chat_completion(
+                messages=messages,
                 n=1,
                 max_tokens=self.config.max_token_length,
                 temperature=0.0,  # Deterministic for evaluation
@@ -317,11 +304,7 @@ class InternBootcampEnv(BaseEnv):
                 split="eval",
             )
 
-            model_response = (
-                completion.choices[0].text
-                if hasattr(completion.choices[0], "text")
-                else completion.choices[0].message.content
-            )
+            model_response = completion.choices[0].message.content
 
             # Score the response
             score = self.bootcamp_instance.verify_score(
