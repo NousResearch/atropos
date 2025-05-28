@@ -181,9 +181,11 @@ class InternBootcampEnv(BaseEnv):
 
             to_score.append((full_messages, metadata, model_response))
 
+        # Score the trajectories immediately and return a ScoredDataGroup
+        scored_data = await self.score(to_score)
         backlog = []  # No backlog items for now
 
-        return to_score, backlog
+        return scored_data, backlog
 
     async def score(self, rollout_group_data) -> ScoredDataGroup:
         """Score the collected trajectories using bootcamp verification."""
@@ -354,7 +356,7 @@ class InternBootcampEnv(BaseEnv):
     def config_init(cls) -> Tuple[InternBootcampEnvConfig, List[APIServerConfig]]:
         """Initialize environment and server configurations."""
         env_config = InternBootcampEnvConfig(
-            tokenizer_name="NousResearch/Nous-Hermes-2-Yi-34B",
+            tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
             group_size=8,
             use_wandb=True,
             max_num_workers=64,
@@ -362,7 +364,7 @@ class InternBootcampEnv(BaseEnv):
             total_steps=10000,
             batch_size=1024,
             steps_per_eval=100,
-            max_token_length=2048,
+            max_token_length=16384,
             inference_weight=1.0,
             wandb_name="intern_bootcamp_game24",
             data_path_to_save_groups="data/intern_bootcamp_game24.jsonl",
@@ -386,7 +388,7 @@ class InternBootcampEnv(BaseEnv):
 
         server_configs = [
             APIServerConfig(
-                model_name="NousResearch/Nous-Hermes-2-Yi-34B",
+                model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9004/v1",
                 api_key="x",
                 num_requests_for_eval=64,
