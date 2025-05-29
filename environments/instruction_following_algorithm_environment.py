@@ -1,7 +1,11 @@
+import asyncio
 import json
+import logging
+import os
 import random
 import re
-from typing import Dict, List, Optional, Tuple
+import uuid
+from typing import Dict, List, Optional, Tuple, Union
 
 import wandb
 from datasets import Dataset, load_dataset
@@ -36,6 +40,10 @@ class IFConfig(BaseEnvConfig):
     test_set_ratio: float = Field(
         0.05, description="The ratio of the selected dataset for testing"
     )
+    dump_rollouts: bool = Field(
+        default=False,
+        description="Whether to dump rollouts to JSONL files.",
+    )
 
 
 class InstructionFollowingEnv(BaseEnv):
@@ -49,9 +57,38 @@ class InstructionFollowingEnv(BaseEnv):
         testing=False,
     ):
         super().__init__(config, server_configs, slurm, testing)
+
+        # Initialize the logger
+        self.logger = logging.getLogger(self.__class__.__name__)
+        if not self.logger.handlers:
+            _handler = logging.StreamHandler()
+            _formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            )
+            _handler.setFormatter(_formatter)
+            self.logger.addHandler(_handler)
+            self.logger.setLevel(logging.INFO)  # Default to INFO, can be configured
+        self.logger.disabled = False  # Ensure logger is enabled
+
         self.percent_correct_buffer = list()
         self.eval_metrics = list()
         self.rollouts_for_wandb = []
+
+        # For saving rollouts to JSONL
+        self.run_uuid = str(uuid.uuid4())
+        # Buffer will store a list of item groups, where each group has an item_id and a list of its rollouts.
+        # Each rollout detail will contain conversation, score, and constraint_details.
+        RolloutDetail = Dict[
+            str, Union[List[Dict[str, str]], float, Dict[str, Union[str, Dict]]]
+        ]  # Type alias for clarity
+        ItemGroup = Dict[str, Union[str, List[RolloutDetail]]]
+        self.rollouts_to_save_buffer: List[ItemGroup] = []
+        self.processed_item_count = 0
+        # Creates .../atropos/environments/datadumps/ relative to this file
+        self.datadumps_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "datadumps"
+        )
+        self.save_file_batch_num = 0
 
     @classmethod
     def config_init(
@@ -65,7 +102,7 @@ class InstructionFollowingEnv(BaseEnv):
             rollout_server_url="http://localhost:8000",
             total_steps=500,
             batch_size=1024,
-            steps_per_eval=20,
+            steps_per_eval=1000,
             max_token_length=1024 * 15,
             inference_weight=1.0,
             wandb_name="instruction_following_rlvr_ifeval",  # Specific WandB project name
@@ -74,6 +111,7 @@ class InstructionFollowingEnv(BaseEnv):
             dataset_name="allenai/RLVR-IFeval",  # Default dataset
             dataset_config_name=None,  # RLVR-IFeval doesn't have a specific config name, uses 'default'
             test_set_ratio=0.05,  # The ratio of the selelcted dataset in %
+            dump_rollouts=False,
         )
         # Server configurations can be similar to SingleToolCallingEnv or adjusted
         server_configs = [
@@ -137,7 +175,7 @@ class InstructionFollowingEnv(BaseEnv):
 
         processed_items = []
         try:
-            print(
+            self.logger.info(
                 f"Attempting to load dataset: {dataset_name}, "
                 f"config: {dataset_config_name if dataset_config_name else 'default'}"
             )
@@ -152,7 +190,7 @@ class InstructionFollowingEnv(BaseEnv):
                 full_dataset_raw = load_dataset(
                     dataset_name, split="train", trust_remote_code=True
                 )
-            print(
+            self.logger.info(
                 f"Successfully loaded raw dataset. Number of items: {len(full_dataset_raw)}"
             )
 
@@ -164,16 +202,16 @@ class InstructionFollowingEnv(BaseEnv):
                     or not isinstance(item_messages, list)
                     or len(item_messages) == 0
                 ):
-                    print(
-                        f"Warning: Item {i} has invalid or empty 'messages' field. Skipping. Item: {item}"
+                    self.logger.warning(
+                        f"Item {i} has invalid or empty 'messages' field. Skipping. Item: {item}"
                     )
                     continue
                 # Assuming the relevant prompt is the content of the first message in the list
                 # (or last, if multiple user messages were possible, but IFEval is typically single user instruction)
                 prompt_text = item_messages[0].get("content")
                 if not prompt_text:
-                    print(
-                        f"Warning: Item {i} '{item_messages[0]}' has no content. Skipping."
+                    self.logger.warning(
+                        f"Item {i} '{item_messages[0]}' has no content. Skipping."
                     )
                     continue
 
@@ -182,8 +220,8 @@ class InstructionFollowingEnv(BaseEnv):
                 if not ground_truth_json_str or not isinstance(
                     ground_truth_json_str, str
                 ):
-                    print(
-                        f"Warning: Item {i} missing or has invalid 'ground_truth' string. Skipping. "
+                    self.logger.warning(
+                        f"Item {i} missing or has invalid 'ground_truth' string. Skipping. "
                         f"Prompt: {prompt_text[:50]}..."
                     )
                     continue
@@ -193,23 +231,23 @@ class InstructionFollowingEnv(BaseEnv):
                     if not isinstance(parsed_gt, dict):
                         raise ValueError("Parsed ground_truth is not a dictionary.")
                 except (json.JSONDecodeError, ValueError) as e:
-                    print(
-                        f"Warning: Could not parse 'ground_truth' JSON for item {i}. Error: {e}. "
+                    self.logger.warning(
+                        f"Could not parse 'ground_truth' JSON for item {i}. Error: {e}. "
                         f"GT String: '{ground_truth_json_str}'. Prompt: {prompt_text[:50]}... Skipping."
                     )
                     continue
 
                 func_name_from_gt = parsed_gt.get("func_name")
                 if not func_name_from_gt:
-                    print(
-                        f"Warning: Item {i} parsed 'ground_truth' has no 'func_name'. GT: {parsed_gt}. "
+                    self.logger.warning(
+                        f"Item {i} parsed 'ground_truth' has no 'func_name'. GT: {parsed_gt}. "
                         f"Prompt: {prompt_text[:50]}... Skipping."
                     )
                     continue
 
                 if func_name_from_gt not in IF_FUNCTIONS_MAP:
-                    print(
-                        f"Warning: func_name '{func_name_from_gt}' in item {i} not in IF_FUNCTIONS_MAP. "
+                    self.logger.warning(
+                        f"func_name '{func_name_from_gt}' in item {i} not in IF_FUNCTIONS_MAP. "
                         f"Prompt: {prompt_text[:50]}... Skipping."
                     )
                     continue
@@ -231,12 +269,13 @@ class InstructionFollowingEnv(BaseEnv):
                             item.get("constraint", "")
                         ),  # For logging, from RLVR-IFeval structure
                         "expected_response_for_logging": "",
+                        "item_id": f"{dataset_name.replace('/', '_')}_train_item_{i}",
                     }
                 )
 
             if not processed_items:
-                print(
-                    "Warning: No items successfully processed from the dataset. "
+                self.logger.warning(
+                    "No items successfully processed from the dataset. "
                     "Check dataset format/content or parsing logic."
                 )
                 raise ValueError(
@@ -244,7 +283,7 @@ class InstructionFollowingEnv(BaseEnv):
                 )
 
             full_dataset = Dataset.from_list(processed_items)
-            print(
+            self.logger.info(
                 f"Successfully processed {len(full_dataset)} items from dataset '{dataset_name}'."
             )
 
@@ -252,8 +291,8 @@ class InstructionFollowingEnv(BaseEnv):
             # This block is a fallback if the primary dataset loading/processing fails catastrophically.
             # For RLVR-IFeval, a failure here suggests issues with Hugging Face access,
             # dataset integrity, or fundamental code errors.
-            print(
-                f"CRITICAL: Failed to load or process primary dataset '{dataset_name}': {e}. "
+            self.logger.critical(
+                f"Failed to load or process primary dataset '{dataset_name}': {e}. "
                 f"Using a DUMMY dataset as fallback."
             )
             dummy_data_for_fallback = [
@@ -263,6 +302,7 @@ class InstructionFollowingEnv(BaseEnv):
                     "args": {"keyword_list": ["example"]},
                     "original_constraints_for_logging": "Contains 'example'",
                     "expected_response_for_logging": "This is an example response.",
+                    "item_id": "dummy_item_0",
                 },
                 {
                     "prompt": "Dummy Instruction 2: Output a valid JSON with key 'data' and value 'test'.",
@@ -270,10 +310,11 @@ class InstructionFollowingEnv(BaseEnv):
                     "args": {},
                     "original_constraints_for_logging": "Output valid JSON.",
                     "expected_response_for_logging": '{\\"data\\": \\"test\\"}',
+                    "item_id": "dummy_item_1",
                 },
             ]
             full_dataset = Dataset.from_list(dummy_data_for_fallback)
-            print(
+            self.logger.info(
                 f"Initialized with DUMMY dataset of {len(full_dataset)} items "
                 f"due to previous errors."
             )
@@ -284,11 +325,13 @@ class InstructionFollowingEnv(BaseEnv):
         num_items = len(full_dataset)
 
         if num_items == 0:
-            print("ERROR: Dataset is empty. Cannot create train/test split.")
+            self.logger.error("Dataset is empty. Cannot create train/test split.")
             self.train = Dataset.from_list([])
             self.test = Dataset.from_list([])
         elif num_items == 1:
-            print("Warning: Dataset has only 1 item. Using it for both train and test.")
+            self.logger.warning(
+                "Dataset has only 1 item. Using it for both train and test."
+            )
             self.train = full_dataset
             self.test = full_dataset
         else:  # num_items > 1
@@ -315,20 +358,20 @@ class InstructionFollowingEnv(BaseEnv):
             self.test = split_dataset["test"]
             # Final check for empty train/test after split, should not happen with logic above if num_items > 0
             if len(self.train) == 0 and len(self.test) > 0:
-                print(
-                    "Warning: Train set empty after split, test set has data. "
+                self.logger.warning(
+                    "Train set empty after split, test set has data. "
                     "This is unusual. Swapping."
                 )
                 self.train = self.test  # Fallback, though indicates issue
             elif len(self.test) == 0 and len(self.train) > 0:
-                print(
-                    "Warning: Test set empty after split, train set has data. "
+                self.logger.warning(
+                    "Test set empty after split, train set has data. "
                     "Using full train set for test as well."
                 )
                 self.test = self.train
 
         self.iter = 0
-        print(
+        self.logger.info(
             f"Dataset setup complete. Train size: {len(self.train)}, Test size: {len(self.test)}"
         )
 
@@ -365,7 +408,6 @@ class InstructionFollowingEnv(BaseEnv):
 
         # 4. If <think> appears after </think>, malformed.
         if idx_think_open >= idx_think_close_start:
-            # print(f"DEBUG: <think> tag appears at or after </think> tag. Response: '{model_response_text[:200]}...'")
             return 0.0
 
         # 5. Extract text_to_verify (content after the first </think>)
@@ -379,8 +421,8 @@ class InstructionFollowingEnv(BaseEnv):
 
         # If all checks pass, proceed with verification using text_to_verify
         if func_name not in IF_FUNCTIONS_MAP:
-            print(
-                f"Warning: Verifier function '{func_name}' not found in IF_FUNCTIONS_MAP."
+            self.logger.warning(
+                f"Verifier function '{func_name}' not found in IF_FUNCTIONS_MAP."
             )
             return 0.0
 
@@ -409,22 +451,22 @@ class InstructionFollowingEnv(BaseEnv):
                 raw_score = verifier_func(text_to_verify, **filtered_args)
 
         except LangDetectException:
-            print(
-                f"Warning: langdetect failed for func_name '{func_name}'. Scoring as incorrect."
+            self.logger.warning(
+                f"langdetect failed for func_name '{func_name}'. Scoring as incorrect."
             )
             return 0.0
         except ImportError as e:
-            print(
-                f"Warning: ImportError during verifier function '{func_name}': {e}. Check dependencies."
+            self.logger.warning(
+                f"ImportError during verifier function '{func_name}': {e}. Check dependencies."
             )
             return 0.0
         except TypeError as e:
-            print(
+            self.logger.warning(
                 f"TypeError calling {func_name} with args {args}: {e}. Text: '{text_to_verify[:100]}...'"
             )
             return 0.0
         except Exception as e:
-            print(
+            self.logger.warning(
                 f"Unexpected error in verifier function '{func_name}' with args {args}: {e}"
             )
             return 0.0
@@ -434,8 +476,8 @@ class InstructionFollowingEnv(BaseEnv):
         elif isinstance(raw_score, bool):
             score_value = float(raw_score)
         else:
-            print(
-                f"Warning: Verifier '{func_name}' returned unexpected type: {type(raw_score)}. Expected bool or tuple."
+            self.logger.warning(
+                f"Verifier '{func_name}' returned unexpected type: {type(raw_score)}. Expected bool or tuple."
             )
             score_value = 0.0
 
@@ -448,8 +490,8 @@ class InstructionFollowingEnv(BaseEnv):
         func_name = test_item["func_name"]
         args_for_verifier = test_item["args"]
 
-        print(
-            f"DEBUG: Entering rollout_and_score_eval. Prompt: {instruction_prompt_text[:200]}..."
+        self.logger.debug(
+            f"Entering rollout_and_score_eval. Prompt: {instruction_prompt_text[:200]}..."
         )  # DEBUG
 
         messages = [{"role": "system", "content": system_prompt}]
@@ -459,8 +501,8 @@ class InstructionFollowingEnv(BaseEnv):
             messages, add_generation_prompt=True, tokenize=False
         )
 
-        print(
-            f"DEBUG: Calling self.server.completion in rollout_and_score_eval. Prompt: {prompt_str[:200]}..."
+        self.logger.debug(
+            f"Calling self.server.completion in rollout_and_score_eval. Prompt: {prompt_str[:200]}..."
         )  # DEBUG
         completion = await self.server.completion(
             prompt=prompt_str,
@@ -469,7 +511,7 @@ class InstructionFollowingEnv(BaseEnv):
             temperature=0.2,  # Temperature for eval, can be 0 for deterministic
             split="eval",
         )
-        print("DEBUG: Received completion in rollout_and_score_eval.")  # DEBUG
+        self.logger.debug("Received completion in rollout_and_score_eval.")  # DEBUG
 
         model_response_text = completion.choices[0].text
         score_value = await self._get_score_from_verifier(
@@ -483,11 +525,13 @@ class InstructionFollowingEnv(BaseEnv):
     async def evaluate(self, *args, **kwargs):
         # Evaluates the model on the test set
         if not self.test or len(self.test) == 0:
-            print("Warning: Test set is empty. Skipping evaluation.")
+            self.logger.warning("Test set is empty. Skipping evaluation.")
             self.eval_metrics.append(("eval/percent_correct", 0.0))
             return
 
-        print(f"DEBUG: Starting evaluation. Test set size: {len(self.test)}")  # DEBUG
+        self.logger.debug(
+            f"Starting evaluation. Test set size: {len(self.test)}"
+        )  # DEBUG
         eval_tasks = []
         for test_item_dict in self.test:  # self.test contains dicts after setup
             eval_tasks.append(self.rollout_and_score_eval(test_item_dict))
@@ -500,23 +544,28 @@ class InstructionFollowingEnv(BaseEnv):
             percent_correct = sum(scores) / len(scores)
 
         self.eval_metrics.append(("eval/percent_correct", percent_correct))
-        print(f"Evaluation percent correct: {percent_correct}")
+        self.logger.info(f"Evaluation percent correct: {percent_correct}")
 
     async def collect_trajectories(
         self, item: Item
     ) -> Tuple[Optional[ScoredDataGroup], List]:
         # item = (prompt_messages_tuple, answer_info_dict)
-        # answer_info_dict = {"func_name": ..., "args": ...}
-        print(f"DEBUG: Entering collect_trajectories. Item: {str(item)}")  # DEBUG
+        # answer_info_dict = {"func_name": ..., "args": ..., "item_id": ...}
+        self.logger.debug(
+            f"Entering collect_trajectories. Item: {str(item)[:500]}"
+        )  # Limit log length
         prompt_messages_list = [dict(msg_fset) for msg_fset in item[0]]
         answer_info = item[1]
+        item_id = answer_info.get(
+            "item_id", f"unknown_item_at_collect_trajectories_{self.iter}"
+        )
 
         prompt_str = self.tokenizer.apply_chat_template(
             prompt_messages_list, add_generation_prompt=True, tokenize=False
         )
 
-        print(
-            f"DEBUG: Calling self.server.completion in collect_trajectories. Prompt: {prompt_str[:200]}..."
+        self.logger.debug(
+            f"Calling self.server.completion in collect_trajectories. Prompt: {prompt_str[:200]}..."
         )  # DEBUG
         try:
             completions = await self.server.completion(
@@ -525,12 +574,12 @@ class InstructionFollowingEnv(BaseEnv):
                 max_tokens=self.config.max_token_length,
                 temperature=0.8,  # Temperature for diverse responses during training rollouts
             )
-            print(
-                f"DEBUG: Received {len(completions.choices)} completions in collect_trajectories."
+            self.logger.debug(
+                f"Received {len(completions.choices)} completions in collect_trajectories."
             )  # DEBUG
         except Exception as e:
-            print(
-                f"ERROR: Exception during self.server.completion in collect_trajectories: {e}"
+            self.logger.error(
+                f"Exception during self.server.completion in collect_trajectories: {e}"
             )  # DEBUG
             # Depending on the desired behavior, you might want to return None or raise the exception
             return None, []
@@ -546,16 +595,137 @@ class InstructionFollowingEnv(BaseEnv):
         if not to_score_list:
             return None, []
 
-        print(
-            f"DEBUG: Scoring {len(to_score_list)} trajectories in collect_trajectories."
+        self.logger.debug(
+            f"Scoring {len(to_score_list)} trajectories in collect_trajectories."
         )  # DEBUG
         scored_data = await self.score(to_score_list)
         to_backlog = []  # Backlog not currently used but part of signature
 
-        print(
-            f"DEBUG: Exiting collect_trajectories. Scored data: {bool(scored_data)}"
+        self.logger.debug(
+            f"Exiting collect_trajectories. Scored data: {bool(scored_data)}"
         )  # DEBUG
+
+        # Data Dumping Logic
+        if scored_data and self.config.dump_rollouts:
+            rollouts_for_current_item_group = (
+                []
+            )  # This will store dicts for each rollout in the group
+
+            num_scored_rollouts = len(scored_data.get("scores", []))
+            # We need the full conversation for each scored rollout.
+            # The `score` method tokenizes, but we need the original messages leading to the choice.
+            # `to_score_list` from earlier in this method had `(trajectory_messages, answer_info)`
+            # Let's assume `scored_data` could somehow relate back or we re-construct for saving.
+            # For simplicity, we might need to pass messages through `score` or reconstruct.
+            # Given `tokenize_for_trainer` is used in `score`, it might be easier to log tokens, or re-decode.
+            # The other environments log the `messages` list from `tokenize_for_trainer` if available.
+
+            # Let's assume `scored_data` will have a 'messages' field if `tokenize_for_trainer` adds it
+            # If not, we fall back to reconstructing (which is less ideal).
+            # The current `score` method does not add `messages` to `scores_container`
+
+            # For now, let's assume we need to get the text from tokens for dumping, similar to add_rollouts_for_wandb
+            # Or, it would be better if `score` returned the messages that were scored.
+            # Let's plan to modify `score` to return messages if possible. For now, we use tokens.
+
+            constraint_details_for_log = {
+                "func_name": answer_info["func_name"],
+                "args": answer_info["args"],
+                "original_constraints_for_logging": answer_info.get(
+                    "original_constraints_for_logging", ""
+                ),
+                "expected_response_for_logging": answer_info.get(
+                    "expected_response_for_logging", ""
+                ),
+            }
+
+            for i in range(num_scored_rollouts):
+                # This part needs careful thought: what exactly to save for "conversation"
+                # Ideally, it's the list of message dicts. If `scored_data` has tokenized versions,
+                # we might decode or try to get original messages if `score` is modified.
+                # For now, let's just log the decoded tokens similar to wandb rollouts.
+                # A more robust solution would be to ensure `score`
+                # can return the full message list for each scored item.
+                # Let's assume scored_data["tokens"][i] are the tokens for the i-th rollout
+                try:
+                    decoded_text = self.tokenizer.decode(
+                        scored_data["tokens"][i], skip_special_tokens=False
+                    )
+                except Exception as e:
+                    self.logger.warning(
+                        f"Could not decode tokens for item_id {item_id}, rollout {i}: {e}"
+                    )
+                    decoded_text = "ERROR_DECODING_TOKENS"
+
+                score_for_rollout = scored_data["scores"][i]
+
+                rollouts_for_current_item_group.append(
+                    {
+                        "conversation_text": decoded_text,  # Placeholder, ideally list of dicts
+                        "score": score_for_rollout,
+                        "constraint_details": constraint_details_for_log,
+                        # Add more details if available, e.g. raw model response before tokenization if kept
+                    }
+                )
+
+            if rollouts_for_current_item_group:
+                item_group_to_save = {
+                    "item_id": item_id,
+                    "rollouts": rollouts_for_current_item_group,
+                }
+                self.rollouts_to_save_buffer.append(item_group_to_save)
+                self.processed_item_count += 1
+
+                if (
+                    self.config.dump_rollouts
+                    and self.processed_item_count > 0
+                    and self.processed_item_count % 100
+                    == 0  # Save every 100 processed item groups
+                ):
+                    log_msg = (
+                        f"Reached {self.processed_item_count} processed item groups. "
+                        f"Triggering save for {len(self.rollouts_to_save_buffer)} item groups."
+                    )
+                    self.logger.info(log_msg)
+                    await self._save_rollouts_to_jsonl()
+
         return scored_data, to_backlog
+
+    async def _save_rollouts_to_jsonl(self):
+        """Saves the buffered rollouts to a JSONL file in the datadumps directory."""
+        if not self.rollouts_to_save_buffer:
+            self.logger.info("No rollouts in buffer to save.")
+            return
+
+        try:
+            if not os.path.exists(self.datadumps_dir):
+                os.makedirs(self.datadumps_dir)
+                self.logger.info(f"Created directory: {self.datadumps_dir}")
+        except OSError as e:
+            self.logger.error(f"Error creating directory {self.datadumps_dir}: {e}")
+            return  # Don't proceed if directory creation fails
+
+        file_path = os.path.join(
+            self.datadumps_dir,
+            f"instruction_following_rollouts_{self.run_uuid}_{self.save_file_batch_num:04d}.jsonl",
+        )
+
+        try:
+            with open(file_path, "w") as f:
+                for rollout_dict in self.rollouts_to_save_buffer:
+                    json.dump(rollout_dict, f)
+                    f.write("\n")
+            self.logger.info(
+                f"Successfully saved {len(self.rollouts_to_save_buffer)} item groups to {file_path}"
+            )
+            self.rollouts_to_save_buffer.clear()  # Clear buffer after successful save
+            self.save_file_batch_num += 1
+        except IOError as e:
+            self.logger.error(f"Error writing rollouts to {file_path}: {e}")
+        except Exception as e:
+            self.logger.error(
+                f"An unexpected error occurred while saving rollouts to {file_path}: {e}"
+            )
 
     def save_checkpoint(self, step, data=None):
         if data is None:
@@ -599,18 +769,11 @@ class InstructionFollowingEnv(BaseEnv):
             # Map to reward: 1.0 for correct, 0 for incorrect
             reward = 1.0 if score_value == 1.0 else 0
 
-            # Tokenize the conversation for PPO training
             # Ensure full_trajectory_messages is a list of dicts
             list_of_dicts_trajectory = [dict(msg) for msg in full_trajectory_messages]
             out_dict = tokenize_for_trainer(self.tokenizer, list_of_dicts_trajectory)
             tokens = out_dict["tokens"]
             masks = out_dict["masks"]
-
-            # Filter out examples with insufficient context (too short)
-            if (
-                sum(1 for m_val in masks if m_val != -100) < 10
-            ):  # At least 10 non-masked tokens
-                continue
 
             scores_container["tokens"].append(tokens)
             scores_container["masks"].append(masks)
@@ -662,13 +825,31 @@ class InstructionFollowingEnv(BaseEnv):
         ):
             return None  # Avoid sending data with no variance
 
+        # Log group average score to console
+        current_scores_if = scores_container.get("scores", [])
+        if current_scores_if:
+            average_score_if = sum(current_scores_if) / len(current_scores_if)
+            log_message_main_if = (
+                f"InstructionFollowing Group average score: {average_score_if:.4f}"
+            )
+            if all(s == 1.0 for s in current_scores_if):
+                self.logger.info(
+                    f"{log_message_main_if} (All successes in this group!)"
+                )
+            # In this env, scores are 0 or 1 after penalty (if all were 1 initially)
+            # So, checking for all 0.0 might be more relevant if penalties made them non-1.
+            elif all(s == 0.0 for s in current_scores_if):
+                self.logger.info(f"{log_message_main_if} (All failures in this group!)")
+            else:
+                self.logger.info(log_message_main_if)
+
         return scores_container
 
     async def get_next_item(self) -> Item:
         # Fetches the next preprocessed item from the training set
         if not self.train or len(self.train) == 0:
             # This case should be handled by setup, but as a safeguard:
-            print("Error: Training data is empty in get_next_item.")
+            self.logger.error("Training data is empty in get_next_item.")
             # Return a dummy item to prevent crashes, though this indicates a setup issue
             dummy_prompt_messages = (
                 frozenset({"role": "system", "content": system_prompt}.items()),
@@ -679,6 +860,7 @@ class InstructionFollowingEnv(BaseEnv):
             dummy_answer_info = {
                 "func_name": "verify_keywords",
                 "args": {"keyword_list": ["hello"]},
+                "item_id": "dummy_fallback_get_next_item_0",
             }
             return (dummy_prompt_messages, dummy_answer_info)
 
@@ -686,6 +868,7 @@ class InstructionFollowingEnv(BaseEnv):
         self.iter += 1
 
         instruction_prompt_text = raw_item["prompt"]
+        item_id = raw_item["item_id"]
 
         # Construct messages for the LLM (prompt tuple part of Item)
         # Using frozenset as required by BaseEnv's Item type hint
@@ -705,6 +888,7 @@ class InstructionFollowingEnv(BaseEnv):
             "expected_response_for_logging": raw_item.get(
                 "expected_response_for_logging", ""
             ),
+            "item_id": item_id,
         }
 
         return (prompt_messages_tuple, answer_info)
@@ -735,6 +919,28 @@ class InstructionFollowingEnv(BaseEnv):
         # Limit the number of rollout groups stored
         if len(self.rollouts_for_wandb) > self.config.num_rollouts_to_keep:
             self.rollouts_for_wandb.pop(0)
+
+    async def close(self):
+        """Clean up and save any remaining rollouts before exiting."""
+        self.logger.info(
+            "Closing InstructionFollowingEnv. Attempting to save any remaining rollouts..."
+        )
+        if (
+            self.config.dump_rollouts and self.rollouts_to_save_buffer
+        ):  # Check if there's anything to save
+            self.logger.info(
+                f"Found {len(self.rollouts_to_save_buffer)} item groups in buffer. Saving now."
+            )
+            await self._save_rollouts_to_jsonl()
+        else:
+            self.logger.info("No item groups in buffer to save upon closing.")
+
+        # Call the superclass's close method if it exists and is async
+        if hasattr(super(), "close") and asyncio.iscoroutinefunction(super().close):
+            await super().close()
+        elif hasattr(super(), "close"):
+            super().close()  # Assuming it's a synchronous method
+        self.logger.info("InstructionFollowingEnv closed.")
 
 
 # ----- IFEval Verifier Functions and Map -----
@@ -782,6 +988,9 @@ def validate_response_language(text: str, language: str) -> bool:
         detected_language = detect(text)
         return detected_language == language
     except LangDetectException:  # Catching specific exception from detect()
+        # Changed print to self.logger.warning - however, self.logger is not accessible here.
+        # This function is outside the class. For now, will keep as print.
+        # A more involved refactor would be needed to pass the logger or make these methods part of the class.
         print(
             f"Warning: langdetect failed to detect language for text: '{text[:50]}...'"
         )
