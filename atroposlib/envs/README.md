@@ -1,6 +1,6 @@
 # Base Environment (`BaseEnv`)
 
-The `BaseEnv` class (located in `trajectoryhandler/envs/base.py`) provides a foundation for creating custom reinforcement learning environments that interact with Atropos. When creating your own environment, you will typically subclass `BaseEnv` and implement several key methods.
+The `BaseEnv` class (located in `atroposlib/envs/base.py`) provides a foundation for creating custom reinforcement learning environments that interact with Atropos. When creating your own environment, you will typically subclass `BaseEnv` and implement several key methods.
 
 ## Design philosophy
 
