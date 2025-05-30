@@ -1807,6 +1807,1294 @@ Access the game at `http://localhost:3000` when running the server.
 
 ---
 
+### 22. Physical Space STL CAD RL Environment (`physical_space_stl/`)
+
+**Contributors**: ecsbeats, venkatacrc
+**PR**: [#76](https://github.com/NousResearch/atropos/pull/76)
+**Integration Status**: ✅ Integrated
+
+**Description**: A reinforcement learning environment for training language models to generate STL (stereolithography) files from 3D wireframe views and technical drawings. This environment bridges the gap between visual 3D understanding and CAD file generation, enabling AI systems to learn computer-aided design skills.
+
+**Core Features**:
+
+**3D Rendering Pipeline**:
+- **PyRender Integration**: Offline 3D rendering with GPU acceleration (EGL) or CPU fallback (OSMesa)
+- **Multi-View Generation**: Automatic generation of front, top, and diagonal wireframe views
+- **Blueprint Styling**: Technical drawing aesthetics with blue wireframes on light backgrounds
+- **Mesh Processing**: Support for complex STL files with automatic centering and scaling
+
+**STL Generation Training**:
+- **ASCII STL Format**: Focus on human-readable STL file generation
+- **Template Variety**: Multiple query templates to encourage diverse reasoning approaches
+- **Geometric Understanding**: Training on shape analysis, dimensions, and 3D spatial relationships
+- **Quality Assessment**: Multi-metric evaluation of generated vs. original meshes
+
+**Evaluation System**:
+- **CLIP-Based Scoring**: Visual similarity assessment between rendered views
+- **Geometric Metrics**: Comparison of vertices, faces, volume, and surface area
+- **Mesh Validation**: Automatic validation of generated STL file structure
+- **Progressive Difficulty**: Adaptive training with increasing geometric complexity
+
+**Technical Architecture**:
+
+**Environment Interface**:
+```python
+from environments.community.physical_space_stl.physical_env import PhysicalEnv
+
+# Initialize environment
+env_config, server_configs = PhysicalEnv.config_init()
+env = PhysicalEnv(env_config, server_configs)
+
+# Training loop
+await env.setup()
+item = await env.get_next_item()
+# item contains: prompt, image (rendered views), stl_path
+```
+
+**Data Pipeline**:
+- **STL File Loading**: Automatic discovery and loading of STL files from sample_data directory
+- **Train/Test Split**: 80/20 split with reproducible random seeding
+- **Image Rendering**: Real-time generation of wireframe views for each STL file
+- **Query Generation**: Dynamic prompt creation with multiple template variations
+
+**Rendering System**:
+```python
+from environments.community.physical_space_stl.pyrender_utils import PyRenderOffline
+
+# Initialize renderer
+renderer = PyRenderOffline(width=224, height=224)  # CLIP-compatible size
+
+# Render mesh to multiple views
+images = renderer.render_mesh_to_images(mesh)
+# Returns: [front_view, top_view, diagonal_view]
+```
+
+**Camera Configuration**:
+- **Front View**: Standard orthographic projection along Z-axis
+- **Top View**: Overhead perspective for plan view understanding
+- **Diagonal View**: 3D perspective for spatial relationship comprehension
+- **Lighting Setup**: Multi-point lighting for clear wireframe visibility
+
+**STL Processing**:
+
+**File Format Support**:
+- **ASCII STL**: Primary focus for human-readable generation
+- **Binary STL**: Loading support for existing files
+- **Mesh Validation**: Automatic checking of facet normals and vertex ordering
+- **Error Handling**: Graceful degradation for malformed files
+
+**Quality Metrics**:
+```python
+def score_meshes_similarity(original_mesh, generated_mesh):
+    # Multi-dimensional similarity assessment
+    metrics = {
+        "vertex_ratio": min(gen_vertices / orig_vertices, 1.0),
+        "face_ratio": min(gen_faces / orig_faces, 1.0),
+        "volume_ratio": min(gen_volume / orig_volume, 1.0),
+        "area_ratio": min(gen_area / orig_area, 1.0)
+    }
+    return sum(metrics.values()) / len(metrics)
+```
+
+**Training Data Generation**:
+
+**Dataset Creation Pipeline**:
+```bash
+# Generate training dataset
+python dataset_scr.py  # Create directory structure
+python render_stl.py   # Generate images from STL files
+python llm_label.py    # Create text descriptions
+python prepare_push_hf_dataset.py  # Upload to Hugging Face
+```
+
+**Data Structure**:
+```
+dataset/
+├── stls/           # Original STL files
+│   ├── model_0001.stl
+│   └── model_0002.stl
+├── images/         # Rendered wireframe views
+│   ├── model_0001.png
+│   └── model_0002.png
+└── labels.json     # Text descriptions and metadata
+```
+
+**Hugging Face Integration**:
+- **Dataset Upload**: Automatic preparation and upload to HF Hub
+- **Feature Extraction**: STL geometric features (centroid, bounding box, volume)
+- **Image Processing**: Standardized image formats for training
+- **Metadata Storage**: JSON-serialized geometric properties
+
+**System Prompt Design**:
+
+**Expert Persona**: "You are an expert in 3D modeling and computer-aided design..."
+
+**Task Specification**:
+- **Input**: Wireframe views and technical drawings
+- **Output**: Valid ASCII STL file content
+- **Reasoning**: Encouraged use of `<think>` tags for geometric analysis
+- **Format**: Strict `<stl>` tag enclosure for generated content
+
+**Example Templates**:
+- "Create a 3D model (STL file) for the object shown in these technical drawings. Be precise with the geometry."
+- "Based on these wireframe views, generate the STL code for this 3D object. Pay attention to all visible features."
+- "Using these blueprint images as reference, provide the STL file format data to recreate this 3D model."
+
+**Performance Optimization**:
+
+**Rendering Efficiency**:
+- **Headless Operation**: EGL/OSMesa for server environments
+- **GPU Acceleration**: Automatic detection and utilization
+- **Memory Management**: Efficient mesh processing and cleanup
+- **Batch Processing**: Support for multiple STL files
+
+**Computational Requirements**:
+- **Dependencies**: pyrender, trimesh, pyglet, matplotlib, torch, transformers
+- **System Libraries**: libglfw3-dev, libgles2-mesa-dev (Ubuntu)
+- **GPU Support**: Optional but recommended for rendering performance
+- **Memory Usage**: Scales with STL file complexity and batch size
+
+**Research Applications**:
+
+**3D Understanding**:
+- **Spatial Reasoning**: Training models to understand 3D geometry from 2D projections
+- **CAD Generation**: Automated creation of manufacturable 3D models
+- **Design Iteration**: Rapid prototyping through AI-assisted design
+- **Geometric Constraints**: Learning physical and manufacturing constraints
+
+**Vision-Language Integration**:
+- **Multi-Modal Learning**: Combining visual and textual understanding of 3D objects
+- **Technical Communication**: Bridging natural language and CAD representations
+- **Design Documentation**: Automatic generation of technical specifications
+- **Educational Tools**: Interactive learning for 3D modeling concepts
+
+**Manufacturing Applications**:
+- **Rapid Prototyping**: AI-assisted design for 3D printing
+- **Quality Control**: Automated verification of CAD file accuracy
+- **Design Optimization**: Iterative improvement of 3D models
+- **Accessibility**: Democratizing CAD design through natural language interfaces
+
+**Setup Instructions**:
+
+**Environment Setup**:
+```bash
+# Install Python dependencies
+pip install pyrender trimesh pyglet matplotlib torch transformers pydantic vllm numpy requests tenacity wandb
+
+# Ubuntu system dependencies for rendering
+sudo apt-get install libglfw3-dev libgles2-mesa-dev libnvidia-gl-570-server
+
+# Set rendering backend (choose one)
+export PYOPENGL_PLATFORM=egl    # For GPU acceleration
+export PYOPENGL_PLATFORM=osmesa # For CPU-only environments
+```
+
+**Data Preparation**:
+```bash
+# Create sample data directory
+mkdir sample_data
+# Add STL files to sample_data/ directory
+
+# Test rendering system
+python test_renderer_example.py
+python test_stl_env.py
+```
+
+**Training Configuration**:
+- **Model**: google/gemma-3-27b-it (configurable)
+- **Batch Size**: 12 (adjustable based on memory)
+- **Max Tokens**: 2048 (sufficient for complex STL files)
+- **Evaluation**: Every 100 steps with 10 test files
+
+**Demo Resources**:
+- **Training Run**: [W&B Run dlexyg5r](https://wandb.ai/csxl/atropos-environments_hack0/runs/dlexyg5r)
+- **GRPO Training**: [W&B Run t61am7gu](https://wandb.ai/csxl/grpo-physical-trainer/runs/t61am7gu)
+- **Test Images**: Rendered sphere views demonstrating wireframe quality
+- **Sample Data**: HTML visualization of training conversations
+
+**Future Enhancements**:
+
+**Advanced Rendering**:
+- **Texture Support**: Material and surface property visualization
+- **Animation**: Time-series rendering for dynamic objects
+- **Cross-Sections**: Internal structure visualization
+- **Assembly Views**: Multi-part object rendering
+
+**Enhanced Evaluation**:
+- **Geometric Accuracy**: More sophisticated similarity metrics
+- **Manufacturing Constraints**: Validation of printability and structural integrity
+- **User Studies**: Human evaluation of generated designs
+- **Benchmark Datasets**: Standardized test suites for CAD generation
+
+**Integration Opportunities**:
+- **CAD Software**: Direct integration with professional design tools
+- **3D Printing**: Seamless workflow to physical prototypes
+- **Simulation**: Physics-based validation of generated designs
+- **Collaborative Design**: Multi-agent design environments
+
+**Research Impact**: This environment represents a significant step toward AI-assisted computer-aided design, potentially revolutionizing how 3D models are created and iterated. The combination of visual understanding and structured output generation opens new possibilities for democratizing design tools and accelerating product development cycles.
+
+**Educational Value**: The environment serves as an excellent introduction to 3D graphics programming, mesh processing, and the intersection of AI with traditional engineering disciplines. The clear separation between rendering, evaluation, and generation components makes it suitable for educational use and research extension.
+
+**Requirements**: pyrender, trimesh, pyglet, matplotlib, torch, transformers, pydantic, vllm, numpy, requests, tenacity, wandb, atroposlib
+
+---
+
+### 23. Protein Design Environment (`protein_design/`)
+
+**Contributors**: hallerite, promachina
+**PR**: [#70](https://github.com/NousResearch/atropos/pull/70)
+**Integration Status**: ✅ Integrated
+
+**Description**: A comprehensive reinforcement learning environment for de novo protein design through a staged simulation loop. This environment enables AI systems to learn the complete protein design workflow from target structure prediction to binder evaluation, using state-of-the-art protein modeling tools.
+
+**Core Features**:
+
+**Multi-Stage Protein Design Pipeline**:
+- **AlphaFold2 Structure Prediction**: Predicts 3D structure of target proteins from amino acid sequences
+- **RFDiffusion Backbone Generation**: Generates novel protein binder backbones conditioned on target structures
+- **ProteinMPNN Sequence Design**: Designs optimal amino acid sequences for generated backbones
+- **AlphaFold2-Multimer Evaluation**: Evaluates binding complex quality with pLDDT scoring
+
+**Advanced Workflow Management**:
+- **State-Based Progression**: Tracks workflow state through 4 distinct internal steps
+- **Retry Logic**: Configurable retry mechanisms for failed tool executions
+- **Validation Systems**: Comprehensive input validation for contigs, hotspots, and sequences
+- **Error Handling**: Robust error recovery and detailed logging
+
+**NVIDIA NIM Integration**:
+- **API-Based Execution**: Leverages NVIDIA NIM APIs for protein modeling tools
+- **Async Processing**: Non-blocking API calls with configurable timeouts and polling
+- **Debug Mode**: Mock data generation for development and testing
+- **Result Caching**: Saves intermediate PDB files and FASTA sequences
+
+**Reward System**:
+- **Format Rewards**: 0.2 points for correct tool usage in steps 0-2
+- **Quality Rewards**: pLDDT-based scoring (0.0-1.0) for final complex evaluation
+- **Progressive Scoring**: Cumulative rewards across workflow stages
+
+**Data Management**:
+- **Hugging Face Integration**: Loads protein binding datasets (ronig/protein_binding_sequences)
+- **File Organization**: Structured output directory with timestamped results
+- **Comprehensive Logging**: Detailed workflow tracking and performance metrics
+
+**Research Applications**:
+- **Drug Discovery**: Design novel protein binders for therapeutic targets
+- **Protein Engineering**: Optimize protein-protein interactions
+- **Structural Biology**: Explore protein design space systematically
+- **AI Training**: Develop protein design capabilities in language models
+
+**Technical Requirements**:
+- NVIDIA NIM API access for protein modeling tools
+- Python environment with protein analysis libraries
+- Sufficient storage for PDB files and intermediate results
+
+**Environment Configuration**:
+- Configurable retry limits and timeout settings
+- Debug mode for development without API calls
+- Flexible dataset selection and column mapping
+- WandB integration for experiment tracking
+
+**Requirements**: pydantic, datasets, python-dotenv, pyyaml, wandb, atroposlib, nvidia-nim-api-client
+
+---
+
+### 24. MCP Tool Calling Environment (`mcp_tool_calling/`)
+
+**Contributors**: ODAncona, ady-bhai, way2key, pranceraz
+**PR**: [#80](https://github.com/NousResearch/atropos/pull/80)
+**Integration Status**: ✅ Integrated
+
+**Description**: A reinforcement learning environment focused on improving agent tool calls using the Model Context Protocol (MCP). The environment trains LLMs to dynamically discover and invoke tools more effectively, leveraging MCP for context-aware decision-making in tool selection and execution.
+
+**Core Features**:
+
+**MCP-Based Tool Calling**:
+- **Dynamic Tool Discovery**: Agents learn to identify appropriate tools from available MCP servers
+- **Context-Aware Selection**: Tool selection based on user prompts and available capabilities
+- **Structured Tool Execution**: JSON-formatted tool calls with proper argument handling
+- **Multi-Tool Scenarios**: Complex tasks requiring multiple tool interactions
+
+**Training Framework**:
+- **GRPO Implementation**: Group Relative Policy Optimization for efficient RL training
+- **Single Tool Environment**: Based on proven Atropos single tool calling framework
+- **Comparison-Based Scoring**: Expected vs actual MCP call evaluation
+- **Deep Thinking Integration**: Systematic reasoning processes with `<think>` tags
+
+**Dataset and Evaluation**:
+- **MCP Servers Dataset**: Uses DeepNLP/mcp-servers for tool discovery training
+- **Synthetic Prompt Generation**: Contextually appropriate prompts for various server types
+- **Tool-Specific Actions**: Predefined action sets for different MCP server categories
+- **JSON Validation**: Structured comparison of expected vs generated tool calls
+
+**Key Components**:
+- **Tool Calling Server** (`tool_calling_server.py`): Main environment implementation with MCP integration
+- **GRPO Trainer** (`grpo.py`): Reference implementation for RL training with vLLM
+- **Dataset Generator** (`MCP_datasets.py`): Synthetic training data creation from MCP server descriptions
+- **Configuration**: Flexible setup for different model sizes and training parameters
+
+**Supported Tool Categories**:
+- **AgentRPC**: Remote procedure calls and agent communication
+- **Git**: Version control operations and code manipulation
+- **AWS Knowledge Base**: Cloud service documentation and configuration
+- **Anki**: Spaced repetition and memory training systems
+- **ArangoDB**: Graph database queries and multi-model operations
+
+**Training Performance**:
+- **Model**: Qwen/Qwen2.5-1.5B-Instruct (configurable)
+- **Batch Size**: 1024 with 32 group size
+- **Training Steps**: 2000 total with evaluation every 20 steps
+- **Context Length**: Up to 16K tokens for complex tool scenarios
+
+**Research Applications**:
+- **Tool Discovery**: Automated identification of relevant tools for tasks
+- **API Integration**: Seamless connection between natural language and structured APIs
+- **Workflow Automation**: Multi-step task execution through tool chaining
+- **Context Understanding**: Improved comprehension of when and how to use tools
+
+**Technical Implementation**:
+- **vLLM Integration**: Efficient inference during data generation
+- **Transformers Training**: Standard training loop with gradient accumulation
+- **WandB Logging**: Comprehensive metrics tracking and visualization
+- **Async Processing**: Non-blocking tool execution and evaluation
+
+**Demo and Results**:
+- **1-Minute Demo**: [Loom demonstration](https://www.loom.com/share/44c793c47e7d45eaaf02bac7c168a10d)
+- **W&B Training**: [Lambda cluster results](https://api.wandb.ai/links/l-a-t-hacken-tu-eindhoven/nqjy1v4b)
+- **Performance Metrics**: Tool calling accuracy and reasoning quality tracking
+
+**Environment Configuration**:
+- **Model Selection**: Configurable base models for training and inference
+- **Server Setup**: Multiple API server configurations for distributed training
+- **Evaluation Settings**: Customizable evaluation frequency and batch sizes
+- **Reward Tuning**: Adjustable scoring weights for different aspects of tool calling
+
+**Future Enhancements**:
+- **Multi-Tool Workflows**: Complex task decomposition across multiple tools
+- **Tool Composition**: Learning to combine tools for novel capabilities
+- **Error Recovery**: Robust handling of tool failures and retries
+- **Real-World Integration**: Connection to actual MCP server implementations
+
+**Requirements**: torch, transformers, vllm, pydantic, numpy, requests, tenacity, wandb, datasets, atroposlib
+
+---
+
+### 25. Sanskrit Poetry Environment (`sanskrit_poetry/`)
+
+**Contributors**: KhoomeiK
+**PR**: [#71](https://github.com/NousResearch/atropos/pull/71)
+**Integration Status**: ✅ Integrated
+
+**Description**: A specialized reinforcement learning environment for generating Sanskrit poetry that adheres to traditional metrical patterns. This environment trains language models to compose authentic Sanskrit verse using the chandas (meter) classification system, combining linguistic knowledge with poetic creativity.
+
+**Core Features**:
+
+**Metrical Poetry Generation**:
+- **Chandas Meter Validation**: Uses the `chandas` classifier to verify adherence to traditional Sanskrit meters
+- **IAST Transliteration**: Supports International Alphabet of Sanskrit Transliteration for accurate representation
+- **SLP1 Conversion**: Automatic conversion from IAST to SLP1 encoding for meter analysis
+- **Multiple Meter Support**: Configurable target meters including tristubh, anushtubh, and others
+
+**Reward System Integration**:
+- **Registry-Based Rewards**: Leverages Atropos reward function registry for modular scoring
+- **ChandasMeterReward**: Custom reward function that scores poetry based on metrical accuracy
+- **Weighted Scoring**: Configurable reward weights for different aspects of poetic quality
+- **Real-Time Feedback**: Immediate scoring during training for rapid learning
+
+**Environment Configuration**:
+- **Flexible Meter Selection**: Easy configuration of target Sanskrit meters
+- **Temperature Control**: Adjustable creativity vs accuracy balance (default 0.7)
+- **Token Limits**: Configurable maximum poem length (default 256 tokens)
+- **System Prompts**: Customizable instructions for different poetic styles
+
+**Technical Implementation**:
+- **Pydantic Configuration**: Type-safe environment configuration with validation
+- **Async Processing**: Non-blocking completion generation for efficient training
+- **Trajectory Collection**: Comprehensive conversation tracking for RL training
+- **Tokenization Support**: Integration with Atropos tokenization utilities
+
+**Sanskrit Linguistic Features**:
+- **Character Mapping**: Comprehensive IAST to SLP1 character conversion
+- **Digraph Handling**: Proper processing of Sanskrit consonant clusters
+- **Unicode Support**: Full support for Sanskrit diacritical marks
+- **Meter Classification**: Integration with scholarly meter analysis tools
+
+**Training Workflow**:
+- **Prompt Generation**: Automatic creation of meter-specific composition prompts
+- **Multi-Sample Generation**: Parallel generation of diverse poetic attempts
+- **Metrical Scoring**: Real-time evaluation of generated verses against target meters
+- **Iterative Improvement**: RL-based refinement of poetic capabilities
+
+**Research Applications**:
+- **Computational Linguistics**: Study of AI understanding of prosodic patterns
+- **Cultural Preservation**: Digital preservation and generation of traditional verse forms
+- **Cross-Lingual Poetry**: Exploration of metrical patterns across languages
+- **Educational Tools**: Interactive learning systems for Sanskrit prosody
+
+**External Dependencies**:
+- **Chandas Package**: Must be built from [source](https://github.com/sanskrit/chandas) for meter classification
+- **Sanskrit Corpus**: Access to traditional texts for training data (optional)
+- **Unicode Libraries**: Proper handling of Sanskrit character encoding
+
+**Configuration Examples**:
+```python
+# Tristubh meter (11 syllables per quarter)
+config = SanskritPoetryEnvConfig(
+    meter="tristubh",
+    temperature=0.7,
+    max_tokens=256
+)
+
+# Anushtubh meter (8 syllables per quarter)
+config = SanskritPoetryEnvConfig(
+    meter="anushtubh",
+    temperature=0.8,
+    max_tokens=128
+)
+```
+
+**Evaluation Metrics**:
+- **Metrical Accuracy**: Percentage of verses matching target meter
+- **Linguistic Quality**: Grammatical correctness and vocabulary usage
+- **Poetic Coherence**: Thematic consistency and aesthetic appeal
+- **Training Efficiency**: Convergence speed and sample efficiency
+
+**Future Enhancements**:
+- **Multi-Meter Compositions**: Training on mixed metrical patterns
+- **Semantic Constraints**: Content-aware poetry generation with thematic guidance
+- **Historical Styles**: Emulation of specific periods or authors
+- **Interactive Composition**: Real-time collaborative poetry creation
+
+**Educational Value**: This environment serves as an excellent introduction to computational prosody, Sanskrit linguistics, and the intersection of AI with traditional literary forms. It demonstrates how modern ML techniques can be applied to preserve and extend classical cultural knowledge.
+
+**Requirements**: pydantic, chandas (from source), atroposlib
+
+---
+
+### 26. OpenVLA Robotics Environment (`openvla_robotics/`)
+
+**Contributors**: RahulSChand
+**PR**: [#65](https://github.com/NousResearch/atropos/pull/65)
+**Integration Status**: ✅ Integrated
+
+**Description**: A robotics reinforcement learning environment that integrates OpenVLA (Vision-Language-Action) models with robosuite simulation for training embodied AI agents. This environment enables language models to learn robotic manipulation tasks through vision-based action prediction and continuous control.
+
+**Core Features**:
+
+**OpenVLA Integration**:
+- **Vision-Language-Action Model**: Uses OpenVLA-7B for multimodal robot control
+- **Visual Input Processing**: Processes camera observations from robosuite environments
+- **Action Prediction**: Generates continuous robot actions from visual and language inputs
+- **Robosuite Simulation**: Integrates with robosuite for realistic robot simulation
+
+**Robotics Simulation**:
+- **Robosuite Environment**: Configurable robot tasks (Lift, NutAssemblySquare, etc.)
+- **Panda Robot**: Simulated Franka Emika Panda robot arm
+- **Camera Observations**: Front-view camera with 640x480 resolution
+- **Continuous Control**: 7-DOF action space for robot manipulation
+
+**Action Tokenization**:
+- **Continuous to Discrete**: Custom action tokenizer for converting continuous actions to tokens
+- **Uniform Binning**: 256 bins per action dimension with configurable ranges
+- **Token Mapping**: Maps actions to least-used vocabulary tokens
+- **Bidirectional Conversion**: Encode actions to tokens and decode back to continuous values
+
+**Training Architecture**:
+- **Vision-Language Input**: Processes camera images with text prompts
+- **Action Generation**: Predicts robot actions using OpenVLA model
+- **Reward Collection**: Gathers rewards from robosuite environment
+- **Trajectory Scoring**: Scores action sequences based on task performance
+
+**Technical Implementation**:
+
+**Model Configuration**:
+- **OpenVLA Model**: `openvla/openvla-7b` with bfloat16 precision
+- **GPU Acceleration**: CUDA support for model inference
+- **Vision Processing**: AutoProcessor for image and text input handling
+- **Action Space**: 7-dimensional continuous action space (position + gripper)
+
+**Environment Setup**:
+```python
+# Robosuite environment configuration
+self.robosuite_env = suite.make(
+    "Lift",  # Task: pick up cube
+    robots="Panda",  # Franka Emika Panda arm
+    has_renderer=False,  # Headless simulation
+    has_offscreen_renderer=True,  # Camera rendering
+    use_camera_obs=True,  # Visual observations
+    camera_names="frontview",  # Front camera
+    camera_heights=640,  # Image height
+    camera_widths=480   # Image width
+)
+```
+
+**Action Processing Pipeline**:
+1. **Visual Observation**: Extract camera image from robosuite
+2. **Prompt Construction**: Create task-specific text prompt
+3. **Model Inference**: Generate action using OpenVLA model
+4. **Action Adjustment**: Scale and transform actions for robosuite
+5. **Environment Step**: Execute action in simulation
+6. **Reward Collection**: Gather task performance feedback
+
+**Action Tokenizer Features**:
+- **Discretization**: Converts continuous actions to discrete tokens
+- **Vocabulary Mapping**: Uses least-frequent tokens for action representation
+- **Configurable Binning**: Adjustable number of bins and action ranges
+- **Efficient Encoding**: Minimal vocabulary overhead for action space
+
+**Research Applications**:
+
+**Embodied AI**:
+- **Vision-Language-Action Learning**: Training models to understand and act in physical environments
+- **Multimodal Control**: Combining visual perception with language understanding for robot control
+- **Sim-to-Real Transfer**: Foundation for transferring learned policies to real robots
+- **Task Generalization**: Learning manipulation skills across different robotic tasks
+
+**Robotics Research**:
+- **Manipulation Learning**: Training robots to perform complex manipulation tasks
+- **Visual Servoing**: Learning to control robots based on visual feedback
+- **Language-Conditioned Control**: Following natural language instructions for robot tasks
+- **Continuous Control**: Learning smooth, continuous robot motions
+
+**Technical Challenges Addressed**:
+- **Action Space Discretization**: Converting continuous robot actions to discrete tokens
+- **Vision-Language Integration**: Combining visual and linguistic information for control
+- **Simulation Integration**: Bridging language models with physics simulation
+- **Real-time Control**: Generating robot actions at appropriate frequencies
+
+**Current Implementation Status**:
+- **Prototype Stage**: Basic integration with OpenVLA and robosuite
+- **Single Task**: Currently configured for cube lifting task
+- **Development Mode**: Includes TODO comments for future enhancements
+- **GPU Required**: Requires CUDA-capable GPU for OpenVLA inference
+
+**Configuration Options**:
+- **Robot Tasks**: Configurable robosuite environments (Lift, NutAssemblySquare, etc.)
+- **Action Binning**: Adjustable discretization parameters (bins, ranges)
+- **Model Settings**: Configurable OpenVLA model parameters
+- **Simulation Parameters**: Camera settings, rendering options, robot configuration
+
+**Future Enhancements**:
+
+**Multi-Task Learning**:
+- **Task Variety**: Support for multiple robosuite manipulation tasks
+- **Task Conditioning**: Language-conditioned task specification
+- **Curriculum Learning**: Progressive difficulty in manipulation tasks
+- **Transfer Learning**: Knowledge sharing across different robot tasks
+
+**Advanced Features**:
+- **Multi-Step Planning**: Long-horizon task planning and execution
+- **Error Recovery**: Robust handling of action failures and retries
+- **Real Robot Integration**: Extension to physical robot platforms
+- **Human Demonstrations**: Integration of human demonstration data
+
+**Performance Optimization**:
+- **Batch Processing**: Parallel trajectory collection for efficiency
+- **Model Optimization**: Quantization and acceleration for faster inference
+- **Memory Management**: Efficient handling of visual observations
+- **Distributed Training**: Multi-GPU and multi-node training support
+
+**Setup Requirements**:
+
+**Hardware**:
+- **GPU**: CUDA-capable GPU with sufficient VRAM (8GB+ recommended)
+- **Memory**: 16GB+ RAM for model loading and simulation
+- **Storage**: Space for OpenVLA model weights (~14GB)
+
+**Software Dependencies**:
+```bash
+# Core robotics and ML libraries
+pip install robosuite torch transformers pillow
+
+# OpenVLA model (requires trust_remote_code=True)
+# Model will be downloaded automatically on first run
+```
+
+**Installation & Usage**:
+```bash
+# Navigate to environment directory
+cd environments/community/openvla_robotics/
+
+# Run the robotics environment
+python open_robot_env.py
+
+# Note: First run will download OpenVLA-7B model (~14GB)
+```
+
+**Example Training Flow**:
+```python
+# Initialize environment
+env = RobotSimEnv(config, server_configs)
+await env.setup()
+
+# Training loop
+for episode in range(num_episodes):
+    # Get next training item (resets environment)
+    item = await env.get_next_item()
+
+    # Collect robot trajectory
+    scored_data, backlog = await env.collect_trajectories(item)
+
+    # Process rewards and update policy
+    # (Policy update logic would be implemented here)
+```
+
+**Research Impact**: This environment represents an important step toward training language models for embodied AI tasks. By combining OpenVLA's vision-language-action capabilities with robosuite's realistic simulation, it provides a foundation for developing robots that can understand and execute complex manipulation tasks based on natural language instructions.
+
+**Educational Value**: The environment demonstrates the integration of multiple complex systems (vision-language models, robotics simulation, action tokenization) and serves as a practical example of how modern AI techniques can be applied to robotics challenges.
+
+**Limitations**:
+- **Single Task Focus**: Currently limited to cube lifting task
+- **Prototype Implementation**: Contains placeholder code and TODO items
+- **GPU Dependency**: Requires significant computational resources
+- **No Evaluation Data**: Lacks standardized evaluation benchmarks
+
+**Requirements**: robosuite, torch, transformers, pillow, atroposlib
+
+---
+
+### 27. StarMapCompression Environment (`starmap_compression/`)
+
+**Contributors**: caradmico
+**PR**: [#66](https://github.com/NousResearch/atropos/pull/66)
+**Integration Status**: ✅ Integrated
+
+**Description**: A reinforcement learning environment for compressing 3D Gaia star data for efficient Three.js browser rendering. This environment trains agents to optimize data compression while preserving points relevant to user viewpoints, achieving ~95% compression while maintaining visual quality for astronomical visualization.
+
+**Core Features**:
+
+**3D Data Compression Pipeline**:
+- **Gaia Star Data Processing**: Handles real astronomical data from the Gaia space observatory
+- **Octree-Based Compression**: Hierarchical spatial data structure for efficient 3D point reduction
+- **PCA Dimensionality Reduction**: Principal component analysis for optimal data representation
+- **Quantization**: Bit-level compression with configurable precision (4-8 bits)
+
+**View-Aware Optimization**:
+- **User Viewpoint Analysis**: Considers multiple Three.js camera positions for optimization
+- **Spatial Relevance Scoring**: Prioritizes star points visible from user viewpoints
+- **Adaptive View Radius**: Dynamic adjustment based on data distribution and viewing distance
+- **Quality Preservation**: Maintains visual fidelity for important astronomical features
+
+**Advanced Compression Techniques**:
+- **Density-Based Sampling**: Intelligent point selection based on local star density
+- **Adaptive Thresholding**: Dynamic density thresholds for different spatial regions
+- **Multi-Scale Processing**: Hierarchical compression with configurable depth levels
+- **Grid-Based Partitioning**: Spatial partitioning with multiple grid size strategies
+
+**Reinforcement Learning Framework**:
+- **Action Space**: Three partition methods with different grid sizes (0.5x, 1x, 1.5x view radius)
+- **State Representation**: Current compression method and data size metrics
+- **Reward Function**: Balances compression ratio, point retention, view relevance, and quality
+- **Multi-Objective Optimization**: Simultaneous optimization of size, quality, and viewpoint coverage
+
+**Technical Implementation**:
+
+**Data Processing Pipeline**:
+```python
+# Environment initialization with Gaia data
+env = StarMapCompressionEnv(
+    data_path="galaxy_subset.npy",    # 1000 3D star positions
+    views_path="user_views.npy"       # 10 user viewpoints
+)
+
+# Compression workflow
+sampled_data = env._density_sample(original_data)      # Density-based sampling
+pca_data = env._apply_pca(sampled_data, views)         # PCA reduction
+octree_data = env._build_octree(pca_data)              # Octree construction
+quantized_data = env._quantize_data(octree_data)       # Bit quantization
+final_data = env._map_to_original(quantized_data)     # Map back to original space
+```
+
+**Compression Metrics**:
+- **Input**: 1000 3D star positions (24KB galaxy_subset.npy)
+- **Output**: ~47 points after 5 RL steps (~95% compression)
+- **Processing Time**: ~3 seconds CPU for 5 RL optimization steps
+- **Memory Usage**: <1GB RAM for typical datasets
+
+**Reward Function Design**:
+```python
+reward = (
+    -avg_data_size / 1000                           # Compression incentive
+    + 5 * len(compressed_data) / len(original_data) # Retention bonus
+    + total_points_in_view / len(original_data)     # Viewpoint relevance
+    - quality_metric / 1e6                          # Quality preservation
+)
+```
+
+**Multi-Threaded RL Optimization**:
+- **Parallel Action Evaluation**: Concurrent testing of all three partition methods
+- **Timeout Management**: Configurable timeout (60s default) for action evaluation
+- **Best Action Selection**: Reward-based selection with random tiebreaking
+- **Progressive Improvement**: Iterative refinement over multiple RL steps
+
+**Visualization and Analysis**:
+
+**3D Visualization Tools**:
+- **Static Scatter Plots**: Before/after compression comparison with original Gaia data
+- **Animation Generation**: Step-by-step compression progression visualization
+- **Multi-View Rendering**: Original data, compressed data, and user viewpoints
+- **Quality Assessment**: Visual comparison of compression artifacts
+
+**Performance Metrics**:
+- **Compression Ratio**: Percentage reduction in data points
+- **View Coverage**: Number of points visible from user viewpoints
+- **Data Size**: Estimated Three.js rendering payload size
+- **Quality Score**: Distance-based quality preservation metric
+
+**Browser Integration**:
+- **Three.js Compatibility**: Optimized for WebGL rendering pipelines
+- **Cell-Based Rendering**: Grid partitioning for efficient GPU processing
+- **Adaptive LOD**: Level-of-detail optimization based on viewing distance
+- **Memory Efficiency**: Reduced GPU memory usage for large astronomical datasets
+
+**Research Applications**:
+
+**Astronomical Visualization**:
+- **Interactive Star Maps**: Real-time exploration of Gaia catalog data
+- **Educational Tools**: Accessible astronomical data visualization for students
+- **Scientific Analysis**: Efficient rendering of large-scale astronomical surveys
+- **Virtual Observatories**: Web-based astronomical data exploration platforms
+
+**3D Data Compression**:
+- **Point Cloud Optimization**: General techniques for 3D point cloud compression
+- **Spatial Data Structures**: Advanced octree and spatial indexing methods
+- **View-Dependent Rendering**: Optimization based on observer perspective
+- **Multi-Resolution Analysis**: Hierarchical data representation techniques
+
+**Web Graphics Optimization**:
+- **WebGL Performance**: Efficient rendering of large 3D datasets in browsers
+- **Progressive Loading**: Adaptive data streaming based on user interaction
+- **Memory Management**: GPU memory optimization for web applications
+- **Real-Time Visualization**: Interactive 3D graphics with large datasets
+
+**Machine Learning Applications**:
+- **Reinforcement Learning**: Multi-objective optimization in continuous spaces
+- **Spatial Intelligence**: Learning spatial relationships and importance
+- **Adaptive Algorithms**: Self-adjusting compression based on data characteristics
+- **Quality-Aware Optimization**: Balancing multiple competing objectives
+
+**Configuration Options**:
+
+**Compression Parameters**:
+- **Density Sampling**: Sample fraction (default: 0.1), radius (default: 50.0)
+- **PCA Components**: Dimensionality reduction (default: 2 components)
+- **Octree Settings**: Max depth (3-5), min points (1-2), density threshold (adaptive)
+- **Quantization**: Bit precision (4-8 bits), adaptive scaling
+
+**RL Training Settings**:
+- **Action Space**: Three partition methods with configurable grid size ratios
+- **Reward Weights**: Adjustable balance between compression, retention, and quality
+- **Timeout Settings**: Configurable evaluation timeout (default: 60 seconds)
+- **Step Limits**: Maximum RL steps per episode (default: 50)
+
+**Visualization Options**:
+- **Plot Resolution**: Configurable figure size and DPI for output images
+- **Animation Settings**: Frame rate, duration, and compression format
+- **Color Schemes**: Customizable color mapping for different data categories
+- **Subsampling**: Adjustable point density for visualization clarity
+
+**Future Enhancements**:
+
+**Advanced Compression**:
+- **Temporal Compression**: Time-series optimization for moving astronomical objects
+- **Semantic Awareness**: Content-aware compression preserving important stellar features
+- **Adaptive Quantization**: Variable bit precision based on local data importance
+- **Hierarchical LOD**: Multi-resolution representation with smooth transitions
+
+**Enhanced RL Training**:
+- **Continuous Action Space**: Fine-grained control over compression parameters
+- **Multi-Agent Optimization**: Collaborative compression across multiple viewpoints
+- **Transfer Learning**: Knowledge transfer across different astronomical datasets
+- **Curriculum Learning**: Progressive difficulty in compression challenges
+
+**Real-World Integration**:
+- **Gaia DR3 Support**: Full integration with latest Gaia data releases
+- **Streaming Optimization**: Real-time compression for live astronomical data
+- **Cloud Processing**: Distributed compression for massive astronomical catalogs
+- **Mobile Optimization**: Compression tuned for mobile device constraints
+
+**Setup Requirements**:
+
+**Core Dependencies**:
+```bash
+pip install numpy scipy scikit-learn openai python-dotenv matplotlib pillow
+```
+
+**Optional Visualization**:
+```bash
+pip install matplotlib pillow  # For 3D plotting and animation generation
+```
+
+**Data Requirements**:
+- **galaxy_subset.npy**: 1000 3D star positions (included, ~24KB)
+- **user_views.npy**: 10 user viewpoint positions (included, ~368B)
+- **Synthetic data**: Generated from Gaia subset with assumed MIT license
+
+**Usage Examples**:
+
+**Basic Compression**:
+```python
+from environments.community.starmap_compression.starmap_compression import StarMapCompressionEnv
+
+# Initialize environment
+env = StarMapCompressionEnv("galaxy_subset.npy", "user_views.npy")
+
+# Run RL optimization
+for step in range(5):
+    env.run_rl_step(timeout_seconds=60)
+    print(f"Step {step+1}: {len(env.data)} points remaining")
+```
+
+**Visualization**:
+```python
+# Generate compression visualization
+python environments/community/starmap_compression/visualize_starmap.py
+
+# Creates:
+# - starmap_compression_static.png (before/after comparison)
+# - starmap_compression_animation.gif (step-by-step progression)
+```
+
+**Performance Benchmarks**:
+- **Compression Efficiency**: 95% reduction (1000 → 47 points) in 5 RL steps
+- **Processing Speed**: ~3 seconds total for 5-step optimization
+- **Memory Usage**: <1GB RAM for typical astronomical datasets
+- **Quality Preservation**: Maintains visual fidelity for user viewpoints
+
+**Research Impact**: This environment demonstrates practical application of RL to real-world data compression challenges. The view-aware optimization approach has applications beyond astronomy, including 3D graphics, virtual reality, and any domain requiring efficient 3D data representation.
+
+**Educational Value**: The environment provides hands-on experience with spatial data structures, 3D compression algorithms, and multi-objective optimization. The astronomical context makes it engaging for students while teaching fundamental computer graphics and data science concepts.
+
+**Limitations**:
+- **Dataset Size**: Currently limited to 1000-point subsets of Gaia data
+- **Static Viewpoints**: Fixed user viewpoints rather than dynamic camera paths
+- **Compression Artifacts**: Some visual quality loss in highly compressed regions
+- **Processing Time**: Sequential RL optimization may be slow for large datasets
+
+**Requirements**: numpy, scipy, scikit-learn, openai, python-dotenv, matplotlib, pillow, atroposlib
+
+---
+
+### 28. Padres Spatial RL Environment (`padres_spatial/`)
+
+**Contributors**: basedlsg
+**PR**: [#75](https://github.com/NousResearch/atropos/pull/75)
+**Integration Status**: ✅ Integrated
+
+**Description**: A 3D spatial reasoning environment that challenges LLMs to understand and manipulate objects in a simulated 3D world using PyBullet physics simulation. The environment tests and improves LLMs' spatial reasoning capabilities through interactive tasks requiring understanding of relative positioning, object manipulation, and spatial relationships.
+
+**Core Features**:
+
+**3D Physics Simulation**:
+- **PyBullet Integration**: Full 3D physics simulation with gravity and collision detection
+- **Object Manipulation**: Support for cubes and spheres with position and orientation control
+- **Real-time Visualization**: Three.js-based web interface for live 3D scene viewing
+- **WebSocket Communication**: Real-time updates between simulation and visualization
+
+**Spatial Reasoning Tasks**:
+- **Conditional Positioning**: Tasks requiring objects to maintain spatial relationships (e.g., opposite sides of planes)
+- **Distance Constraints**: Precise positioning within target distances between objects
+- **Multi-objective Scoring**: Rewards both proximity accuracy and spatial relationship satisfaction
+- **Dynamic Task Generation**: Procedurally generated spatial reasoning challenges
+
+**LLM Integration**:
+- **Anthropic Claude Integration**: Uses Claude-3.5-Sonnet for spatial reasoning
+- **JSON Action Format**: Structured action space for object movement commands
+- **Fallback Mock System**: Graceful degradation when LLM API is unavailable
+- **Prompt Engineering**: Detailed spatial context and constraint descriptions
+
+**Training & Evaluation**:
+- **W&B Integration**: Comprehensive metrics tracking and experiment logging
+- **Trajectory Generation**: Batch processing mode for dataset creation
+- **Interactive Demo Mode**: Real-time visualization with manual task triggering
+- **Reward Function**: Balanced scoring for distance accuracy and constraint satisfaction
+
+**Technical Architecture**:
+- **Modular Design**: Separate physics simulator, environment wrapper, and visualization components
+- **Async Processing**: Non-blocking LLM calls and WebSocket communication
+- **Error Handling**: Robust fallback mechanisms for API failures and malformed responses
+- **Extensible Framework**: Easy addition of new object types and spatial constraints
+
+**Use Cases**:
+- **Spatial Reasoning Research**: Benchmark LLM performance on 3D spatial tasks
+- **Robotics Simulation**: Foundation for more complex manipulation scenarios
+- **Educational Tool**: Interactive demonstration of spatial AI capabilities
+- **RL Training**: Environment for training spatial reasoning policies
+
+**Example Task**: Move a red cube to be approximately 1.0 unit away from a blue sphere while maintaining opposite sides of the YZ plane, testing both distance estimation and spatial relationship understanding.
+
+**Requirements**: pybullet, numpy, websockets, python-dotenv, wandb, anthropic, atroposlib
+
+---
+
+### 29. Humor Generation Environment (`humor_generation/`)
+
+**Contributors**: kirilligum
+**PR**: [#87](https://github.com/NousResearch/atropos/pull/87)
+**Integration Status**: ✅ Integrated
+
+**Description**: A reinforcement learning environment for training language models to generate humor in the style of specific comedians and formats. The environment uses a comprehensive multi-dimensional scoring rubric to evaluate joke quality across relevance, style consistency, creativity, humor effectiveness, virality, and cognitive coherence.
+
+**Core Features**:
+
+**Multi-Comedian Training**:
+- **Diverse Comedian Styles**: Supports various comedian voices (Norm Macdonald, John Mulaney, Hasan Minhaj, Dave Chappelle, Ali Wong, Chris Rock)
+- **Format Diversity**: Trains on different humor formats (haiku, one-liner, q/a over SMS)
+- **Style Transfer Learning**: Models learn to adapt humor generation to specific comedian characteristics
+- **Cross-Format Adaptation**: Training across multiple humor formats for versatility
+
+**Comprehensive Scoring System**:
+- **6-Dimensional Evaluation**: Multi-faceted assessment of joke quality
+- **LLM-Based Judging**: Uses GPT-4o-mini for detailed rubric-based scoring
+- **Weighted Scoring**: Balanced evaluation across different humor aspects
+- **Automated Assessment**: Real-time scoring during training for rapid feedback
+
+**Scoring Rubric Dimensions**:
+1. **Relevance to Format** (0-2 points): How well the joke fits the specified format (haiku, one-liner, SMS)
+2. **Style Consistency** (0-2 points): Adherence to the target comedian's distinctive style and voice
+3. **Creativity** (0-3 points): Originality, inventiveness, and unexpected elements in the humor
+4. **Humor Effectiveness** (0-3 points): How funny, engaging, and entertaining the joke is
+5. **Virality Potential** (0-3 points): Likelihood of widespread appeal and social sharing
+6. **Cognitive Coherence** (0-3 points): Logical structure, clarity, and comprehensibility
+
+**Dataset Generation**:
+- **Automated Creation**: Script for generating training datasets using GPT-4o-mini
+- **Comedian-Format Matrix**: Systematic coverage of all comedian/format combinations
+- **Example Generation**: Each dataset entry includes 3 example jokes for reference
+- **Reasoning Explanations**: Detailed explanations of model recommendations and approaches
+
+**Training Architecture**:
+- **Dual LLM Setup**: Separate models for generation and evaluation
+- **Group-Based Training**: Multiple completions per prompt for comparison
+- **WandB Integration**: Comprehensive experiment tracking and visualization
+- **Iterative Improvement**: Continuous refinement based on scoring feedback
+
+**Technical Implementation**:
+
+**Environment Configuration**:
+- **Model Selection**: GPT-4o-mini for both generation and evaluation
+- **Group Size**: 2 completions per prompt for diversity
+- **Token Limits**: 2048 for generation, 512 for scoring
+- **Evaluation Frequency**: Regular assessment during training
+
+**Dataset Structure**:
+Each training record contains:
+- **comedian**: Target comedian style (e.g., "Norm Macdonald")
+- **format**: Humor format (e.g., "haiku", "one-liner", "q/a over sms")
+- **question**: Prompt asking for model recommendations and example jokes
+- **response**: GPT-4o-mini generated response with explanations and examples
+
+**Scoring Process**:
+1. **Joke Extraction**: Parse generated content to identify the joke
+2. **Rubric Application**: Apply 6-dimensional scoring criteria
+3. **LLM Evaluation**: Use GPT-4o-mini to score each dimension
+4. **Score Aggregation**: Calculate average score across all dimensions
+5. **Feedback Integration**: Use scores for training signal
+
+**Research Applications**:
+
+**Creative AI Development**:
+- **Style Transfer**: Learning to mimic specific creative voices and personalities
+- **Format Adaptation**: Generating content within structural constraints
+- **Quality Assessment**: Training models to evaluate creative output
+- **Entertainment AI**: Developing systems for comedy and entertainment content
+
+**Computational Humor**:
+- **Humor Understanding**: Teaching AI systems to recognize and generate humor
+- **Cultural Adaptation**: Learning humor styles specific to different comedians
+- **Format Constraints**: Working within specific structural requirements
+- **Audience Awareness**: Understanding what makes content shareable and viral
+
+**Natural Language Generation**:
+- **Creative Writing**: Extending beyond factual content to creative expression
+- **Personality Modeling**: Capturing distinctive voice and style characteristics
+- **Multi-Modal Generation**: Adapting content to different formats and contexts
+- **Quality Evaluation**: Developing better metrics for creative content assessment
+
+**Training Performance**:
+- **Comedian Coverage**: 6 different comedian styles for diverse training
+- **Format Variety**: 3 distinct humor formats for structural learning
+- **Dataset Size**: 18 total combinations (6 comedians × 3 formats)
+- **Scoring Granularity**: 16-point scale (0-16) across 6 dimensions
+
+**Configuration Options**:
+- **Model Selection**: Configurable LLM for generation (default: GPT-4o-mini)
+- **Scoring Model**: Separate model for evaluation (default: GPT-4o-mini)
+- **Group Size**: Number of completions per prompt (default: 2)
+- **Token Limits**: Configurable generation and scoring token limits
+- **Evaluation Frequency**: Steps between scoring evaluations
+
+**Future Enhancements**:
+
+**Extended Comedian Library**:
+- **More Comedians**: Expand to include additional comedian styles
+- **International Humor**: Include comedians from different cultures and languages
+- **Historical Styles**: Classic comedians and vintage humor styles
+- **Emerging Voices**: Contemporary and social media comedy styles
+
+**Advanced Formats**:
+- **Long-Form Content**: Stand-up routines, comedy sketches, and stories
+- **Interactive Humor**: Conversational comedy and improvisation
+- **Visual Comedy**: Integration with image and video content
+- **Contextual Humor**: Situation-specific and topical comedy
+
+**Enhanced Evaluation**:
+- **Human Evaluation**: Integration of human judges for validation
+- **Audience Testing**: Real-world testing with actual audiences
+- **Cultural Sensitivity**: Evaluation for appropriateness and inclusivity
+- **Temporal Relevance**: Assessment of humor that ages well
+
+**Setup Requirements**:
+
+**API Access**:
+- **OpenAI API Key**: Required for GPT-4o-mini access (`OPENAI_API_KEY` environment variable)
+- **Rate Limiting**: Respectful API usage patterns for training
+- **Cost Management**: Efficient token usage for large-scale training
+
+**Dependencies**:
+```bash
+pip install openai python-dotenv datasets wandb atroposlib
+```
+
+**Usage Examples**:
+
+**Running the Environment**:
+```bash
+# Set up API key
+export OPENAI_API_KEY="your_openai_api_key"
+
+# Run humor generation environment
+python environments/community/humor_generation/humor_env.py serve
+```
+
+**Generating New Datasets**:
+```bash
+cd environments/community/humor_generation/
+python generate_humor_dataset.py
+```
+
+**Training Applications**:
+- **Comedy Writing AI**: Automated generation of jokes and humorous content
+- **Entertainment Industry**: AI assistance for comedy writers and performers
+- **Social Media**: Automated generation of engaging, shareable content
+- **Educational Tools**: Teaching humor and creative writing through AI examples
+- **Therapeutic Applications**: Humor therapy and mood enhancement systems
+
+**Research Impact**: This environment addresses the challenging domain of computational humor, providing a structured framework for training AI systems in creative content generation. The multi-dimensional evaluation approach offers insights into what makes humor effective and how AI can learn creative expression.
+
+**Educational Value**: The environment demonstrates the intersection of AI and creativity, showing how structured evaluation can be applied to subjective domains like humor. It provides practical experience with creative AI, style transfer, and quality assessment in natural language generation.
+
+**Limitations**:
+- **Subjective Evaluation**: Humor appreciation varies significantly across individuals and cultures
+- **Limited Dataset**: Currently covers only 6 comedians and 3 formats
+- **API Dependency**: Requires OpenAI API access for both generation and evaluation
+- **Cultural Bias**: May reflect biases present in training data and evaluation models
+
+**Requirements**: openai, python-dotenv, datasets, wandb, atroposlib
+
+---
+
+### 30. Meteorology Forecast RL Environment (`meteorology_forecast/`)
+
+**Contributors**: FahrenheitResearch, drewsny
+**PR**: [#68](https://github.com/NousResearch/atropos/pull/68)
+**Integration Status**: ✅ Integrated
+
+**Description**: A reinforcement learning environment designed to train LLMs on interpreting numerical weather prediction (NWP) model sounding data and making informed meteorological forecast assessments. The environment moves beyond static graphical outputs to a text-structured, LLM-readable format that enables programmatic reasoning and analysis of weather data.
+
+**Core Features**:
+
+**NWP Model Data Processing**:
+- **Real Weather Data Integration**: Uses actual numerical weather prediction model sounding data (RAP, HRRR)
+- **Multi-Location Support**: Processes weather data from multiple geographical locations
+- **Time Series Analysis**: Analyzes forecast data across multiple UTC time periods (6, 9, 12, 15, 18 hours)
+- **Area Forecast Discussion (AFD) Integration**: Incorporates human forecaster discussions for evaluation context
+
+**Meteorological Reasoning Framework**:
+- **Three-Phase Analysis**: Detailed reasoning, tool calling, and forecast summarization
+- **Conceptual Tool Integration**: Available tools include surface observations, radar imagery, satellite data, and upper-air soundings
+- **Severe Weather Focus**: Specialized assessment of severe weather potential and risks
+- **Professional Format**: Output format matches professional meteorological analysis standards
+
+**Dual LLM Architecture**:
+- **Agent LLM**: Analyzes sounding data and generates forecasts (default: Qwen/Qwen3-8B)
+- **Judge LLM**: Expert meteorologist evaluation using Gemini-2.5-Flash-Preview via OpenRouter
+- **Separate API Endpoints**: Independent configuration for agent and judge models
+- **Comprehensive Scoring**: 10-point scale evaluation across multiple meteorological criteria
+
+**Expert Evaluation System**:
+- **Meteorological Soundness** (0-5 points): Correct interpretation of sounding parameters, logical weather connections, depth of analysis
+- **Tool Call Relevance** (0-3 points): Appropriate tool usage given model data and reasoning
+- **Forecast Summary Quality** (0-2 points): Clarity, conciseness, alignment with reasoning and AFDs
+- **Professional Justification**: Detailed textual feedback on forecast quality
+
+**Technical Implementation**:
+
+**Data Structure and Processing**:
+- **JSONL Sounding Data**: Structured format optimized for LLM consumption
+- **Pattern Matching**: Automated discovery of sounding files by location and time
+- **AFD Text Processing**: Area Forecast Discussion integration with encoding handling
+- **Case Generation**: Systematic creation of forecast scenarios with target times
+
+**Environment Configuration**:
+```python
+sounding_data_root: str = "environments/community/meteorology_forecast/data/"
+target_date: str = "20250314"  # YYYYMMDD format
+judge_model_name: str = "google/gemini-2.5-flash-preview"
+nwp_models_to_use: List[str] = ["RAP"]
+forecast_hours_to_sample: List[int] = [6, 9, 12, 15, 18]
+max_reasoning_tokens_llm: int = 3000
+max_tokens_judge: int = 2000
+```
+
+**Agent System Prompt**:
+The environment instructs the agent to:
+1. Provide detailed step-by-step meteorological reasoning
+2. Identify trends in atmospheric parameters and connect them to weather phenomena
+3. Call conceptual tools when additional observational data would improve assessment
+4. Generate professional forecast summaries using "FORECAST_SUMMARY:" format
+
+**Judge Evaluation Process**:
+1. **Input Analysis**: Receives agent output and relevant human forecaster AFDs
+2. **Multi-Criteria Assessment**: Evaluates reasoning quality, tool appropriateness, and forecast clarity
+3. **Structured Scoring**: Provides numerical scores in standardized format
+4. **Professional Justification**: Detailed explanation of scoring decisions
+
+**Training and Evaluation Workflow**:
+
+**Data Collection Loop**:
+- **Case Sampling**: Random selection from available weather scenarios
+- **Prompt Generation**: Dynamic creation of location-specific forecast prompts
+- **Agent Inference**: LLM analysis of sounding data with reasoning and tool calls
+- **Judge Evaluation**: Expert assessment of agent performance
+- **Score Integration**: Tokenization and score assignment for RL training
+
+**WandB Metrics Tracking**:
+- `train/avg_judge_total_score`: Overall forecast quality (0-10 scale)
+- `train/avg_judge_reasoning_score`: Depth and accuracy of reasoning (0-5)
+- `train/avg_judge_tool_score`: Tool usage relevance (0-3)
+- `train/avg_judge_forecast_score`: Forecast clarity and alignment (0-2)
+- `train/detailed_rollouts`: Comprehensive logging of prompts, reasoning, tools, and justifications
+
+**Research Applications**:
+
+**Meteorological AI Development**:
+- **Professional Weather Analysis**: Training AI systems for operational meteorology
+- **Decision Support Systems**: AI assistance for human forecasters during severe weather
+- **Automated Forecast Generation**: Custom forecasts for arbitrary geographic locations
+- **Meteorological Education**: Teaching weather analysis and forecasting principles
+
+**Multi-Modal Reasoning**:
+- **Tool-Augmented Analysis**: Learning when and how to request additional observational data
+- **Contextual Decision Making**: Integrating model data with human forecaster insights
+- **Structured Output Generation**: Professional-format meteorological communication
+- **Domain Expertise Transfer**: Incorporating specialized meteorological knowledge
+
+**Real-World Integration Potential**:
+- **National Weather Service Integration**: Complementing operational forecast workflows
+- **Emergency Management**: Enhanced severe weather warning systems
+- **Aviation Meteorology**: Specialized forecasts for flight planning and safety
+- **Agricultural Applications**: Crop-specific weather analysis and forecasting
+
+**Data Requirements**:
+
+**Sounding Data Format**:
+- **Location Structure**: `data/YYYYMMDD/{location_id}/`
+- **File Pattern**: `{location_id}_{model}_{timestamp}.jsonl`
+- **AFD Files**: `AFD_*.txt` for human forecaster context
+- **JSONL Format**: Structured atmospheric profile data optimized for LLM processing
+
+**Example Data Structure**:
+```
+environments/community/meteorology_forecast/data/
+└── 20250314/
+    ├── KOKC/  # Oklahoma City
+    │   ├── KOKC_RAP_20250314_12Z.buf_default_llm_optimized.jsonl
+    │   ├── AFD_OUN.txt
+    │   └── ...
+    └── KORD/  # Chicago O'Hare
+        ├── KORD_RAP_20250314_12Z.buf_default_llm_optimized.jsonl
+        ├── AFD_LOT.txt
+        └── ...
+```
+
+**Setup and Usage**:
+
+**Environment Variables**:
+- `AGENT_LLM_MODEL_NAME`: Agent model selection (default: Qwen/Qwen3-8B)
+- `AGENT_LLM_API_KEY`: API key for agent model
+- `AGENT_LLM_BASE_URL`: Base URL for agent model API
+- `OPENROUTER_API_KEY`: Required for judge model (Gemini-2.5-Flash-Preview)
+
+**Command Line Usage**:
+```bash
+# Set up required API keys
+export AGENT_LLM_API_KEY="your_agent_api_key"
+export OPENROUTER_API_KEY="your_openrouter_api_key"
+
+# Run meteorology forecast environment
+python environments/community/meteorology_forecast/meteorology_env.py serve \
+    --env.group_size 2 \
+    --env.use_wandb True \
+    --env.target_date 20250314 \
+    --openai.api_key $AGENT_LLM_API_KEY \
+    --openai.base_url http://localhost:8080/v1 \
+    --openai.model_name Qwen/Qwen3-8B
+```
+
+**Performance Characteristics**:
+
+**Computational Requirements**:
+- **Agent Model**: Qwen/Qwen3-8B or similar (configurable)
+- **Judge Model**: Gemini-2.5-Flash-Preview via OpenRouter API
+- **Memory Usage**: Moderate (depends on sounding data volume)
+- **Processing Time**: Variable based on number of locations and time periods
+
+**Training Metrics**:
+- **Episode Length**: Variable based on available weather cases
+- **Reward Signal**: Expert judge scores (0-10 scale)
+- **Evaluation Frequency**: Configurable steps per evaluation (default: 100)
+- **Data Throughput**: Thousands of location-specific soundings per model run
+
+**Demo and Results**:
+- **W&B Dashboard**: [Example training run](https://wandb.ai/fahrenheitagi-fahrenheitagi/my_atropos_rl_experiments/runs/dsubhw9i/overview)
+- **Performance Tracking**: Real-time monitoring of forecast quality improvements
+- **Detailed Logging**: Complete conversation histories with expert evaluations
+
+**Future Enhancements**:
+
+**Extended Weather Data**:
+- **Additional NWP Models**: HRRR, GFS, NAM integration
+- **Satellite Data**: Direct integration of satellite imagery analysis
+- **Radar Data**: Real-time radar interpretation capabilities
+- **Ensemble Forecasting**: Multi-model consensus analysis
+
+**Advanced Meteorological Features**:
+- **Mesoscale Analysis**: High-resolution weather pattern recognition
+- **Climate Integration**: Long-term climate data context
+- **Specialized Domains**: Marine, aviation, agricultural meteorology
+- **Real-Time Integration**: Live weather data processing
+
+**Professional Applications**:
+- **Forecast Verification**: Automated accuracy assessment
+- **Warning Systems**: Severe weather alert generation
+- **Briefing Generation**: Automated meteorological briefings
+- **Educational Tools**: Interactive weather analysis training
+
+**Research Impact**: This environment represents a significant advancement in applying AI to meteorological analysis, providing a framework for training language models on real weather data with expert-level evaluation. The integration of professional meteorological workflows with RL training opens new possibilities for AI-assisted weather forecasting.
+
+**Educational Value**: The environment serves as an excellent example of domain-specific RL applications, demonstrating how specialized knowledge can be incorporated into AI training through expert evaluation systems and structured data formats.
+
+**Limitations**:
+- **Data Dependency**: Requires access to NWP model sounding data
+- **Expert Evaluation Cost**: Judge model API calls for evaluation
+- **Domain Specificity**: Focused on meteorological applications
+- **Real-Time Constraints**: Historical data training vs. operational forecasting
+
+**Requirements**: wandb, pydantic, httpx, atroposlib
+
+---
+
 ## Support
 
 For questions or issues with community environments:

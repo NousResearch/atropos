@@ -4,7 +4,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+.DS_Store
 # C extensions
 *.so
 
@@ -191,5 +191,5 @@ example_trainer/trained_model_checkpoints/
 uv.lock
 
 .DS_Store
-
 environments/datadumps/
+.aider*
