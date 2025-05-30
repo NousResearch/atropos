@@ -93,13 +93,13 @@ class SingleToolCallingEnv(BaseEnv):
             rollout_server_url="http://localhost:8000",
             total_steps=2000,
             batch_size=1024,
-            steps_per_eval=1000,
+            steps_per_eval=20,
             max_token_length=1024 * 16,
             inference_weight=1.0,
             wandb_name="toolcall_think",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
-            dump_rollouts=True,
+            dump_rollouts=False,
         )
         server_configs = [
             APIServerConfig(

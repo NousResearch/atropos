@@ -102,15 +102,15 @@ class InstructionFollowingEnv(BaseEnv):
             rollout_server_url="http://localhost:8000",
             total_steps=500,
             batch_size=1024,
-            steps_per_eval=1000,
-            max_token_length=1024 * 15,
+            steps_per_eval=20,
+            max_token_length=1024 * 13,
             inference_weight=1.0,
-            wandb_name="instruction_following_rlvr_ifeval",  # Specific WandB project name
+            wandb_name="instruction_following_rlvr_ifeval",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
-            dataset_name="allenai/RLVR-IFeval",  # Default dataset
+            dataset_name="allenai/RLVR-IFeval",
             dataset_config_name=None,  # RLVR-IFeval doesn't have a specific config name, uses 'default'
-            test_set_ratio=0.05,  # The ratio of the selelcted dataset in %
+            test_set_ratio=0.05,
             dump_rollouts=False,
         )
         # Server configurations can be similar to SingleToolCallingEnv or adjusted
