@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+aiosqlite
+numpy
+docker
+google-generativeai
+python-dotenv 
