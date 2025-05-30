@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Local testing script for InternBootcamp environment
+Local testing script for InternBootcamp environment with RandomTask
 """
 
 import asyncio
@@ -22,31 +22,27 @@ logger = logging.getLogger(__name__)
 
 
 async def main():
-    logger.info("Starting InternBootcamp environment local test runner")
+    logger.info("Starting InternBootcamp environment local test runner with RandomTask")
 
-    # Test configuration - using Game24 as an example
+    # Test configuration - using RandomTask for multitask curriculum
     env_config = InternBootcampEnvConfig(
-        tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",  # Using proper tokenizer
+        tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
         group_size=2,  # Small group for testing
         use_wandb=False,
-        wandb_name="intern_bootcamp_local_test",
+        wandb_name="intern_bootcamp_random_test",
         max_num_workers=1,
         rollout_server_url="http://localhost:8000",
         total_steps=1,
         batch_size=2,
         steps_per_eval=0,
-        max_token_length=1024,
+        max_token_length=2048,  # Increased for diverse tasks
         inference_weight=1.0,
         data_path_to_save_groups=None,
         eval_handling=EvalHandlingEnum.NONE,
         eval_limit_ratio=0.0,
-        # InternBootcamp specific settings
-        task_name="Game24bootcamp",
-        task_params={
-            "num_numbers": 4,
-            "range_max": 20,  # Smaller range for easier problems
-            "target_max": 30,
-        },
+        # InternBootcamp specific settings - using RandomTask
+        task_name="RandomTask",
+        task_params={},  # RandomTask doesn't need specific params
         correct_reward=1.0,
         incorrect_reward=-0.5,
         format_bonus=0.2,
@@ -65,7 +61,7 @@ async def main():
         )
     ]
 
-    logger.info("Using test configuration for Game24bootcamp")
+    logger.info("Using RandomTask configuration for multitask curriculum")
     logger.debug(f"Env Config: {env_config}")
     logger.debug(f"Server Configs: {server_configs}")
 
@@ -77,41 +73,82 @@ async def main():
         logger.exception(f"Failed to initialize InternBootcampEnv: {e}")
         return
 
-    logger.info("Running test trajectories")
+    logger.info("Running RandomTask tests")
     try:
         await env.setup()
 
-        # Test 1: Generate and solve a single problem
-        logger.info("\n========== Test 1: Single Problem ==========")
+        # Test 1: Generate multiple random problems to show variety
+        logger.info("\n========== Test 1: Multiple Random Problems ==========")
+
+        for i in range(5):
+            logger.info(f"\n--- Random Problem {i+1} ---")
+            item = await env.get_next_item()
+            prompt_tuple, metadata = item
+
+            # Extract bootcamp name from identity if available
+            bootcamp_name = "Unknown"
+            if (
+                isinstance(metadata["identity"], dict)
+                and "_bootcamp_name" in metadata["identity"]
+            ):
+                bootcamp_name = metadata["identity"]["_bootcamp_name"]
+
+            logger.info(f"  Selected Bootcamp: {bootcamp_name}")
+            logger.info(f"  Task: {metadata['task_name']}")
+            logger.info(f"  Prompt preview: {metadata['raw_prompt'][:150]}...")
+
+        # Test 2: Collect and score trajectories from a random problem
+        logger.info("\n========== Test 2: Trajectory Collection & Scoring ==========")
         item = await env.get_next_item()
         prompt_tuple, metadata = item
 
-        logger.info("Generated problem:")
-        logger.info(f"  Task: {metadata['task_name']}")
-        logger.info(f"  Identity: {metadata['identity']}")
-        logger.info(f"  Prompt: {metadata['raw_prompt'][:200]}...")
+        # Extract bootcamp name
+        bootcamp_name = "Unknown"
+        if (
+            isinstance(metadata["identity"], dict)
+            and "_bootcamp_name" in metadata["identity"]
+        ):
+            bootcamp_name = metadata["identity"]["_bootcamp_name"]
+
+        logger.info(f"Testing with bootcamp: {bootcamp_name}")
+        logger.info(f"Problem: {metadata['raw_prompt'][:200]}...")
 
         # Collect trajectories
-        trajectories, backlog = await env.collect_trajectories(item)
-        logger.info(f"Collected {len(trajectories)} trajectories")
+        scored_data, backlog = await env.collect_trajectories(item)
+        logger.info(f"Collected and scored {len(scored_data['scores'])} responses")
 
-        # Score the trajectories
-        scored_data = await env.score(trajectories)
-        logger.info(f"Scored {len(scored_data['scores'])} responses")
+        for i, score in enumerate(scored_data["scores"]):
+            response_preview = (
+                scored_data["messages"][i][-1]["content"][:100]
+                if scored_data["messages"][i]
+                else "No response"
+            )
+            logger.info(
+                f"  Response {i+1}: Score={score:.2f}, Preview: {response_preview}..."
+            )
 
-        for i, (messages, metadata, response) in enumerate(trajectories):
-            logger.info(f"\n--- Response {i+1} ---")
-            logger.info(f"Model response: {response[:200]}...")
-            logger.info(f"Score: {scored_data['scores'][i]}")
-
-        # Test 2: Run evaluation (reduced for testing)
-        logger.info("\n========== Test 2: Evaluation (3 problems) ==========")
+        # Test 3: Quick evaluation with random tasks
+        logger.info("\n========== Test 3: Random Task Evaluation ==========")
 
         async def quick_evaluate(*args, **kwargs):
-            logger.info("Starting quick evaluation with 3 problems")
+            logger.info("Starting evaluation with random tasks")
             eval_tasks = []
+            bootcamp_names = []
+
             for i in range(3):  # Only 3 problems for testing
                 logger.info(f"Starting evaluation problem {i+1}/3")
+
+                # Generate a problem to see which bootcamp is selected
+                test_item = await env.get_next_item()
+                _, test_metadata = test_item
+                if (
+                    isinstance(test_metadata["identity"], dict)
+                    and "_bootcamp_name" in test_metadata["identity"]
+                ):
+                    bootcamp_name = test_metadata["identity"]["_bootcamp_name"]
+                    bootcamp_names.append(bootcamp_name)
+                    logger.info(f"  Evaluation problem {i+1} using: {bootcamp_name}")
+
                 eval_tasks.append(env.evaluate_single_problem())
 
             results = await asyncio.gather(*eval_tasks)
@@ -124,47 +161,77 @@ async def main():
             accuracy = correct_count / total_count if total_count > 0 else 0
             format_rate = format_count / total_count if total_count > 0 else 0
 
-            logger.info(
-                f"Quick evaluation complete: accuracy={accuracy:.2%}, format_rate={format_rate:.2%}"
-            )
+            logger.info("Evaluation complete:")
+            logger.info(f"  Bootcamps used: {bootcamp_names}")
+            logger.info(f"  Accuracy: {accuracy:.2%}")
+            logger.info(f"  Format rate: {format_rate:.2%}")
 
-            return [(f"eval/{env.current_task_name}_accuracy", accuracy)]
+            return [("eval/random_tasks_accuracy", accuracy)]
 
         env.evaluate = quick_evaluate
         await env.evaluate()
 
-        # Test 3: Test different bootcamp tasks
-        logger.info("\n========== Test 3: Testing Other Bootcamps ==========")
-        test_tasks = ["Sudokubootcamp", "Mazebootcamp", "Cipherbootcamp"]
+        # Test 4: Test specific bootcamp fallback
+        logger.info("\n========== Test 4: Specific Bootcamp Test ==========")
 
-        for task_name in test_tasks:
-            try:
-                # Create a new config for each task
-                test_config = InternBootcampEnvConfig(
-                    **env_config.model_dump(),
-                    task_name=task_name,
-                    task_params={},  # Use default parameters
-                )
+        # Test with a specific bootcamp to ensure single-task mode still works
+        specific_config = InternBootcampEnvConfig(
+            **env_config.model_dump(),
+            task_name="Game24bootcamp",
+            task_params={
+                "num_numbers": 4,
+                "range_max": 20,
+                "target_max": 30,
+            },
+        )
 
-                test_env = InternBootcampEnv(
-                    config=test_config,
-                    server_configs=server_configs,
-                    slurm=False,
-                    testing=True,
-                )
+        try:
+            specific_env = InternBootcampEnv(
+                config=specific_config,
+                server_configs=server_configs,
+                slurm=False,
+                testing=True,
+            )
 
-                await test_env.setup()
-                item = await test_env.get_next_item()
-                _, metadata = item
+            await specific_env.setup()
+            item = await specific_env.get_next_item()
+            _, metadata = item
 
-                logger.info(f"\n{task_name}:")
-                logger.info(f"  Generated problem: {metadata['identity']}")
-                logger.info(f"  Prompt preview: {metadata['raw_prompt'][:100]}...")
+            logger.info("Specific bootcamp test (Game24bootcamp):")
+            logger.info(f"  Task: {metadata['task_name']}")
+            logger.info(f"  Problem: {metadata['identity']}")
+            logger.info(f"  Prompt preview: {metadata['raw_prompt'][:100]}...")
 
-            except Exception as e:
-                logger.error(f"Failed to test {task_name}: {e}")
+        except Exception as e:
+            logger.error(f"Failed to test specific bootcamp: {e}")
 
-        logger.info("\n========== Test Complete ==========")
+        # Test 5: Show bootcamp registry info
+        logger.info("\n========== Test 5: Bootcamp Registry Info ==========")
+        from environments.intern_bootcamp.bootcamp_registry import (
+            get_available_bootcamps,
+        )
+
+        available = get_available_bootcamps()
+        logger.info(f"Total available bootcamps: {len(available)}")
+        logger.info(f"Sample bootcamps: {available[:10]}")
+
+        # Show some variety in bootcamp names
+        math_bootcamps = [
+            name
+            for name in available
+            if any(x in name.lower() for x in ["math", "game", "number"])
+        ]
+        logic_bootcamps = [
+            name
+            for name in available
+            if any(x in name.lower() for x in ["logic", "puzzle", "cipher"])
+        ]
+
+        logger.info(f"Math-related bootcamps (sample): {math_bootcamps[:5]}")
+        logger.info(f"Logic-related bootcamps (sample): {logic_bootcamps[:5]}")
+
+        logger.info("\n========== All Tests Complete ==========")
+        logger.info("RandomTask multitask curriculum is working correctly!")
 
     except Exception as e:
         logger.exception(f"An error occurred during testing: {e}")

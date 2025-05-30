@@ -8,6 +8,7 @@ InternBootcamp tasks without having to manually import each one.
 import importlib
 import inspect
 import logging
+import random
 from typing import Any, Dict, List, Type
 
 logger = logging.getLogger(__name__)
@@ -137,6 +138,117 @@ class BootcampRegistry:
         return info
 
 
+class RandomTask:
+    """Special bootcamp that randomly selects from available bootcamps on each call."""
+
+    def __init__(self, **params):
+        self.registry = BootcampRegistry()
+        self.registry.discover_bootcamps()
+        self.available_bootcamps = self.registry.list_available_bootcamps()
+        # Remove base classes and template classes from the list
+        self.available_bootcamps = [
+            name
+            for name in self.available_bootcamps
+            if not any(x in name.lower() for x in ["base", "template", "{puzzlename}"])
+        ]
+        self.params = params
+        self.current_bootcamp = None
+        self.current_bootcamp_name = None
+        logger.info(
+            f"RandomTask initialized with {len(self.available_bootcamps)} available bootcamps"
+        )
+
+    def case_generator(self) -> object:
+        """Generate a case by randomly selecting a bootcamp."""
+        # Select a random bootcamp
+        self.current_bootcamp_name = random.choice(self.available_bootcamps)
+        self.current_bootcamp = self.registry.create_bootcamp_instance(
+            self.current_bootcamp_name, **self.params
+        )
+
+        # Generate case from the selected bootcamp
+        case = self.current_bootcamp.case_generator()
+
+        # Add bootcamp name to the case for tracking
+        if isinstance(case, dict):
+            case["_bootcamp_name"] = self.current_bootcamp_name
+        else:
+            # If case is not a dict, wrap it
+            case = {"data": case, "_bootcamp_name": self.current_bootcamp_name}
+
+        return case
+
+    def prompt_func(self, identity) -> str:
+        """Generate prompt using the current bootcamp."""
+        # Extract the bootcamp name if stored
+        bootcamp_name = identity.get("_bootcamp_name", self.current_bootcamp_name)
+
+        # If we need to recreate the bootcamp (e.g., during scoring)
+        if not self.current_bootcamp or self.current_bootcamp_name != bootcamp_name:
+            self.current_bootcamp_name = bootcamp_name
+            self.current_bootcamp = self.registry.create_bootcamp_instance(
+                bootcamp_name, **self.params
+            )
+
+        # Remove the bootcamp name before passing to prompt_func
+        identity_copy = dict(identity)
+        identity_copy.pop("_bootcamp_name", None)
+        if "data" in identity_copy and len(identity_copy) == 1:
+            identity_copy = identity_copy["data"]
+
+        return self.current_bootcamp.prompt_func(identity_copy)
+
+    @classmethod
+    def extract_output(cls, output):
+        """This should not be called directly for RandomTask."""
+        raise NotImplementedError(
+            "RandomTask does not implement extract_output directly"
+        )
+
+    @classmethod
+    def _verify_correction(cls, solution, identity):
+        """This should not be called directly for RandomTask."""
+        raise NotImplementedError(
+            "RandomTask does not implement _verify_correction directly"
+        )
+
+    def verify_score(
+        self,
+        model_output,
+        identity,
+        format_score=0,
+        short_penalty=True,
+        short_threshold=100,
+        format_penalty=True,
+    ) -> float:
+        """Verify score using the appropriate bootcamp."""
+        # Extract the bootcamp name
+        bootcamp_name = identity.get("_bootcamp_name", self.current_bootcamp_name)
+
+        # If we need to recreate the bootcamp
+        if not self.current_bootcamp or self.current_bootcamp_name != bootcamp_name:
+            self.current_bootcamp_name = bootcamp_name
+            self.current_bootcamp = self.registry.create_bootcamp_instance(
+                bootcamp_name, **self.params
+            )
+
+        # Remove the bootcamp name before passing to verify_score
+        identity_copy = dict(identity)
+        identity_copy.pop("_bootcamp_name", None)
+        if "data" in identity_copy and len(identity_copy) == 1:
+            identity_copy = identity_copy["data"]
+
+        # Call the bootcamp's verify_score method
+        return self.current_bootcamp.verify_score(
+            model_output,
+            identity_copy,
+            format_score,
+            short_penalty,
+            short_threshold,
+            format_penalty,
+        )
+
+
 # Global registry instance
 bootcamp_registry = BootcampRegistry()
 
@@ -148,4 +260,7 @@ def get_available_bootcamps() -> List[str]:
 
 def create_bootcamp(name: str, **params) -> Any:
     """Create a bootcamp instance by name with parameters."""
+    # Special handling for RandomTask
+    if name == "RandomTask":
+        return RandomTask(**params)
     return bootcamp_registry.create_bootcamp_instance(name, **params)

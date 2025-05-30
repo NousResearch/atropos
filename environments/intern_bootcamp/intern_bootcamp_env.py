@@ -19,20 +19,7 @@ from atroposlib.envs.base import (
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
-# Import the bootcamp registry
-try:
-    # Try relative import first (when imported as module)
-    from .bootcamp_registry import create_bootcamp, get_available_bootcamps
-except ImportError:
-    # Fall back to absolute import (when run directly)
-    import os
-    import sys
-
-    # Add the current directory to path for absolute imports
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    if current_dir not in sys.path:
-        sys.path.insert(0, current_dir)
-    from bootcamp_registry import create_bootcamp, get_available_bootcamps
+from .bootcamp_registry import create_bootcamp, get_available_bootcamps
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -51,9 +38,9 @@ SYSTEM_PROMPT = (
     "1. Think step by step through the problem inside <think> tags\n"
     "2. Show your work clearly in your thinking\n"
     "3. Verify your answer before finalizing\n"
-    "4. Always format your final answer using \\boxed{} notation\n\n"
-    "For mathematical problems requiring a specific format, make sure to follow "
-    "it exactly. Your final answer must be enclosed in \\boxed{your answer here}."
+    "4. Follow the specific answer format requested in the problem\n\n"
+    "Pay close attention to how the problem asks you to format your answer - "
+    "some may require specific tags, notations, or formats."
 )
 
 
@@ -61,7 +48,7 @@ class InternBootcampEnvConfig(BaseEnvConfig):
     """Configuration for the InternBootcamp environment."""
 
     # Task selection
-    task_name: str = "Game24bootcamp"  # Single task mode
+    task_name: str = "RandomTask"  # Random task selection mode
 
     # Task-specific parameters
     task_params: Dict[str, Any] = {}
@@ -151,6 +138,14 @@ class InternBootcampEnv(BaseEnv):
         # Generate a new problem
         identity = self.bootcamp_instance.case_generator()
         prompt = self.bootcamp_instance.prompt_func(identity)
+
+        # Log which bootcamp is being used if RandomTask
+        if (
+            self.config.task_name == "RandomTask"
+            and isinstance(identity, dict)
+            and "_bootcamp_name" in identity
+        ):
+            logger.info(f"RandomTask selected: {identity['_bootcamp_name']}")
 
         # Create the message format expected by Atropos
         messages = [
@@ -379,10 +374,10 @@ class InternBootcampEnv(BaseEnv):
             steps_per_eval=100,
             max_token_length=16384,
             inference_weight=1.0,
-            wandb_name="intern_bootcamp_game24",
-            data_path_to_save_groups="data/intern_bootcamp_game24.jsonl",
+            wandb_name="intern_bootcamp_random_tasks",
+            data_path_to_save_groups="data/intern_bootcamp_random_tasks.jsonl",
             # Task configuration
-            task_name="Game24bootcamp",
+            task_name="RandomTask",
             task_params={
                 "num_numbers": 4,
                 "range_max": 50,
