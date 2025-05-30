@@ -378,11 +378,7 @@ class InternBootcampEnv(BaseEnv):
             data_path_to_save_groups="data/intern_bootcamp_random_tasks.jsonl",
             # Task configuration
             task_name="RandomTask",
-            task_params={
-                "num_numbers": 4,
-                "range_max": 50,
-                "target_max": 50,
-            },
+            task_params={},
             # Reward configuration
             correct_reward=1.0,
             incorrect_reward=-0.5,
