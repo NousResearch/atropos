@@ -40,7 +40,7 @@ To contribute a new environment to the community collection:
 5. **Test thoroughly** before submitting
 6. **Submit a pull request** with a clear description
 
-Once your environment is ready, please follow the guidelines in our main [CONTRIBUTING.md](../../../CONTRIBUTING.md) to submit your contribution.
+Once your environment is ready, please follow the guidelines in our main [CONTRIBUTING.md](../../CONTRIBUTING.md) to submit your contribution.
 
 ---
 
@@ -199,7 +199,7 @@ A specialized environment for training LLMs to automatically identify and fix we
 - +1.0: All targeted issues fixed correctly
 - 0.0-0.8: Partial fixes applied
 - -0.5: Parseable HTML but no issues fixed
-- -1.0: Unparseable HTML or regressions introduced
+- -1.0: Unparsable HTML or regressions introduced
 
 **Note**: The accessibility dataset referenced in the environment (`data/accessibility_dataset.jsonl`) was not included in the contribution. Please contact the author for access to the training dataset.
 
