@@ -20,7 +20,7 @@ Our Dataset uses a format like-
   }
 }
 
-the return promts are compared with the expected_mcp_call
+the return prompts are compared with the expected_mcp_call
 
 Our main task or challenge that our environment presented-
 Help LLMs use MCPs
@@ -32,7 +32,7 @@ Framework-
 we used the Single Tool Environment as a framework for the MCP env
 
 Challenge-
-Finding existing large datasets with MCP calls was extermely difficult.
+Finding existing large datasets with MCP calls was extremely difficult.
 
 ## Estimate
 ### 🧪 Zero-Training Test Results
