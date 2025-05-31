@@ -71,7 +71,7 @@ class InternBootcampEnvConfig(BaseEnvConfig):
 
     # Data generation
     dump_rollouts: bool = Field(
-        default=False,
+        default=True,
         description="Whether to dump rollouts to JSONL files.",
     )
 
@@ -509,7 +509,7 @@ class InternBootcampEnv(BaseEnv):
     def config_init(cls) -> Tuple[InternBootcampEnvConfig, List[APIServerConfig]]:
         """Initialize environment and server configurations."""
         env_config = InternBootcampEnvConfig(
-            tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+            tokenizer_name="mistralai/Mistral-Small-3.1-24B-Instruct-2503",
             group_size=8,
             use_wandb=True,
             max_num_workers=64,
@@ -539,7 +539,7 @@ class InternBootcampEnv(BaseEnv):
 
         server_configs = [
             APIServerConfig(
-                model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+                model_name="mistralai/Mistral-Small-3.1-24B-Instruct-2503",
                 base_url="http://localhost:9004/v1",
                 api_key="x",
                 num_requests_for_eval=64,
