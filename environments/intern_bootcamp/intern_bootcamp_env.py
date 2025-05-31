@@ -8,8 +8,13 @@ and curriculum learning modes.
 """
 
 import asyncio
+import json
 import logging
+import os
+import uuid
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+from pydantic import Field
 
 from atroposlib.envs.base import (
     APIServerConfig,
@@ -64,6 +69,12 @@ class InternBootcampEnvConfig(BaseEnvConfig):
     temperature: float = 0.7
     top_p: float = 0.9
 
+    # Data generation
+    dump_rollouts: bool = Field(
+        default=False,
+        description="Whether to dump rollouts to JSONL files.",
+    )
+
 
 class InternBootcampEnv(BaseEnv):
     """Environment for training on InternBootcamp reasoning tasks."""
@@ -80,6 +91,18 @@ class InternBootcampEnv(BaseEnv):
         super().__init__(config, server_configs, slurm, testing)
         self.config = config
 
+        # Initialize the logger
+        self.logger = logging.getLogger(self.__class__.__name__)
+        if not self.logger.handlers:
+            _handler = logging.StreamHandler()
+            _formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            )
+            _handler.setFormatter(_formatter)
+            self.logger.addHandler(_handler)
+            self.logger.setLevel(logging.INFO)
+        self.logger.disabled = False
+
         # Task tracking
         self.bootcamp_instance = None
         self.current_task_name = config.task_name
@@ -88,6 +111,22 @@ class InternBootcampEnv(BaseEnv):
         self.task_correct_buffer = []
         self.format_correct_buffer = []
         self.eval_metrics = []
+
+        # For saving rollouts to JSONL
+        self.run_uuid = str(uuid.uuid4())
+        # Buffer will store a list of item groups, where each group has an item_id and a list of its rollouts.
+        # Each rollout detail will contain conversation, score, and task metadata.
+        RolloutDetail = Dict[
+            str, Union[List[Dict[str, str]], float, Dict[str, Any]]
+        ]  # Type alias for clarity
+        ItemGroup = Dict[str, Union[str, List[RolloutDetail]]]
+        self.rollouts_to_save_buffer: List[ItemGroup] = []
+        self.processed_item_count = 0
+        # Creates .../atropos/environments/datadumps/ relative to this file
+        self.datadumps_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "datadumps"
+        )
+        self.save_file_batch_num = 0
 
         self.system_prompt = SYSTEM_PROMPT
 
@@ -193,6 +232,54 @@ class InternBootcampEnv(BaseEnv):
         scored_data = await self.score(to_score)
         backlog = []  # No backlog items for now
 
+        # If rollouts were generated and scored, and data dumping is enabled,
+        # prepare them for saving.
+        if scored_data and self.config.dump_rollouts:
+            rollouts_for_current_item_group = []
+
+            num_scored_rollouts = len(scored_data.get("scores", []))
+            messages_batch = scored_data.get("messages", [])
+
+            for i in range(num_scored_rollouts):
+                conversation_messages = (
+                    messages_batch[i] if i < len(messages_batch) else messages
+                )
+                score_for_rollout = scored_data["scores"][i]
+
+                rollouts_for_current_item_group.append(
+                    {
+                        "conversation": conversation_messages,  # Full conversation history
+                        "score": score_for_rollout,
+                        "task_metadata": metadata,  # Include bootcamp task metadata
+                    }
+                )
+
+            if rollouts_for_current_item_group:
+                # Create a unique item_id for this group
+                item_id = (
+                    f"intern_bootcamp_{self.processed_item_count}_{self.run_uuid[:8]}"
+                )
+
+                item_group_to_save = {
+                    "item_id": item_id,
+                    "rollouts": rollouts_for_current_item_group,
+                }
+                self.rollouts_to_save_buffer.append(item_group_to_save)
+                self.processed_item_count += 1
+
+                # Check if it's time to save a batch of rollouts
+                if (
+                    self.config.dump_rollouts
+                    and self.processed_item_count > 0
+                    and self.processed_item_count % 100 == 0
+                ):
+                    log_msg = (
+                        f"Reached {self.processed_item_count} processed item groups. "
+                        f"Triggering save for {len(self.rollouts_to_save_buffer)} item groups."
+                    )
+                    self.logger.info(log_msg)
+                    await self._save_rollouts_to_jsonl()
+
         return scored_data, backlog
 
     async def score(self, rollout_group_data) -> ScoredDataGroup:
@@ -253,6 +340,42 @@ class InternBootcampEnv(BaseEnv):
             scored_data["messages"].append(messages)
 
         return scored_data
+
+    async def _save_rollouts_to_jsonl(self):
+        """Saves the buffered rollouts to a JSONL file in the datadumps directory."""
+        if not self.rollouts_to_save_buffer:
+            self.logger.info("No rollouts in buffer to save.")
+            return
+
+        try:
+            if not os.path.exists(self.datadumps_dir):
+                os.makedirs(self.datadumps_dir)
+                self.logger.info(f"Created directory: {self.datadumps_dir}")
+        except OSError as e:
+            self.logger.error(f"Error creating directory {self.datadumps_dir}: {e}")
+            return  # Don't proceed if directory creation fails
+
+        file_path = os.path.join(
+            self.datadumps_dir,
+            f"intern_bootcamp_rollouts_{self.run_uuid}_{self.save_file_batch_num:04d}.jsonl",
+        )
+
+        try:
+            with open(file_path, "w") as f:
+                for rollout_dict in self.rollouts_to_save_buffer:
+                    json.dump(rollout_dict, f)
+                    f.write("\n")
+            self.logger.info(
+                f"Successfully saved {len(self.rollouts_to_save_buffer)} item groups to {file_path}"
+            )
+            self.rollouts_to_save_buffer.clear()  # Clear buffer after successful save
+            self.save_file_batch_num += 1
+        except IOError as e:
+            self.logger.error(f"Error writing rollouts to {file_path}: {e}")
+        except Exception as e:
+            self.logger.error(
+                f"An unexpected error occurred while saving rollouts to {file_path}: {e}"
+            )
 
     async def evaluate(self, *args, **kwargs):
         """Evaluate the model on test problems."""
@@ -360,6 +483,28 @@ class InternBootcampEnv(BaseEnv):
 
         await super().wandb_log(wandb_metrics)
 
+    async def close(self):
+        """Clean up and save any remaining rollouts before exiting."""
+        self.logger.info(
+            "Closing InternBootcampEnv. Attempting to save any remaining rollouts..."
+        )
+        if (
+            self.config.dump_rollouts and self.rollouts_to_save_buffer
+        ):  # Check if there's anything to save
+            self.logger.info(
+                f"Found {len(self.rollouts_to_save_buffer)} item groups in buffer. Saving now."
+            )
+            await self._save_rollouts_to_jsonl()
+        else:
+            self.logger.info("No item groups in buffer to save upon closing.")
+
+        # Call the superclass's close method if it exists and is async
+        if hasattr(super(), "close") and asyncio.iscoroutinefunction(super().close):
+            await super().close()
+        elif hasattr(super(), "close"):
+            super().close()  # Assuming it's a synchronous method
+        self.logger.info("InternBootcampEnv closed.")
+
     @classmethod
     def config_init(cls) -> Tuple[InternBootcampEnvConfig, List[APIServerConfig]]:
         """Initialize environment and server configurations."""
@@ -388,6 +533,8 @@ class InternBootcampEnv(BaseEnv):
             min_reasoning_length=50,
             temperature=0.7,
             top_p=0.9,
+            # Data generation
+            dump_rollouts=False,
         )
 
         server_configs = [
