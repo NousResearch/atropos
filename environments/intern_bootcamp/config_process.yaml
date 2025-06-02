@@ -1,0 +1,51 @@
+---
+# Configuration for InternBootcamp dataset generation using process mode
+# Usage: python -m environments.intern_bootcamp.intern_bootcamp_env process --config environments/intern_bootcamp/config_process.yaml
+
+env:
+  # Task configuration - RandomTask selects from all available bootcamp tasks
+  task_name: "RandomTask"
+  task_params: {}
+  
+  # Reward configuration for scoring
+  correct_reward: 1.0
+  incorrect_reward: -0.5
+  format_bonus: 0.2
+  
+  # Generation parameters
+  group_size: 16  # Generate 16 responses per problem for rejection sampling
+  total_steps: 2  # Process 2 problem groups for testing = 32 total responses
+  
+  # Reasoning requirements
+  require_reasoning: true
+  min_reasoning_length: 50
+  
+  # Sampling parameters for DeepHermes
+  temperature: 0.7
+  top_p: 0.9
+  max_token_length: 16384
+  
+  # Output configuration
+  data_path_to_save_groups: "data/intern_bootcamp_deephermes24b_dataset.jsonl"
+  ensure_scores_are_not_same: false  # Allow rejection sampling
+  include_messages: true  # Save full conversations
+  
+  # Tokenizer for processing (use same model as generation model)
+  tokenizer_name: "NousResearch/DeepHermes-3-Mistral-24B-Preview"
+  
+  # WandB tracking
+  use_wandb: true
+  wandb_name: "intern_bootcamp_deephermes24b_dataset_generation"
+  
+  # Disable rollout dumping (we're using the JSONL output instead)
+  dump_rollouts: false
+
+# OpenAI-compatible API configuration for DeepHermes 24B
+openai:
+  model_name: "DeepHermes-3-Mistral-24B-Preview"
+  base_url: "https://inference-api.nousresearch.com/v1"
+  api_key: "sk-CRs4gcGL5Jai3ojQ2BKxxA"
+  
+# Server configuration for process mode (no slurm needed)
+slurm: false
+testing: false

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rendered Messages - groups_8.jsonl</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; margin: 20px; }
+        details { border: 1px solid #ccc; border-radius: 4px; margin-bottom: 15px; }
+        summary {
+            font-weight: bold;
+            padding: 10px;
+            background-color: #f0f0f0;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+            border-bottom: 1px solid #ccc;
+            outline: none; /* Remove default focus outline if needed */
+        }
+        details[open] summary { border-bottom: 1px solid #ccc; }
+        .group-content { padding: 15px; }
+        .item {
+            border: 1px solid #eee;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            padding: 10px;
+            transition: background-color 0.3s ease, box-shadow 0.2s ease; /* Smooth transitions */
+            scroll-margin-top: 10px; /* Space when scrolling into view */
+        }
+        .item h4 { margin-top: 0; margin-bottom: 5px; font-size: 1.1em; }
+        .content-block { background-color: #fff; padding: 8px; border-radius: 3px; margin-bottom: 5px; overflow-x: auto; }
+        /* Use :focus-within for better accessibility on container focus */
+        .item:focus, .item.active {
+             box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5); /* Highlight active/focused item */
+             outline: none; /* Remove default outline */
+        }
+
+        /* Score Backgrounds (Faint) */
+        .reward-positive { background-color: rgba(144, 238, 144, 0.3); } /* Faint light green */
+        .reward-zero { background-color: rgba(255, 215, 0, 0.3); }    /* Faint gold/orange */
+        .reward-negative { background-color: rgba(255, 182, 193, 0.4); } /* Faint light pink/red */
+
+        /* Markdown specific styles */
+        .content-block pre {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 10px;
+            overflow-x: auto; /* Allow horizontal scrolling for long code lines */
+            white-space: pre-wrap; /* Wrap long lines within pre */
+            word-wrap: break-word; /* Break long words if necessary */
+        }
+        .content-block code {
+             background-color: #f0f0f0; /* Slightly different for inline code */
+             padding: 0.2em 0.4em;
+             border-radius: 3px;
+             font-size: 0.9em;
+        }
+        .content-block pre code {
+            background-color: transparent; /* Don't double-background code in pre blocks */
+            padding: 0;
+            border-radius: 0;
+            font-size: inherit; /* Inherit pre font size */
+        }
+        .content-block blockquote {
+            border-left: 4px solid #ccc;
+            padding-left: 10px;
+            margin-left: 0;
+            color: #555;
+        }
+        .content-block table {
+            border-collapse: collapse;
+            width: auto; /* Don't force full width */
+            margin-bottom: 1em;
+        }
+        .content-block th, .content-block td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .content-block th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h1>Rendered Messages - groups_8.jsonl</h1>
+    <div id="groups-container">
+                <details>
+            <summary>Group 0</summary>
+            <div class="group-content">
+                            <div class="item reward-positive" id="group-0-item-0">
+                <h4>Content 0</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>what are you?&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p>I’m an AI language model developed by OpenAI, designed to understand and generate human-like text based on the input I receive. I can assist with answering questions, providing explanations, brainstorming ideas, writing, and much more. How can I help you today?&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.33333333333333337</p>
+            </div>
+            <div class="item reward-negative" id="group-0-item-1">
+                <h4>Content 1</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>what are you?&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p>I’m ChatGPT, an AI language model created by OpenAI. I’m designed to understand and generate human-like text based on the input I receive. I can help answer questions, provide explanations, assist with writing, and much more. How can I assist you today?&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> -0.33333333333333337</p>
+            </div>
+
+            </div>
+        </details>
+
+        <details>
+            <summary>Group 1</summary>
+            <div class="group-content">
+                            <div class="item reward-positive" id="group-1-item-0">
+                <h4>Content 0</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>CONSTRAINTS:</p>
+<ol>
+<li>~4000 word limit for short term memory. Your short term memory is short, so immediately save important information to files.</li>
+<li>If you are unsure how you previously did something or want to recall past events, thinking about similar events will help you remember.</li>
+<li>No user assistance</li>
+<li>Exclusively use the commands listed in double quotes e.g. "command name"</li>
+</ol>
+<p>COMMANDS:</p>
+<ol>
+<li>Google Search: "google", args: "input": "<search>"</li>
+<li>Memory Add: "memory_add", args: "key": "<key>", "string": "<string>"</li>
+<li>Memory Delete: "memory_del", args: "key": "<key>"</li>
+<li>Memory Overwrite: "memory_ovr", args: "key": "<key>", "string": "<string>"</li>
+<li>List Memory: "memory_list" args: "reason": "<reason>"</li>
+<li>Browse Website: "browse_website", args: "url": "<url>"</li>
+<li>Start GPT Agent: "start_agent",  args: "name": <name>, "task": "<short_task_desc>", "Commands":[<command_names_for_GPT_Agent>], "prompt": "<prompt>"</li>
+<li>Message GPT Agent: "message_agent", args: "name": "<name>", "message": "<message>"</li>
+<li>List GPT Agents: "list_agents", args: ""</li>
+<li>Delete GPT Agent: "delete_agent", args: "key": "<key>"</li>
+<li>Write to file: "write_to_file", args: "file": "<file>", "text": "<text>"</li>
+<li>Read file: "read_file", args: "file": "<file>"</li>
+<li>Append to file: "append_to_file", args: "file": "<file>", "text": "<text>"</li>
+<li>Delete file: "delete_file", args: "file": "<file>"</li>
+<li>Evaluate Code: "evaluate_code", args: "code": "<full _code_string>"</li>
+<li>Get Improved Code: "improve_code", args: "suggestions": "<list_of_suggestions>", "code": "<full_code_string>"</li>
+<li>Write Tests: "write_tests", args: "code": "<full_code_string>", "focus": "<list_of_focus_areas>"</li>
+<li>Execute Python File: "execute_python_file", args: "file": "<file>"</li>
+<li>Task Complete (Shutdown): "task_complete", args: "reason": "<reason>"</li>
+</ol>
+<p>RESOURCES:</p>
+<ol>
+<li>Internet access for searches and information gathering.</li>
+<li>Long Term memory management.</li>
+<li>GPT-4 powered Agents for delegation of simple tasks.</li>
+<li>File output.</li>
+</ol>
+<p>PERFORMANCE EVALUATION:</p>
+<ol>
+<li>Continuously review and analyze your actions to ensure you are performing to the best of your abilities. </li>
+<li>Constructively self-criticize your big-picture behaviour constantly.</li>
+<li>Reflect on past decisions and strategies to refine your approach.</li>
+<li>Every command has a cost, so be smart and efficient. Aim to complete tasks in the least number of steps.</li>
+</ol>
+<p>RULES:</p>
+<ol>
+<li>If you start a GPT Agent you must define the commands that can be used by a GPT Agent in his prompt and define the commands using a prompt similar to the structure of this one.</li>
+<li>Respond only inside the JSON format.</li>
+<li>Never demand user input.</li>
+<li>Never say that a task is impossible to execute on your own because these tools are enough to complete any task.</li>
+</ol>
+<p>You should only respond in JSON format as described below</p>
+<p>RESPONSE FORMAT:<br />
+{<br />
+    "command": {<br />
+        "name": "command name",<br />
+        "args":{<br />
+            "arg name": "value"<br />
+        }<br />
+    },<br />
+    "thoughts":<br />
+    {<br />
+        "text": "thought",<br />
+        "reasoning": "reasoning",<br />
+        "plan": "- short bulleted\n- list that conveys\n- long-term plan",<br />
+        "criticism": "constructive self-criticism",<br />
+        "summary": "thoughts summary to say to user"<br />
+    }<br />
+}</p>
+<p>Ensure the response can be parsed by Python json.loads<br />
+The Task: start a gpt agent that can google and add to memory.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p>{<br />
+  "command": {<br />
+    "name": "start_agent",<br />
+    "args": {<br />
+      "name": "MemoryGoogleAgent",<br />
+      "task": "Perform Google searches and save important results to memory",<br />
+      "Commands": [<br />
+        "google",<br />
+        "memory_add",<br />
+        "memory_ovr",<br />
+        "memory_list",<br />
+        "memory_del"<br />
+      ],<br />
+      "prompt": "You are a GPT agent specialized in conducting Google searches and managing long-term memory. Your allowed commands are: \"google\" to search the internet, \"memory_add\" to add data to memory, \"memory_ovr\" to overwrite existing memory entries, \"memory_list\" to list memory keys, and \"memory_del\" to delete memory entries. Your task is to efficiently gather information online and preserve important details in memory for later use."<br />
+    }<br />
+  },<br />
+  "thoughts": {<br />
+    "text": "Started a specialized GPT agent capable of googling and managing memory to handle knowledge acquisition autonomously.",<br />
+    "reasoning": "By delegating internet search and memory management to a dedicated agent with the exact required commands, the workload is separated and streamlined, improving efficiency and recall.",<br />
+    "plan": "- Start the MemoryGoogleAgent with commands constrained to googling and memory management\n- Utilize the agent for internet research and logging key information\n- Maintain memory hygiene by overwriting or deleting outdated entries\n- Use the main assistant for higher-level orchestration",<br />
+    "criticism": "Defined a narrowly focused agent which may need future enhancements to incorporate more commands, but this keeps initial scope clear and manageable.",<br />
+    "summary": "MemoryGoogleAgent has been launched to autonomously handle searches and memory storage, enabling effective knowledge management."<br />
+  }<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> 0.33333333333333337</p>
+            </div>
+            <div class="item reward-negative" id="group-1-item-1">
+                <h4>Content 1</h4>
+                <div class="content-block">
+                    <p>&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</p>
+<p>CONSTRAINTS:</p>
+<ol>
+<li>~4000 word limit for short term memory. Your short term memory is short, so immediately save important information to files.</li>
+<li>If you are unsure how you previously did something or want to recall past events, thinking about similar events will help you remember.</li>
+<li>No user assistance</li>
+<li>Exclusively use the commands listed in double quotes e.g. "command name"</li>
+</ol>
+<p>COMMANDS:</p>
+<ol>
+<li>Google Search: "google", args: "input": "<search>"</li>
+<li>Memory Add: "memory_add", args: "key": "<key>", "string": "<string>"</li>
+<li>Memory Delete: "memory_del", args: "key": "<key>"</li>
+<li>Memory Overwrite: "memory_ovr", args: "key": "<key>", "string": "<string>"</li>
+<li>List Memory: "memory_list" args: "reason": "<reason>"</li>
+<li>Browse Website: "browse_website", args: "url": "<url>"</li>
+<li>Start GPT Agent: "start_agent",  args: "name": <name>, "task": "<short_task_desc>", "Commands":[<command_names_for_GPT_Agent>], "prompt": "<prompt>"</li>
+<li>Message GPT Agent: "message_agent", args: "name": "<name>", "message": "<message>"</li>
+<li>List GPT Agents: "list_agents", args: ""</li>
+<li>Delete GPT Agent: "delete_agent", args: "key": "<key>"</li>
+<li>Write to file: "write_to_file", args: "file": "<file>", "text": "<text>"</li>
+<li>Read file: "read_file", args: "file": "<file>"</li>
+<li>Append to file: "append_to_file", args: "file": "<file>", "text": "<text>"</li>
+<li>Delete file: "delete_file", args: "file": "<file>"</li>
+<li>Evaluate Code: "evaluate_code", args: "code": "<full _code_string>"</li>
+<li>Get Improved Code: "improve_code", args: "suggestions": "<list_of_suggestions>", "code": "<full_code_string>"</li>
+<li>Write Tests: "write_tests", args: "code": "<full_code_string>", "focus": "<list_of_focus_areas>"</li>
+<li>Execute Python File: "execute_python_file", args: "file": "<file>"</li>
+<li>Task Complete (Shutdown): "task_complete", args: "reason": "<reason>"</li>
+</ol>
+<p>RESOURCES:</p>
+<ol>
+<li>Internet access for searches and information gathering.</li>
+<li>Long Term memory management.</li>
+<li>GPT-4 powered Agents for delegation of simple tasks.</li>
+<li>File output.</li>
+</ol>
+<p>PERFORMANCE EVALUATION:</p>
+<ol>
+<li>Continuously review and analyze your actions to ensure you are performing to the best of your abilities. </li>
+<li>Constructively self-criticize your big-picture behaviour constantly.</li>
+<li>Reflect on past decisions and strategies to refine your approach.</li>
+<li>Every command has a cost, so be smart and efficient. Aim to complete tasks in the least number of steps.</li>
+</ol>
+<p>RULES:</p>
+<ol>
+<li>If you start a GPT Agent you must define the commands that can be used by a GPT Agent in his prompt and define the commands using a prompt similar to the structure of this one.</li>
+<li>Respond only inside the JSON format.</li>
+<li>Never demand user input.</li>
+<li>Never say that a task is impossible to execute on your own because these tools are enough to complete any task.</li>
+</ol>
+<p>You should only respond in JSON format as described below</p>
+<p>RESPONSE FORMAT:<br />
+{<br />
+    "command": {<br />
+        "name": "command name",<br />
+        "args":{<br />
+            "arg name": "value"<br />
+        }<br />
+    },<br />
+    "thoughts":<br />
+    {<br />
+        "text": "thought",<br />
+        "reasoning": "reasoning",<br />
+        "plan": "- short bulleted\n- list that conveys\n- long-term plan",<br />
+        "criticism": "constructive self-criticism",<br />
+        "summary": "thoughts summary to say to user"<br />
+    }<br />
+}</p>
+<p>Ensure the response can be parsed by Python json.loads<br />
+The Task: start a gpt agent that can google and add to memory.&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</p>
+<p>{<br />
+  "command": {<br />
+    "name": "start_agent",<br />
+    "args": {<br />
+      "name": "SearcherMemoryAgent",<br />
+      "task": "google queries and add results to memory",<br />
+      "Commands": [<br />
+        "google",<br />
+        "memory_add"<br />
+      ],<br />
+      "prompt": "You are SearcherMemoryAgent, specialized in performing Google searches and saving relevant information to memory. You may only use the commands 'google' and'memory_add'. Use google to find concise and accurate information and memory_add to save important data with clear keys. Your goal is to efficiently gather and store knowledge useful for future reference."<br />
+    }<br />
+  },<br />
+  "thoughts": {<br />
+    "text": "I am starting a GPT agent with access to only 'google' and'memory_add' commands to fulfill the task of searching Google and adding results to memory. This will modularize the searching and memory-saving process for future tasks.",<br />
+    "reasoning": "Delegating the google + memory add functionality to a dedicated agent makes retrieval and data gathering streamlined and specialized. The agent will be simpler and focused on these two commands only.",<br />
+    "plan": "- Start agent named SearcherMemoryAgent\n- Allow it to google and memory_add only\n- Use agent subsequently for search and memory storage tasks\n- Keep main interface clean and focused",<br />
+    "criticism": "Could enhance agent capabilities later if needed, but starting minimal is efficient and will avoid complexity. Need to monitor if agent uses memory_add effectively.",<br />
+    "summary": "Started a specialized GPT agent to handle Google searches and memory additions exclusively."<br />
+  }<br />
+}&lt;|eot_id|&gt;</p>
+                </div>
+                <p><strong>Reward:</strong> -0.33333333333333337</p>
+            </div>
+
+            </div>
+        </details>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const items = document.querySelectorAll('.item');
+            let activeIndex = -1; // No item active initially
+
+            // Function to set active item
+            function setActiveItem(index) {
+                if (activeIndex >= 0 && activeIndex < items.length) {
+                    items[activeIndex].classList.remove('active');
+                    items[activeIndex].removeAttribute('tabindex'); // Remove from tab order when not active
+                }
+                if (index >= 0 && index < items.length) {
+                    items[index].classList.add('active');
+                    items[index].setAttribute('tabindex', '0'); // Make active item focusable
+                    items[index].focus(); // Focus the element
+                    // Ensure the parent <details> is open
+                    const detailsParent = items[index].closest('details');
+                    if (detailsParent && !detailsParent.open) {
+                        detailsParent.open = true;
+                    }
+                    // Scroll into view with options if needed (focus should handle this mostly)
+                    // items[index].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    activeIndex = index;
+                } else {
+                    activeIndex = -1; // Deactivate if index is out of bounds
+                }
+            }
+
+            // Add click listener to activate items
+            items.forEach((item, index) => {
+                item.addEventListener('click', () => {
+                    setActiveItem(index);
+                });
+                // Make items focusable initially only if we want tab navigation
+                // item.setAttribute('tabindex', '0');
+            });
+
+            // Add keydown listener for arrow navigation
+            document.addEventListener('keydown', (event) => {
+                let targetIndex = -1;
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault(); // Prevent default page scroll
+                    targetIndex = (activeIndex === -1) ? 0 : Math.min(activeIndex + 1, items.length - 1);
+                } else if (event.key === 'ArrowUp') {
+                    event.preventDefault(); // Prevent default page scroll
+                    targetIndex = (activeIndex === -1) ? items.length - 1 : Math.max(activeIndex - 1, 0);
+                }
+
+                if (targetIndex !== -1) {
+                    setActiveItem(targetIndex);
+                }
+            });
+
+            // Make first item focusable initially if you want immediate keyboard nav
+             if (items.length > 0) {
+                 // items[0].setAttribute('tabindex', '0');
+                 // Optionally activate the first item on load:
+                 // setActiveItem(0);
+             }
+        });
+    </script>
+</body>
+</html>
