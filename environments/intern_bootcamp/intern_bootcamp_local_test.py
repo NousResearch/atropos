@@ -54,7 +54,7 @@ async def main():
 
     server_configs = [
         APIServerConfig(
-            model_name="gpt-4o-mini",
+            model_name="gpt-4.1-mini",
             base_url="https://api.openai.com/v1",
             api_key=os.getenv("OPENAI_API_KEY"),
             num_requests_for_eval=0,

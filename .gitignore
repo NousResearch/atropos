@@ -193,3 +193,5 @@ uv.lock
 .DS_Store
 environments/datadumps/
 .aider*
+
+data/*
