@@ -6,7 +6,7 @@ Example script for processing PDF files with progress tracking and resumption.
 Uses pdfplumber for high-quality text extraction with layout preservation.
 
 Usage:
-    python -m data_pipeline.process_pdfs --pdf-dir data_pipeline/pdfs --output-dir data_pipeline/output
+    python -m environments.longform_story_generation.data_pipeline.process_pdfs --pdf-dir environments/longform_story_generation/data_pipeline/pdfs --output-dir environments/longform_story_generation/data_pipeline/output
 
 Features:
 - Processes all PDFs in the specified directory using pdfplumber
