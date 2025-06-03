@@ -1,0 +1,28 @@
+
+# Longform Story Generation - Data Pipeline
+# PDF source files (can be large, users provide their own)
+**/*.pdf
+
+# Processed output files (generated, not source code)
+data_pipeline/output/
+data/processed/
+data/datasets/
+
+# Processing progress and logs (local state, not for repo)
+processing_progress.json
+pdf_processing.log
+
+# Chapter/Content Detection
+*_test_subset.txt
+content_detection_*.log
+content_detection_progress.json
+content_detection_training_data.jsonl
+chapter_detection_training_data.jsonl
+
+# Content analysis outputs
+content_analysis/
+*_content_analysis.json
+*_story_chapters.json
+
+# Training data collection
+*_training_data.jsonl
