@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=intern-bootcamp-parallel-sglang
+#SBATCH --job-name=intern-bootcamp-sglang-datagen
 #SBATCH --output=environments/intern_bootcamp/logs/%j.out
 #SBATCH --error=environments/intern_bootcamp/logs/%j.err
 #SBATCH --nodes=1
@@ -10,14 +10,8 @@
 #SBATCH --time=24:00:00
 
 # Dataset generation with local SGLang serving DeepHermes-3-Mistral-24B
-# This version uses the new parallel processing feature
 
 set -e
-
-# Load environment variables if .env file exists
-if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
-fi
 
 # Create logs directory if it doesn't exist
 mkdir -p environments/intern_bootcamp/logs/${SLURM_JOB_ID}
@@ -29,18 +23,16 @@ LOGDIR="$(pwd)/environments/intern_bootcamp/logs/${SLURM_JOB_ID}"
 
 # Configuration
 MODEL_NAME="NousResearch/DeepHermes-3-Mistral-24B-Preview"
-SGLANG_PORT=8000
-OUTPUT_FILE="data/intern_bootcamp_deephermes24b_parallel_sglang_dataset_${SLURM_JOB_ID}.jsonl"
-MAX_WORKERS=4  # Number of parallel groups to process
+SGLANG_PORT=30000
+OUTPUT_FILE="data/intern_bootcamp_deephermes24b_sglang_dataset_${SLURM_JOB_ID}.jsonl"
+MAX_WORKERS=32
 TOTAL_STEPS=10000
-GROUP_SIZE=64  # Responses per group
 
-echo "Starting InternBootcamp PARALLEL dataset generation with local SGLang"
+echo "Starting InternBootcamp dataset generation with local SGLang"
 echo "Model: ${MODEL_NAME}"
 echo "Output file: ${OUTPUT_FILE}"
-echo "Max parallel groups: ${MAX_WORKERS}"
+echo "Max parallel workers: ${MAX_WORKERS}"
 echo "Total steps: ${TOTAL_STEPS}"
-echo "Group size: ${GROUP_SIZE}"
 
 # Step 1: Launch SGLang server
 echo "Launching SGLang server on port ${SGLANG_PORT}..."
@@ -83,8 +75,8 @@ done
 CONFIG_FILE="${LOGDIR}/config_sglang.yaml"
 cat > ${CONFIG_FILE} << EOF
 ---
-# Configuration for InternBootcamp PARALLEL dataset generation using local SGLang
-# This uses the new parallel processing feature for improved throughput
+# Configuration for InternBootcamp dataset generation using local SGLang
+# Modified from config_process.yaml to use local endpoint
 
 env:
   # Task configuration - RandomTask selects from all available bootcamp tasks
@@ -97,11 +89,10 @@ env:
   format_bonus: 0.2
   
   # Generation parameters
-  group_size: ${GROUP_SIZE}  # Generate responses per problem for rejection sampling
+  group_size: 64  # Generate 64 responses per problem for rejection sampling
   batch_size: -1  # Disable batching for direct file writing
   total_steps: ${TOTAL_STEPS}  # Process problems
-  max_num_workers: ${MAX_WORKERS}  # Number of parallel groups to process
-  use_parallel_processing: true  # Enable new parallel processing mode
+  max_num_workers: ${MAX_WORKERS}  # Number of parallel workers
   
   # Reasoning requirements
   require_reasoning: true
@@ -122,7 +113,7 @@ env:
   
   # WandB tracking
   use_wandb: true
-  wandb_name: "intern_bootcamp_deephermes24b_parallel_sglang_generation"
+  wandb_name: "intern_bootcamp_deephermes24b_sglang_dataset_generation"
   
   # Enable direct rollout dumping to datadumps directory
   dump_rollouts: true
@@ -141,18 +132,23 @@ testing: false
 
 EOF
 
-# Step 3: Run the data generation with parallel processing
-echo "Starting PARALLEL data generation..."
-echo "This will process up to ${MAX_WORKERS} groups in parallel (${MAX_WORKERS} x ${GROUP_SIZE} = $((MAX_WORKERS * GROUP_SIZE)) concurrent requests)"
+# Step 3: Run the data generation
+echo "Starting data generation..."
 cd /home/maxpaperclips/atropos
 
-# Run process mode with parallel processing enabled
+# Run process mode with direct file writing (no API server needed)
 uv run python -m environments.intern_bootcamp.intern_bootcamp_env process \
     --config ${CONFIG_FILE} \
-    --env.use_parallel_processing true \
+    --env.data_path_to_save_groups "${OUTPUT_FILE}" \
+    --env.batch_size -1 \
     --env.max_num_workers ${MAX_WORKERS} \
     --env.total_steps ${TOTAL_STEPS} \
-    --env.group_size ${GROUP_SIZE}
+    --env.group_size 64 \
+    --env.ensure_scores_are_not_same false \
+    --env.dump_rollouts true \
+    --env.use_wandb false \
+    --env.do_send_to_api false \
+    --env.rollout_server_url ""
 
 echo "Dataset generation complete!"
 
@@ -168,16 +164,6 @@ wc -l ${OUTPUT_FILE}
 
 echo "File size:"
 ls -lh ${OUTPUT_FILE}
-
-# Calculate throughput statistics
-START_TIME=$(stat -c %Y ${OUTPUT_FILE} 2>/dev/null || echo 0)
-END_TIME=$(date +%s)
-DURATION=$((END_TIME - START_TIME))
-if [ $DURATION -gt 0 ]; then
-    LINES=$(wc -l < ${OUTPUT_FILE})
-    THROUGHPUT=$((LINES / DURATION))
-    echo "Generation throughput: ~${THROUGHPUT} groups/second"
-fi
 
 # Filter for SFT format (score >= 0.0)
 echo "Filtering dataset for SFT..."
