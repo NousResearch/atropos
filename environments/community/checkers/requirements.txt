@@ -1,0 +1,2 @@
+# No additional dependencies required beyond base atropos requirements
+# The checkers environment uses only Python standard library and atroposlib
