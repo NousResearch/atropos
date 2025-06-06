@@ -51,15 +51,15 @@ def check_multi_thought_format(completion_text: str) -> bool:
     think_match = re.search(r"<think>(.*)</think>", completion_text, re.DOTALL)
     if not think_match:
         return False
-    
+
     thinking_block = think_match.group(1)
-    
+
     # Check for at least one well-formed <thought_N>...</thought_N> tag within the <think> block
     # This ensures there's at least one thought, and it's properly closed.
     # Using a non-greedy match for the content of thought_N to handle multiple such tags correctly.
     if re.search(r"<thought_\d+>.*?</thought_\d+>", thinking_block, re.DOTALL):
         return True
-        
+
     return False
 
 
@@ -279,17 +279,17 @@ class GSM8kEnv(BaseEnv):
                 # print(
                 #     f"message: {data_item['raw_completion']}, ground_truth: {data_item['gold_answer']}, reward: {correctness_verified}"
                 # )
-                
+
                 base_score = 1.0 if correctness_verified else -1.0
-                
+
                 # Manual tokenization and masking
                 full_text = data_item["raw_prompt"] + data_item["raw_completion"]
                 tokens = self.tokenizer.encode(full_text)
-                
+
                 prompt_tokens = self.tokenizer.encode(data_item["raw_prompt"])
                 if prompt_tokens and prompt_tokens[-1] == self.tokenizer.eos_token_id:
                     prompt_tokens = prompt_tokens[:-1]
-                
+
                 # Basic assertion to ensure prompt tokens are a prefix of full tokens
                 # This might need adjustment if the tokenizer adds special tokens differently
                 # to concatenated strings vs. individual strings.
@@ -301,7 +301,7 @@ class GSM8kEnv(BaseEnv):
 
                 # Construct messages for logging (similar to math_server_zero.py)
                 log_messages = [
-                    {"role": "user", "content": data_item["raw_prompt"]}, 
+                    {"role": "user", "content": data_item["raw_prompt"]},
                     {"role": "assistant", "content": data_item["raw_completion"]}
                 ]
                 scores["messages"].append(log_messages)
@@ -311,29 +311,29 @@ class GSM8kEnv(BaseEnv):
                     # Need to pop the message if we skip, or handle this before appending message
                     scores["messages"].pop() # Remove the last added message
                     continue
-                
+
                 # If not skipped:
                 final_correctness_scores.append(base_score)
 
                 # Apply format reward/penalty to get the final score for training
-                format_bonus = 0.1 
+                format_bonus = 0.1
                 format_is_good = check_multi_thought_format(data_item["raw_completion"])
                 final_score_for_training = base_score + (format_bonus if format_is_good else -format_bonus)
-                
+
                 scores["tokens"].append(tokens)
                 scores["masks"].append(masks)
                 scores["scores"].append(final_score_for_training)
 
                 if len(scores["tokens"]) >= self.config.group_size: # or final_correctness_scores
                     break
-            
+
             if not final_correctness_scores: # If all items were skipped
                 return None
 
             # Update percent_correct_buffer with actual correctness scores
             for c_score in final_correctness_scores:
                 self.percent_correct_buffer.append(max(c_score, 0.0))
-            
+
             # Length penalty check using final_correctness_scores
             # print(scores['scores']) # This would print training scores
             # print(final_correctness_scores) # This would print base scores
