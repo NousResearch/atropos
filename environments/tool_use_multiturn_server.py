@@ -1,12 +1,3 @@
-# Negative reward applied when the first mismatched tool-call causes early termination.
-WRONG_CALL_PENALTY = -0.2
-# Hard cap on how many new tokens the model may generate in a single turn.
-MAX_GEN_PER_TURN = 1024
-# Hard cap on how many tool-call turns we will actually roll out
-MAX_TOOL_CALL_TURNS = 2
-# Whether to validate that all GPT messages have <think> blocks [useful when non-tool call gpt messages are inserted]
-VALIDATE_THINK_BLOCKS = True
-
 """
 Multi-Turn Tool-Calling Environment
 ==================================
@@ -33,10 +24,10 @@ import ast
 from typing import Dict, List, Optional, Tuple, Union
 from collections import Counter
 
-
 import wandb
 from datasets import load_dataset
 from tqdm.asyncio import tqdm_asyncio
+from pydantic import Field
 
 from atroposlib.envs.base import (
     APIServerConfig,
@@ -47,6 +38,32 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+
+# Easy-to-change constants for experimentation - modify these for quick testing
+WRONG_CALL_PENALTY = -0.2
+MAX_GEN_PER_TURN = 1024
+MAX_TOOL_CALL_TURNS = 2
+VALIDATE_THINK_BLOCKS = True
+
+class MultiTurnEnvConfig(BaseEnvConfig):
+    """Configuration for Multi-Turn Tool Calling Environment."""
+    max_tool_call_turns: int = Field(
+        default=2,
+        description="Hard cap on how many tool-call turns we will actually roll out"
+    )
+    validate_think_blocks: bool = Field(
+        default=True,
+        description="Whether to validate that all GPT messages have <think> blocks [useful when non-tool call gpt messages are inserted]"
+    )
+    max_gen_per_turn: int = Field(
+        default=1024,
+        description="Hard cap on how many new tokens the model may generate in a single turn"
+    )
+    wrong_call_penalty: float = Field(
+        default=-0.2, 
+        description="Negative reward applied when the first mismatched tool-call causes early termination"
+    )
+
 
 system_prompt = (
     "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the "
@@ -111,7 +128,7 @@ class MultiTurnToolCallingEnv(BaseEnv):
 
     def __init__(
         self,
-        config: BaseEnvConfig,
+        config: MultiTurnEnvConfig,
         server_configs: List[APIServerConfig],
         slurm: bool = True,
         testing: bool = False,
@@ -135,8 +152,8 @@ class MultiTurnToolCallingEnv(BaseEnv):
         self.iter = 0
 
     @classmethod
-    def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
-        env_cfg = BaseEnvConfig(
+    def config_init(cls) -> Tuple[MultiTurnEnvConfig, List[APIServerConfig]]:
+        env_cfg = MultiTurnEnvConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
             group_size=16,
             use_wandb=True,
@@ -149,6 +166,11 @@ class MultiTurnToolCallingEnv(BaseEnv):
             wandb_name="multiturn_tool_use",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
+            # Override config defaults with experimental constants
+            wrong_call_penalty=WRONG_CALL_PENALTY,
+            max_gen_per_turn=MAX_GEN_PER_TURN,
+            max_tool_call_turns=MAX_TOOL_CALL_TURNS,
+            validate_think_blocks=VALIDATE_THINK_BLOCKS,
         )
         server_cfgs = [
             APIServerConfig(
@@ -197,7 +219,7 @@ class MultiTurnToolCallingEnv(BaseEnv):
         the answer is the list of function_call JSONs (canonical string).
         Each turn can have multiple tool calls.
 
-        We only keep those samples that contain = MAX_TOOL_CALL_TURNS separate messages with <tool_call>.
+        We only keep those samples that contain = config.max_tool_call_turns separate messages with <tool_call>.
         """
         target = self.train_items if is_train else self.test_items
         before_len = len(target)
@@ -220,7 +242,7 @@ class MultiTurnToolCallingEnv(BaseEnv):
                 continue
             
             # Optional: Validate <think> blocks in gpt messages if enabled
-            if VALIDATE_THINK_BLOCKS:
+            if self.config.validate_think_blocks:
                 gpt_messages = [msg for msg in conv if msg["from"] in ("gpt", "assistant")]
                 if not all("<think>" in msg["value"].lower() for msg in gpt_messages):
                     continue
@@ -296,13 +318,13 @@ class MultiTurnToolCallingEnv(BaseEnv):
             while len(inter_turns) < max(0, len(expected_calls_by_turn) - 1):
                 inter_turns.append([])
 
-            if tool_call_turns == MAX_TOOL_CALL_TURNS:
+            if tool_call_turns == self.config.max_tool_call_turns:
                 target.append((tuple(running_msgs), expected_calls_by_turn, inter_turns))
 
         print(f"[prep_items] {'train' if is_train else 'test'}: added {len(target)-before_len} items.")
 
     @staticmethod
-    def _score_episode(pred_calls: list, exp_calls: list, lam: float = 0.5) -> float:
+    def _score_episode(pred_calls: list, exp_calls: list, lam: float = 0.5, wrong_call_penalty: float = -0.2) -> float:
         """
         pred_calls : list of JSON objects (already parsed)
         exp_calls  : list of *canonical* JSON strings from dataset
@@ -319,7 +341,7 @@ class MultiTurnToolCallingEnv(BaseEnv):
         mismatch_penalty = 0.0
         if pred_calls and pred_calls[-1] == "__MISMATCH__":
             pred_calls = pred_calls[:-1]
-            mismatch_penalty = WRONG_CALL_PENALTY
+            mismatch_penalty = wrong_call_penalty
         correct = sum(
             1 for p, e in zip(pred_calls, exp_jsons) if _json_objects_match(p, e)
         )
@@ -354,7 +376,7 @@ class MultiTurnToolCallingEnv(BaseEnv):
         
         # Flatten expected calls for scoring
         expected_calls_flat = [call for turn_calls in expected_calls_by_turn for call in turn_calls]
-        score = self._score_episode(preds, expected_calls_flat)
+        score = self._score_episode(preds, expected_calls_flat, wrong_call_penalty=self.config.wrong_call_penalty)
         return score
 
     async def evaluate(self, *_, **__):
@@ -539,7 +561,7 @@ class MultiTurnToolCallingEnv(BaseEnv):
         preds: List[List] = [[] for _ in range(num_rollouts)]
         active = [True] * num_rollouts
 
-        max_turns = min(len(expected_calls_by_turn), MAX_TOOL_CALL_TURNS)
+        max_turns = min(len(expected_calls_by_turn), self.config.max_tool_call_turns)
 
 
         for turn_idx in range(max_turns):
@@ -553,7 +575,7 @@ class MultiTurnToolCallingEnv(BaseEnv):
 
             max_prompt_len = max(len(p) for p in prompts)
             max_gen = min(
-                MAX_GEN_PER_TURN,
+                self.config.max_gen_per_turn,
                 max(1, self.config.max_token_length - max_prompt_len),
             )
 
@@ -574,7 +596,7 @@ class MultiTurnToolCallingEnv(BaseEnv):
         # Flatten expected calls for scoring (since _score_episode expects flat list)
         expected_calls_flat = [call for turn_calls in expected_calls_by_turn for call in turn_calls]
         for r in range(num_rollouts):
-            reward = self._score_episode(preds[r], expected_calls_flat)
+            reward = self._score_episode(preds[r], expected_calls_flat, wrong_call_penalty=self.config.wrong_call_penalty)
             out = tokenize_for_trainer(
                 tokenizer=self.tokenizer,
                 chat=contexts[r],
