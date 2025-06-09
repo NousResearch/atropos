@@ -7,17 +7,40 @@ using BLEU scores as rewards. Based on the paper:
 https://arxiv.org/abs/2505.11080
 """
 
+import logging
 import os
 import random
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from dotenv import load_dotenv
 from pydantic import Field
 from typing_extensions import TypedDict
 
 import wandb
 from atroposlib.envs.base import BaseEnv, BaseEnvConfig, ScoredDataItem
+from atroposlib.envs.server_handling.openai_server import APIServerConfig
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+
+# Load environment variables from .env file if available
+load_dotenv()
+
+# Check for OpenAI API key
+if not os.environ.get("OPENAI_API_KEY"):
+    print(
+        "WARNING: OPENAI_API_KEY environment variable not found. Make sure to set it!"
+    )
+else:
+    print(
+        f"Found OPENAI_API_KEY environment variable ({os.environ.get('OPENAI_API_KEY')[:5]}...)"
+    )
 
 
 # Define our own Item class for the environment
@@ -124,6 +147,50 @@ class BLEUBERIEnv(BaseEnv):
     name = "bleuberi"
     env_config_cls = BLEUBERIEnvConfig
 
+    @classmethod
+    def config_init(cls) -> Tuple[BLEUBERIEnvConfig, List[APIServerConfig]]:
+        """Initialize configuration with OpenAI API settings."""
+        # Load API key from environment
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            print("WARNING: OPENAI_API_KEY environment variable not found!")
+            print(
+                "Please set the OPENAI_API_KEY environment variable or add it to a .env file"
+            )
+
+        # Create environment config with all necessary settings
+        env_config = BLEUBERIEnvConfig(
+            tokenizer_name="gpt2",
+            group_size=4,
+            use_wandb=True,
+            rollout_server_url="http://localhost:8000",
+            total_steps=1000,
+            batch_size=-1,
+            steps_per_eval=100,
+            max_token_length=2048,
+            wandb_name="bleuberi",
+            dataset_name="allenai/tulu-3-sft-mixture",
+            dataset_split="train",
+            reward_funcs=["bleu"],
+            ref_models=["gold"],
+            # Optional: Add a place to save the data
+            data_path_to_save_groups="bleuberi_openai_results.jsonl",
+        )
+
+        # Create OpenAI server config
+        server_configs = [
+            APIServerConfig(
+                model_name="gpt-4.1-nano",  # Or your preferred model
+                base_url="https://api.openai.com/v1",
+                api_key=api_key,
+                timeout=60,
+                num_max_requests_at_once=8,
+                num_requests_for_eval=16,
+            ),
+        ]
+
+        return env_config, server_configs
+
     def __init__(
         self,
         config: BLEUBERIEnvConfig,
@@ -131,6 +198,45 @@ class BLEUBERIEnv(BaseEnv):
         slurm=False,
         testing=False,
     ):
+        # Initialize logger
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Check for OpenAI API key if using OpenAI server
+        if any(
+            getattr(server, "server_type", "") == "openai" for server in server_configs
+        ):
+            api_key = os.environ.get("OPENAI_API_KEY")
+            if not api_key:
+                self.logger.warning("OPENAI_API_KEY environment variable not found!")
+                self.logger.warning(
+                    "Please set the OPENAI_API_KEY environment variable or add it to a .env file"
+                )
+            else:
+                self.logger.info(
+                    f"Found OPENAI_API_KEY in environment variables: {api_key[:5]}..."
+                )
+
+                # Update server configs with API key if needed
+                for server in server_configs:
+                    if getattr(server, "server_type", "") == "openai" and not getattr(
+                        server, "api_key", None
+                    ):
+                        server.api_key = api_key
+                        self.logger.info(
+                            f"Updated server config with API key: {api_key[:5]}..."
+                        )
+
+        # Print out server configurations for debugging
+        for i, server in enumerate(server_configs):
+            self.logger.info(f"Server config {i+1}:")
+            for key in dir(server):
+                if not key.startswith("_") and not callable(getattr(server, key)):
+                    value = getattr(server, key)
+                    if key == "api_key" and value:
+                        self.logger.info(f"  {key}: {value[:5]}...")
+                    else:
+                        self.logger.info(f"  {key}: {value}")
+
         super().__init__(config, server_configs, slurm, testing)
         self.config = config
         self.dataset = None
@@ -139,6 +245,21 @@ class BLEUBERIEnv(BaseEnv):
         self.train_examples = None
         self.test_examples = None
         self.train_index = 0
+
+        # Debug server setup
+        if hasattr(self, "server"):
+            self.logger.info("Server has been initialized:")
+            self.logger.info(f"Server type: {type(self.server).__name__}")
+            if hasattr(self.server, "servers"):
+                self.logger.info(
+                    f"Number of server instances: {len(self.server.servers)}"
+                )
+                for i, server in enumerate(self.server.servers):
+                    self.logger.info(
+                        f"Server instance {i+1} type: {type(server).__name__}"
+                    )
+        else:
+            self.logger.warning("No 'server' attribute found after initialization!")
 
         # Track correct responses
         self.percent_correct_buffer = []
@@ -152,10 +273,7 @@ class BLEUBERIEnv(BaseEnv):
 
     def _init_metrics(self):
         """Initialize BLEUBERI dataset for reward calculation."""
-        # Import logging here to avoid the unused import warning
-        import logging
-
-        self.logger = logging.getLogger(self.__class__.__name__)
+        # Logger is already initialized in __init__
 
         # We'll initialize a KeywordDataset instance that will be used for reward calculation
         # The path parameter is not important as we're only using the reward functions
@@ -387,7 +505,9 @@ class BLEUBERIEnv(BaseEnv):
         Uses BLEUBERI's reward functions directly.
         """
         # Get the appropriate reward functions from BLEUBERI's implementation
+        self.logger.info(f"Getting reward functions for: {self.config.reward_funcs}")
         reward_funcs = self.bleuberi_dataset.get_reward_funcs(self.config.reward_funcs)
+        self.logger.info(f"Found {len(reward_funcs)} reward functions")
 
         if not reward_funcs:
             self.logger.warning("No valid reward functions found")
@@ -395,8 +515,11 @@ class BLEUBERIEnv(BaseEnv):
 
         # Calculate scores using each reward function
         all_scores = []
-        for reward_func in reward_funcs:
+        for i, reward_func in enumerate(reward_funcs):
             # Apply the reward function
+            self.logger.info(
+                f"Applying reward function {i+1}/{len(reward_funcs)}: {getattr(reward_func, '__name__', 'unnamed')}"
+            )
             kwargs = {"references": references}
             if (
                 hasattr(reward_func, "__name__")
@@ -406,44 +529,67 @@ class BLEUBERIEnv(BaseEnv):
                 kwargs["prompts"] = [
                     [{"role": "user", "content": "prompt"}]
                 ]  # dummy prompt
+                self.logger.info("Added prompts for RM reward function")
 
+            self.logger.info(
+                f"Calling reward function with response length {len(response_content)} and {len(references)} references"
+            )
             scores = reward_func([response_content], **kwargs)
+            self.logger.debug(f"Reward function returned scores: {scores}")
+
             if scores and len(scores) > 0:
                 all_scores.append(scores[0])
+                self.logger.info(f"Added score: {scores[0]}")
 
         # Take the average of all scores
         final_score = sum(all_scores) / len(all_scores) if all_scores else 0.0
+        self.logger.info(
+            f"Calculated final score: {final_score} from {len(all_scores)} individual scores"
+        )
         return final_score
 
     async def collect_trajectory(
         self, item: BLEUBERIItem
     ) -> Tuple[Optional[ScoredDataItem], List[BLEUBERIItem]]:
         """Generate a response and score it against references."""
+        self.logger.info(f"Starting collect_trajectory for item {item['id']}")
         backlog = []
 
         try:
+            self.logger.info("Making API call to server.chat_completion...")
             # Generate response using the server
             response = await self.server.chat_completion(messages=item["messages"])
+            self.logger.debug(f"API response received: {response}")
 
             # Extract response content
             response_content = response.choices[0].message.content
+            self.logger.info(f"Extracted content: {response_content[:50]}...")
 
             # Get references from item metadata
             references = item["metadata"].get("references", [])
+            self.logger.info(f"References count: {len(references)}")
 
             # Calculate score using the specified reward functions
+            self.logger.info("Calculating reward score...")
             final_score = await self._calculate_reward(response_content, references)
+            self.logger.info(f"Final reward score: {final_score}")
 
             # Track whether the response was deemed correct (score > 0.5)
             self.percent_correct_buffer.append(1.0 if final_score > 0.5 else 0.0)
             if len(self.percent_correct_buffer) > 100:
                 self.percent_correct_buffer.pop(0)
+            self.logger.info(
+                f"Updated percent_correct_buffer, current size: {len(self.percent_correct_buffer)}"
+            )
 
             # Tokenize the response
+            self.logger.info("Tokenizing response...")
             tokens = self.tokenizer.encode(response_content)
             mask = [1] * len(tokens)
+            self.logger.info(f"Tokenized length: {len(tokens)}")
 
             # Create scored data item as ScoredDataItem
+            self.logger.info("Creating ScoredDataItem...")
             scored_data: ScoredDataItem = {
                 "tokens": tokens,
                 "masks": mask,
@@ -456,11 +602,16 @@ class BLEUBERIEnv(BaseEnv):
                 "overrides": None,
                 "images": None,
             }
+            self.logger.info("ScoredDataItem created successfully")
 
+            self.logger.info(f"Finished processing item {item['id']}, returning data")
             return scored_data, backlog
 
         except Exception as e:
             self.logger.error(f"Error in collect_trajectory: {e}")
+            import traceback
+
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return None, backlog
 
     async def evaluate(self):
