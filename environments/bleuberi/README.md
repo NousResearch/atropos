@@ -10,6 +10,22 @@ BLEUBERI uses BLEU scores (a simple n-gram matching metric) directly as rewards 
 2. Computes BLEU scores by comparing model outputs to these references
 3. Uses these scores as rewards to train models through GRPO
 
+## Installation
+
+Before using the BLEUBERI environment, you need to install its dependencies:
+
+```bash
+# Install the required dependencies
+pip install -r environments/bleuberi/requirements.txt
+```
+
+The key dependencies include:
+- `model2vec`: For embedding-based similarity metrics
+- `bert-score`: For semantic similarity evaluation
+- `sacrebleu`: For BLEU score calculation
+- `evaluate`: For evaluation metrics
+- `datasets`: For dataset handling
+
 ## Features
 
 - BLEU-based reward functions (with support for multiple reference models)
