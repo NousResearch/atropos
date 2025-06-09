@@ -811,9 +811,14 @@ class ReasoningGymEnv(BaseEnv):
             task_name = rg_item_for_group.get("metadata", {}).get(
                 "source_dataset", "unknown_task"
             )
-            log_message_main = (
-                f"Task: {task_name} | Group average score: {average_score:.4f}"
-            )
+
+            # Add complexity information to the log message
+            complexity_info = ""
+            if self.config.complexity_mode and task_name != "unknown_task":
+                complexity_level = self._get_task_complexity_level(task_name)
+                complexity_info = f" | Complexity: {complexity_level:.2f}"
+
+            log_message_main = f"Task: {task_name} | Group average score: {average_score:.4f}{complexity_info}"
             if all(s >= 0.5 for s in current_scores):
                 self.logger.info(f"{log_message_main} (All correct in this group!)")
             elif all(s == 0.0 for s in current_scores):
