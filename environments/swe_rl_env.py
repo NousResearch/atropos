@@ -200,9 +200,10 @@ class SWERLEnv(BaseEnv):
             Dict[str, Union[str, List[Dict[str, Union[List[Dict[str, str]], float]]]]]
         ] = []
         self.processed_item_count = 0
-        # Creates .../atropos/environments/swe_rl/data_dumps/ relative to the project structure
+        # Creates .../atropos/environments/datadumps/ relative to the project structure
         self.datadumps_dir = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "swe_rl", "data_dumps"
+            os.path.dirname(os.path.abspath(__file__)),
+            "datadumps",  # Changed to common datadumps directory
         )
         self.save_file_batch_num = 0
 
@@ -218,7 +219,7 @@ class SWERLEnv(BaseEnv):
             rollout_server_url="http://localhost:8000",
             total_steps=10000,
             batch_size=512,
-            steps_per_eval=100,
+            steps_per_eval=20,
             max_token_length=1024 * 15,
             inference_weight=1.0,
             wandb_name="swe_rl_env_deep_hermes_hf_dataset",  # Updated wandb_name
@@ -239,6 +240,7 @@ class SWERLEnv(BaseEnv):
             dataset_name_eval="princeton-nlp/SWE-bench_Lite_oracle",
             dataset_split_eval="test",
             dataset_config_name_eval=None,
+            dump_rollouts=False,
         )
         server_configs = [
             APIServerConfig(
