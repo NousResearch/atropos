@@ -7,11 +7,12 @@ using BLEU scores as rewards. Based on the paper:
 https://arxiv.org/abs/2505.11080
 """
 
+import asyncio
 import logging
 import os
 import random
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from dotenv import load_dotenv
@@ -19,7 +20,7 @@ from pydantic import Field
 from typing_extensions import TypedDict
 
 import wandb
-from atroposlib.envs.base import BaseEnv, BaseEnvConfig, ScoredDataItem
+from atroposlib.envs.base import BaseEnv, BaseEnvConfig, ScoredDataItem, ScoredDataGroup
 from atroposlib.envs.server_handling.openai_server import APIServerConfig
 
 # Configure logging
@@ -242,16 +243,10 @@ class BLEUBERIEnv(BaseEnv):
                             f"Updated server config with API key: {api_key[:5]}..."
                         )
 
-        # Print out server configurations for debugging
+        # Print minimal server configuration info
         for i, server in enumerate(server_configs):
-            self.logger.info(f"Server config {i+1}:")
-            for key in dir(server):
-                if not key.startswith("_") and not callable(getattr(server, key)):
-                    value = getattr(server, key)
-                    if key == "api_key" and value:
-                        self.logger.info(f"  {key}: {value[:5]}...")
-                    else:
-                        self.logger.info(f"  {key}: {value}")
+            if hasattr(server, "model_name"):
+                self.logger.info(f"Server {i+1} using model: {server.model_name}")
 
         super().__init__(config, server_configs, slurm, testing)
         self.config = config
@@ -262,18 +257,9 @@ class BLEUBERIEnv(BaseEnv):
         self.test_examples = None
         self.train_index = 0
 
-        # Debug server setup
+        # Minimal server initialization message
         if hasattr(self, "server"):
-            self.logger.info("Server has been initialized:")
-            self.logger.info(f"Server type: {type(self.server).__name__}")
-            if hasattr(self.server, "servers"):
-                self.logger.info(
-                    f"Number of server instances: {len(self.server.servers)}"
-                )
-                for i, server in enumerate(self.server.servers):
-                    self.logger.info(
-                        f"Server instance {i+1} type: {type(server).__name__}"
-                    )
+            self.logger.info(f"Server initialized with {len(getattr(self.server, 'servers', []))} instances")
         else:
             self.logger.warning("No 'server' attribute found after initialization!")
 
@@ -475,7 +461,7 @@ class BLEUBERIEnv(BaseEnv):
     def _extract_answer(self, completion: str) -> str:
         """Extract the answer from a completion with potential thinking tags."""
         # Use the extract_answer method from BLEUBERI's KeywordDataset
-        return KeywordDataset.extract_answer(self, completion)
+        return self.bleuberi_dataset.extract_answer(completion)
 
     async def _calculate_bleu_score(
         self, response_content: str, references: List[str]
@@ -667,9 +653,73 @@ class BLEUBERIEnv(BaseEnv):
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return None, backlog
 
+    async def collect_trajectories(self, item: BLEUBERIItem) -> Tuple[
+        Union[
+            Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]], List[Any | None]
+        ],
+        List[BLEUBERIItem],
+    ]:
+        """
+        Override the default collect_trajectories method to properly format data for jsonl2html.
+        This implementation collects multiple trajectories and formats them correctly for HTML generation.
+        """
+        # Call the parent class implementation to get the original ScoredDataGroup
+        tasks = []
+        for _ in range(self.config.group_size):
+            tasks.append(self.collect_trajectory(item))
+        results = await asyncio.gather(*tasks)
+        
+        if any(not isinstance(result[0], dict) for result in results):
+            logging.error("something wasn't a ScoredDataItem")
+            raise ValueError(
+                "collect_trajectory must return a ScoredDataItem or None to use the default "
+                "collect_trajectories method"
+            )
+            
+        backlog = []
+        to_postprocess = ScoredDataGroup()
+        to_postprocess["tokens"] = []
+        to_postprocess["masks"] = []
+        to_postprocess["scores"] = []
+        to_postprocess["advantages"] = []
+        to_postprocess["ref_logprobs"] = []
+        to_postprocess["messages"] = []
+        to_postprocess["group_overrides"] = {}
+        to_postprocess["overrides"] = []
+        to_postprocess["images"] = []
+        
+        self.logger.info("Processing results for BLEUBERI trajectories")
+        for result in results:
+            to_postprocess["tokens"].append(result[0]["tokens"])
+            to_postprocess["masks"].append(result[0]["masks"])
+            to_postprocess["scores"].append(result[0]["scores"])
+            
+            if result[0].get("advantages", None) is not None:
+                to_postprocess["advantages"].append(result[0]["advantages"])
+            if result[0].get("ref_logprobs", None) is not None:
+                to_postprocess["ref_logprobs"].append(result[0]["ref_logprobs"])
+            if result[0].get("messages", None) is not None:
+                to_postprocess["messages"].append(result[0]["messages"])
+            if result[0].get("group_overrides", None) is not None:
+                to_postprocess["group_overrides"].update(result[0]["group_overrides"])
+            if result[0].get("overrides", None) is not None:
+                to_postprocess["overrides"].append(result[0]["overrides"])
+            if result[0].get("images", None) is not None:
+                to_postprocess["images"].append(result[0]["images"])
+            
+            backlog.extend(result[1])
+            
+        # We're not manually writing to the JSONL file here
+        # The parent class will handle it in handle_send_to_api method
+        # This prevents duplication of data in the JSONL file
+        if self.jsonl_writer is not None:
+            self.logger.info(f"JSONL writing handled by parent class in handle_send_to_api")
+            
+        return to_postprocess, backlog
+        
     async def evaluate(self):
         """Evaluate the model on the test set."""
-        self.logger.info("Starting evaluation - BLEUBERI EVAL DEBUG")
+        self.logger.info("Starting evaluation")
 
         if not self.test_examples:
             self.logger.warning("No test examples available for evaluation")
@@ -739,17 +789,10 @@ class BLEUBERIEnv(BaseEnv):
 
             # Generate response
             try:
-                self.logger.info(
-                    f"Making EVAL API call #{id(item)} to server.chat_completion..."
-                )
-                self.logger.info(
-                    f"EVAL Message content: {item['messages'][-1]['content'][:50]}..."
-                )
                 response = await self.server.chat_completion(
                     messages=item["messages"],
                     split="eval",  # Use eval split to track eval separately
                 )
-                self.logger.info(f"EVAL API call #{id(item)} completed")
                 response_content = response.choices[0].message.content
 
                 # Get references
