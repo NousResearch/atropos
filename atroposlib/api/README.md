@@ -129,9 +129,12 @@ The API documentation (Swagger UI) will be available at `http://<your-server-ip>
             tokens: List[List[int]]
             masks: List[List[int]]
             scores: List[float]
+            advantages: Optional[List[List[float]]] = None
             ref_logprobs: Optional[List[List[float]]] = None
+            messages: Optional[List[List[Message]]] = None
             overrides: Optional[List[dict]] = None # Per-item logging overrides
             group_overrides: Optional[dict] = None # Group logging overrides
+            images: Optional[Any] = None # Image data (if applicable)
         ```
     * **Response:** `{"status": "received"}`
 * `POST /scored_data_list`
@@ -145,7 +148,7 @@ The API documentation (Swagger UI) will be available at `http://<your-server-ip>
         * Not enough data: `{"batch": null}`
 * `GET /latest_example`
     * **Description:** Debug endpoint to retrieve the most recently added `ScoredData` item.
-    * **Response:** The last `ScoredData` dictionary pushed, or empty lists if none yet.
+    * **Response:** The last `ScoredData` dictionary pushed, or empty lists for tokens, masks, scores, advantages, ref_logprobs, messages, and images if none yet.
 
 ### Debugging
 

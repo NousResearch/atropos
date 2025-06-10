@@ -39,6 +39,7 @@ Settings for the `ServerManager`.
 | :-------- | :------ | :------ | :------------------------------------------------ |
 | `slurm`   | `bool`  | `True`  | Whether the environment is running on SLURM.      |
 | `testing` | `bool`  | `False` | If `True`, uses mock OpenAI data for testing. |
+| `max_n_completions` | `int` | `8` | The maximum number of completions to request at once per server call. Will split any n larger than this into multiple calls. This is to help load balance servers. |
 
 ## Server Baseline Configuration (`atroposlib.envs.server_handling.server_manager.ServerBaseline`)
 

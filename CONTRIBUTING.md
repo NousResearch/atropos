@@ -13,7 +13,7 @@ We welcome any type of contribution, not just code. You can help with:
 We use GitHub to host the code, track issues and feature requests, and accept pull requests.
 
 ## We Use GitHub Flow
-We follow the [GitHub Flow](https://guides.github.com/introduction/flow/index.html) development workflow. All code changes happen through Pull Requests.
+We follow the [GitHub Flow](https://docs.github.com) development workflow. All code changes happen through Pull Requests.
 
 ## Getting Started
 

@@ -286,6 +286,90 @@ output adheres to diverse and specific constraints defined in the input instruct
 
 - **Fallback Mechanism:** Includes a fallback to a small, predefined dummy dataset if the primary dataset (`allenai/RLVR-IFeval`) cannot be loaded, ensuring operational continuity for testing or development.
 
+---
+
+### SWE-RL Environment (`swe_rl_env.py`)
+
+Software Engineering Reinforcement Learning environment for training models to fix bugs based on issue descriptions and code context.
+
+**Dependencies:**
+- `datasets` (Hugging Face)
+- `difflib`
+- `wandb`
+- `pydantic`
+
+**Dataset:**
+- Default: `princeton-nlp/SWE-bench_Lite_oracle`
+- Configurable via `SWERLEnvConfig` (e.g., `dataset_name`, `dataset_split_train`, `dataset_split_eval`).
+
+**Input Format (for the model via prompts):**
+- `problem_statement`: The issue text.
+- `content`: Relevant code segments from one or more files.
+
+**System Prompts:**
+1.  **Thinking System Prompt:**
+    ```
+    You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution prior to answering. You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem.
+    ```
+2.  **Task System Prompt:**
+    ```
+    A user will ask you to solve a task. You should generate the solution. Your response format must follow the template below:
+    ```
+    (Followed by instructions on the SEARCH/REPLACE format)
+
+**User Prompt Template:**
+```
+We are currently solving the following issue within our repository. Here is the issue text:
+--- BEGIN ISSUE ---
+{problem_statement}
+--- END ISSUE ---
+Below are some code segments, each from a relevant file. One or more of these files may contain bugs.
+--- BEGIN FILE ---
+``` {content} ```
+--- END FILE ---
+Please first localize the bug based on the issue statement, and then generate *SEARCH/REPLACE* edits to fix the issue.
+Every *SEARCH/REPLACE* edit must use this format:
+1. The file path
+2. The start of search block: <<<<<<< SEARCH
+3. A contiguous chunk of lines to search for in the existing source code
+4. The dividing line: =======
+5. The lines to replace into the source code
+6. The end of the replace block: >>>>>>> REPLACE
+Here is an example:
+```python
+### mathweb/flask/app.py
+import math
+from flask import Flask
+```
+Please note that the *SEARCH/REPLACE* edit REQUIRES PROPER INDENTATION. If you would like to add the line ’ print(x)’, you must fully write that out, with all those spaces before the code!
+Wrap each *SEARCH/REPLACE* edit in a code block as shown in the example above. If you have multiple *SEARCH/REPLACE* edits, use a separate code block for each one.
+```
+
+**Reward Function:**
+- Primary reward is based on the `SequenceMatcher` ratio between the model's reconstructed generated patch and the oracle patch.
+- A score of -1.0 is given initially.
+- If the model's response has a `finish_reason` of "length", or if `<think>` tags are present but malformed, the reward remains -1.0 and advantage is set to zero for "length".
+- If the SEARCH/REPLACE patch format is correctly parsed from the model's output (after potentially extracting content from `<think> </think>` tags):
+    - The `SequenceMatcher.ratio()` between the reconstructed predicted patch and the `oracle_patch_str` is used as the reward.
+- Buffers track:
+    - `percent_format_correct_buffer`: Percentage of responses with correctly formatted patches.
+    - `similarity_score_buffer`: List of similarity scores for correctly formatted patches.
+    - `think_tags_present_buffer`: Percentage of responses where `<think>` tags were present.
+    - `think_tags_well_formed_buffer`: Percentage of responses where `<think>` tags were present AND well-formed.
+
+**Evaluation Metrics:**
+- `eval/avg_similarity_score_correct_patch_format`: Average similarity score for responses that had a correctly formatted patch.
+- `eval/patch_format_accuracy`: Proportion of evaluation items where the patch was correctly formatted.
+- `eval/pass_at_1`: Proportion of evaluation items where the patch was correct and achieved a similarity score of 1.0.
+- `eval/avg_think_tags_present`: Average presence of think tags in evaluation responses.
+- `eval/avg_think_tags_well_formed`: Average well-formedness of think tags in evaluation responses.
+
+**Unique Configuration and Features:**
+- **Dataset Handling:** Loads training and test data from Hugging Face datasets, specifically tailored for SWE-bench like formats.
+- **Patch Parsing:** Implements robust parsing for a specific SEARCH/REPLACE patch format.
+- **Thinking Tag Processing:** Extracts content after `<think> </think>` tags for patch generation, and scores based on presence and well-formedness of these tags.
+- **Wandb Logging:** Logs detailed training and evaluation metrics, including rollout tables with problem statements, full interaction text, oracle patches, and scores.
+
 ## Common Features
 
 All environments share these common features:
@@ -331,3 +415,193 @@ The environments follow a common interface with methods for:
 - `score()`: Computing rewards
 - `evaluate()`: Running evaluation on test set
 - `wandb_log()`: Logging metrics to Weights & Biases
+
+## 31. Cybersecurity Sigma Rule Generation Environment
+
+**Location:** `environments/community/cybersecurity_sigma/`
+**Contributor:** [Subrahmanyam2305](https://github.com/Subrahmanyam2305)
+**PR:** [#74](https://github.com/NousResearch/atropos/pull/74)
+
+### Core Features
+- **Dual Reward Systems**: Jaccard similarity scoring and LLM-as-a-judge evaluation
+- **Structured Output Generation**: Enforces YAML format with LaTeX `\boxed{}` wrapper
+- **Cybersecurity Domain**: Trains models to generate Sigma detection rules from threat prompts
+- **Dataset Integration**: Uses `mmaisel1/nous-rl-hackathon-sigma` from Hugging Face
+
+### Technical Implementation
+- **Environment Names**: `sigmarule` (Jaccard) and `llm_judge_sigmarule` (LLM judge)
+- **Output Format**: `<think>...</think>` reasoning tags + YAML in `\boxed{}`
+- **Reward Mechanisms**: Token-based Jaccard similarity vs. semantic LLM evaluation
+- **Model Configuration**: DeepHermes-3-Llama-3-3B-Preview with 2048 token limit
+
+### Research Applications
+- **Cybersecurity Training**: Automated threat detection rule generation
+- **Structured Generation**: Constrained output format research with YAML validation
+- **Evaluation Methodology**: Comparison of token-based vs. semantic reward functions
+- **Domain Expertise**: Training models on specialized cybersecurity knowledge
+
+### Setup and Usage
+```bash
+# Environment variables
+export OPENAI_API_KEY="your-key"  # For LLM judge (optional)
+export NOUS_API_KEY="your-key"    # For model inference
+
+# Run environments
+python environments/community/cybersecurity_sigma/jaccard_reward_env.py
+python environments/community/cybersecurity_sigma/llm_judge_env.py
+```
+
+### Performance Characteristics
+- **Jaccard Rewards**: 0.1-0.3 range, fast but structurally sensitive
+- **LLM Judge Rewards**: Binary 0.0/1.0, semantic understanding but API latency
+- **W&B Integration**: Comprehensive experiment tracking and visualization
+- **Length Penalties**: Applied for overly verbose rule generation
+
+## 32. Wikipedia Article Research Environment
+
+**Location:** `environments/community/wikipedia_research/`
+**Contributor:** [aniemerg](https://github.com/aniemerg)
+**PR:** [#72](https://github.com/NousResearch/atropos/pull/72)
+
+### Core Features
+- **Multi-Step Research Process**: Web search and content extraction with Tavily API integration
+- **Factual Accuracy Evaluation**: OpenAI-powered line-by-line fact-checking against reference articles
+- **Wikipedia Blocking**: Prevents direct Wikipedia access to encourage diverse source usage
+- **Quality Assessment Framework**: Structure, comprehensiveness, and fact usage scoring
+
+### Technical Implementation
+- **Environment Name**: `WikipediaArticleCreator`
+- **Research Tools**: `web_search` and `visit_page` with error handling and filtering
+- **Evaluation System**: Dual scoring combining structural quality with factual accuracy
+- **Episode Management**: Tracks complete research sessions with conversation history
+
+### Research Applications
+- **Information Synthesis**: Training models to combine multiple sources into coherent articles
+- **Research Methodology**: Multi-step information gathering and fact verification
+- **Quality Assessment**: Comprehensive article evaluation across multiple dimensions
+- **Tool Usage Training**: Effective utilization of search and extraction capabilities
+
+### Setup and Usage
+```bash
+# Environment variables
+export TAVILY_API_KEY="your-tavily-key"    # Required for web research
+export OPENAI_API_KEY="your-openai-key"    # Required for LLM and evaluation
+
+# Direct usage
+cd environments/community/wikipedia_research
+python run_with_openai.py --topic "Climate change in Antarctica" --model "gpt-4o"
+
+# Training mode
+python -m atroposlib.cli.dpo \
+    --env-module "environments.community.wikipedia_research.wikipedia_article_creator"
+```
+
+### Performance Characteristics
+- **Research Efficiency**: 10-50 tool calls per article depending on complexity
+- **Quality Metrics**: Structure (0-1), comprehensiveness (0-1), fact usage (0-1)
+- **Accuracy Evaluation**: CORRECT/INCORRECT/UNKNOWN statement categorization
+- **Combined Scoring**: Overall article score in [-1, 1] range balancing quality and accuracy
+- **W&B Integration**: Complete research session tracking with tool usage analytics
+
+## 33. Goofy Math Environment
+
+**Location:** `environments/community/goofy_math/`
+**Contributor:** [chinguun101](https://github.com/chinguun101)
+**PR:** [#91](https://github.com/NousResearch/atropos/pull/91)
+
+### Core Features
+- **Dual Reward System**: Mathematical correctness verification + goofiness scoring
+- **RLAIF-Based Judging**: AI feedback system for ranking entertaining vs. standard solutions
+- **GSM8K Integration**: Uses standard math dataset with humor enhancement overlay
+- **Position Bias Elimination**: Forward/reverse judgment pairs to ensure fair evaluation
+
+### Technical Implementation
+- **Environment Name**: `goofy_math`
+- **Correctness Verification**: Uses `math_verify` and `latex2sympy2_extended` for objective scoring
+- **Goofiness Assessment**: LLM judge evaluates entertainment value of mathematically correct solutions
+- **Reward Formula**: `score = correctness_score + (goofiness_bonus * 0.5)`
+- **Output Format**: `<think>...</think>` reasoning + `\boxed{answer}` format
+
+### Research Applications
+- **Educational AI**: Training math tutors that are both accurate and engaging
+- **Personality Injection**: Adding entertainment value while maintaining technical correctness
+- **Multi-Objective Optimization**: Balancing objective accuracy with subjective entertainment
+- **Humor in AI**: Systematic approach to training models for appropriate comedic timing
+
+### Setup and Usage
+```bash
+# Install requirements
+pip install -r environments/community/goofy_math/requirements.txt
+
+# Environment variables
+export OPENAI_API_KEY="your-key"
+
+# Process mode for examples
+python environments/community/goofy_math/goofy_math_server.py process \
+  --env.data_path_to_save_groups goofy_math_demo.jsonl \
+  --env.total_steps 3
+
+# Training mode
+python -m atroposlib.cli.dpo \
+    --env-module "environments.community.goofy_math.goofy_math_server"
+```
+
+### Performance Characteristics
+- **Correctness Requirement**: Solutions must pass mathematical verification to receive any reward
+- **Goofiness Scoring**: 0-1 range based on humor, sound effects, and creative explanations
+- **Reward Distribution**: Base 1.0 for correctness + up to 0.5 bonus for entertainment value
+- **Anti-Reward Hacking**: Goofiness only evaluated after correctness verification
+- **W&B Integration**: Tracks goofiness histograms, judgment tables, and accuracy metrics
+
+### Demo and Results
+- **Video Demo**: [1-minute demonstration](https://www.loom.com/share/8704f63e2d2e4b4db23eab673d7990a2)
+- **WandB Run**: [Experiment tracking](https://wandb.ai/goofymath/goofy_math/runs/z92gd2j4)
+- **Unique Metrics**: `train/avg_goofiness_score`, `train/goofiness_histogram`, `train/judgement_table`
+
+## 34. Options Implied Volatility Prediction Environment
+
+**Location:** `environments/community/options_iv_prediction/`
+**Contributor:** [michaelwaves](https://github.com/michaelwaves)
+**PR:** [#78](https://github.com/NousResearch/atropos/pull/78)
+
+### Core Features
+- **Real Market Data Integration**: Live options data fetching via Yahoo Finance API (`yahooquery`)
+- **Financial Analysis Training**: Teaches models options pricing relationships and implied volatility prediction
+- **Thinking Process Framework**: Encourages step-by-step reasoning with `<think>` tags for complex financial analysis
+- **Dual Scoring System**: Magnitude accuracy and binary correctness evaluation
+
+### Technical Implementation
+- **Environment Name**: `OptionsIVPrediction`
+- **Data Source**: Real-time UNH (UnitedHealth Group) options chain data
+- **Input Parameters**: Option price, stock price, strike price, time to expiry, risk-free rate
+- **Output Format**: Structured prediction with exact format requirement: "The implied volatility will be: {percentage}%"
+
+### Research Applications
+- **Financial AI Development**: Training models to understand complex options pricing mechanisms
+- **Quantitative Analysis**: Automated volatility prediction for trading and risk management
+- **Educational Applications**: Teaching AI systems fundamental financial concepts
+- **Real-World Integration**: Direct application to live market data and trading scenarios
+
+### Setup and Usage
+```bash
+# Dependencies
+pip install pandas wandb datasets tqdm yahooquery atroposlib
+
+# Training mode
+python environments/community/options_iv_prediction/options_iv_prediction.py serve \
+    --env.total_steps 2000 --env.batch_size 1024
+
+# Process mode (data generation)
+python environments/community/options_iv_prediction/options_iv_prediction.py process \
+    --env.data_path_to_save_groups ./outputs/options_rollouts.jsonl \
+    --openai.api_key YOUR_KEY
+```
+
+### Performance Characteristics
+- **Memory Usage**: ~2-4 GB RAM for typical configurations with live data processing
+- **Data Processing**: Automatic filtering of invalid options (negative prices, expired contracts)
+- **Scoring Metrics**: Magnitude accuracy (0-1 scale) and binary correctness (within 10% threshold)
+- **Combined Reward**: Weighted combination (70% magnitude + 30% binary) for balanced learning
+- **Market Integration**: Real-time data fetching with robust error handling for market anomalies
+
+---

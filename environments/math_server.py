@@ -655,7 +655,7 @@ class MathEnv(BaseEnv):
         )
         # check if all the same
         # print(scores['scores'])
-        # Fill in the correct/incorrect lens after so we're only looking at actual training data
+        # Fill in the correct/incorrect lenses after so we're only looking at actual training data
         self.correct_answer_len.extend(
             [
                 len(scores["tokens"][i])

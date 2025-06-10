@@ -1,0 +1,40 @@
+name: Check No Torch in Main Dependencies
+
+on:
+  pull_request:
+    paths:
+      - 'pyproject.toml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'pyproject.toml'
+
+jobs:
+  check-torch:
+    runs-on: ubuntu-latest
+    name: Ensure torch is not in main dependencies
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check pyproject.toml for torch in main dependencies
+      run: |
+        echo "🔍 Checking if torch is in main dependencies..."
+
+        # Check if torch appears in the main dependencies section
+        if grep -A 50 '^\[project\]' pyproject.toml | grep -B 50 '^\[project.optional-dependencies\]\|^\[build-system\]\|^\[tool\]' | grep -E '^\s*"torch' | grep -v '^#'; then
+          echo "❌ ERROR: torch found in main dependencies!"
+          echo "🚨 TORCH SHOULD NOT BE IN MAIN DEPENDENCIES! 🚨"
+          echo ""
+          echo "Torch is a 2GB+ dependency that significantly slows down CI and installations."
+          echo "Please move torch to optional dependencies (e.g., under 'rewardfns' or similar)."
+          echo ""
+          echo "Example fix in pyproject.toml:"
+          echo "[project.optional-dependencies]"
+          echo "rewardfns = ["
+          echo '    "torch"'
+          echo "]"
+          exit 1
+        else
+          echo "✅ No torch found in main dependencies"
+        fi

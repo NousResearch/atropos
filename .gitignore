@@ -1,8 +1,10 @@
+# keys
+*/secrets.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-
+.DS_Store
 # C extensions
 *.so
 
@@ -187,3 +189,6 @@ example_trainer/trained_model_checkpoints/
 
 # uv
 uv.lock
+
+.DS_Store
+.aider*
