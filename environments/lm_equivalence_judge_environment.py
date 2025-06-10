@@ -1,22 +1,21 @@
-import asyncio
 import os
 import random
 import re
 from typing import Dict, List, Optional, Tuple, Union
-from pydantic import Field
 
 import openai
-import wandb
 from datasets import load_dataset
 from dotenv import load_dotenv
+from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
+import wandb
 from atroposlib.envs.base import (
+    APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
     EvalHandlingEnum,
     Item,
-    OpenaiConfig,
     ScoredDataGroup,
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
@@ -24,8 +23,12 @@ from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 # Static path to .env file - CHANGE THIS TO YOUR ABSOLUTE PATH
 ENV_FILE_PATH = "/home/teknium/trajectory-handler/.env"
 
+
 class LMJudgeConfig(BaseEnvConfig):
-    use_openai_judge: bool = Field(True, description="If external OpenAI API should be used for judging")
+    use_openai_judge: bool = Field(
+        True, description="If external OpenAI API should be used for judging"
+    )
+
 
 system_prompt = (
     "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the "
@@ -39,7 +42,7 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
     def __init__(
         self,
         config: BaseEnvConfig,
-        server_configs: List[OpenaiConfig],
+        server_configs: List[APIServerConfig],
         slurm=True,
         testing=False,
     ):
@@ -58,48 +61,58 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
 
         # Fix path construction
         env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
-        
+
         # Log whether OpenAI judging is enabled in config
-        use_openai_judge = getattr(config, 'use_openai_judge', True)
-        print(f"OpenAI judging configuration: {'ENABLED' if use_openai_judge else 'DISABLED'}")
-        
+        use_openai_judge = getattr(config, "use_openai_judge", True)
+        print(
+            f"OpenAI judging configuration: {'ENABLED' if use_openai_judge else 'DISABLED'}"
+        )
+
         # Only check for OpenAI keys if use_openai_judge is enabled
         if use_openai_judge:
             # First check if the environment variables are already set
-            self.openai_api_key = (
-                os.environ.get("OAI_API_KEY")
-                or os.environ.get("OPENAI_API_KEY")
+            self.openai_api_key = os.environ.get("OAI_API_KEY") or os.environ.get(
+                "OPENAI_API_KEY"
             )
-            
+
             # Load from the specified .env file if API key not already present
             if self.openai_api_key is None and os.path.exists(env_path):
                 load_dotenv(env_path)
                 print(f"Loaded environment variables from {env_path}")
-                self.openai_api_key = (
-                    os.environ.get("OAI_API_KEY")
-                    or os.environ.get("OPENAI_API_KEY")
+                self.openai_api_key = os.environ.get("OAI_API_KEY") or os.environ.get(
+                    "OPENAI_API_KEY"
                 )
-            
+
             # If still None, notify the user
             if self.openai_api_key is None:
                 if os.path.exists(env_path):
-                    print(f"Warning: OpenAI API key not found in environment or in {env_path} - will use local model")
+                    print(
+                        f"Warning: OpenAI API key not found in environment or in {env_path} - will use local model"
+                    )
                 else:
-                    print(f"Warning: OpenAI API key not found in environment and .env file not found at {env_path} - will use local model")
+                    print(
+                        f"Warning: OpenAI API key not found in environment and .env file not found at {env_path} - will use local model"  # noqa
+                    )
                 # Force use_openai_for_judging to False when key is missing
                 self.use_openai_for_judging = False
             else:
                 # Key exists, set to use OpenAI
                 self.use_openai_for_judging = True
-                print(f"Found OpenAI API key: {self.openai_api_key[:4]}...{self.openai_api_key[-4:] if self.openai_api_key and len(self.openai_api_key) > 8 else '****'}")
+                print(
+                    f"Found OpenAI API key: {self.openai_api_key[:4]}...{self.openai_api_key[-4:] if self.openai_api_key and len(self.openai_api_key) > 8 else '****'}"  # noqa
+                )  # noqa
         else:
             # Config explicitly disabled OpenAI judging
             self.openai_api_key = None
             self.use_openai_for_judging = False
-            print("OpenAI judging disabled by configuration - using local model for judgments")
+            print(
+                "OpenAI judging disabled by configuration - using local model for judgments"
+            )
 
         # Set the OpenAI model to use
-        self.openai_model = getattr(config, 'openai_model', os.environ.get("OAI_MODEL") or "gpt-4.1-nano")
+        self.openai_model = getattr(
+            config, "openai_model", os.environ.get("OAI_MODEL") or "gpt-4.1-nano"
+        )
         print(f"Using OpenAI model: {self.openai_model}")
 
         # Initialize the OpenAI client as an instance attribute
@@ -120,12 +133,14 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
                 print("Falling back to local model for equivalency judgments")
         else:
             print("Using local model for equivalency judgments (OpenAI not configured)")
-            
+
         # Final status of judge
-        print(f"FINAL JUDGE STATUS: {'Using OpenAI' if self.use_openai_for_judging else 'Using local model'}")
+        print(
+            f"FINAL JUDGE STATUS: {'Using OpenAI' if self.use_openai_for_judging else 'Using local model'}"
+        )
 
     @classmethod
-    def config_init(cls) -> Tuple[BaseEnvConfig, List[OpenaiConfig]]:
+    def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = LMJudgeConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
             group_size=16,
@@ -142,10 +157,10 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
             use_openai_judge=True,
-            openai_model="gpt-4.1-nano"
+            openai_model="gpt-4.1-nano",
         )
         server_configs = [
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9004/v1",
                 api_key="x",
@@ -314,13 +329,17 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
 
         # For debugging in eval, print judge status
         if is_eval:
-            print(f"JUDGE STATUS CHECK - OpenAI enabled: {self.use_openai_for_judging}, OpenAI client initialized: {self.openai_client is not None}")
+            print(
+                f"JUDGE STATUS CHECK - OpenAI enabled: {self.use_openai_for_judging}, OpenAI client initialized: {self.openai_client is not None}"  # noqa
+            )
 
         # Use OpenAI API if configured and enabled
         if self.use_openai_for_judging and self.openai_client is not None:
             try:
                 if is_eval:
-                    print(f"USING OPENAI API ({self.openai_model}) FOR EQUIVALENCE JUDGE...")
+                    print(
+                        f"USING OPENAI API ({self.openai_model}) FOR EQUIVALENCE JUDGE..."
+                    )
                 # Call the OpenAI API using the instance client
                 response = await self.openai_client.chat.completions.create(
                     model=self.openai_model,
@@ -338,38 +357,46 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
             except Exception as e:
                 if is_eval:
                     print(f"ERROR USING OPENAI API: {str(e)}")
-                    print(f"API KEY: {self.openai_api_key[:4]}...{self.openai_api_key[-4:] if self.openai_api_key and len(self.openai_api_key) > 8 else '****'}")
+                    print(
+                        f"API KEY: {self.openai_api_key[:4]}...{self.openai_api_key[-4:] if self.openai_api_key and len(self.openai_api_key) > 8 else '****'}"  # noqa
+                    )
                     print(f"MODEL: {self.openai_model}")
                 else:
                     print(f"Error using OpenAI API: {e}")
-                
+
                 print("Falling back to local model for judgment")
                 # Don't permanently disable OpenAI judging, just fall back for this request
 
         # Use local server if OpenAI is not configured, explicitly disabled, or on fallback
         if is_eval:
             if not self.use_openai_for_judging:
-                print("USING LOCAL MODEL BECAUSE OPENAI JUDGING IS DISABLED BY CONFIGURATION")
+                print(
+                    "USING LOCAL MODEL BECAUSE OPENAI JUDGING IS DISABLED BY CONFIGURATION"
+                )
             elif self.openai_client is None:
                 print("USING LOCAL MODEL BECAUSE OPENAI CLIENT IS NOT CONFIGURED")
             else:
                 print("USING LOCAL MODEL BECAUSE OPENAI API CALL FAILED")
-            
+
         if is_eval:
             print("LOCAL MODEL MESSAGES:")
             for msg in messages:
                 print(f"  {msg['role'].upper()}: {msg['content'][:100]}...")
-            
+
         completion = await self.server.chat_completion(
             messages=messages,
             n=1,
             max_tokens=16000,
             temperature=0.1,
         )
-        
+
         if is_eval:
-            if hasattr(completion, 'choices') and completion.choices:
-                result = completion.choices[0].message.content.strip() if hasattr(completion.choices[0], 'message') else "UNKNOWN"
+            if hasattr(completion, "choices") and completion.choices:
+                result = (
+                    completion.choices[0].message.content.strip()
+                    if hasattr(completion.choices[0], "message")
+                    else "UNKNOWN"
+                )
                 print(f"LOCAL MODEL RESULT: {result}")
             else:
                 print(f"LOCAL MODEL RETURNED UNEXPECTED FORMAT: {completion}")
@@ -377,10 +404,10 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
         # Extract the result and convert it to a boolean
         result_text = completion.choices[0].message.content.strip()
         is_true = result_text.lower() == "true"
-        
+
         if is_eval:
             print(f"FINAL JUDGE DECISION: {'TRUE' if is_true else 'FALSE'}")
-            
+
         return is_true
 
     async def score(self, rollout_group_data: List) -> Optional[ScoredDataGroup]:
@@ -415,20 +442,21 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
                 # Check if there's exactly one proper set of think tags
                 # Count complete <think></think> pairs
                 think_tag_pairs = re.findall(
-                    r"<think>.*?</think>",
-                    model_response,
-                    re.DOTALL | re.IGNORECASE
+                    r"<think>.*?</think>", model_response, re.DOTALL | re.IGNORECASE
                 )
-                
+
                 has_exactly_one_proper_think_tag = len(think_tag_pairs) == 1
-                
+
                 # Check for malformed tags (incomplete closing tag)
-                has_malformed_tags = re.search(
-                    r"<think>(?:(?!</think>).)*$",  # <think> without matching </think>
-                    model_response,
-                    re.DOTALL | re.IGNORECASE
-                ) is not None
-                
+                has_malformed_tags = (
+                    re.search(
+                        r"<think>(?:(?!</think>).)*$",  # <think> without matching </think>
+                        model_response,
+                        re.DOTALL | re.IGNORECASE,
+                    )
+                    is not None
+                )
+
                 # Extract thinking and answer sections
                 think_match = re.search(
                     r"<think>(.*?)</think>",
@@ -436,11 +464,20 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
                     re.DOTALL | re.IGNORECASE,
                 )
 
-                if think_match and has_exactly_one_proper_think_tag and not has_malformed_tags:
+                if (
+                    think_match
+                    and has_exactly_one_proper_think_tag
+                    and not has_malformed_tags
+                ):
                     # If there's a properly formatted thinking section, use the non-thinking part for evaluation
                     # Get everything after the properly closed </think> tag
-                    answer_section = re.sub(r".*?</think>", "", model_response, flags=re.DOTALL | re.IGNORECASE).strip()
-                    
+                    answer_section = re.sub(
+                        r".*?</think>",
+                        "",
+                        model_response,
+                        flags=re.DOTALL | re.IGNORECASE,
+                    ).strip()
+
                     # Use LLM judge to evaluate the answer
                     is_equivalent = await self.is_equivalent_answer(
                         question, answer_section, ground_truth
@@ -502,11 +539,11 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
             messages, add_generation_prompt=True, tokenize=False
         )
 
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("BEGINNING EVALUATION ON SAMPLE QUESTION:")
         print(f"QUESTION: {question_text}")
         print(f"GROUND TRUTH: {ground_truth}")
-        
+
         # Get model completion
         completion = await self.server.completion(
             prompt=prompt,
@@ -515,7 +552,7 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
             temperature=0.2,  # Lower for eval
             split="train",
         )
-        
+
         # Extract the model's response from the completion
         model_response = completion.choices[0].text
         print(f"MODEL RESPONSE: {model_response}")
@@ -523,20 +560,21 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
         # Check if there's exactly one proper set of think tags
         # Count complete <think></think> pairs
         think_tag_pairs = re.findall(
-            r"<think>.*?</think>",
-            model_response,
-            re.DOTALL | re.IGNORECASE
+            r"<think>.*?</think>", model_response, re.DOTALL | re.IGNORECASE
         )
-        
+
         has_exactly_one_proper_think_tag = len(think_tag_pairs) == 1
-        
+
         # Check for malformed tags (incomplete closing tag)
-        has_malformed_tags = re.search(
-            r"<think>(?:(?!</think>).)*$",  # <think> without matching </think>
-            model_response,
-            re.DOTALL | re.IGNORECASE
-        ) is not None
-        
+        has_malformed_tags = (
+            re.search(
+                r"<think>(?:(?!</think>).)*$",  # <think> without matching </think>
+                model_response,
+                re.DOTALL | re.IGNORECASE,
+            )
+            is not None
+        )
+
         # Extract thinking and answer sections
         think_match = re.search(
             r"<think>(.*?)</think>",
@@ -547,29 +585,39 @@ class LLMEquivalencyJudgeEnv(BaseEnv):
         if think_match and has_exactly_one_proper_think_tag and not has_malformed_tags:
             # If there's a properly formatted thinking section, use the non-thinking part for evaluation
             # Get everything after the properly closed </think> tag
-            answer_section = re.sub(r".*?</think>", "", model_response, flags=re.DOTALL | re.IGNORECASE).strip()
+            answer_section = re.sub(
+                r".*?</think>", "", model_response, flags=re.DOTALL | re.IGNORECASE
+            ).strip()
             print("THINK TAG DETECTED: Extracting answer after think tag")
         else:
             # If missing or improper think tags, we still want to evaluate the full response in eval mode
             # to see if the model got the right answer, but log a warning
             answer_section = model_response
             if has_malformed_tags:
-                print("WARNING: Malformed think tags detected. Using full response for evaluation.")
+                print(
+                    "WARNING: Malformed think tags detected. Using full response for evaluation."
+                )
             elif len(think_tag_pairs) > 1:
-                print(f"WARNING: Multiple think tags detected ({len(think_tag_pairs)}). Using full response for evaluation.")
+                print(
+                    f"WARNING: Multiple think tags detected ({len(think_tag_pairs)}). Using full response for evaluation."  # noqa
+                )
             else:
-                print("WARNING: No think tags detected. Using full response for evaluation.")
+                print(
+                    "WARNING: No think tags detected. Using full response for evaluation."
+                )
 
         print(f"EXTRACTED ANSWER SECTION: {answer_section}")
         print("EQUIVALENCE JUDGE STARTING...")
-        
+
         # Use LLM judge to evaluate the answer - passing is_eval=True to provide detailed logs
         is_equivalent = await self.is_equivalent_answer(
             question_text, answer_section, ground_truth, is_eval=True
         )
-        
-        print(f"EQUIVALENCE JUDGE RESULT: {'CORRECT' if is_equivalent else 'INCORRECT'}")
-        print("="*80 + "\n")
+
+        print(
+            f"EQUIVALENCE JUDGE RESULT: {'CORRECT' if is_equivalent else 'INCORRECT'}"
+        )
+        print("=" * 80 + "\n")
 
         # Return 1 for equivalent answer, 0 otherwise
         return 1 if is_equivalent else 0

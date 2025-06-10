@@ -88,6 +88,39 @@ You are a deep thinking AI, you may use extremely long chains of thought to deep
   - Linear penalty scaling from 1.0 down to 0.0 for responses between 50% and 100% of max length
   - Returns None if all scores are identical (no learning signal)
 
+---
+
+### LLM Equivalency Judge Environment (`lm_equivalence_judge_environment.py`)
+
+Textbook question answering environment that uses LLM-based judging to evaluate response equivalency.
+
+**Input Format:**
+- Questions from the TextbooksToRLQuestions-100k dataset
+- Each item contains:
+  - `question`: The textbook question
+  - `solution`: The ground truth answer/solution
+
+**System Prompt:**
+```
+You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution prior to answering. You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem.
+```
+
+**Reward Function:**
+- Score of 1.0 if the model's answer is judged equivalent to ground truth by LLM judge
+- Score of 0.0 if:
+  - Response was cut off due to length limits
+  - Missing or malformed thinking tags (not exactly one `<think></think>` pair)
+  - LLM judge determines answer is not equivalent to ground truth
+- Uses either OpenAI API or local model for equivalency judging
+- Judge evaluates semantic equivalence, numerical reasoning, and format compliance
+- Returns None if all scores are identical (no learning signal)
+
+**Judge Configuration:**
+- Configurable to use OpenAI API (gpt-4.1-nano by default) or local model
+- Automatic fallback to local model if OpenAI API is unavailable
+- Environment variables: `OAI_API_KEY`/`OPENAI_API_KEY`, `OAI_MODEL`
+- Detailed evaluation logging for debugging judge decisions
+
 ## Common Features
 
 All environments share these common features:
