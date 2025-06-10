@@ -10,15 +10,19 @@ import logging  # Add logging import
 import os  # Add os import
 import random  # Ensured import random is present
 import re
+import time  # Add time import for timestamping failed responses
 import uuid  # Import uuid module
 from difflib import SequenceMatcher
 from typing import Dict, List, Optional, Tuple, Union
 
-import wandb
+# Add imports for specific error handling
+import aiohttp
+import openai
 from datasets import load_dataset  # Ensured import load_dataset is present
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
+import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
@@ -153,6 +157,10 @@ class SWERLEnvConfig(BaseEnvConfig):
         default=False,
         description="Whether to dump rollouts to JSONL files.",
     )
+    dump_failed_rollouts: bool = Field(
+        default=False,
+        description="Whether to dump failed rollouts (all 0 scores) to JSONL files for debugging.",
+    )
 
 
 class SWERLEnv(BaseEnv):
@@ -206,8 +214,28 @@ class SWERLEnv(BaseEnv):
         )
         self.save_file_batch_num = 0
 
+        # For saving failed rollouts (all 0 scores) for debugging
+        self.failed_rollouts_to_save_buffer: List[
+            Dict[str, Union[str, List[Dict[str, Union[List[Dict[str, str]], float]]]]]
+        ] = []
+        self.failed_processed_item_count = 0
+        self.failed_save_file_batch_num = 0
+
         # Curriculum Learning State
         self.using_icl_prompt: bool = self.config.use_curriculum_learning
+
+        # Track failure reasons for better debugging
+        self.failure_reasons = {
+            "length_cutoff": 0,
+            "malformed_think_tags": 0,
+            "no_think_tags": 0,
+            "patch_parsing_failed": 0,
+            "no_patch_content": 0,
+            "successful": 0,
+        }
+
+        # Track finish reasons for debugging
+        self.finish_reason_counts = {}
 
     @classmethod
     def config_init(cls) -> Tuple[SWERLEnvConfig, List[APIServerConfig]]:
@@ -239,6 +267,7 @@ class SWERLEnv(BaseEnv):
             dataset_name_eval="princeton-nlp/SWE-bench_Lite_oracle",
             dataset_split_eval="test",
             dataset_config_name_eval=None,
+            dump_failed_rollouts=True,  # Enable failed rollouts dumping for debugging
         )
         server_configs = [
             APIServerConfig(
@@ -492,6 +521,8 @@ class SWERLEnv(BaseEnv):
         oracle_patch = item["oracle_patch"]
         item_id = item.get("item_id", "unknown_item")
 
+        self.logger.info(f"Processing training item {item_id}")
+
         # Combine system prompts
         combined_system_content = (
             THINKING_SYSTEM_PROMPT_CONTENT + "\n\n" + SWE_RL_TASK_SYSTEM_PROMPT_CONTENT
@@ -551,16 +582,51 @@ class SWERLEnv(BaseEnv):
         ):
             stop_tokens.insert(0, self.tokenizer.eos_token)
 
-        completions = await self.server.completion(
-            prompt=prompt_for_llm,
-            n=self.config.group_size,
-            max_tokens=self.config.max_token_length,
-            temperature=0.8,
-            stop=stop_tokens,
+        # Log before sending completion request
+        self.logger.info(
+            f"Sending completion request for item {item_id}: "
+            f"n={self.config.group_size}, max_tokens={self.config.max_token_length}, "
+            f"temperature=0.8, prompt_length={len(prompt_for_llm)} chars"
         )
+
+        try:
+            completions = await self.server.completion(
+                prompt=prompt_for_llm,
+                n=self.config.group_size,
+                max_tokens=self.config.max_token_length,
+                temperature=0.8,
+                stop=stop_tokens,
+            )
+        except aiohttp.ClientError as e:
+            self.logger.error(
+                f"HTTP client error during completion request for item {item_id}: {type(e).__name__}: {e}"
+            )
+            return None, []
+        except openai.OpenAIError as e:
+            self.logger.error(
+                f"OpenAI API error during completion request for item {item_id}: {type(e).__name__}: {e}"
+            )
+            return None, []
+        except openai.APITimeoutError as e:
+            self.logger.error(
+                f"API timeout error during completion request for item {item_id}: {type(e).__name__}: {e}"
+            )
+            return None, []
+        except Exception as e:
+            self.logger.error(
+                f"Unexpected error during completion request for item {item_id}: {type(e).__name__}: {e}"
+            )
+            return None, []
+
+        # Log completion response status
         if not completions or not completions.choices:
             self.logger.warning(f"No completions received for item_id: {item_id}")
             return None, []
+        else:
+            self.logger.info(
+                f"Received {len(completions.choices)} completions for item {item_id} "
+                f"(expected {self.config.group_size})"
+            )
 
         # Prepare to collect all conversations and their potential scores for this item
         # This list will hold tuples of (conversation_messages, oracle_patch, finish_reason)
@@ -760,6 +826,22 @@ class SWERLEnv(BaseEnv):
         think_tags_present_count_batch = 0
         think_tags_well_formed_count_batch = 0
 
+        # Track failure reasons for better debugging
+        failure_reasons = {
+            "length_cutoff": 0,
+            "malformed_think_tags": 0,
+            "no_think_tags": 0,
+            "patch_parsing_failed": 0,
+            "no_patch_content": 0,
+            "successful": 0,
+        }
+
+        # Track finish reasons for debugging
+        finish_reason_counts = {}
+
+        # Collect all failed responses for immediate saving
+        failed_responses_this_group = []
+
         for trajectory_messages, oracle_patch_str, finish_reason in rollout_group_data:
             assistant_response = ""
             if (
@@ -770,8 +852,14 @@ class SWERLEnv(BaseEnv):
             ):
                 assistant_response = trajectory_messages[-1].get("content", "")
 
+            # Track finish reasons
+            finish_reason_counts[finish_reason] = (
+                finish_reason_counts.get(finish_reason, 0) + 1
+            )
+
             override_dict = {}
-            reward = -1.0
+            reward = 0.0  # Changed from -1.0 to follow 0-1 scoring convention
+            is_failed = False  # Track if this rollout failed
 
             content_to_parse_for_patch, think_present, think_well_formed = (
                 self._extract_content_after_think_tags(assistant_response)
@@ -784,8 +872,23 @@ class SWERLEnv(BaseEnv):
 
             if finish_reason == "length":
                 override_dict["set_advantage_to_zero"] = True
+                failure_reasons["length_cutoff"] += 1
+                is_failed = True
+                self.logger.debug(
+                    f"Rollout failed due to length cutoff (finish_reason: {finish_reason})"
+                )
             elif think_present and not think_well_formed:
-                pass  # reward remains -1.0
+                failure_reasons["malformed_think_tags"] += 1
+                is_failed = True
+                self.logger.debug(
+                    f"Rollout failed due to malformed think tags (finish_reason: {finish_reason})"
+                )
+            elif not think_present:
+                failure_reasons["no_think_tags"] += 1
+                is_failed = True
+                self.logger.debug(
+                    f"Rollout failed due to missing think tags (finish_reason: {finish_reason})"
+                )
             else:
                 patch_input_text = (
                     content_to_parse_for_patch
@@ -793,13 +896,21 @@ class SWERLEnv(BaseEnv):
                     else assistant_response
                 )
                 if patch_input_text is None and think_well_formed:
-                    pass
+                    failure_reasons["no_patch_content"] += 1
+                    is_failed = True
+                    self.logger.debug(
+                        f"Rollout failed due to no patch content after think tags (finish_reason: {finish_reason})"
+                    )
                 elif patch_input_text is not None:
                     parsed_predicted_patch = self._parse_search_replace_patch(
                         patch_input_text
                     )
                     if parsed_predicted_patch is None:
-                        pass
+                        failure_reasons["patch_parsing_failed"] += 1
+                        is_failed = True
+                        self.logger.debug(
+                            f"Rollout failed due to patch parsing failure (finish_reason: {finish_reason})"
+                        )
                     else:
                         patch_format_correct_count_batch += 1
                         reconstructed_predicted_patch = (
@@ -809,8 +920,40 @@ class SWERLEnv(BaseEnv):
                             None, reconstructed_predicted_patch, oracle_patch_str
                         ).ratio()
                         similarity_scores_batch_temp.append(reward)
+                        failure_reasons["successful"] += 1
+                        # Even successful responses with score < 1.0 could be considered "failed" for analysis
+                        if reward < 1.0:
+                            is_failed = True
+                        self.logger.debug(
+                            f"Rollout succeeded with similarity score {reward:.3f} (finish_reason: {finish_reason})"
+                        )
                 else:
-                    pass
+                    failure_reasons["no_patch_content"] += 1
+                    is_failed = True
+                    self.logger.debug(
+                        f"Rollout failed due to no patch content (finish_reason: {finish_reason})"
+                    )
+
+            # Collect failed response data for immediate saving
+            if is_failed and self.config.dump_failed_rollouts:
+                failed_responses_this_group.append(
+                    {
+                        "conversation": trajectory_messages,
+                        "score": reward,
+                        "oracle_patch": oracle_patch_str,
+                        "finish_reason": finish_reason,
+                        "failure_type": self._get_failure_type(
+                            finish_reason,
+                            think_present,
+                            think_well_formed,
+                            patch_input_text,
+                            reward,
+                        ),
+                        "assistant_response": assistant_response,
+                        "think_tags_present": think_present,
+                        "think_tags_well_formed": think_well_formed,
+                    }
+                )
 
             try:
                 tokenized_output = tokenize_for_trainer(
@@ -838,6 +981,10 @@ class SWERLEnv(BaseEnv):
             if len(scored_data["scores"]) >= self.config.group_size:
                 break
 
+        # Save failed responses immediately if any exist
+        if failed_responses_this_group and self.config.dump_failed_rollouts:
+            await self._save_failed_responses_immediately(failed_responses_this_group)
+
         if not scored_data["scores"]:
             return None
         if rollout_group_data:
@@ -860,22 +1007,113 @@ class SWERLEnv(BaseEnv):
             log_message_main = f"Group average score: {average_score:.4f}"
             if all(s == 1.0 for s in current_scores):
                 self.logger.info(f"{log_message_main} (All successes in this group!)")
-            elif all(
-                s == 0.0 or s == -1.0 for s in current_scores
-            ):  # Assuming -1.0 is also a failure state
-                self.logger.info(
-                    f"{log_message_main} (All failures in this group!)"
-                )  # noqa: E501
+            elif all(s == 0.0 for s in current_scores):
+                self.logger.info(f"{log_message_main} (All failures in this group!)")
             else:
                 self.logger.info(log_message_main)
+
+            # Log detailed failure reasons for debugging
+            total_rollouts = len(rollout_group_data)
+            if total_rollouts > 0:
+                self.logger.info(
+                    f"Failure breakdown for {total_rollouts} rollouts: "
+                    f"successful={failure_reasons['successful']}, "
+                    f"no_think_tags={failure_reasons['no_think_tags']}, "
+                    f"malformed_think_tags={failure_reasons['malformed_think_tags']}, "
+                    f"patch_parsing_failed={failure_reasons['patch_parsing_failed']}, "
+                    f"no_patch_content={failure_reasons['no_patch_content']}, "
+                    f"length_cutoff={failure_reasons['length_cutoff']}"
+                )
+
+                # Log finish reasons
+                finish_reasons_str = ", ".join(
+                    [
+                        f"{reason}={count}"
+                        for reason, count in finish_reason_counts.items()
+                    ]
+                )
+                self.logger.info(f"Finish reasons: {finish_reasons_str}")
 
         if (
             self.config.ensure_scores_are_not_same
             and len(scored_data["scores"]) > 1
             and all(s == scored_data["scores"][0] for s in scored_data["scores"])
         ):
+            # Before returning None, check if this is a completely failed group (all 0.0 scores) for debugging
+            if self.config.dump_failed_rollouts and all(
+                score == 0.0 for score in scored_data["scores"]
+            ):
+                self.logger.debug(
+                    "Saving failed group (all 0 scores) for debugging analysis"
+                )
+                await self._save_failed_group_for_debugging(
+                    rollout_group_data, scored_data
+                )
             return None
         return scored_data
+
+    def _get_failure_type(
+        self, finish_reason, think_present, think_well_formed, patch_input_text, reward
+    ):
+        """Helper method to categorize the type of failure for better analysis."""
+        if finish_reason == "length":
+            return "length_cutoff"
+        elif think_present and not think_well_formed:
+            return "malformed_think_tags"
+        elif not think_present:
+            return "no_think_tags"
+        elif patch_input_text is None:
+            return "no_patch_content"
+        elif reward == 0.0:
+            return "patch_parsing_failed"
+        elif reward < 1.0:
+            return "partial_success"
+        else:
+            return "unknown"
+
+    async def _save_failed_responses_immediately(self, failed_responses):
+        """Save failed responses immediately to a JSONL file."""
+        if not failed_responses:
+            return
+
+        try:
+            if not os.path.exists(self.datadumps_dir):
+                os.makedirs(self.datadumps_dir)
+                self.logger.debug(f"Created directory: {self.datadumps_dir}")
+        except OSError as e:
+            self.logger.error(f"Error creating directory {self.datadumps_dir}: {e}")
+            return
+
+        # Create a unique filename for each step/group
+        timestamp = int(time.time() * 1000)  # millisecond precision
+        file_path = os.path.join(
+            self.datadumps_dir,
+            f"swe_rl_failed_responses_step_{self.failed_processed_item_count}_{timestamp}.jsonl",
+        )
+
+        try:
+            with open(file_path, "w") as f:
+                for failed_response in failed_responses:
+                    # Create a structured record for each failed response
+                    record = {
+                        "step": self.failed_processed_item_count,
+                        "timestamp": timestamp,
+                        "failed_response": failed_response,
+                    }
+                    json.dump(record, f)
+                    f.write("\n")
+
+            self.logger.info(
+                f"Immediately saved {len(failed_responses)} failed responses to {file_path}"
+            )
+            self.failed_processed_item_count += 1
+
+        except IOError as e:
+            self.logger.error(f"Error writing failed responses to {file_path}: {e}")
+        except Exception as e:
+            self.logger.error(
+                f"An unexpected error occurred while saving failed responses to {file_path}: {e}"
+            )
 
     async def _save_rollouts_to_jsonl(self):
         """Saves the buffered rollouts to a JSONL file in the datadumps directory."""
@@ -913,6 +1151,86 @@ class SWERLEnv(BaseEnv):
                 f"An unexpected error occurred while saving rollouts to {file_path}: {e}"
             )
 
+    async def _save_failed_group_for_debugging(self, rollout_group_data, scored_data):
+        """Helper method to save failed groups (all 0 scores) for debugging analysis."""
+        failed_rollouts_with_scores_to_save = []
+
+        # Build the failed rollouts data structure
+        for i, (trajectory_messages, oracle_patch, finish_reason) in enumerate(
+            rollout_group_data
+        ):
+            if i < len(scored_data["scores"]):
+                score_for_rollout = scored_data["scores"][i]
+                failed_rollouts_with_scores_to_save.append(
+                    {
+                        "conversation": trajectory_messages,  # Full conversation history
+                        "score": score_for_rollout,
+                        "oracle_patch": oracle_patch,
+                        "finish_reason": finish_reason,
+                    }
+                )
+
+        if failed_rollouts_with_scores_to_save:
+            # Use a generic item ID for failed rollouts
+            item_id = f"failed_item_{self.failed_processed_item_count}"
+
+            failed_item_data_to_save = {
+                "item_id": item_id,
+                "rollouts": failed_rollouts_with_scores_to_save,
+            }
+            self.failed_rollouts_to_save_buffer.append(failed_item_data_to_save)
+            self.failed_processed_item_count += 1
+
+            # Check if it's time to save a batch of failed rollouts (every 50 instead of 100)
+            if (
+                self.config.dump_failed_rollouts
+                and self.failed_processed_item_count % 50 == 0
+                and self.failed_processed_item_count > 0
+            ):
+                failed_log_msg = (
+                    f"Reached {self.failed_processed_item_count} failed items. "
+                    f"Triggering save for {len(self.failed_rollouts_to_save_buffer)} failed items "
+                    f"(each with multiple failed rollouts)."
+                )
+                self.logger.info(failed_log_msg)
+                await self._save_failed_rollouts_to_jsonl()
+
+    async def _save_failed_rollouts_to_jsonl(self):
+        """Saves the buffered failed rollouts (all 0 scores) to a JSONL file for debugging."""
+        if not self.failed_rollouts_to_save_buffer:
+            self.logger.info("No failed rollouts in buffer to save.")
+            return
+
+        try:
+            if not os.path.exists(self.datadumps_dir):
+                os.makedirs(self.datadumps_dir)
+                self.logger.info(f"Created directory: {self.datadumps_dir}")
+        except OSError as e:
+            self.logger.error(f"Error creating directory {self.datadumps_dir}: {e}")
+            return
+
+        file_path = os.path.join(
+            self.datadumps_dir,
+            f"swe_rl_environment_FAILED_rollouts_{self.run_uuid}_{self.failed_save_file_batch_num:04d}.jsonl",
+        )
+
+        try:
+            with open(file_path, "w") as f:
+                for rollout_dict in self.failed_rollouts_to_save_buffer:
+                    json.dump(rollout_dict, f)
+                    f.write("\n")
+            self.logger.info(
+                f"Successfully saved {len(self.failed_rollouts_to_save_buffer)} FAILED rollouts to {file_path}"
+            )
+            self.failed_rollouts_to_save_buffer.clear()
+            self.failed_save_file_batch_num += 1
+        except IOError as e:
+            self.logger.error(f"Error writing failed rollouts to {file_path}: {e}")
+        except Exception as e:
+            self.logger.error(
+                f"An unexpected error occurred while saving failed rollouts to {file_path}: {e}"
+            )
+
     async def _rollout_and_score_eval_item(self, test_item: Dict[str, str]) -> Dict:
         # Renamed internal item to avoid conflict with 'item' parameter in collect_trajectories
         current_test_item = test_item
@@ -923,7 +1241,9 @@ class SWERLEnv(BaseEnv):
         )
         item_id = current_test_item.get("item_id", "unknown_eval_item")
 
-        final_similarity_score, final_patch_format_correct = -1.0, 0
+        self.logger.info(f"Processing evaluation item {item_id}")
+
+        final_similarity_score, final_patch_format_correct = 0.0, 0
         llm_raw_response, think_present_eval, think_well_formed_eval = (
             "INIT_ERROR",
             0,
@@ -956,7 +1276,7 @@ class SWERLEnv(BaseEnv):
             )
             return {
                 "item_id": item_id,
-                "similarity_score": -1.0,
+                "similarity_score": 0.0,
                 "format_correct": 0,
                 "predicted_patch": "CHAT_TEMPLATE_ERROR",
                 "oracle_patch": oracle_patch_str,
@@ -973,43 +1293,189 @@ class SWERLEnv(BaseEnv):
         ):
             stop_tokens.insert(0, self.tokenizer.eos_token)
 
-        completions = await self.server.completion(
-            prompt=prompt_for_llm,
-            n=self.config.eval_n_samples,
-            max_tokens=self.config.max_token_length,
-            temperature=0.2,
-            stop=stop_tokens,
-            split="eval",
+        # Log before sending completion request
+        self.logger.info(
+            f"Sending completion request for item {item_id}: "
+            f"n={self.config.eval_n_samples}, max_tokens={self.config.max_token_length}, "
+            f"temperature=0.2, prompt_length={len(prompt_for_llm)} chars"
         )
 
+        try:
+            completions = await self.server.completion(
+                prompt=prompt_for_llm,
+                n=self.config.eval_n_samples,
+                max_tokens=self.config.max_token_length,
+                temperature=0.2,
+                stop=stop_tokens,
+                split="eval",
+            )
+        except aiohttp.ClientError as e:
+            self.logger.error(
+                f"HTTP client error during eval completion request for item {item_id}: {type(e).__name__}: {e}"
+            )
+            return {
+                "item_id": item_id,
+                "similarity_score": 0.0,
+                "format_correct": 0,
+                "predicted_patch": f"HTTP_CLIENT_ERROR: {type(e).__name__}: {e}",
+                "oracle_patch": oracle_patch_str,
+                "prompt": prompt_for_llm,
+                "think_tags_present": 0,
+                "think_tags_well_formed": 0,
+            }
+        except openai.OpenAIError as e:
+            self.logger.error(
+                f"OpenAI API error during eval completion request for item {item_id}: {type(e).__name__}: {e}"
+            )
+            return {
+                "item_id": item_id,
+                "similarity_score": 0.0,
+                "format_correct": 0,
+                "predicted_patch": f"OPENAI_API_ERROR: {type(e).__name__}: {e}",
+                "oracle_patch": oracle_patch_str,
+                "prompt": prompt_for_llm,
+                "think_tags_present": 0,
+                "think_tags_well_formed": 0,
+            }
+        except openai.APITimeoutError as e:
+            self.logger.error(
+                f"API timeout error during eval completion request for item {item_id}: {type(e).__name__}: {e}"
+            )
+            return {
+                "item_id": item_id,
+                "similarity_score": 0.0,
+                "format_correct": 0,
+                "predicted_patch": f"API_TIMEOUT_ERROR: {type(e).__name__}: {e}",
+                "oracle_patch": oracle_patch_str,
+                "prompt": prompt_for_llm,
+                "think_tags_present": 0,
+                "think_tags_well_formed": 0,
+            }
+        except Exception as e:
+            self.logger.error(
+                f"Unexpected error during eval completion request for item {item_id}: {type(e).__name__}: {e}"
+            )
+            return {
+                "item_id": item_id,
+                "similarity_score": 0.0,
+                "format_correct": 0,
+                "predicted_patch": f"UNEXPECTED_ERROR: {type(e).__name__}: {e}",
+                "oracle_patch": oracle_patch_str,
+                "prompt": prompt_for_llm,
+                "think_tags_present": 0,
+                "think_tags_well_formed": 0,
+            }
+
+        # Log completion response status
         if completions and completions.choices:
+            self.logger.info(
+                f"Received {len(completions.choices)} eval completions for item {item_id} "
+                f"(expected {self.config.eval_n_samples})"
+            )
             choice = completions.choices[0]
             llm_raw_response = choice.text.strip()
+
+            # Log finish reason for debugging
+            self.logger.debug(
+                f"Eval completion finish_reason for item {item_id}: {choice.finish_reason}"
+            )
+
             content_after_think, think_present, think_well_formed = (
                 self._extract_content_after_think_tags(llm_raw_response)
             )
             think_present_eval, think_well_formed_eval = int(think_present), int(
                 think_well_formed
             )
+
+            # Determine if this evaluation response failed
+            is_eval_failed = False
+            failure_type = "unknown"
+
             if choice.finish_reason == "length" or (
                 think_present and not think_well_formed
             ):
-                pass
+                is_eval_failed = True
+                failure_type = (
+                    "length_cutoff"
+                    if choice.finish_reason == "length"
+                    else "malformed_think_tags"
+                )
+                self.logger.debug(
+                    f"Eval item {item_id} failed: finish_reason={choice.finish_reason}, think_present={think_present}, think_well_formed={think_well_formed}"  # noqa
+                )
             else:
                 patch_input_text = (
                     content_after_think if think_well_formed else llm_raw_response
                 )
                 if patch_input_text is not None:
-                    parsed_patch = self._parse_search_replace_patch(patch_input_text)
-                    if parsed_patch:
+                    parsed_predicted_patch = self._parse_search_replace_patch(
+                        patch_input_text
+                    )
+                    if parsed_predicted_patch:
                         final_patch_format_correct = 1
                         final_similarity_score = SequenceMatcher(
                             None,
-                            self._reconstruct_patch_from_parsed(parsed_patch),
+                            self._reconstruct_patch_from_parsed(parsed_predicted_patch),
                             oracle_patch_str,
                         ).ratio()
+                        if final_similarity_score < 1.0:
+                            is_eval_failed = True
+                            failure_type = "partial_success"
+                        self.logger.debug(
+                            f"Eval item {item_id} succeeded: finish_reason={choice.finish_reason}, similarity_score={final_similarity_score:.3f}"  # noqa
+                        )
+                    else:
+                        is_eval_failed = True
+                        failure_type = "patch_parsing_failed"
+                        self.logger.debug(
+                            f"Eval item {item_id} failed patch parsing: finish_reason={choice.finish_reason}"
+                        )
+                else:
+                    is_eval_failed = True
+                    failure_type = "no_patch_content"
+                    self.logger.debug(
+                        f"Eval item {item_id} failed - no patch content: finish_reason={choice.finish_reason}"
+                    )
+
+            # Save failed evaluation response immediately
+            if is_eval_failed and self.config.dump_failed_rollouts:
+                eval_conversation = messages_for_prompt + [
+                    {"role": "assistant", "content": llm_raw_response}
+                ]
+                failed_eval_response = {
+                    "conversation": eval_conversation,
+                    "score": final_similarity_score,
+                    "oracle_patch": oracle_patch_str,
+                    "finish_reason": choice.finish_reason,
+                    "failure_type": failure_type,
+                    "assistant_response": llm_raw_response,
+                    "think_tags_present": think_present,
+                    "think_tags_well_formed": think_well_formed,
+                    "item_id": item_id,
+                    "is_evaluation": True,
+                }
+                await self._save_failed_eval_response_immediately(failed_eval_response)
+
         else:
+            self.logger.warning(f"No eval completions received for item_id: {item_id}")
             llm_raw_response = "NO_COMPLETION_RECEIVED"
+
+            # Save this as a failed response too
+            if self.config.dump_failed_rollouts:
+                failed_eval_response = {
+                    "conversation": messages_for_prompt
+                    + [{"role": "assistant", "content": llm_raw_response}],
+                    "score": 0.0,
+                    "oracle_patch": oracle_patch_str,
+                    "finish_reason": "no_completion",
+                    "failure_type": "no_completion_received",
+                    "assistant_response": llm_raw_response,
+                    "think_tags_present": False,
+                    "think_tags_well_formed": False,
+                    "item_id": item_id,
+                    "is_evaluation": True,
+                }
+                await self._save_failed_eval_response_immediately(failed_eval_response)
 
         return {
             "item_id": item_id,
@@ -1021,6 +1487,44 @@ class SWERLEnv(BaseEnv):
             "think_tags_present": think_present_eval,
             "think_tags_well_formed": think_well_formed_eval,
         }
+
+    async def _save_failed_eval_response_immediately(self, failed_eval_response):
+        """Save failed evaluation response immediately to a JSONL file."""
+        try:
+            if not os.path.exists(self.datadumps_dir):
+                os.makedirs(self.datadumps_dir)
+                self.logger.debug(f"Created directory: {self.datadumps_dir}")
+        except OSError as e:
+            self.logger.error(f"Error creating directory {self.datadumps_dir}: {e}")
+            return
+
+        # Create a unique filename for each evaluation failure
+        timestamp = int(time.time() * 1000)  # millisecond precision
+        file_path = os.path.join(
+            self.datadumps_dir,
+            f"swe_rl_failed_eval_response_{failed_eval_response['item_id']}_{timestamp}.jsonl",
+        )
+
+        try:
+            with open(file_path, "w") as f:
+                # Create a structured record for the failed evaluation response
+                record = {
+                    "timestamp": timestamp,
+                    "failed_eval_response": failed_eval_response,
+                }
+                json.dump(record, f)
+                f.write("\n")
+
+            self.logger.info(
+                f"Immediately saved failed evaluation response for {failed_eval_response['item_id']} to {file_path}"
+            )
+
+        except IOError as e:
+            self.logger.error(f"Error writing failed eval response to {file_path}: {e}")
+        except Exception as e:
+            self.logger.error(
+                f"An unexpected error occurred while saving failed eval response to {file_path}: {e}"
+            )
 
     async def evaluate(self, *args, **kwargs):
         self.logger.info("Starting evaluation...")
@@ -1045,7 +1549,7 @@ class SWERLEnv(BaseEnv):
         correct_format_sim_scores = [
             r["similarity_score"]
             for r in results
-            if r["format_correct"] == 1 and r["similarity_score"] != -1.0
+            if r["format_correct"] == 1 and r["similarity_score"] != 0.0
         ]
         num_pass_at_1 = sum(
             1
@@ -1223,6 +1727,15 @@ class SWERLEnv(BaseEnv):
             await self._save_rollouts_to_jsonl()
         else:
             self.logger.info("No rollouts in buffer to save upon closing.")
+
+        # Also save any remaining failed rollouts
+        if self.config.dump_failed_rollouts and self.failed_rollouts_to_save_buffer:
+            self.logger.info(
+                f"Found {len(self.failed_rollouts_to_save_buffer)} failed rollouts in buffer. Saving now."
+            )
+            await self._save_failed_rollouts_to_jsonl()
+        else:
+            self.logger.info("No failed rollouts in buffer to save upon closing.")
 
         # Call the superclass's close method if it exists and is async, or handle appropriately
         # This is a placeholder; actual implementation depends on BaseEnv's close method.
