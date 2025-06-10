@@ -709,11 +709,31 @@ class BLEUBERIEnv(BaseEnv):
             
             backlog.extend(result[1])
             
-        # We're not manually writing to the JSONL file here
-        # The parent class will handle it in handle_send_to_api method
-        # This prevents duplication of data in the JSONL file
-        if self.jsonl_writer is not None:
-            self.logger.info(f"JSONL writing handled by parent class in handle_send_to_api")
+        # Process the data for HTML compatibility before sending to the API
+        # Convert nested message structure to flat strings for HTML rendering
+        if "messages" in to_postprocess and to_postprocess["messages"]:
+            # Extract the assistant message content from each result
+            html_compatible_messages = []
+            
+            for result in results:
+                if "messages" in result[0] and result[0]["messages"]:
+                    # Find the LAST assistant message (most recent response)
+                    assistant_messages = [
+                        msg for msg in result[0]["messages"] 
+                        if msg.get("role") == "assistant"
+                    ]
+                    
+                    if assistant_messages:
+                        # Get just the content of the last assistant message
+                        last_assistant_msg = assistant_messages[-1]
+                        html_compatible_messages.append(last_assistant_msg.get("content", ""))
+            
+            # Replace the nested messages with flat strings
+            if html_compatible_messages:
+                to_postprocess["messages"] = html_compatible_messages
+                self.logger.info(f"Prepared HTML-compatible format with {len(html_compatible_messages)} messages")
+        
+        # The parent's handle_send_to_api method will write this to JSONL
             
         return to_postprocess, backlog
         
