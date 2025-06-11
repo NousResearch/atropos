@@ -37,6 +37,9 @@ from atroposlib.utils.tool_call_parser import parse_tool_call
 from environments.game_environments.textworld.generation_utils import (
     generate_textworld_game,
 )
+from environments.game_environments.textworld.textworld_registry import (
+    create_textworld_registry,
+)
 from textworld import EnvInfos, GameOptions
 from textworld.gym.envs import TextworldGymEnv
 
@@ -109,6 +112,28 @@ class TextWorldEnvConfig(BaseEnvConfig):
         }
     )
     game_file_path: Optional[str] = None
+    
+    # Registry configuration
+    use_registry: bool = Field(
+        default=True,
+        description="Whether to use the registry for game selection"
+    )
+    registry_mode: str = Field(
+        default="random",
+        description="Registry mode: random, generated, challenge"
+    )
+    registry_generation_ratio: float = Field(
+        default=0.7,
+        description="Ratio of generated games vs pre-built (0.0 to 1.0)"
+    )
+    registry_difficulty: Optional[str] = Field(
+        default="random",
+        description="Difficulty: easy, medium, hard, expert, random"
+    )
+    registry_game_type: Optional[str] = Field(
+        default=None,
+        description="Game type: quest, puzzle, navigation, mixed (None for random)"
+    )
 
     default_server_config: APIServerConfig = Field(
         default_factory=lambda: APIServerConfig(
@@ -271,6 +296,14 @@ class TextWorldEnv(BaseEnv):
 
         if self.config.debug_mode:
             logger.setLevel(logging.DEBUG)
+            
+        # Initialize registry if enabled
+        self.registry = None
+        if self.config.use_registry:
+            self.registry = create_textworld_registry(
+                generation_ratio=self.config.registry_generation_ratio,
+                seed=self.config.seed if hasattr(self.config, 'seed') else None
+            )
 
     async def setup(self):
         """Ensure prerequisites are met for TextWorld."""
@@ -308,42 +341,61 @@ class TextWorldEnv(BaseEnv):
             episode_seed if episode_seed is not None else random.randint(0, 0xFFFFFFFF)
         )
 
-        # Create GameOptions
-        options = GameOptions()
-        options.seeds = current_game_seed
-        options.nb_rooms = self.config.nb_rooms
-        options.nb_objects = self.config.nb_objects
-        options.chaining.min_length = self.config.quest_min_length
-        options.chaining.max_length = self.config.quest_max_length
-        options.chaining.max_depth = self.config.quest_max_depth
-        options.grammar.theme = self.config.grammar_theme
-        options.grammar.include_adj = self.config.grammar_include_adj
-
-        challenge_settings = {
-            "seed": current_game_seed,
-            "rewards": self.config.challenge_rewards,
-            "goal": self.config.challenge_goal,
-            "test": self.config.challenge_test_mode,
-        }
-
-        try:
-            game_file_path, game_object = generate_textworld_game(
-                challenge_name=self.config.challenge_name,
-                settings=challenge_settings,
-                options=options,
-                output_folder=self._temp_dir,
-                filename_prefix=f"{self.config.challenge_name}_ep{current_game_seed}",
-            )
-
-            if not game_file_path or not os.path.exists(game_file_path):
-                logger.error(f"Failed to generate game file for episode {episode_id}")
+        # Generate or select game using registry if enabled
+        if self.config.use_registry and self.registry:
+            try:
+                game_file_path, game_config = self.registry.get_environment(
+                    mode=self.config.registry_mode,
+                    difficulty=self.config.registry_difficulty,
+                    game_type=self.config.registry_game_type
+                )
+                
+                if not game_file_path or not os.path.exists(game_file_path):
+                    logger.error(f"Registry failed to generate game for episode {episode_id}")
+                    return None
+                    
+                logger.info(f"Generated game from registry: {game_config}")
+                
+            except Exception as e:
+                logger.error(f"Error using registry for game generation: {e}")
                 return None
+        else:
+            # Use original generation logic
+            options = GameOptions()
+            options.seeds = current_game_seed
+            options.nb_rooms = self.config.nb_rooms
+            options.nb_objects = self.config.nb_objects
+            options.chaining.min_length = self.config.quest_min_length
+            options.chaining.max_length = self.config.quest_max_length
+            options.chaining.max_depth = self.config.quest_max_depth
+            options.grammar.theme = self.config.grammar_theme
+            options.grammar.include_adj = self.config.grammar_include_adj
 
-        except Exception as e:
-            logger.error(
-                f"Error generating game for {self.config.challenge_name} challenge: {e}"
-            )
-            return None
+            challenge_settings = {
+                "seed": current_game_seed,
+                "rewards": self.config.challenge_rewards,
+                "goal": self.config.challenge_goal,
+                "test": self.config.challenge_test_mode,
+            }
+
+            try:
+                game_file_path, game_object = generate_textworld_game(
+                    challenge_name=self.config.challenge_name,
+                    settings=challenge_settings,
+                    options=options,
+                    output_folder=self._temp_dir,
+                    filename_prefix=f"{self.config.challenge_name}_ep{current_game_seed}",
+                )
+
+                if not game_file_path or not os.path.exists(game_file_path):
+                    logger.error(f"Failed to generate game file for episode {episode_id}")
+                    return None
+
+            except Exception as e:
+                logger.error(
+                    f"Error generating game for {self.config.challenge_name} challenge: {e}"
+                )
+                return None
 
         requested_infos = EnvInfos(
             description=True,
@@ -918,13 +970,22 @@ class TextWorldEnv(BaseEnv):
                     f"[Episode: {ep_state.episode_id}] Error closing TextWorld environment: {e}"
                 )
 
-        if ep_state.game_file and os.path.exists(ep_state.game_file):
-            try:
-                os.remove(ep_state.game_file)
-            except OSError as e:
-                logger.warning(
-                    f"[Episode: {ep_state.episode_id}] Error removing game file: {e}"
-                )
+        # Clean up game file
+        if ep_state.game_file:
+            if self.registry:
+                # Use registry cleanup which also handles JSON files
+                self.registry.cleanup_game_file(ep_state.game_file)
+            elif os.path.exists(ep_state.game_file):
+                try:
+                    os.remove(ep_state.game_file)
+                    # Also remove JSON file if it exists
+                    json_file = ep_state.game_file.replace('.z8', '.json')
+                    if os.path.exists(json_file):
+                        os.remove(json_file)
+                except OSError as e:
+                    logger.warning(
+                        f"[Episode: {ep_state.episode_id}] Error removing game files: {e}"
+                    )
 
     async def postprocess_histories(
         self,
@@ -1091,6 +1152,10 @@ class TextWorldEnv(BaseEnv):
 
     async def cleanup(self):
         """Clean up resources."""
+        # Clean up any remaining registry files
+        if self.registry:
+            self.registry.cleanup_all()
+            
         if (
             hasattr(self, "_temp_dir")
             and self._temp_dir

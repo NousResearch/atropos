@@ -21,7 +21,8 @@ def generate_textworld_game(
     settings: Dict[str, Any],
     options: Optional[GameOptions] = None,
     output_folder: str = DEFAULT_OUTPUT_FOLDER,
-    filename_prefix: Optional[str] = None
+    filename_prefix: Optional[str] = None,
+    cleanup_on_error: bool = True
 ) -> Tuple[Optional[str], Optional[Any]]:
     """
     Generate and compile a TextWorld game based on a challenge name and settings.
@@ -75,6 +76,12 @@ def generate_textworld_game(
 
     except (QuestGenerationError, MissingTextGrammar, ValueError, Exception) as e:
         logger.error(f"Error during challenge game generation ('{challenge_name}'): {e}")
+        # Clean up partial files if requested
+        if cleanup_on_error and options and options.path and os.path.exists(options.path):
+            try:
+                os.remove(options.path)
+            except OSError:
+                pass
         return None, None
 
 

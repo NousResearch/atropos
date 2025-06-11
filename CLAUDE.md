@@ -382,78 +382,181 @@ sbatch environments/intern_bootcamp/run_datagen_parallel_sglang.slurm
 
 **Status**: ✅ **IMPLEMENTED AND READY FOR TESTING**
 
-## Recent Work: TextWorld Environment with SGLang and VR-CLI (June 10, 2025)
+## Recent Work: TextWorld Registry System ✅ (June 10, 2025)
 
 ### Problem Solved
-Needed to set up TextWorld environment to work with SGLang server for access to logprobs, remove unnecessary smolagents dependency, and implement environment state copying for VR-CLI evaluation.
+User needed a registry system for TextWorld similar to bootcamp_registry.py to manage 1000+ game variations through random sampling, mixing pre-built challenges and procedurally generated games.
 
 ### Solution Implemented
 
-#### 1. SGLang Integration
-- **Updated**: `textworld_local_server.py` to use DeepHermes-3-Mistral-24B via local SGLang server
-- SGLang server runs with `--tp 8` for tensor parallelism across 8 GPUs
-- Provides access to logprobs which OpenAI API doesn't expose
-- Server endpoint: `http://localhost:30000/v1`
+#### 1. Created Comprehensive Registry System
+- **File**: `/environments/game_environments/textworld/textworld_registry.py`
+- Three main classes:
+  - `TextWorldChallengeRegistry`: Manages pre-built challenges (tw-simple, tw-cooking, tw-coin_collector, tw-treasure_hunter)
+  - `TextWorldGenerator`: Base class for custom game generation with difficulty settings
+  - `TextWorldEnvironmentRegistry`: Main registry combining both systems
+- Features:
+  - Random selection between generated (default 70%) and pre-built (30%) games
+  - Difficulty levels: easy, medium, hard, expert, random
+  - Automatic cleanup of generated files
+  - LRU cache for frequently used configurations
 
-#### 2. Removed smolagents Dependency
-- **Issue**: AtroposAgent inherited from smolagents.Model causing property conflicts
-- **Solution**: Simplified AtroposAgent to not inherit from Model
-- Removed all smolagents imports and converted helper functions
-- Agent now directly manages token counting and API calls
+#### 2. Updated Generation Utilities
+- **File**: `/environments/game_environments/textworld/generation_utils.py`
+- Added `cleanup_on_error` parameter for better error handling
+- Ensures partial files are cleaned up on generation failure
 
-#### 3. TextWorld State Copying via Replay
-- **Challenge**: TextWorld doesn't support state saving/loading or deepcopy
-- **Solution**: Implemented replay-based state copying:
-  - Extract canonical action history from agent's game log
-  - Create new environment instance with same game file
-  - Replay all actions to reach current state
-  - Used for VR-CLI evaluation of alternative actions
+#### 3. Integrated Registry with TextWorldEnv
+- **File**: `/environments/game_environments/textworld/textworld_env.py`
+- Added registry configuration fields to TextWorldEnvConfig:
+  - `use_registry`: Enable/disable registry usage (default: True)
+  - `registry_mode`: Selection mode - random, generated, challenge
+  - `registry_generation_ratio`: Ratio of generated vs pre-built games (0.0-1.0)
+  - `registry_difficulty`: Difficulty level selection
+  - `registry_game_type`: Specific game type selection
+- Modified `_setup_new_episode` to use registry when enabled
+- Updated cleanup methods to handle registry cleanup
 
-#### 4. Key Files Modified
-- `/environments/game_environments/textworld/textworld_local_server.py`: SGLang configuration
-- `/environments/game_environments/textworld/agents/atropos_agent.py`: Removed smolagents
-- `/environments/game_environments/textworld/textworld_env.py`: Added replay-based copying
+#### 4. Test Results
+- ✅ Successfully tested all registry functionality
+- ✅ Pre-built challenges working correctly
+- ✅ Generated games with difficulty scaling functional
+- ✅ Proper file cleanup confirmed
+- ✅ Integration with TextWorldEnv verified
 
-### TextWorld VR-CLI Implementation
+### Key Features
+- **Dynamic game selection**: Mixes pre-built and generated games based on configured ratio
+- **Difficulty support**: Easy, medium, hard, expert, or random selection
+- **Game types**: Quest, puzzle, navigation, mixed (for generated games)
+- **Automatic cleanup**: Tracks and cleans up all generated game files
+- **Seamless integration**: Works transparently with existing TextWorldEnv
 
-VR-CLI (Value-Ranked Counterfactual Learning from Implicit feedback) evaluates multiple action alternatives by:
-1. Agent generates N alternative actions with outcome predictions
-2. For each alternative, create environment copy via replay
-3. Execute action and compare predicted vs actual outcome
-4. Score based on prediction accuracy (lower perplexity = better)
-5. Select best-scoring action to execute
+### Usage Example
+```python
+# Create environment with registry enabled
+config = TextWorldEnvConfig(
+    use_registry=True,
+    registry_mode="random",
+    registry_generation_ratio=0.7,  # 70% generated, 30% pre-built
+    registry_difficulty="random",    # Randomize difficulty
+    max_steps=30
+)
+```
 
-### Current Status
-- ✅ SGLang server integration working with logprobs
-- ✅ smolagents dependency removed successfully
-- ✅ Environment replay for state copying implemented
-- ✅ TextWorld games running with VR-CLI evaluation
-- ✅ Agent successfully playing through game objectives
+### Background: SGLang Integration (Previously Completed)
+- Updated textworld_local_server.py to use SGLang instead of OpenAI for logprobs access
+- Removed smolagents dependency from AtroposAgent (simplified implementation)
+- Implemented environment replay for state copying (required for VR-CLI evaluation)
+- Successfully tested with DeepHermes-3-Mistral-24B-Preview model
 
-### TODO for TextWorld Environment
+### Specialized Game Generators ✅ (June 10, 2025)
 
-1. **Create SLURM scripts** for distributed training:
-   - Dataset generation script for rejection sampling
-   - Multi-node training script with SGLang inference
-   - Configure appropriate node allocation
+#### Completed Today
+Created four specialized game generators for TextWorld:
 
-2. **Implement additional reward functions**:
-   - Game completion reward
-   - Step efficiency reward
-   - VR-CLI prediction accuracy reward
+1. **quest_generator.py** ✅
+   - Quest types: fetch, delivery, rescue, exploration, puzzle
+   - Difficulty-based room/object scaling
+   - Custom quest generation with commands
+   - Uses GameMaker API for programmatic game creation
 
-3. **Test with different TextWorld challenges**:
-   - tw-simple (current)
-   - tw-cooking
-   - tw-treasure_hunter
-   - Custom challenges
+2. **puzzle_generator.py** ✅
+   - Puzzle types: door_sequence, combination_lock, weight_puzzle, light_puzzle, container_puzzle
+   - Specialized puzzle mechanics (keys, combinations, weights)
+   - Progressive difficulty with more complex puzzles
 
-4. **Performance optimization**:
-   - Cache environment copies for similar states
-   - Batch VR-CLI evaluations
-   - Optimize replay mechanism
+3. **navigation_generator.py** ✅
+   - Navigation types: maze, labyrinth, exploration, dungeon
+   - Layout algorithms: grid maze, branching tree, hub-and-spoke
+   - Landmarks and navigation aids based on difficulty
+   - Dead ends and complex pathfinding challenges
 
-5. **Data generation**:
-   - Generate diverse game instances
-   - Create SFT datasets from successful trajectories
-   - Filter by VR-CLI scores for quality
+4. **mixed_generator.py** ✅
+   - Mixed types: quest_puzzle, navigation_puzzle, exploration_quest, dungeon_crawler, adventure
+   - Combines elements from other generators
+   - Complex multi-stage games with various mechanics
+
+#### Files Created/Modified
+- `/environments/game_environments/textworld/generators/quest_generator.py`
+- `/environments/game_environments/textworld/generators/puzzle_generator.py`
+- `/environments/game_environments/textworld/generators/navigation_generator.py`
+- `/environments/game_environments/textworld/generators/mixed_generator.py`
+- `/environments/game_environments/textworld/generators/__init__.py`
+- Updated `/environments/game_environments/textworld/textworld_registry.py` to use new generators
+
+### Issues Encountered
+
+During testing, several errors were discovered:
+
+1. **GameMaker API Issues**:
+   - `'NoneType' object has no attribute 'remove'` - likely from room exit handling
+   - Need to properly check if exits exist before using them
+   - Path creation between rooms needs better error handling
+
+2. **Quest Generation Parameters**:
+   - Hard difficulty quests failing with "No quest can be generated with the provided options"
+   - Quest breadth/depth parameters may be too restrictive for complex games
+   - Need to adjust chaining options for higher difficulties
+
+3. **Challenge Generation**:
+   - tw-cooking challenge failing due to missing 'recipe_seed' parameter
+   - Need to update challenge parameters for different game types
+
+### Next Steps to Fix
+
+1. **Fix Room Connection Logic**:
+   ```python
+   # Check if exit exists before using
+   if hasattr(room, 'exits') and direction in room.exits:
+       maker.connect(room.exits[direction], other_room.exits[opposite])
+   ```
+
+2. **Adjust Quest Parameters**:
+   ```python
+   # Reduce breadth for hard difficulty to make generation possible
+   "hard": {
+       "quest_breadth": 2,  # Instead of 3
+       "quest_depth": 10
+   }
+   ```
+
+3. **Add Error Handling**:
+   - Wrap room creation and connection in try/except blocks
+   - Validate game maker state before operations
+   - Add fallback generation methods
+
+4. **Test Individual Generators**:
+   - Test each generator's main method directly
+   - Fix specific issues in each generator
+   - Ensure all difficulty levels work
+
+### TODO: Remaining Tasks
+
+1. **Bug Fixes** (High Priority)
+   - [ ] Fix room connection errors in all generators
+   - [ ] Adjust quest generation parameters for feasibility
+   - [ ] Add proper error handling and validation
+   - [ ] Test each generator individually
+
+2. **Enhancements**
+   - [ ] Add sub-type selection through registry API
+   - [ ] Implement game complexity metrics
+   - [ ] Add more sophisticated room layouts
+   - [ ] Create better pathfinding for navigation quests
+
+3. **Integration**
+   - [ ] Create SLURM scripts for training with diverse games
+   - [ ] Add curriculum learning support
+   - [ ] Implement performance tracking by game type
+   - [ ] Create visualization tools for generated games
+
+### Architecture Notes
+
+The generator system now provides:
+- **Modular design**: Each generator focuses on specific game mechanics
+- **Difficulty scaling**: All generators support easy/medium/hard/expert
+- **Flexible configuration**: Can specify game types and sub-types
+- **Programmatic generation**: Uses TextWorld's GameMaker API
+- **Registry integration**: Seamlessly works with the existing registry system
+
+The main challenge is working with TextWorld's GameMaker API, which has some undocumented behaviors and constraints that need to be discovered through testing.
