@@ -7,12 +7,27 @@
 #SBATCH --exclusive
 #SBATCH --gpus=8
 #SBATCH --cpus-per-task=64
-#SBATCH --time=24:00:00
+#SBATCH --time=7-00:00:00
+#SBATCH --requeue                    # Allow job to be requeued after node failure
+#SBATCH --open-mode=append           # Append to log files on restart
 
 # Dataset generation with local SGLang serving DeepHermes-3-Mistral-24B
-# This version uses the new parallel processing feature
+# This version uses the new parallel processing feature and auto-restart
 
-set -e
+# Don't use set -e so the job continues on errors
+# set -e
+
+# Function to cleanup on exit
+cleanup() {
+    echo "Cleaning up..."
+    # Kill SGLang server if it exists
+    if [ ! -z "$SGLANG_PID" ]; then
+        kill $SGLANG_PID 2>/dev/null || true
+    fi
+}
+
+# Set trap to cleanup on exit
+trap cleanup EXIT
 
 # Load environment variables if .env file exists
 if [ -f .env ]; then
@@ -35,11 +50,25 @@ MAX_WORKERS=4  # Number of parallel groups to process
 TOTAL_STEPS=10000
 GROUP_SIZE=64  # Responses per group
 
-echo "Starting InternBootcamp PARALLEL dataset generation with local SGLang"
+# Check if this is a restart
+if [ -f "${OUTPUT_FILE}" ]; then
+    EXISTING_LINES=$(wc -l < "${OUTPUT_FILE}")
+    echo "RESTART DETECTED: Found existing file with ${EXISTING_LINES} lines"
+    echo "Will continue from where we left off..."
+    # Adjust total steps to account for already completed work
+    TOTAL_STEPS=$((TOTAL_STEPS - EXISTING_LINES))
+    if [ $TOTAL_STEPS -le 0 ]; then
+        echo "Job already completed!"
+        exit 0
+    fi
+else
+    echo "Starting fresh InternBootcamp PARALLEL dataset generation with local SGLang"
+fi
+
 echo "Model: ${MODEL_NAME}"
 echo "Output file: ${OUTPUT_FILE}"
 echo "Max parallel groups: ${MAX_WORKERS}"
-echo "Total steps: ${TOTAL_STEPS}"
+echo "Remaining steps: ${TOTAL_STEPS}"
 echo "Group size: ${GROUP_SIZE}"
 
 # Step 1: Launch SGLang server
@@ -117,6 +146,7 @@ env:
   data_path_to_save_groups: "${OUTPUT_FILE}"
   ensure_scores_are_not_same: false  # Allow rejection sampling
   include_messages: true  # Save full conversations
+  strip_tokens_and_masks: true  # Save space by removing tokens/masks
   
   # Tokenizer for processing (use same model as generation model)
   tokenizer_name: "${MODEL_NAME}"
@@ -147,49 +177,45 @@ echo "Starting PARALLEL data generation..."
 echo "This will process up to ${MAX_WORKERS} groups in parallel (${MAX_WORKERS} x ${GROUP_SIZE} = $((MAX_WORKERS * GROUP_SIZE)) concurrent requests)"
 cd /home/maxpaperclips/atropos
 
-# Run process mode with parallel processing enabled
+# Run process mode with error handling
+# The || true ensures the script continues even if the Python script fails
 uv run python -m environments.intern_bootcamp.intern_bootcamp_env process \
     --config ${CONFIG_FILE} \
     --env.use_parallel_processing true \
     --env.max_num_workers ${MAX_WORKERS} \
     --env.total_steps ${TOTAL_STEPS} \
     --env.group_size ${GROUP_SIZE} \
-    --env.strip_tokens_and_masks true
+    --env.strip_tokens_and_masks true || {
+    echo "Data generation encountered an error, but continuing..."
+    echo "Error code: $?"
+}
 
-echo "Dataset generation complete!"
+echo "Dataset generation phase complete!"
 
 # Kill SGLang server
 echo "Shutting down SGLang server..."
-kill ${SGLANG_PID} || true
+kill ${SGLANG_PID} 2>/dev/null || true
 
 echo "Output saved to: ${OUTPUT_FILE}"
 
 # Show statistics
 echo "Total lines generated:"
-wc -l ${OUTPUT_FILE}
+wc -l ${OUTPUT_FILE} 2>/dev/null || echo "0"
 
 echo "File size:"
-ls -lh ${OUTPUT_FILE}
+ls -lh ${OUTPUT_FILE} 2>/dev/null || echo "No file generated"
 
-# Calculate throughput statistics
-START_TIME=$(stat -c %Y ${OUTPUT_FILE} 2>/dev/null || echo 0)
-END_TIME=$(date +%s)
-DURATION=$((END_TIME - START_TIME))
-if [ $DURATION -gt 0 ]; then
-    LINES=$(wc -l < ${OUTPUT_FILE})
-    THROUGHPUT=$((LINES / DURATION))
-    echo "Generation throughput: ~${THROUGHPUT} groups/second"
+# Check if we should resubmit for more data
+if [ -f "${OUTPUT_FILE}" ]; then
+    FINAL_LINES=$(wc -l < "${OUTPUT_FILE}")
+    if [ $FINAL_LINES -lt 10000 ]; then
+        echo "Only generated ${FINAL_LINES} lines out of 10000 target"
+        echo "Consider resubmitting job to continue data collection"
+        # Uncomment below to auto-resubmit
+        # sbatch $0
+    else
+        echo "Target reached! Generated ${FINAL_LINES} lines"
+    fi
 fi
 
-# Filter for SFT format (score >= 0.0)
-echo "Filtering dataset for SFT..."
-SFT_OUTPUT="${OUTPUT_FILE%.jsonl}_sft.jsonl"
-uv run python environments/intern_bootcamp/filter_dataset.py \
-    ${OUTPUT_FILE} \
-    --format sft \
-    --min-score 0.0 \
-    --output ${SFT_OUTPUT} \
-    --verbose
-
-echo "Filtered SFT dataset saved to: ${SFT_OUTPUT}"
 echo "Job completed at $(date)"

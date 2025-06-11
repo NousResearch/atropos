@@ -164,6 +164,10 @@ class BaseEnvConfig(BaseModel):
         default=False,
         description="Whether to use parallel processing for process command (runs multiple groups concurrently)",
     )
+    strip_tokens_and_masks: bool = Field(
+        default=False,
+        description="Whether to strip tokens and masks from saved data (dramatically reduces file size for SFT datasets)",
+    )
 
 
 class BaseEnv(ABC):
@@ -689,7 +693,12 @@ class BaseEnv(ABC):
             await self.add_rollouts_for_wandb(group, item)
 
             if self.jsonl_writer is not None:
-                self.jsonl_writer.write(group)
+                # Strip tokens and masks if configured to do so
+                if self.config.strip_tokens_and_masks:
+                    group_to_write = {k: v for k, v in group.items() if k not in ["tokens", "masks"]}
+                else:
+                    group_to_write = group
+                self.jsonl_writer.write(group_to_write)
                 print(f"Wrote scored group to {self.config.data_path_to_save_groups}")
 
             valid_groups.append(group)
