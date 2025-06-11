@@ -381,3 +381,79 @@ sbatch environments/intern_bootcamp/run_datagen_parallel_sglang.slurm
 - **Automatic throughput calculation**: Shows groups/second metrics
 
 **Status**: ✅ **IMPLEMENTED AND READY FOR TESTING**
+
+## Recent Work: TextWorld Environment with SGLang and VR-CLI (June 10, 2025)
+
+### Problem Solved
+Needed to set up TextWorld environment to work with SGLang server for access to logprobs, remove unnecessary smolagents dependency, and implement environment state copying for VR-CLI evaluation.
+
+### Solution Implemented
+
+#### 1. SGLang Integration
+- **Updated**: `textworld_local_server.py` to use DeepHermes-3-Mistral-24B via local SGLang server
+- SGLang server runs with `--tp 8` for tensor parallelism across 8 GPUs
+- Provides access to logprobs which OpenAI API doesn't expose
+- Server endpoint: `http://localhost:30000/v1`
+
+#### 2. Removed smolagents Dependency
+- **Issue**: AtroposAgent inherited from smolagents.Model causing property conflicts
+- **Solution**: Simplified AtroposAgent to not inherit from Model
+- Removed all smolagents imports and converted helper functions
+- Agent now directly manages token counting and API calls
+
+#### 3. TextWorld State Copying via Replay
+- **Challenge**: TextWorld doesn't support state saving/loading or deepcopy
+- **Solution**: Implemented replay-based state copying:
+  - Extract canonical action history from agent's game log
+  - Create new environment instance with same game file
+  - Replay all actions to reach current state
+  - Used for VR-CLI evaluation of alternative actions
+
+#### 4. Key Files Modified
+- `/environments/game_environments/textworld/textworld_local_server.py`: SGLang configuration
+- `/environments/game_environments/textworld/agents/atropos_agent.py`: Removed smolagents
+- `/environments/game_environments/textworld/textworld_env.py`: Added replay-based copying
+
+### TextWorld VR-CLI Implementation
+
+VR-CLI (Value-Ranked Counterfactual Learning from Implicit feedback) evaluates multiple action alternatives by:
+1. Agent generates N alternative actions with outcome predictions
+2. For each alternative, create environment copy via replay
+3. Execute action and compare predicted vs actual outcome
+4. Score based on prediction accuracy (lower perplexity = better)
+5. Select best-scoring action to execute
+
+### Current Status
+- ✅ SGLang server integration working with logprobs
+- ✅ smolagents dependency removed successfully
+- ✅ Environment replay for state copying implemented
+- ✅ TextWorld games running with VR-CLI evaluation
+- ✅ Agent successfully playing through game objectives
+
+### TODO for TextWorld Environment
+
+1. **Create SLURM scripts** for distributed training:
+   - Dataset generation script for rejection sampling
+   - Multi-node training script with SGLang inference
+   - Configure appropriate node allocation
+
+2. **Implement additional reward functions**:
+   - Game completion reward
+   - Step efficiency reward
+   - VR-CLI prediction accuracy reward
+
+3. **Test with different TextWorld challenges**:
+   - tw-simple (current)
+   - tw-cooking
+   - tw-treasure_hunter
+   - Custom challenges
+
+4. **Performance optimization**:
+   - Cache environment copies for similar states
+   - Batch VR-CLI evaluations
+   - Optimize replay mechanism
+
+5. **Data generation**:
+   - Generate diverse game instances
+   - Create SFT datasets from successful trajectories
+   - Filter by VR-CLI scores for quality

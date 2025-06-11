@@ -28,22 +28,18 @@ async def main():
     )
     logging.getLogger("atroposlib.utils.tool_call_parser").setLevel(logging.DEBUG)
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        logger.error("OPENAI_API_KEY not found in environment variables")
-        return
-
+    # Using local SGLang server with DeepHermes-3-Mistral-24B
     server_config = APIServerConfig(
-        model_name="gpt-4.1-mini",
-        base_url="https://api.openai.com/v1",
-        api_key=api_key,
+        model_name="NousResearch/DeepHermes-3-Mistral-24B-Preview",
+        base_url="http://localhost:30000/v1",
+        api_key="dummy",  # SGLang doesn't need a real API key
         num_requests_for_eval=0,
-        server_type="openai",
+        server_type="openai",  # SGLang is OpenAI-compatible
     )
 
     env_config = TextWorldEnvConfig(
-        tokenizer_name="NousResearch/Hermes-2-Pro-Llama-3-8B",
-        max_token_length=4096,
+        tokenizer_name="NousResearch/DeepHermes-3-Mistral-24B-Preview",
+        max_token_length=8192,  # Increased for the 24B model
         max_steps=20,  # Reduced for quicker testing
         challenge_name="tw-simple",
         challenge_rewards="sparse",  # Using sparse rewards with VR-CLI

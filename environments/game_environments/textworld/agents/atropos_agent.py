@@ -1,9 +1,6 @@
 import logging
 from typing import List, Optional, Tuple, Any, Dict
 
-# Smol Gents imports
-from smolagents.models import Model, ChatMessage, MessageRole
-
 from atroposlib.type_definitions import Message, AtroposAgentActionLog, AtroposAgentAction, AtroposAgentTurn
 from transformers import PreTrainedTokenizer
 from pydantic import BaseModel, Field
@@ -18,7 +15,7 @@ logger = logging.getLogger(__name__)
 class AtroposAgentConfig(BaseModel):
     """Configuration for AtroposAgent."""
     # General LLM parameters
-    model_id: str = Field(default="gpt-4-turbo", description="LLM model ID for smolagents.Model and server calls.")
+    model_id: str = Field(default="NousResearch/DeepHermes-3-Mistral-24B-Preview", description="LLM model ID for server calls.")
     temperature: float = Field(
         default=0.7, 
         ge=0.0, 
@@ -29,7 +26,7 @@ class AtroposAgentConfig(BaseModel):
         default=1024,
         description="Maximum tokens to generate for each action alternative."
     )
-    max_retries_on_error: int = Field(default=3, description="Maximum retries for LLM calls on failure (not directly used by smol Model).")
+    max_retries_on_error: int = Field(default=3, description="Maximum retries for LLM calls on failure.")
 
     system_prompt: str = Field(
         default="You are a helpful AI assistant playing a text adventure game. Think step-by-step and then call the required tool.",
@@ -75,51 +72,22 @@ class AtroposAgentConfig(BaseModel):
         arbitrary_types_allowed = True
 
 
-def _convert_atropos_to_smolagent_messages(messages: List[Message]) -> List[Dict[str, str]]:
-    """Converts a list of Atropos Message objects to smolagent message dicts."""
-    smol_messages = []
+def _convert_messages_for_api(messages: List[Message]) -> List[Dict[str, str]]:
+    """Converts a list of Atropos Message objects to API-compatible dicts."""
+    api_messages = []
     for msg in messages:
         role = msg.get("role", "user")
-        if role == "system":
-            smol_role = "system"
-        elif role == "user":
-            smol_role = "user"
-        elif role == "assistant" or role == "agent":
-            smol_role = "assistant"
-        elif role == "tool_call":
-            smol_role = "assistant"
-        elif role == "tool_response":
-            smol_role = "tool"
-        else:
-            smol_role = "user"
-
         content_str = msg.get("content", "")
-        if content_str is None: content_str = ""
-
-        smol_messages.append({"role": smol_role, "content": content_str})
-    return smol_messages
-
-def _convert_smolagent_to_atropos_message(smol_message: ChatMessage) -> Message:
-    """Converts a smolagent ChatMessage to an Atropos Message."""
-    role_map = {
-        MessageRole.SYSTEM: "system",
-        MessageRole.USER: "user",
-        MessageRole.ASSISTANT: "assistant",
-        MessageRole.TOOL: "tool_response",
-    }
-    atropos_role = role_map.get(smol_message.role, "assistant")
-    
-    content = smol_message.content
-    if isinstance(content, list):
-        content = "\n".join(item["text"] for item in content if item.get("type") == "text")
-
-    return Message(role=atropos_role, content=str(content) if content is not None else "", reward=None)
+        if content_str is None: 
+            content_str = ""
+        api_messages.append({"role": role, "content": content_str})
+    return api_messages
 
 
-class AtroposAgent(Model):
+class AtroposAgent:
     """
     An agent that interacts with an LLM for game playing, managing its own dialogue history
-    and using a memory system. Implements the smolagents.Model interface.
+    and using a memory system.
     """
     def __init__(
         self,
@@ -129,8 +97,8 @@ class AtroposAgent(Model):
         memory_manager: Optional[TextWorldMemoryManager] = None,
     ):
         self.config = config if config is not None else AtroposAgentConfig()
-        super().__init__(model_id=self.config.model_id)
-
+        self.model_id = self.config.model_id
+        
         self.server_client = server_client
         self.tokenizer = tokenizer
         self.system_prompt_content = self.config.system_prompt
@@ -190,25 +158,25 @@ class AtroposAgent(Model):
             logger.warning(f"AtroposAgent[{self.config.player_id_for_logging}] summarize_turn_for_memory: Game history window is empty.")
             return None
 
-        formatted_history_for_smol = _convert_atropos_to_smolagent_messages(game_history_window)
+        formatted_history_for_api = _convert_messages_for_api(game_history_window)
         
-        memory_prompt_messages_for_smol = [
+        memory_prompt_messages_for_api = [
             {"role": "system", "content": self.memory_generation_system_prompt}
         ]
-        combined_history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in formatted_history_for_smol])
-        memory_prompt_messages_for_smol.append({"role": "user", "content": combined_history_text})
+        combined_history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in formatted_history_for_api])
+        memory_prompt_messages_for_api.append({"role": "user", "content": combined_history_text})
         
         logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] Generating memory summary with prompt (first 100 chars of user content): {combined_history_text[:100]}")
         
         try:
-            chat_message_response = await self.generate(
-                messages=memory_prompt_messages_for_smol,
+            response = await self.generate(
+                messages=memory_prompt_messages_for_api,
                 max_tokens=self.config.max_tokens_for_memory_summary,
                 temperature=self.config.temperature
             )
             
-            if chat_message_response and chat_message_response.content:
-                summary_text = chat_message_response.content.strip()
+            if response:
+                summary_text = response.strip()
                 logger.info(f"AtroposAgent[{self.config.player_id_for_logging}] Generated memory summary: '{summary_text[:100]}...'")
                 return summary_text
             else:
@@ -221,10 +189,10 @@ class AtroposAgent(Model):
 
     async def generate(
         self,
-        messages: list[dict[str, str | list[dict]]],
-        stop_sequences: list[str] | None = None,
+        messages: List[Dict[str, str]],
+        stop_sequences: Optional[List[str]] = None,
         **kwargs,
-    ) -> ChatMessage:
+    ) -> Optional[str]:
         api_kwargs = {
             "model": self.config.model_id,
             "n": kwargs.get("n", 1),
@@ -240,7 +208,7 @@ class AtroposAgent(Model):
             if messages and isinstance(messages[-1], dict) and messages[-1].get('content') 
             else "EMPTY_HISTORY_CONTENT"
         )
-        logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] (smol.generate) LLM Chat Prompt (last message content, first 200 chars): {log_prompt_snippet}")
+        logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] (generate) LLM Chat Prompt (last message content, first 200 chars): {log_prompt_snippet}")
 
         try:
             raw_response = await self.server_client.chat_completion(
@@ -248,8 +216,7 @@ class AtroposAgent(Model):
                 **api_kwargs
             )
 
-            content = "No response content or error."
-            role = MessageRole.ASSISTANT
+            content = None
             
             if raw_response and raw_response.choices:
                 first_choice = raw_response.choices[0]
@@ -257,31 +224,31 @@ class AtroposAgent(Model):
                     content = first_choice.message.content.strip()
                 else:
                     logger.warning(
-                        f"AtroposAgent[{self.config.player_id_for_logging}] (smol.generate) LLM first choice had no message content. Choice: {first_choice}"
+                        f"AtroposAgent[{self.config.player_id_for_logging}] (generate) LLM first choice had no message content. Choice: {first_choice}"
                     )
             else:
                  logger.warning(
-                    f"AtroposAgent[{self.config.player_id_for_logging}] (smol.generate) chat_completion returned no choices or empty response. History snippet: {log_prompt_snippet}"
+                    f"AtroposAgent[{self.config.player_id_for_logging}] (generate) chat_completion returned no choices or empty response. History snippet: {log_prompt_snippet}"
                 )
 
             if hasattr(raw_response, "usage") and raw_response.usage:
                 self.last_input_token_count = raw_response.usage.prompt_tokens
                 self.last_output_token_count = raw_response.usage.completion_tokens
                 logger.debug(
-                    f"AtroposAgent[{self.config.player_id_for_logging}] (smol.generate) Token usage: input={self.last_input_token_count}, output={self.last_output_token_count}"
+                    f"AtroposAgent[{self.config.player_id_for_logging}] (generate) Token usage: input={self.last_input_token_count}, output={self.last_output_token_count}"
                 )
             else:
                 self.last_input_token_count = None
                 self.last_output_token_count = None
             
-            return ChatMessage(role=role, content=content, raw=raw_response)
+            return content
 
         except Exception as e:
             logger.error(
-                f"AtroposAgent[{self.config.player_id_for_logging}] (smol.generate) LLM API (chat_completion) error: {e}. History snippet: {log_prompt_snippet}", 
+                f"AtroposAgent[{self.config.player_id_for_logging}] (generate) LLM API (chat_completion) error: {e}. History snippet: {log_prompt_snippet}", 
                 exc_info=True
             )
-            raise ValueError(f"LLM API error during smol.generate: {e}")
+            raise ValueError(f"LLM API error during generate: {e}")
 
 
     async def generate_action(
@@ -307,7 +274,7 @@ class AtroposAgent(Model):
         observation_message = Message(role="user", content=observation_content, reward=None)
         current_history_atropos.append(observation_message)
 
-        history_for_llm_call = _convert_atropos_to_smolagent_messages(current_history_atropos)
+        history_for_llm_call = _convert_messages_for_api(current_history_atropos)
         
         log_prompt_snippet = (
             history_for_llm_call[-1]['content'][:200] 

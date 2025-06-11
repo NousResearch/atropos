@@ -506,29 +506,75 @@ class TextWorldEnv(BaseEnv):
         # Score is improvement in perplexity
         return max(0.0, (base_ppl - pred_ppl) / base_ppl)
 
-    def _deepcopy_textworld_env(self, env: TextworldGymEnv) -> TextworldGymEnv:
-        """Create a deep copy of the TextWorld environment for safe evaluation."""
-        # TextWorld doesn't support deepcopy due to generators
-        # Instead, save and restore the game state
+    def _get_action_history_from_agent(self) -> List[str]:
+        """Extract the canonical action history from the agent."""
+        action_history = []
+        
+        for turn_data in self.agent.game_log['turn']:
+            if turn_data['selected_alternative'] is not None:
+                selected_idx = turn_data['selected_alternative']
+                if 0 <= selected_idx < len(turn_data['alternatives']):
+                    choice = turn_data['alternatives'][selected_idx]
+                    if not choice['api_error'] and choice['action_text']:
+                        # Extract the actual command from the tool call
+                        action_text = choice['action_text']
+                        tool_name, arguments, is_error = parse_tool_call(
+                            response=action_text, preferred_tags=["tool_call"]
+                        )
+                        if not is_error and tool_name == "execute_command":
+                            command = arguments.get("command")
+                            if command:
+                                action_history.append(command.strip())
+        
+        return action_history
+    
+    def _create_env_copy_with_replay(self, ep_state: TextWorldEpisodeState) -> Optional[TextworldGymEnv]:
+        """Create a new environment instance and replay actions to reach current state."""
         try:
-            # Save current state
-            if hasattr(env, "state"):
-                saved_state = env.state
-                # Create new environment instance
-                env_copy = textworld.gym.make(env.spec.id)
-                # Restore state
-                env_copy.load_state(saved_state)
-                return env_copy
-            else:
-                # If no state method, just return original env
-                # This is risky but better than crashing
-                logger.warning(
-                    "TextWorld environment doesn't support state saving, using original env"
-                )
-                return env
+            # Get the action history from the agent
+            action_history = self._get_action_history_from_agent()
+            
+            # Register a new environment instance with the same game file
+            requested_infos = textworld.EnvInfos(
+                objective=True,
+                inventory=True,
+                description=True,
+                score=True,
+                won=True,
+                lost=True,
+                facts=True,
+                last_action=True,
+                feedback=True,
+                moves=True,
+                admissible_commands=True,
+            )
+            
+            # Create a unique ID for this copy
+            copy_env_id = f"{ep_state.episode_id}_copy_{random.randint(1000, 9999)}"
+            
+            registered_env_id = textworld.gym.register_game(
+                ep_state.game_file,
+                requested_infos,
+                max_episode_steps=self.config.max_steps,
+                name=copy_env_id,
+            )
+            
+            # Create the environment
+            env_copy = textworld.gym.make(registered_env_id)
+            
+            # Reset the environment
+            obs, infos = env_copy.reset()
+            
+            # Replay all actions to reach the current state
+            for past_action in action_history:
+                obs, reward, done, infos = env_copy.step(past_action)
+                if done:
+                    break
+                    
+            return env_copy
         except Exception as e:
-            logger.warning(f"Failed to copy environment state: {e}, using original env")
-            return env
+            logger.error(f"Failed to create environment copy with replay: {e}")
+            return None
 
     async def _evaluate_candidates(
         self, ep_state: TextWorldEpisodeState, candidates: List[Tuple[str, str, str]]
@@ -540,8 +586,19 @@ class TextWorldEnv(BaseEnv):
             if action is None:
                 action = "look"  # Default action
 
-            # Deepcopy environment state
-            env_copy = self._deepcopy_textworld_env(ep_state.textworld_env)
+            # Create environment copy with replay
+            env_copy = self._create_env_copy_with_replay(ep_state)
+            if env_copy is None:
+                logger.error(f"Failed to create environment copy for candidate {i}")
+                evaluations.append({
+                    "action": action,
+                    "prediction": prediction,
+                    "vrcli_score": 0.0,
+                    "env_reward": 0.0,
+                    "combined_score": 0.0,
+                    "error": True
+                })
+                continue
 
             try:
                 # Execute action
