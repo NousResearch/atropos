@@ -1,0 +1,1078 @@
+<frozen runpy>:128: RuntimeWarning: 'environments.intern_bootcamp.intern_bootcamp_env' found in sys.modules after import of package 'environments.intern_bootcamp', but prior to execution of 'environments.intern_bootcamp.intern_bootcamp_env'; this may result in unpredictable behaviour
+2025-06-05 15:40:13,488 - INFO - PyTorch version 2.7.0 available.
+2025-06-05 15:40:13,490 - INFO - Polars version 1.30.0 available.
+2025-06-05 15:40:18,900 - INFO - Discovered 1069 bootcamp tasks
+2025-06-05 15:40:18,900 - INFO - Found 1069 available bootcamp tasks
+2025-06-05 15:40:18,900 - DEBUG - Available tasks (first 20): ['Aalmostarithmeticalprogressionbootcamp', 'Adidyoumeanbootcamp', 'Adimaandstaircasebootcamp', 'Adnaalignmentbootcamp', 'Aexamsbootcamp', 'Afoxandnamesbootcamp', 'Aglasscarvingbootcamp', 'Amessybootcamp', 'Amishaandforestbootcamp', 'Amrkitayutathetreasurehunterbootcamp', 'Apbinarybootcamp', 'Aperformeasilybootcamp', 'Apetyaandcatacombsbootcamp', 'Aquariumbootcamp', 'Aquizbootcamp', 'Arcbootcamp', 'Aremovingcolumnsbootcamp', 'Arrowmazebootcamp', 'Aryoukosmemorynotebootcamp', 'Asavethenaturebootcamp']
+2025-06-05 15:40:18,903 - INFO - Discovered 1069 bootcamp tasks
+2025-06-05 15:40:18,904 - INFO - RandomTask initialized with 1065 available bootcamps
+2025-06-05 15:40:18,904 - INFO - Initialized RandomTask with params: {}
+2025-06-05 15:40:18,905 - INFO - Test problem 1: You are given a string s of 27 uppercase English letters, where each letter appears at least once. Y...
+2025-06-05 15:40:18,905 - INFO - Test problem 2: Vasya is managing a set of eels and performing a series of operations. Each operation is either addi...
+2025-06-05 15:40:18,905 - INFO - Test problem 3: 你是贝兰德国立大学的学生，需要完成专业中的7门主修课程。总共有10门课程，存在以下依赖关系：
+        
+课程编号 | 前置课程数量 | 前置课程列表
+--------|------------...
+wandb: Currently logged in as: shannon_nous (nous_research) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.19.11
+wandb: Run data is saved locally in /data/maxpaperclips/wandb/wandb/run-20250605_154019-89voc3kg
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run intern_bootcamp-2025-06-05-xhjdnl
+wandb: ⭐️ View project at https://wandb.ai/nous_research/atropos
+wandb: 🚀 View run at https://wandb.ai/nous_research/atropos/runs/89voc3kg
+2025-06-05 15:40:20,306 - INFO - RandomTask selected: Fcurfewbootcamp
+2025-06-05 15:40:20,307 - INFO - RandomTask selected: Galaxiesbootcamp
+2025-06-05 15:40:20,307 - INFO - RandomTask selected: Cjzzhuandapplesbootcamp
+2025-06-05 15:40:20,308 - INFO - RandomTask selected: Ceugeneandanarraybootcamp
+2025-06-05 15:40:20,308 - INFO - RandomTask selected: Cgeometricprogressionbootcamp
+2025-06-05 15:40:20,309 - INFO - RandomTask selected: Cstrangeradiationbootcamp
+2025-06-05 15:40:20,309 - INFO - RandomTask selected: Crelayracebootcamp
+2025-06-05 15:40:20,310 - INFO - RandomTask selected: Clittleelephantandfurikandrubikbootcamp
+2025-06-05 15:40:20,310 - INFO - RandomTask selected: Bsashaandonemorenamebootcamp
+2025-06-05 15:40:20,310 - INFO - RandomTask selected: Cthreebagsbootcamp
+2025-06-05 15:40:20,311 - INFO - RandomTask selected: Cbeautifullyricsbootcamp
+2025-06-05 15:40:20,311 - INFO - RandomTask selected: Cnumbertransformationbootcamp
+2025-06-05 15:40:20,312 - INFO - RandomTask selected: Equantifierquestionbootcamp
+2025-06-05 15:40:20,312 - INFO - RandomTask selected: Dratingcompressionbootcamp
+2025-06-05 15:40:20,313 - INFO - RandomTask selected: Dnewyearsantanetworkbootcamp
+2025-06-05 15:40:20,313 - INFO - RandomTask selected: Cbearandprimenumbersbootcamp
+2025-06-05 15:40:20,313 - INFO - RandomTask selected: Cfirstdigitlawbootcamp
+2025-06-05 15:40:20,314 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '## 宿舍查房优化问题\n\n**背景**  \n某宿舍有20个房间排成一行，每个房间应有688名学生。当前分布：  \n房间1: 685人\n房间2: 689人\n房间3: 689人\n房间4: 686人\n房间5: 689人\n房间6: 687人\n房间7: 690人\n房间8: 689人\n房间9: 686人\n房间10: 687人\n房间11: 688人\n房间12: 687人\n房间13: 690人\n房间14: 687人\n房间15: 687人\n房间16: 690人\n房间17: 691人\n房间18: 686人\n房间19: 688人\n房间20: 689人\n\n**查房规则**  \n1. 两位教官分别从两端开始逐间检查\n2. 学生每次可移动≤4个房间或选择隐藏\n3. 目标：使两位教官记录的违规房间数最大值最小\n\n**输出格式**  \n将答案放在[answer]标签内，如：[answer]2[/answer]'}], {'identity': {'n': 20, 'd': 4, 'b': 688, 'a': [685, 689, 689, 686, 689, 687, 690, 689, 686, 687, 688, 687, 690, 687, 687, 690, 691, 686, 688, 689], 'correct_answer': 0, '_bootcamp_name': 'Fcurfewbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': '## 宿舍查房优化问题\n\n**背景**  \n某宿舍有20个房间排成一行，每个房间应有688名学生。当前分布：  \n房间1: 685人\n房间2: 689人\n房间3: 689人\n房间4: 686人\n房间5: 689人\n房间6: 687人\n房间7: 690人\n房间8: 689人\n房间9: 686人\n房间10: 687人\n房间11: 688人\n房间12: 687人\n房间13: 690人\n房间14: 687人\n房间15: 687人\n房间16: 690人\n房间17: 691人\n房间18: 686人\n房间19: 688人\n房间20: 689人\n\n**查房规则**  \n1. 两位教官分别从两端开始逐间检查\n2. 学生每次可移动≤4个房间或选择隐藏\n3. 目标：使两位教官记录的违规房间数最大值最小\n\n**输出格式**  \n将答案放在[answer]标签内，如：[answer]2[/answer]'})
+2025-06-05 15:40:20,314 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '## 宿舍查房优化问题\n\n**背景**  \n某宿舍有20个房间排成一行，每个房间应有688名学生。当前分布：  \n房间1: 685人\n房间2: 689人\n房间3: 689人\n房间4: 686人\n房间5: 689人\n房间6: 687人\n房间7: 690人\n房间8: 689人\n房间9: 686人\n房间10: 687人\n房间11: 688人\n房间12: 687人\n房间13: 690人\n房间14: 687人\n房间15: 687人\n房间16: 690人\n房间17: 691人\n房间18: 686人\n房间19: 688人\n房间20: 689人\n\n**查房规则**  \n1. 两位教官分别从两端开始逐间检查\n2. 学生每次可移动≤4个房间或选择隐藏\n3. 目标：使两位教官记录的违规房间数最大值最小\n\n**输出格式**  \n将答案放在[answer]标签内，如：[answer]2[/answer]'}]
+2025-06-05 15:40:20,315 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '你是专业星系谜题解题专家，请根据以下信息划分星系：\n\n**网格尺寸**: 5x5\n**中心位置**: (2,2)\n\n**规则要求**:\n1. 每个星系必须包含且仅包含一个中心，且形状关于中心180度对称\n2. 所有单元格必须属于且仅属于一个星系\n3. 星系区域必须连通（上下左右相邻）\n\n请按以下格式返回答案：\n[answer]\n[\n    {"center": (行坐标, 列坐标), "cells": [(坐标1), (坐标2), ...]},\n    ...\n]\n[/answer]\n\n请确保：\n1. 使用严格的Python列表和元组语法\n2. 包含所有中心对应的星系\n3. 每个坐标均为(row, column)格式'}], {'identity': {'rows': 5, 'cols': 5, 'centers': [(2, 2)], '_bootcamp_name': 'Galaxiesbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': '你是专业星系谜题解题专家，请根据以下信息划分星系：\n\n**网格尺寸**: 5x5\n**中心位置**: (2,2)\n\n**规则要求**:\n1. 每个星系必须包含且仅包含一个中心，且形状关于中心180度对称\n2. 所有单元格必须属于且仅属于一个星系\n3. 星系区域必须连通（上下左右相邻）\n\n请按以下格式返回答案：\n[answer]\n[\n    {"center": (行坐标, 列坐标), "cells": [(坐标1), (坐标2), ...]},\n    ...\n]\n[/answer]\n\n请确保：\n1. 使用严格的Python列表和元组语法\n2. 包含所有中心对应的星系\n3. 每个坐标均为(row, column)格式'})
+2025-06-05 15:40:20,315 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '你是专业星系谜题解题专家，请根据以下信息划分星系：\n\n**网格尺寸**: 5x5\n**中心位置**: (2,2)\n\n**规则要求**:\n1. 每个星系必须包含且仅包含一个中心，且形状关于中心180度对称\n2. 所有单元格必须属于且仅属于一个星系\n3. 星系区域必须连通（上下左右相邻）\n\n请按以下格式返回答案：\n[answer]\n[\n    {"center": (行坐标, 列坐标), "cells": [(坐标1), (坐标2), ...]},\n    ...\n]\n[/answer]\n\n请确保：\n1. 使用严格的Python列表和元组语法\n2. 包含所有中心对应的星系\n3. 每个坐标均为(row, column)格式'}]
+2025-06-05 15:40:20,315 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': "Jzzhu has 37 apples numbered 1-37. Group them into pairs where each pair's GCD >1. Find the maximum groups.\n\nOutput format:\nm\na1 b1\n...\nam bm\n\nPut your answer between [answer] and [/answer]. Example:\n\n[answer]\n2\n6 3\n2 4\n[/answer]"}], {'identity': {'n': 37, 'm_correct': 15, '_bootcamp_name': 'Cjzzhuandapplesbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': "Jzzhu has 37 apples numbered 1-37. Group them into pairs where each pair's GCD >1. Find the maximum groups.\n\nOutput format:\nm\na1 b1\n...\nam bm\n\nPut your answer between [answer] and [/answer]. Example:\n\n[answer]\n2\n6 3\n2 4\n[/answer]"})
+2025-06-05 15:40:20,315 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': "Jzzhu has 37 apples numbered 1-37. Group them into pairs where each pair's GCD >1. Find the maximum groups.\n\nOutput format:\nm\na1 b1\n...\nam bm\n\nPut your answer between [answer] and [/answer]. Example:\n\n[answer]\n2\n6 3\n2 4\n[/answer]"}]
+2025-06-05 15:40:20,315 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': 'You are given an array of integers. Your task is to calculate the number of nonempty good subarrays of the given array. A good subarray is defined as one where every nonempty subarray of it has a nonzero sum. The array has length 3 and its elements are [-837128046, -854955334, 381550464]. Please output the number of good subarrays in the following format: [answer]X[/answer], where X is the count.'}], {'identity': {'n': 3, 'array': [-837128046, -854955334, 381550464], 'correct_answer': 6, '_bootcamp_name': 'Ceugeneandanarraybootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': 'You are given an array of integers. Your task is to calculate the number of nonempty good subarrays of the given array. A good subarray is defined as one where every nonempty subarray of it has a nonzero sum. The array has length 3 and its elements are [-837128046, -854955334, 381550464]. Please output the number of good subarrays in the following format: [answer]X[/answer], where X is the count.'})
+2025-06-05 15:40:20,315 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': 'You are given an array of integers. Your task is to calculate the number of nonempty good subarrays of the given array. A good subarray is defined as one where every nonempty subarray of it has a nonzero sum. The array has length 3 and its elements are [-837128046, -854955334, 381550464]. Please output the number of good subarrays in the following format: [answer]X[/answer], where X is the count.'}]
+2025-06-05 15:40:20,316 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': 'Polycarp loves geometric progressions of length three. Help him find how many such subsequences exist in his sequence with a common ratio of k.\n\nRules:\n1. Indices must be strictly increasing (i < j < k).\n2. Elements must form a geometric progression: a[j] = a[i] * k and a[k] = a[j] * k.\n\nInput Parameters:\n- n (array length) = 6\n- k (common ratio) = 3\n- Sequence: [-7, -21, -63, -7, 9, -21]\n\nOutput the exact number of valid subsequences. Enclose your answer within [answer] and [/answer] tags.'}], {'identity': {'n': 6, 'k': 3, 'a': [-7, -21, -63, -7, 9, -21], '_bootcamp_name': 'Cgeometricprogressionbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': 'Polycarp loves geometric progressions of length three. Help him find how many such subsequences exist in his sequence with a common ratio of k.\n\nRules:\n1. Indices must be strictly increasing (i < j < k).\n2. Elements must form a geometric progression: a[j] = a[i] * k and a[k] = a[j] * k.\n\nInput Parameters:\n- n (array length) = 6\n- k (common ratio) = 3\n- Sequence: [-7, -21, -63, -7, 9, -21]\n\nOutput the exact number of valid subsequences. Enclose your answer within [answer] and [/answer] tags.'})
+2025-06-05 15:40:20,316 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': 'Polycarp loves geometric progressions of length three. Help him find how many such subsequences exist in his sequence with a common ratio of k.\n\nRules:\n1. Indices must be strictly increasing (i < j < k).\n2. Elements must form a geometric progression: a[j] = a[i] * k and a[k] = a[j] * k.\n\nInput Parameters:\n- n (array length) = 6\n- k (common ratio) = 3\n- Sequence: [-7, -21, -63, -7, 9, -21]\n\nOutput the exact number of valid subsequences. Enclose your answer within [answer] and [/answer] tags.'}]
+2025-06-05 15:40:20,316 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': 'You are tasked with solving a bomb placement optimization problem to minimize the time when both ends of the coordinate axis (0 and 1,000,000) are reached. The problem is as follows:\n- Number of people (n): 4\n- Speed of the rays (s): 861\nEach person has the following attributes:\n- Position (x): An integer where 0 < x < 1,000,000\n- Speed (v): An integer less than s\n- Direction (1 for left, 2 for right)\n  Person 1: x=976684, v=521, direction=1\n  Person 2: x=721185, v=690, direction=2\n  Person 3: x=734618, v=577, direction=1\n  Person 4: x=465589, v=663, direction=1\n\nYour task is to determine the earliest possible time t such that there exists a bomb position where at least one person reaches 0 and another reaches 1,000,000. The answer must be precise to at least six decimal places and formatted within [answer] tags.\nExample answer format: [answer]500.000000[/answer]'}], {'identity': {'n': 4, 's': 861, 'people': [{'x': 976684, 'v': 521, 't': 1}, {'x': 721185, 'v': 690, 't': 2}, {'x': 734618, 'v': 577, 't': 1}, {'x': 465589, 'v': 663, 't': 1}], 'expected_time': 404.07971014492756, '_bootcamp_name': 'Cstrangeradiationbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': 'You are tasked with solving a bomb placement optimization problem to minimize the time when both ends of the coordinate axis (0 and 1,000,000) are reached. The problem is as follows:\n- Number of people (n): 4\n- Speed of the rays (s): 861\nEach person has the following attributes:\n- Position (x): An integer where 0 < x < 1,000,000\n- Speed (v): An integer less than s\n- Direction (1 for left, 2 for right)\n  Person 1: x=976684, v=521, direction=1\n  Person 2: x=721185, v=690, direction=2\n  Person 3: x=734618, v=577, direction=1\n  Person 4: x=465589, v=663, direction=1\n\nYour task is to determine the earliest possible time t such that there exists a bomb position where at least one person reaches 0 and another reaches 1,000,000. The answer must be precise to at least six decimal places and formatted within [answer] tags.\nExample answer format: [answer]500.000000[/answer]'})
+2025-06-05 15:40:20,316 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': 'You are tasked with solving a bomb placement optimization problem to minimize the time when both ends of the coordinate axis (0 and 1,000,000) are reached. The problem is as follows:\n- Number of people (n): 4\n- Speed of the rays (s): 861\nEach person has the following attributes:\n- Position (x): An integer where 0 < x < 1,000,000\n- Speed (v): An integer less than s\n- Direction (1 for left, 2 for right)\n  Person 1: x=976684, v=521, direction=1\n  Person 2: x=721185, v=690, direction=2\n  Person 3: x=734618, v=577, direction=1\n  Person 4: x=465589, v=663, direction=1\n\nYour task is to determine the earliest possible time t such that there exists a bomb position where at least one person reaches 0 and another reaches 1,000,000. The answer must be precise to at least six decimal places and formatted within [answer] tags.\nExample answer format: [answer]500.000000[/answer]'}]
+2025-06-05 15:40:20,317 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': 'Furik和Rubik参加接力赛跑。比赛场地是一个边长为n米的正方形，被划分为n×n的单元格。每个单元格中的数字表示得分。\n\n规则说明：\n1. Furik从（1,1）出发，每次只能向右或向下移动，到达（n,n）\n2. Rubik随后从（n,n）出发，每次只能向左或向上移动，返回（1,1）\n3. 单元格得分只能计算一次，求最大总得分\n\n输入格式：\n第一行：整数n（1≤n≤300）\n随后n行：每行n个整数（-1000≤a_i,j≤1000）\n\n输出格式：\n一个整数，表示最大得分\n\n当前题目：\n3\n-447 -864 797\n15 -843 -295\n-132 -16 472\n\n请将答案用[answer]标签包裹，例如：[answer]42[/answer]'}], {'identity': {'n': 3, 'grid': [[-447, -864, 797], [15, -843, -295], [-132, -16, 472]], 'answer': -108, '_bootcamp_name': 'Crelayracebootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': 'Furik和Rubik参加接力赛跑。比赛场地是一个边长为n米的正方形，被划分为n×n的单元格。每个单元格中的数字表示得分。\n\n规则说明：\n1. Furik从（1,1）出发，每次只能向右或向下移动，到达（n,n）\n2. Rubik随后从（n,n）出发，每次只能向左或向上移动，返回（1,1）\n3. 单元格得分只能计算一次，求最大总得分\n\n输入格式：\n第一行：整数n（1≤n≤300）\n随后n行：每行n个整数（-1000≤a_i,j≤1000）\n\n输出格式：\n一个整数，表示最大得分\n\n当前题目：\n3\n-447 -864 797\n15 -843 -295\n-132 -16 472\n\n请将答案用[answer]标签包裹，例如：[answer]42[/answer]'})
+2025-06-05 15:40:20,317 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': 'Furik和Rubik参加接力赛跑。比赛场地是一个边长为n米的正方形，被划分为n×n的单元格。每个单元格中的数字表示得分。\n\n规则说明：\n1. Furik从（1,1）出发，每次只能向右或向下移动，到达（n,n）\n2. Rubik随后从（n,n）出发，每次只能向左或向上移动，返回（1,1）\n3. 单元格得分只能计算一次，求最大总得分\n\n输入格式：\n第一行：整数n（1≤n≤300）\n随后n行：每行n个整数（-1000≤a_i,j≤1000）\n\n输出格式：\n一个整数，表示最大得分\n\n当前题目：\n3\n-447 -864 797\n15 -843 -295\n-132 -16 472\n\n请将答案用[answer]标签包裹，例如：[answer]42[/answer]'}]
+2025-06-05 15:40:20,317 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '你是数学竞赛选手，请解决以下期望值计算问题：\n\n给定两个长度均为5的字符串：\n字符串a：WNPCP\n字符串b：NNNRX\n\n定义所有有效子串对(x,y)为从a和b中分别选取的等长子串。求在所有可能子串对中，x与y在相同位置上字符相等的数量的数学期望。\n\n请先分析问题，给出计算步骤，最后将答案（保留9位小数）放入[answer]标签内。例如：[answer]0.400000000[/answer]'}], {'identity': {'n': 5, 'a': 'WNPCP', 'b': 'NNNRX', 'expected': 0.32727272727272727, '_bootcamp_name': 'Clittleelephantandfurikandrubikbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': '你是数学竞赛选手，请解决以下期望值计算问题：\n\n给定两个长度均为5的字符串：\n字符串a：WNPCP\n字符串b：NNNRX\n\n定义所有有效子串对(x,y)为从a和b中分别选取的等长子串。求在所有可能子串对中，x与y在相同位置上字符相等的数量的数学期望。\n\n请先分析问题，给出计算步骤，最后将答案（保留9位小数）放入[answer]标签内。例如：[answer]0.400000000[/answer]'})
+2025-06-05 15:40:20,317 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '你是数学竞赛选手，请解决以下期望值计算问题：\n\n给定两个长度均为5的字符串：\n字符串a：WNPCP\n字符串b：NNNRX\n\n定义所有有效子串对(x,y)为从a和b中分别选取的等长子串。求在所有可能子串对中，x与y在相同位置上字符相等的数量的数学期望。\n\n请先分析问题，给出计算步骤，最后将答案（保留9位小数）放入[answer]标签内。例如：[answer]0.400000000[/answer]'}]
+2025-06-05 15:40:20,317 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '根据神秘东方命名规则，你需要将一个回文字符串tchtwrxxxxrwthct分割重组为不同的回文：\n1. 只能通过切割并重组子串来形成新回文\n2. 新回文必须与原字符串不同\n3. 需要找到最小切割次数k\n\n请按照以下格式给出答案：[answer]答案[/answer]\n示例：\n输入：nolon → [answer]2[/answer]\n输入：otto → [answer]1[/answer]\n输入：qqqq → [answer]Impossible[/answer]\n'}], {'identity': {'s': 'tchtwrxxxxrwthct', '_bootcamp_name': 'Bsashaandonemorenamebootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': '根据神秘东方命名规则，你需要将一个回文字符串tchtwrxxxxrwthct分割重组为不同的回文：\n1. 只能通过切割并重组子串来形成新回文\n2. 新回文必须与原字符串不同\n3. 需要找到最小切割次数k\n\n请按照以下格式给出答案：[answer]答案[/answer]\n示例：\n输入：nolon → [answer]2[/answer]\n输入：otto → [answer]1[/answer]\n输入：qqqq → [answer]Impossible[/answer]\n'})
+2025-06-05 15:40:20,318 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '根据神秘东方命名规则，你需要将一个回文字符串tchtwrxxxxrwthct分割重组为不同的回文：\n1. 只能通过切割并重组子串来形成新回文\n2. 新回文必须与原字符串不同\n3. 需要找到最小切割次数k\n\n请按照以下格式给出答案：[answer]答案[/answer]\n示例：\n输入：nolon → [answer]2[/answer]\n输入：otto → [answer]1[/answer]\n输入：qqqq → [answer]Impossible[/answer]\n'}]
+2025-06-05 15:40:20,318 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '## Three Bags Puzzle ##\nYou have three bags containing numbers. In each operation:\n1. Choose two non-empty bags\n2. Pick one number from each (a from first, b from second)\n3. Replace a with a-b in the first bag\n4. Remove b from the second bag\n\nGoal: Leave exactly one number in any bag with others empty. Find the MAXIMUM possible final number.\n\nInput format:\nLine 1: n1 n2 n3 (element counts)\nNext 3 lines: space-separated numbers for each bag\n\nOutput format:\nSingle integer in [answer]...[/answer] tags\n\nExample:\nInput:\n2 4 1\n1 2\n6 3 4 5\n5\nAnswer:\n[answer]20[/answer]\n\nNow solve this problem:\n3 2 1\n11 4 3\n16 2\n5\n[answer][/answer]'}], {'identity': {'bags': [[11, 4, 3], [16, 2], [5]], '_bootcamp_name': 'Cthreebagsbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': '## Three Bags Puzzle ##\nYou have three bags containing numbers. In each operation:\n1. Choose two non-empty bags\n2. Pick one number from each (a from first, b from second)\n3. Replace a with a-b in the first bag\n4. Remove b from the second bag\n\nGoal: Leave exactly one number in any bag with others empty. Find the MAXIMUM possible final number.\n\nInput format:\nLine 1: n1 n2 n3 (element counts)\nNext 3 lines: space-separated numbers for each bag\n\nOutput format:\nSingle integer in [answer]...[/answer] tags\n\nExample:\nInput:\n2 4 1\n1 2\n6 3 4 5\n5\nAnswer:\n[answer]20[/answer]\n\nNow solve this problem:\n3 2 1\n11 4 3\n16 2\n5\n[answer][/answer]'})
+2025-06-05 15:40:20,318 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '## Three Bags Puzzle ##\nYou have three bags containing numbers. In each operation:\n1. Choose two non-empty bags\n2. Pick one number from each (a from first, b from second)\n3. Replace a with a-b in the first bag\n4. Remove b from the second bag\n\nGoal: Leave exactly one number in any bag with others empty. Find the MAXIMUM possible final number.\n\nInput format:\nLine 1: n1 n2 n3 (element counts)\nNext 3 lines: space-separated numbers for each bag\n\nOutput format:\nSingle integer in [answer]...[/answer] tags\n\nExample:\nInput:\n2 4 1\n1 2\n6 3 4 5\n5\nAnswer:\n[answer]20[/answer]\n\nNow solve this problem:\n3 2 1\n11 4 3\n16 2\n5\n[answer][/answer]'}]
+2025-06-05 15:40:20,318 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': "You are given 4 words, each consisting of lowercase letters. Each word contains at least one vowel. Your task is to form as many beautiful lyrics as possible.\n\nA beautiful lyric consists of two lines. Each line has two words separated by a space. The conditions are:\n1. The number of vowels in the first word of each line must be equal.\n2. The number of vowels in the second word of each line must be equal.\n3. The last vowel in the entire first line must be the same as the last vowel in the entire second line.\n\nVowels are 'a', 'e', 'i', 'o', 'u' (excluding 'y').\n\nInput:\n4\nitonf\nawrz\nuurgp\naz\n\nOutput format:\n- The first line is the maximum number of lyrics, m.\n- Followed by 2m lines, each pair forming a lyric.\n\nPut your answer within [answer] tags. Example:\n[answer]2[/answer]\nword1 word2\nword3 word4\nword5 word6\nword7 word8"}], {'identity': {'n': 4, 'words': ['itonf', 'awrz', 'uurgp', 'az'], 'expected_m': 1, 'word_counts': defaultdict(<class 'int'>, {'itonf': 1, 'awrz': 1, 'uurgp': 1, 'az': 1}), '_bootcamp_name': 'Cbeautifullyricsbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': "You are given 4 words, each consisting of lowercase letters. Each word contains at least one vowel. Your task is to form as many beautiful lyrics as possible.\n\nA beautiful lyric consists of two lines. Each line has two words separated by a space. The conditions are:\n1. The number of vowels in the first word of each line must be equal.\n2. The number of vowels in the second word of each line must be equal.\n3. The last vowel in the entire first line must be the same as the last vowel in the entire second line.\n\nVowels are 'a', 'e', 'i', 'o', 'u' (excluding 'y').\n\nInput:\n4\nitonf\nawrz\nuurgp\naz\n\nOutput format:\n- The first line is the maximum number of lyrics, m.\n- Followed by 2m lines, each pair forming a lyric.\n\nPut your answer within [answer] tags. Example:\n[answer]2[/answer]\nword1 word2\nword3 word4\nword5 word6\nword7 word8"})
+2025-06-05 15:40:20,319 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': "You are given 4 words, each consisting of lowercase letters. Each word contains at least one vowel. Your task is to form as many beautiful lyrics as possible.\n\nA beautiful lyric consists of two lines. Each line has two words separated by a space. The conditions are:\n1. The number of vowels in the first word of each line must be equal.\n2. The number of vowels in the second word of each line must be equal.\n3. The last vowel in the entire first line must be the same as the last vowel in the entire second line.\n\nVowels are 'a', 'e', 'i', 'o', 'u' (excluding 'y').\n\nInput:\n4\nitonf\nawrz\nuurgp\naz\n\nOutput format:\n- The first line is the maximum number of lyrics, m.\n- Followed by 2m lines, each pair forming a lyric.\n\nPut your answer within [answer] tags. Example:\n[answer]2[/answer]\nword1 word2\nword3 word4\nword5 word6\nword7 word8"}]
+2025-06-05 15:40:20,319 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '给定初始值a=245118，目标值b=38，k=11。每次操作可选：\n1. 减1\n2. 选x∈[2,k]，减去a mod x\n求最短时间。答案放入[answer][/answer]。正确格式示例：[answer]5[/answer]'}], {'identity': {'a': 245118, 'b': 38, 'k': 11, '_bootcamp_name': 'Cnumbertransformationbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': '给定初始值a=245118，目标值b=38，k=11。每次操作可选：\n1. 减1\n2. 选x∈[2,k]，减去a mod x\n求最短时间。答案放入[answer][/answer]。正确格式示例：[answer]5[/answer]'})
+2025-06-05 15:40:20,319 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '给定初始值a=245118，目标值b=38，k=11。每次操作可选：\n1. 减1\n2. 选x∈[2,k]，减去a mod x\n求最短时间。答案放入[answer][/answer]。正确格式示例：[answer]5[/answer]'}]
+2025-06-05 15:40:20,319 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': "你是一位逻辑学专家，现在需要解决一个关于量词分配的问题。给定10个变量和13个不等式，每个不等式是x_j < x_k的形式。你的任务是为每个变量分配量词∀或∃，使得整个命题为真，并且尽可能多地使用∀。如果无解，输出-1。\n\n        具体的不等式如下：\n        f(x_1, ..., x_10) = x_8 < x_2 ∧ x_10 < x_1 ∧ x_7 < x_10 ∧ x_5 < x_8 ∧ x_4 < x_7 ∧ x_3 < x_8 ∧ x_1 < x_10 ∧ x_9 < x_2 ∧ x_7 < x_6 ∧ x_2 < x_6 ∧ x_4 < x_5 ∧ x_5 < x_10 ∧ x_7 < x_2\n\n        请输出你的解决方案，将所有变量的量词分配写在一个字符串中，例如'AAE'，并放在[answer][/answer]标签中。"}], {'identity': {'n': 10, 'm': 13, 'inequalities': [(8, 2), (10, 1), (7, 10), (5, 8), (4, 7), (3, 8), (1, 10), (9, 2), (7, 6), (2, 6), (4, 5), (5, 10), (7, 2)], 'answer': -1, '_bootcamp_name': 'Equantifierquestionbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': "你是一位逻辑学专家，现在需要解决一个关于量词分配的问题。给定10个变量和13个不等式，每个不等式是x_j < x_k的形式。你的任务是为每个变量分配量词∀或∃，使得整个命题为真，并且尽可能多地使用∀。如果无解，输出-1。\n\n        具体的不等式如下：\n        f(x_1, ..., x_10) = x_8 < x_2 ∧ x_10 < x_1 ∧ x_7 < x_10 ∧ x_5 < x_8 ∧ x_4 < x_7 ∧ x_3 < x_8 ∧ x_1 < x_10 ∧ x_9 < x_2 ∧ x_7 < x_6 ∧ x_2 < x_6 ∧ x_4 < x_5 ∧ x_5 < x_10 ∧ x_7 < x_2\n\n        请输出你的解决方案，将所有变量的量词分配写在一个字符串中，例如'AAE'，并放在[answer][/answer]标签中。"})
+2025-06-05 15:40:20,319 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': "你是一位逻辑学专家，现在需要解决一个关于量词分配的问题。给定10个变量和13个不等式，每个不等式是x_j < x_k的形式。你的任务是为每个变量分配量词∀或∃，使得整个命题为真，并且尽可能多地使用∀。如果无解，输出-1。\n\n        具体的不等式如下：\n        f(x_1, ..., x_10) = x_8 < x_2 ∧ x_10 < x_1 ∧ x_7 < x_10 ∧ x_5 < x_8 ∧ x_4 < x_7 ∧ x_3 < x_8 ∧ x_1 < x_10 ∧ x_9 < x_2 ∧ x_7 < x_6 ∧ x_2 < x_6 ∧ x_4 < x_5 ∧ x_5 < x_10 ∧ x_7 < x_2\n\n        请输出你的解决方案，将所有变量的量词分配写在一个字符串中，例如'AAE'，并放在[answer][/answer]标签中。"}]
+2025-06-05 15:40:20,319 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '给定长度为9的数组：[4 8 5 2 7 3 1 9 6]\n请对k=1到k=9依次判断：\n1. 计算k-compression数组（每个元素是连续k个元素的最小值）\n2. 检查该数组是否是1到(n-k+1)的排列\n\n输出：长度为9的二进制字符串，第k位为1表示有效。答案置于[answer][/answer]中。例如：[answer]1010[/answer]'}], {'identity': {'n': 9, 'a': [4, 8, 5, 2, 7, 3, 1, 9, 6], 'correct_answer': '100000001', 'case_type': 'valid_k1', '_bootcamp_name': 'Dratingcompressionbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': '给定长度为9的数组：[4 8 5 2 7 3 1 9 6]\n请对k=1到k=9依次判断：\n1. 计算k-compression数组（每个元素是连续k个元素的最小值）\n2. 检查该数组是否是1到(n-k+1)的排列\n\n输出：长度为9的二进制字符串，第k位为1表示有效。答案置于[answer][/answer]中。例如：[answer]1010[/answer]'})
+2025-06-05 15:40:20,320 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '给定长度为9的数组：[4 8 5 2 7 3 1 9 6]\n请对k=1到k=9依次判断：\n1. 计算k-compression数组（每个元素是连续k个元素的最小值）\n2. 检查该数组是否是1到(n-k+1)的排列\n\n输出：长度为9的二进制字符串，第k位为1表示有效。答案置于[answer][/answer]中。例如：[answer]1010[/answer]'}]
+2025-06-05 15:40:20,320 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': 'You are a programming expert in Tree World. The problem involves calculating the expected cost after each road repair in a tree structure.\nThe tree has n cities connected by n-1 roads. Each year, the length of one road is reduced. After each modification, output the expected cost of building the Santa network, which is the average of the sum of pairwise distances for all possible triplets of distinct cities.\n\nInput format:\n- First line: integer n (3 ≤ n ≤ 1e5)\n- Next n-1 lines: three integers ai, bi, li (describing a road)\n- Next line: integer q (number of modifications)\n- Next q lines: two integers r_j, w_j (road number and new length)\n\nOutput format:\n- After each modification, print the expected cost with 10 decimal places.\n\nInput data for this problem:\n3\n1 2 557\n2 3 252\n5\n2 36\n1 242\n2 5\n1 207\n2 4\n\nPlease output the expected cost after each modification, each on a new line with exactly 10 decimal places.\nEnclose your answer within [answer] and [/answer] tags. Example:\n[answer]\n14.0000000000\n12.0000000000\n...\n[/answer]\n'}], {'identity': {'n': 3, 'edges': [(1, 2, 557), (2, 3, 252)], 'queries': [(2, 36), (1, 242), (2, 5), (1, 207), (2, 4)], '_bootcamp_name': 'Dnewyearsantanetworkbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': 'You are a programming expert in Tree World. The problem involves calculating the expected cost after each road repair in a tree structure.\nThe tree has n cities connected by n-1 roads. Each year, the length of one road is reduced. After each modification, output the expected cost of building the Santa network, which is the average of the sum of pairwise distances for all possible triplets of distinct cities.\n\nInput format:\n- First line: integer n (3 ≤ n ≤ 1e5)\n- Next n-1 lines: three integers ai, bi, li (describing a road)\n- Next line: integer q (number of modifications)\n- Next q lines: two integers r_j, w_j (road number and new length)\n\nOutput format:\n- After each modification, print the expected cost with 10 decimal places.\n\nInput data for this problem:\n3\n1 2 557\n2 3 252\n5\n2 36\n1 242\n2 5\n1 207\n2 4\n\nPlease output the expected cost after each modification, each on a new line with exactly 10 decimal places.\nEnclose your answer within [answer] and [/answer] tags. Example:\n[answer]\n14.0000000000\n12.0000000000\n...\n[/answer]\n'})
+2025-06-05 15:40:20,320 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': 'You are a programming expert in Tree World. The problem involves calculating the expected cost after each road repair in a tree structure.\nThe tree has n cities connected by n-1 roads. Each year, the length of one road is reduced. After each modification, output the expected cost of building the Santa network, which is the average of the sum of pairwise distances for all possible triplets of distinct cities.\n\nInput format:\n- First line: integer n (3 ≤ n ≤ 1e5)\n- Next n-1 lines: three integers ai, bi, li (describing a road)\n- Next line: integer q (number of modifications)\n- Next q lines: two integers r_j, w_j (road number and new length)\n\nOutput format:\n- After each modification, print the expected cost with 10 decimal places.\n\nInput data for this problem:\n3\n1 2 557\n2 3 252\n5\n2 36\n1 242\n2 5\n1 207\n2 4\n\nPlease output the expected cost after each modification, each on a new line with exactly 10 decimal places.\nEnclose your answer within [answer] and [/answer] tags. Example:\n[answer]\n14.0000000000\n12.0000000000\n...\n[/answer]\n'}]
+2025-06-05 15:40:20,320 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': 'You are given a sequence of integers and need to process multiple queries. Each query asks for the sum of f(p) for all primes p in a given range [l, r]. Here, f(p) is the number of integers in the sequence divisible by p.\n\nInput format:\n- First line: integer n (1 ≤ n ≤ 1e6)\n- Second line: n integers x1, x2, ..., xn (2 ≤ xi ≤ 1e7)\n- Third line: integer m (1 ≤ m ≤ 50000)\n- Next m lines: pairs of integers li, ri (2 ≤ li ≤ ri ≤ 2e9)\n\nCurrent input:\n2\n6558 1322\n4\n660 661\n1091 1093\n1091 1093\n2 3\n\nOutput m integers in order, each on a new line. Enclose your answer with [answer] tags.\nExample format:\n[answer]\n3\n0\n5\n[/answer]'}], {'identity': {'n': 2, 'x': [6558, 1322], 'm': 4, 'queries': [(660, 661), (1091, 1093), (1091, 1093), (2, 3)], 'answers': [1, 1, 1, 3], '_prefix': [0, 0, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5], '_max_prime': 1093, '_bootcamp_name': 'Cbearandprimenumbersbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': 'You are given a sequence of integers and need to process multiple queries. Each query asks for the sum of f(p) for all primes p in a given range [l, r]. Here, f(p) is the number of integers in the sequence divisible by p.\n\nInput format:\n- First line: integer n (1 ≤ n ≤ 1e6)\n- Second line: n integers x1, x2, ..., xn (2 ≤ xi ≤ 1e7)\n- Third line: integer m (1 ≤ m ≤ 50000)\n- Next m lines: pairs of integers li, ri (2 ≤ li ≤ ri ≤ 2e9)\n\nCurrent input:\n2\n6558 1322\n4\n660 661\n1091 1093\n1091 1093\n2 3\n\nOutput m integers in order, each on a new line. Enclose your answer with [answer] tags.\nExample format:\n[answer]\n3\n0\n5\n[/answer]'})
+2025-06-05 15:40:20,321 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': 'You are given a sequence of integers and need to process multiple queries. Each query asks for the sum of f(p) for all primes p in a given range [l, r]. Here, f(p) is the number of integers in the sequence divisible by p.\n\nInput format:\n- First line: integer n (1 ≤ n ≤ 1e6)\n- Second line: n integers x1, x2, ..., xn (2 ≤ xi ≤ 1e7)\n- Third line: integer m (1 ≤ m ≤ 50000)\n- Next m lines: pairs of integers li, ri (2 ≤ li ≤ ri ≤ 2e9)\n\nCurrent input:\n2\n6558 1322\n4\n660 661\n1091 1093\n1091 1093\n2 3\n\nOutput m integers in order, each on a new line. Enclose your answer with [answer] tags.\nExample format:\n[answer]\n3\n0\n5\n[/answer]'}]
+2025-06-05 15:40:20,321 - DEBUG - handle_process_group: Starting group with item: ([{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '根据本福特定律研究问题，请计算4个独立随机变量满足条件的概率：\n\n每个变量的取值范围如下：\n变量1: [7836, 432874861283070409]，其中每个整数等概率出现\n变量2: [1000000000, 1999999999]，其中每个整数等概率出现\n变量3: [3079758, 4858291225015]，其中每个整数等概率出现\n变量4: [819130953, 7004964936310]，其中每个整数等概率出现\n要求计算至少3个变量的最高位为1的概率（即至少达到69%的比例）。\n\n请输出精确到小数点后15位的概率值，并确保绝对/相对误差≤1e-9。答案请用[answer]和[/answer]标签包裹。\n\n示例：\n[answer]0.123456789012345[/answer]'}], {'identity': {'N': 4, 'variables': [{'L': 7836, 'R': 432874861283070409}, {'L': 1000000000, 'R': 1999999999}, {'L': 3079758, 'R': 4858291225015}, {'L': 819130953, 'R': 7004964936310}], 'K': 69, '_bootcamp_name': 'Cfirstdigitlawbootcamp'}, 'task_name': 'RandomTask', 'raw_prompt': '根据本福特定律研究问题，请计算4个独立随机变量满足条件的概率：\n\n每个变量的取值范围如下：\n变量1: [7836, 432874861283070409]，其中每个整数等概率出现\n变量2: [1000000000, 1999999999]，其中每个整数等概率出现\n变量3: [3079758, 4858291225015]，其中每个整数等概率出现\n变量4: [819130953, 7004964936310]，其中每个整数等概率出现\n要求计算至少3个变量的最高位为1的概率（即至少达到69%的比例）。\n\n请输出精确到小数点后15位的概率值，并确保绝对/相对误差≤1e-9。答案请用[answer]和[/answer]标签包裹。\n\n示例：\n[answer]0.123456789012345[/answer]'})
+2025-06-05 15:40:20,321 - INFO - Collecting trajectories for item: [{'role': 'system', 'content': 'You are a deep thinking AI with strong reasoning abilities. You may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution.\n\nYou should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. Please think in English, even if the problem is presented in another language.\n\nWhen solving problems:\n1. Think step by step through the problem inside <think> tags\n2. Show your work clearly in your thinking\n3. Verify your answer before finalizing\n4. Follow the specific answer format requested in the problem\n\nPay close attention to how the problem asks you to format your answer - some may require specific tags, notations, or formats.'}, {'role': 'user', 'content': '根据本福特定律研究问题，请计算4个独立随机变量满足条件的概率：\n\n每个变量的取值范围如下：\n变量1: [7836, 432874861283070409]，其中每个整数等概率出现\n变量2: [1000000000, 1999999999]，其中每个整数等概率出现\n变量3: [3079758, 4858291225015]，其中每个整数等概率出现\n变量4: [819130953, 7004964936310]，其中每个整数等概率出现\n要求计算至少3个变量的最高位为1的概率（即至少达到69%的比例）。\n\n请输出精确到小数点后15位的概率值，并确保绝对/相对误差≤1e-9。答案请用[answer]和[/answer]标签包裹。\n\n示例：\n[answer]0.123456789012345[/answer]'}]
+2025-06-05 15:40:20,323 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,330 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,332 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,333 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,335 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,336 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,338 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,340 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,341 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,342 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,344 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,345 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,346 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,348 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,349 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,350 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+2025-06-05 15:40:20,352 - ERROR - Exception in callback BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076
+handle: <Handle BaseEnv.parallel_process_manager.<locals>.<lambda>(<Task cancell...base.py:1104>>) at /home/maxpaperclips/atropos/atroposlib/envs/base.py:1076>
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1078, in <lambda>
+    self._handle_group_completion(fut)
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1157, in _handle_group_completion
+    result = future.result()
+             ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1121, in handle_process_group
+    to_postprocess, to_backlog = await self.collect_trajectories(item)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 172, in collect_trajectories
+    completions = await self.server.chat_completion(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 182, in chat_completion
+    completions = await asyncio.gather(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/server_handling/server_manager.py", line 171, in chat_completion
+    async def chat_completion(self, **kwargs) -> ChatCompletion:
+asyncio.exceptions.CancelledError
+Traceback (most recent call last):
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1583, in run
+    loop = asyncio.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 406, in <module>
+    InternBootcampEnv.cli()
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1195, in cli
+    run_and_exit(
+  File "/home/maxpaperclips/atropos/.venv/lib/python3.11/site-packages/pydantic_cli/__init__.py", line 644, in run_and_exit
+    sys.exit(f(_args))
+             ^^^^^^^^
+  File "/home/maxpaperclips/atropos/.venv/lib/python3.11/site-packages/pydantic_cli/__init__.py", line 523, in f
+    return _runner(
+           ^^^^^^^^
+  File "/home/maxpaperclips/atropos/.venv/lib/python3.11/site-packages/pydantic_cli/__init__.py", line 333, in _runner
+    exit_code = exception_handler(e)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1193, in custom_error_handler
+    raise ex
+  File "/home/maxpaperclips/atropos/.venv/lib/python3.11/site-packages/pydantic_cli/__init__.py", line 326, in _runner
+    out = cmd.run()
+          ^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1587, in run
+    asyncio.run(manager_method())
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/atroposlib/envs/base.py", line 1061, in parallel_process_manager
+    item = await self.get_next_item()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/intern_bootcamp_env.py", line 140, in get_next_item
+    prompt = self.bootcamp_instance.prompt_func(identity)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/bootcamp_registry.py", line 199, in prompt_func
+    return self.current_bootcamp.prompt_func(identity_copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxpaperclips/atropos/environments/intern_bootcamp/internbootcamp_lib/internbootcamp/bootcamp/bigcodebench/bigcodebench.py", line 25, in prompt_func
+    return add_python_marker(case['instruct_prompt'])
+                             ~~~~^^^^^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable

@@ -1,0 +1,87 @@
+Starting InternBootcamp PARALLEL dataset generation with local SGLang
+Model: NousResearch/DeepHermes-3-Mistral-24B-Preview
+Output file: data/intern_bootcamp_deephermes24b_parallel_sglang_dataset_13647.jsonl
+Max parallel groups: 32
+Total steps: 10000
+Group size: 64
+Launching SGLang server on port 8000...
+SGLang server started with PID 1954944
+Waiting for SGLang server to be ready...
+SGLang server is ready!
+Starting PARALLEL data generation...
+This will process up to 32 groups in parallel
+Loaded config from /home/maxpaperclips/atropos/environments/intern_bootcamp/logs/13647/config_sglang.yaml
+InternBootcampEnvConfigWithDefaults(
+    group_size=64,
+    max_num_workers=32,
+    max_eval_workers=16,
+    max_num_workers_per_node=8,
+    steps_per_eval=100,
+    max_token_length=24576,
+    eval_handling=<EvalHandlingEnum.STOP_TRAIN: 'STOP_TRAIN'>,
+    eval_limit_ratio=0.5,
+    inference_weight=1.0,
+    batch_size=-1,
+    max_batches_offpolicy=3,
+    tokenizer_name='NousResearch/DeepHermes-3-Mistral-24B-Preview',
+    use_wandb=True,
+    rollout_server_url='http://localhost:8000',
+    total_steps=10000,
+    wandb_name='intern_bootcamp_deephermes24b_parallel_sglang_generation',
+    num_rollouts_to_keep=32,
+    num_rollouts_per_group_for_logging=1,
+    ensure_scores_are_not_same=False,
+    data_path_to_save_groups='data/intern_bootcamp_deephermes24b_parallel_sglang
+_dataset_13647.jsonl',
+    min_items_sent_before_logging=2,
+    include_messages=True,
+    use_parallel_processing=True,
+    task_name='RandomTask',
+    task_params={},
+    correct_reward=1.0,
+    incorrect_reward=-0.5,
+    format_bonus=0.2,
+    require_reasoning=True,
+    min_reasoning_length=50,
+    temperature=0.7,
+    top_p=0.9
+)
+[
+    APIServerConfig(
+        timeout=1200,
+        num_max_requests_at_once=512,
+        num_requests_for_eval=64,
+        model_name='NousResearch/DeepHermes-3-Mistral-24B-Preview',
+        rolling_buffer_length=1000,
+        server_type='openai',
+        api_key='dummy',
+        base_url='http://localhost:8000/v1',
+        n_kwarg_is_ignored=False,
+        health_check=True
+    )
+]
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mintern_bootcamp-2025-06-05-xhjdnl[0m at: [34mhttps://wandb.ai/nous_research/atropos/runs/89voc3kg[0m
+[1;34mwandb[0m: Find logs at: [1;35m../../../data/maxpaperclips/wandb/wandb/run-20250605_154019-89voc3kg/logs[0m
+Not enough nodes to distribute to, assuming single node and you've setup your sglang appropriately.
+Processing 10000 groups of 64 responses using parallel (high-performance) mode and writing to data/intern_bootcamp_deephermes24b_parallel_sglang_dataset_13647.jsonl
+Running up to 32 groups in parallel
+Starting to process 10000 groups with up to 32 parallel workers...
+Each group will process 64 trajectories in parallel
+Started processing group 1/10000
+Started processing group 2/10000
+Started processing group 3/10000
+Started processing group 4/10000
+Started processing group 5/10000
+Started processing group 6/10000
+Started processing group 7/10000
+Started processing group 8/10000
+Started processing group 9/10000
+Started processing group 10/10000
+Started processing group 11/10000
+Started processing group 12/10000
+Started processing group 13/10000
+Started processing group 14/10000
+Started processing group 15/10000
+Started processing group 16/10000
+Started processing group 17/10000

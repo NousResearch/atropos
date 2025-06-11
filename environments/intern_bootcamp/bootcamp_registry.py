@@ -160,43 +160,74 @@ class RandomTask:
 
     def case_generator(self) -> object:
         """Generate a case by randomly selecting a bootcamp."""
-        # Select a random bootcamp
-        self.current_bootcamp_name = random.choice(self.available_bootcamps)
-        self.current_bootcamp = self.registry.create_bootcamp_instance(
-            self.current_bootcamp_name, **self.params
-        )
+        max_attempts = 10  # Try up to 10 different bootcamps
+        
+        for attempt in range(max_attempts):
+            try:
+                # Select a random bootcamp
+                self.current_bootcamp_name = random.choice(self.available_bootcamps)
+                self.current_bootcamp = self.registry.create_bootcamp_instance(
+                    self.current_bootcamp_name, **self.params
+                )
 
-        # Generate case from the selected bootcamp
-        case = self.current_bootcamp.case_generator()
+                # Generate case from the selected bootcamp
+                case = self.current_bootcamp.case_generator()
+                
+                # Validate case is not None
+                if case is None:
+                    logger.warning(f"Bootcamp {self.current_bootcamp_name} returned None case, skipping")
+                    continue
 
-        # Add bootcamp name to the case for tracking
-        if isinstance(case, dict):
-            case["_bootcamp_name"] = self.current_bootcamp_name
-        else:
-            # If case is not a dict, wrap it
-            case = {"data": case, "_bootcamp_name": self.current_bootcamp_name}
+                # Add bootcamp name to the case for tracking
+                if isinstance(case, dict):
+                    case["_bootcamp_name"] = self.current_bootcamp_name
+                else:
+                    # If case is not a dict, wrap it
+                    case = {"data": case, "_bootcamp_name": self.current_bootcamp_name}
 
-        return case
+                return case
+            except Exception as e:
+                logger.warning(
+                    f"Failed to generate case from {self.current_bootcamp_name}: {e}"
+                )
+                # Remove the failing bootcamp from available list
+                if self.current_bootcamp_name in self.available_bootcamps:
+                    self.available_bootcamps.remove(self.current_bootcamp_name)
+                    logger.info(
+                        f"Removed {self.current_bootcamp_name} from available bootcamps. "
+                        f"{len(self.available_bootcamps)} remaining."
+                    )
+                
+                if attempt == max_attempts - 1:
+                    logger.error(f"Failed to generate case after {max_attempts} attempts")
+                    raise
+        
+        raise RuntimeError("Could not generate a valid case after maximum attempts")
 
     def prompt_func(self, identity) -> str:
         """Generate prompt using the current bootcamp."""
-        # Extract the bootcamp name if stored
-        bootcamp_name = identity.get("_bootcamp_name", self.current_bootcamp_name)
+        try:
+            # Extract the bootcamp name if stored
+            bootcamp_name = identity.get("_bootcamp_name", self.current_bootcamp_name)
 
-        # If we need to recreate the bootcamp (e.g., during scoring)
-        if not self.current_bootcamp or self.current_bootcamp_name != bootcamp_name:
-            self.current_bootcamp_name = bootcamp_name
-            self.current_bootcamp = self.registry.create_bootcamp_instance(
-                bootcamp_name, **self.params
-            )
+            # If we need to recreate the bootcamp (e.g., during scoring)
+            if not self.current_bootcamp or self.current_bootcamp_name != bootcamp_name:
+                self.current_bootcamp_name = bootcamp_name
+                self.current_bootcamp = self.registry.create_bootcamp_instance(
+                    bootcamp_name, **self.params
+                )
 
-        # Remove the bootcamp name before passing to prompt_func
-        identity_copy = dict(identity)
-        identity_copy.pop("_bootcamp_name", None)
-        if "data" in identity_copy and len(identity_copy) == 1:
-            identity_copy = identity_copy["data"]
+            # Remove the bootcamp name before passing to prompt_func
+            identity_copy = dict(identity)
+            identity_copy.pop("_bootcamp_name", None)
+            if "data" in identity_copy and len(identity_copy) == 1:
+                identity_copy = identity_copy["data"]
 
-        return self.current_bootcamp.prompt_func(identity_copy)
+            return self.current_bootcamp.prompt_func(identity_copy)
+        except Exception as e:
+            logger.error(f"Error in prompt_func for {self.current_bootcamp_name}: {e}")
+            # Return a fallback prompt
+            return f"Error generating prompt for {self.current_bootcamp_name}: {str(e)}"
 
     @classmethod
     def extract_output(cls, output):
