@@ -1,11 +1,13 @@
 import asyncio
 import logging
 import os
+
 from dotenv import load_dotenv
+
 from atroposlib.envs.base import APIServerConfig
-from .textworld_env import TextWorldEnv, TextWorldEnvConfig
+
 from .agents.atropos_agent import AtroposAgentConfig
-from .agents.atropos_rm import AtroposRMConfig
+from .textworld_env import TextWorldEnv, TextWorldEnvConfig
 
 load_dotenv()
 
@@ -20,6 +22,12 @@ async def main():
     """Run a complete TextWorld episode for testing."""
     logger.info("Starting TextWorld Environment Test")
 
+    # Set debug logging for more info
+    logging.getLogger("environments.game_environments.textworld").setLevel(
+        logging.DEBUG
+    )
+    logging.getLogger("atroposlib.utils.tool_call_parser").setLevel(logging.DEBUG)
+
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         logger.error("OPENAI_API_KEY not found in environment variables")
@@ -30,28 +38,29 @@ async def main():
         base_url="https://api.openai.com/v1",
         api_key=api_key,
         num_requests_for_eval=0,
-        server_type="openai"
+        server_type="openai",
     )
 
     env_config = TextWorldEnvConfig(
         tokenizer_name="NousResearch/Hermes-2-Pro-Llama-3-8B",
         max_token_length=4096,
-        max_steps=100,
+        max_steps=20,  # Reduced for quicker testing
         challenge_name="tw-simple",
+        challenge_rewards="sparse",  # Using sparse rewards with VR-CLI
         debug_mode=True,
         default_server_config=server_config,
         atropos_agent_config=AtroposAgentConfig(enable_memory=True),
-        atropos_rm_config=AtroposRMConfig(thinking=False),
-        group_size=2,
+        group_size=3,  # Test with 3 alternatives
+        vrcli_enabled=True,
+        vrcli_weight=0.7,  # 70% VR-CLI, 30% environment reward
+        vrcli_discount_factor=0.99,
         enable_policy_thinking_summarization=True,
         max_policy_thinking_summary_tokens=128,
     )
 
     try:
         env = TextWorldEnv(
-            config=env_config,
-            server_configs=[server_config],
-            slurm=False
+            config=env_config, server_configs=[server_config], slurm=False
         )
     except Exception as e:
         logger.error(f"Failed to initialize TextWorldEnv: {e}")
@@ -78,36 +87,67 @@ async def main():
 
         logger.info(f"\nEpisode Summary: {episode_id}")
         logger.info(f"  Status: Won={episode_state.won}, Lost={episode_state.lost}")
-        logger.info(f"  Score: {episode_state.last_score}, Moves: {episode_state.moves}")
-        logger.info(f"  Turns: {len(policy_sdgs_for_episode) if policy_sdgs_for_episode else 0}")
+        logger.info(
+            f"  Score: {episode_state.last_score}, Moves: {episode_state.moves}"
+        )
+        logger.info(
+            f"  Turns: {len(policy_sdgs_for_episode) if policy_sdgs_for_episode else 0}"
+        )
 
         if final_policy_data:
-            logger.info("\nPolicy Agent Results:")
+            logger.info("\nPolicy Agent Results with VR-CLI:")
             for turn_num, sdg in enumerate(final_policy_data):
                 if sdg:
                     metadata = sdg.get("metadata", {})
                     chosen_idx = metadata.get("chosen_alternative_index", -1)
                     scores = sdg.get("scores", [])
                     messages = sdg.get("messages", [])
+                    vrcli_scores = metadata.get("vrcli_scores", [])
+                    env_rewards = metadata.get("env_rewards", [])
 
-                    logger.info(f"  Turn {turn_num + 1}:")
+                    logger.info(f"\n  Turn {turn_num + 1}:")
                     logger.info(f"    Chosen alternative: {chosen_idx}")
-                    logger.info(f"    Scores: {scores}")
+                    logger.info(f"    Combined scores: {[f'{s:.3f}' for s in scores]}")
+                    logger.info(
+                        f"    VR-CLI scores: {[f'{s:.3f}' for s in vrcli_scores]}"
+                    )
+                    logger.info(f"    Env rewards: {[f'{s:.3f}' for s in env_rewards]}")
 
-                    if chosen_idx != -1 and 0 <= chosen_idx < len(messages):
-                        chosen_alt_messages = messages[chosen_idx]
-                        if chosen_alt_messages and len(chosen_alt_messages) >= 2:
-                            logger.info(f"    Input: '{chosen_alt_messages[-2].get('content', '')[:200]}...'")
-                            logger.info(f"    Output: '{chosen_alt_messages[-1].get('content', '')[:200]}...'")
+                    # Display all alternatives with their predictions
+                    for alt_idx, alt_messages in enumerate(messages):
+                        if alt_messages and len(alt_messages) >= 1:
+                            last_msg = alt_messages[-1].get("content", "")
+                            # Extract action and prediction from the tool call
+                            action_start = last_msg.find('"command":')
+                            prediction_start = last_msg.find('"expected_outcome":')
 
-        logger.info(f"\nRM Judgements: {len(episode_state.rm_judgement_history)}")
-        for i, judgement in enumerate(episode_state.rm_judgement_history):
-            logger.info(f"  Judgement {i+1}:")
-            logger.info(f"    Q-value: {judgement.get('parsed_q_value', 'N/A')}")
-            if judgement.get('api_error'):
-                logger.info("    API Error: True")
-            if judgement.get('q_value_parse_error'):
-                logger.info("    Parse Error: True")
+                            chosen_marker = " [CHOSEN]" if alt_idx == chosen_idx else ""
+                            logger.info(f"\n    Alternative {alt_idx}{chosen_marker}:")
+
+                            if action_start != -1 and prediction_start != -1:
+                                # Parse the action and prediction
+                                import json
+
+                                try:
+                                    tool_call_start = last_msg.find('{"name"')
+                                    tool_call_end = last_msg.rfind("}")
+                                    if tool_call_start != -1 and tool_call_end != -1:
+                                        tool_call_str = last_msg[
+                                            tool_call_start : tool_call_end + 1
+                                        ]
+                                        tool_call = json.loads(tool_call_str)
+                                        action = tool_call.get("arguments", {}).get(
+                                            "command", "N/A"
+                                        )
+                                        prediction = tool_call.get("arguments", {}).get(
+                                            "expected_outcome", "N/A"
+                                        )
+                                        logger.info(f"      Action: {action}")
+                                        logger.info(
+                                            f"      Prediction: {prediction[:100]}..."
+                                        )
+                                except:
+                                    logger.info(f"      Raw: {last_msg[:200]}...")
 
     except Exception as e:
         logger.error(f"Error during episode: {e}")
