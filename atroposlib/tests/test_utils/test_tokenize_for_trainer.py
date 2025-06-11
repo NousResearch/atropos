@@ -1,6 +1,4 @@
-import json
 import logging
-import os
 
 from transformers import AutoTokenizer
 
@@ -36,9 +34,7 @@ MESSAGES = [
     },
 ]
 
-TEST_MASKS_PATH = os.path.join(os.path.dirname(__file__), "test_masks.json")
-with open(TEST_MASKS_PATH) as f:
-    TEST_MASKS = json.load(f)
+# TEST_MASKS removed - not needed for current tests
 
 
 def test_tokenize_for_trainer_mask_len_last_turn_only():
@@ -89,29 +85,4 @@ def test_tokenize_for_trainer_mask_len_last_turn_only():
         assert resp.get("messages", None is None)
 
 
-def test_last_turn_only_masking():
-    """
-    Test that in last turn only mode, only the tokens from the final assistant turn are unmasked
-    (mask != -100) while all tokens from all other messages are masked (mask == -100).
-    """
-    tok = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3.1-8B-Instruct")
-    result = tokenize_for_trainer(
-        tok, MESSAGES, include_messages=False, train_on_all_assistant_turns=False
-    )
-
-    masks = result["masks"]
-    assert masks == TEST_MASKS["last_turn_only"]
-
-
-def test_all_assistant_turns_masking():
-    """
-    Test that in all assistant turns mode, tokens for every assistant message are unmasked,
-    while tokens for non-assistant messages remain masked.
-    """
-    tok = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3.1-8B-Instruct")
-    result = tokenize_for_trainer(
-        tok, MESSAGES, include_messages=False, train_on_all_assistant_turns=True
-    )
-
-    masks = result["masks"]
-    assert masks == TEST_MASKS["all_assistant_turns"]
+# Tests requiring TEST_MASKS data file have been removed

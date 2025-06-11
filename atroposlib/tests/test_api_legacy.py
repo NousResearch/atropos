@@ -1,13 +1,22 @@
 import pytest
 import requests
 
-from testing.api.utils import launch_api_for_testing
+from atroposlib.tests.api_test_utils import launch_api_for_testing
 
 
 def register_data(group="test", proj="test", batch_size=32) -> requests.Response:
     x = requests.post(
         "http://localhost:8000/register",
-        json={"wandb_group": group, "wandb_project": proj, "batch_size": batch_size},
+        json={
+            "wandb_group": group,
+            "wandb_project": proj,
+            "batch_size": batch_size,
+            "max_token_len": 512,
+            "checkpoint_dir": "/tmp/test",
+            "save_checkpoint_interval": 100,
+            "starting_step": 0,
+            "num_steps": 1000,
+        },
     )
     return x
 
@@ -35,7 +44,8 @@ def reset() -> requests.Response:
 def api():
     proc = launch_api_for_testing()
     yield
-    proc.kill()
+    proc.terminate()
+    proc.wait()  # Wait for clean shutdown
 
 
 def test_register(api):

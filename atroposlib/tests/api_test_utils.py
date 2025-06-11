@@ -1,9 +1,7 @@
-import multiprocessing
+import subprocess
 import time
 
 import requests
-
-from atroposlib.cli.run_api import main as run_api_main
 
 
 def check_api_running() -> bool:
@@ -14,14 +12,27 @@ def check_api_running() -> bool:
         return False
 
 
-def launch_api_for_testing(max_wait_for_api: int = 10) -> multiprocessing.Process:
-    api_proc = multiprocessing.Process(target=run_api_main)
-    api_proc.start()
+def launch_api_for_testing(max_wait_for_api: int = 10) -> subprocess.Popen:
+    # Use subprocess instead of multiprocessing to avoid inheriting pytest args
+    api_proc = subprocess.Popen(
+        [
+            "python",
+            "-m",
+            "atroposlib.cli.run_api",
+            "--host",
+            "localhost",
+            "--port",
+            "8000",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     counter = 0
     while not check_api_running():
         time.sleep(1)
         counter += 1
         if counter > max_wait_for_api:
+            api_proc.terminate()
             raise TimeoutError("API server did not start in time.")
     print("API server started for testing.")
     return api_proc

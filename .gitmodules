@@ -1,3 +1,6 @@
 [submodule "environments/intern_bootcamp/internbootcamp_lib"]
 	path = environments/intern_bootcamp/internbootcamp_lib
 	url = https://github.com/InternLM/InternBootcamp.git
+[submodule "environments/reasoning_gym_environment/reasoning-gym"]
+	path = environments/reasoning_gym_environment/reasoning-gym
+	url = https://github.com/open-thought/reasoning-gym

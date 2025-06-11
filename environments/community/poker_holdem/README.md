@@ -66,7 +66,7 @@ python -m vllm.entrypoints.openai.api_server \
 ```
 
 ```bash
-# run the enviroment
+# run the environment
 python poker_env.py process \
     --env.data_path_to_save_groups poker_rollouts.jsonl \
     --openai.base_url https://localhost:9002/v1 \

@@ -62,7 +62,7 @@ These methods have default implementations or are optional based on your needs:
 
 *   **`async def cleanup(self)`**: Called after each call to `handle_env`. You can implement this for any cleanup needed after processing a single item, though it's often not required.
 
-## Overrideable Class Variables
+## Overridable Class Variables
 
 These class-level variables in `BaseEnv` can be overridden in your subclass to customize its behavior:
 
