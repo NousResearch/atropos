@@ -7,12 +7,109 @@ This document contains project-specific instructions and learnings for Claude as
 - This project uses UV for dependency management
 - Example: `uv run python test_improved_prompt.py`
 
-## Current Work: TextWorld Environment Testing (June 11, 2025)
+## Current Work: Inline Memory Generation System (June 11, 2025)
 
-### Testing Setup
-We are testing the TextWorld environment with different models to compare format compliance:
+### Background
+The TextWorld environment currently uses a separate LLM call to generate memory summaries after each turn. We're implementing an inline memory generation system where the model generates memories as XML blocks during its response, which will be more efficient and allow the model to learn memory generation through RL.
+
+### Current Memory System Analysis
+1. **Memory Generation Process**:
+   - After each turn, `record_selected_action_and_learn_from_turn()` is called
+   - This method calls `summarize_turn_for_memory()` which makes a separate LLM API call
+   - The LLM generates a concise memory summary based on the turn's events
+   - The summary is stored in a FAISS index for similarity-based retrieval
+
+2. **Memory Storage**:
+   - Uses `AtroposMemoryManager` with sentence-transformers for embeddings
+   - Stores text summaries in a FAISS index (vector database)
+   - Retrieves top-k relevant memories based on cosine similarity
+   - Retrieved memories are prepended to observations in `generate_action()`
+
+3. **Thinking Block Summarization**:
+   - Separate process that happens in `postprocess_histories()`
+   - Uses `summarize_thinking_block()` to compress long reasoning chains
+   - Preserves key reasoning steps while reducing token count
+   - **NOTE**: We'll initially try WITHOUT thinking block summarization to see if inline memories are sufficient
+   - Only re-enable if model starts refusing to produce thinking blocks due to overconditioning on previous messages
+
+### Proposed Inline Memory Generation System
+
+#### Implementation Plan
+1. **Update System Prompt**:
+   - Add instructions for generating `<memory>` blocks after `<think>` and before `<tool_call>`
+   - Memory blocks should:
+     - Build upon and reference previous memories (shown as "Relevant Memories" in observation)
+     - Track outcomes of previous actions and update understanding
+     - Maintain continuity of goals and strategic plans
+     - Record new discoveries while preserving important context
+
+2. **Memory Generation Guidelines** (to include in prompt):
+   - Review previous memories shown in the observation
+   - Note the outcome of your last action (did it match expectations?)
+   - Update any goals or plans based on new information
+   - Preserve important state information (inventory, location, objectives)
+   - Be concise but comprehensive (aim for 1-3 sentences)
+
+3. **Modify AtroposAgent**:
+   - Add memory extraction logic in `generate_action()` method
+   - Parse XML to extract content from `<memory>` tags
+   - Store extracted memories directly in the FAISS index
+   - Remove the need for `summarize_turn_for_memory()` calls
+
+4. **Benefits**:
+   - **Efficiency**: Eliminates extra LLM API call per turn
+   - **Context**: Memories generated with full context awareness
+   - **RL Integration**: Memory generation becomes part of the RL training
+   - **Continuity**: Model learns to maintain coherent memory chains
+   - **Strategic Planning**: Memories can track multi-step plans
+
+5. **Challenges & Solutions**:
+   - **Memory Coherence**: Model must learn to build on previous memories
+   - **Information Decay**: Important early memories might get lost
+   - **Token Usage**: Monitor if inline memories increase response length significantly
+   - **Thinking Block Overconditioning**: If model stops producing thinking blocks because previous messages lack them, we may need to:
+     - Re-enable thinking block summarization for very long blocks (>2000 tokens)
+     - Or adjust training to ensure model still produces thinking blocks despite their absence in history
+
+### Implementation Tasks
+- [ ] Update system prompt in `textworld_env.py` to include memory block instructions
+- [ ] Add memory extraction logic to `AtroposAgent.generate_action()`
+- [ ] Create XML parsing utilities for memory blocks
+- [ ] Update memory storage to use inline memories
+- [ ] Test with 8B model to ensure format compliance
+- [ ] Compare memory quality between inline and separate generation
+- [ ] Monitor token usage and adjust if needed
+
+### Example Expected Output
+```xml
+<think>
+Looking at my previous memories, I was exploring the kitchen to find cooking ingredients.
+I successfully opened the fridge and found eggs, milk, and flour. My goal is still to
+cook something. Now I need to take these ingredients and find a recipe or mixing bowl.
+The previous action of opening the fridge worked as expected.
+</think>
+<memory>
+Found eggs, milk, and flour in kitchen fridge. Still need mixing bowl or recipe to cook.
+Previous exploration of kitchen successful - have stove and ingredients located.
+</memory>
+<tool_call>
+{"name": "execute_command", "arguments": {"command": "take eggs", "expected_outcome": "I take the eggs from the fridge and add them to my inventory"}}
+</tool_call>
+```
+
+### Memory Continuity Example
+**Turn 1 Memory**: "Kitchen has stove and fridge. Main objective is cooking. Need to find ingredients."
+
+**Turn 2 Memory**: "Found eggs, milk, flour in fridge. Still need mixing bowl or recipe. Kitchen layout understood."
+
+**Turn 3 Memory**: "Have eggs in inventory. Milk and flour still in fridge. Next: find mixing bowl, then gather remaining ingredients."
+
+This creates a coherent narrative that the model can follow and build upon.
+
+### Previous Work: TextWorld Environment Testing (Completed)
+We tested the TextWorld environment with different models to compare format compliance:
 - **DeepHermes-3-Mistral-24B-Preview**: Had formatting issues with tool calls
-- **DeepHermes-3-Llama-3-8B-Preview**: Currently testing as it may handle the format better
+- **DeepHermes-3-Llama-3-8B-Preview**: Successfully handles the XML format correctly
 
 ### Key Files and Locations
 - **SGLang launcher scripts**:
