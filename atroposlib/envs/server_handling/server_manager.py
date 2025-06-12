@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, List, Union
@@ -7,56 +8,66 @@ from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.completion import Completion
 from pydantic import BaseModel, Field
 
-from atroposlib.envs.server_handling.openai_server import OpenaiConfig, OpenAIServer
+from atroposlib.envs.server_handling.openai_server import OpenAIServer
+from atroposlib.envs.server_handling.server_baseline import (
+    APIServer,
+    APIServerConfig,
+    ServerBaseline,
+)
 from atroposlib.envs.server_handling.server_harness import ServerHarness
+from atroposlib.envs.server_handling.trl_vllm_server import TrlVllmServer
 
 
 class ServerManagerConfig(BaseModel):
     slurm: bool = Field(
-        default=True, description="Whether environment is running on slurm or not."
+        default=False, description="Whether environment is running on slurm or not."
     )
     testing: bool = Field(
         default=False, description="If set to True, environment uses mock OpenAI data."
     )
-
-
-class ServerBaseline(BaseModel):
-    """
-    Baseline configuration for server information. If local, uses ports 9004-9007 for the servers,
-    assuming a 1:1 split of GPUs.
-    """
-
-    timeout: int = Field(
-        default=1200, description="Timeout for the request in seconds."
-    )
-    num_max_requests_at_once: int = Field(
-        default=512,
-        description="Maximum number of concurrent requests. You should divide this by the n kwarg.",
-    )
-    num_requests_for_eval: int = Field(
-        default=64, description="Maximum number of concurrent requests for evaluation."
-    )
-    model_name: str = Field(
-        default="default",
-        description="The model name to use. Only works with sglang, please provide the model name.",
-    )
-    rolling_buffer_length: int = Field(
-        default=1000, description="Length of the rolling buffer to store metrics."
+    max_n_completions: int = Field(
+        default=8,
+        description=(
+            "The maximum number of completions to request at once per server call. "
+            "Will split any n larger than this into multiple calls. "
+            "This is to help load balance servers."
+        ),
     )
 
 
 class ServerManager:
     def __init__(
         self,
-        configs: Union[ServerBaseline, List[OpenaiConfig]],
+        configs: Union[ServerBaseline, List[APIServerConfig]],
+        server_class: APIServer = APIServer,
         slurm=False,
         testing=False,
+        max_n_completions=8,
     ):
+        self.max_n_completions = max_n_completions
+        # First we check to see if it's the base server class, and if so, we need to select the appropriate server class
+        # You can't use type() to check if it's the base server class, because it's an abstract class, it'll appear as
+        # an ABCMeta, not what you're expecting.
+        if inspect.isabstract(server_class):
+            if not isinstance(configs, list):
+                if configs.server_type == "openai":
+                    server_class = OpenAIServer
+                elif configs.server_type == "trl":
+                    server_class = TrlVllmServer
+                else:
+                    raise ValueError(f"Invalid server type: {configs.server_type}")
+            else:
+                if configs[0].server_type == "openai":
+                    server_class = OpenAIServer
+                elif configs[0].server_type == "trl":
+                    server_class = TrlVllmServer
+                else:
+                    raise ValueError(f"Invalid server type: {configs[0].server_type}")
         if testing:
             # testing :)
             self.servers = [ServerHarness()]
             return
-        if isinstance(configs, ServerBaseline):
+        if not isinstance(configs, list):
             urls = []
             if os.environ.get("SLURM_JOB_NODELIST", None) is not None:
                 nodelist = (
@@ -84,7 +95,7 @@ class ServerManager:
                 openai_configs = []
             for url in urls:
                 openai_configs.append(
-                    OpenaiConfig(
+                    APIServerConfig(
                         base_url=url,
                         timeout=configs.timeout,
                         num_max_requests_at_once=configs.num_max_requests_at_once,
@@ -94,9 +105,9 @@ class ServerManager:
                         api_key="x",
                     )
                 )
-            self.servers = [OpenAIServer(config) for config in openai_configs]
-        if not slurm:
-            self.servers = [OpenAIServer(config) for config in configs]
+            self.servers = [server_class(config) for config in openai_configs]
+        elif not slurm:
+            self.servers = [server_class(config) for config in configs]
         else:
             nodelist = (
                 os.popen(f'scontrol show hostnames {os.environ["SLURM_JOB_NODELIST"]}')
@@ -109,7 +120,7 @@ class ServerManager:
                     "Not enough nodes to distribute to, assuming single node"
                     " and you've setup your sglang appropriately."
                 )
-                self.servers = [OpenAIServer(config) for config in configs]
+                self.servers = [server_class(config) for config in configs]
                 return
             urls = []
             num_training_nodes = int(os.environ.get("NUM_TRAINING_NODES"))
@@ -124,7 +135,7 @@ class ServerManager:
                 new_conf = configs[0].model_copy(deep=True)
                 new_conf.base_url = urls[i]
                 new_configs.append(new_conf)
-            self.servers = [OpenAIServer(config) for config in new_configs]
+            self.servers = [server_class(config) for config in new_configs]
 
     async def update_weight(self, weight: float):
         for server in self.servers:
@@ -158,6 +169,24 @@ class ServerManager:
             await asyncio.sleep(1)
 
     async def chat_completion(self, **kwargs) -> ChatCompletion:
+        n = kwargs.get("n", 1)
+        if n > self.max_n_completions:
+            # Split into multiple completions
+            completions = []
+            total_n = n
+            while total_n > 0:
+                n_to_use = min(total_n, self.max_n_completions)
+                kwargs["n"] = n_to_use
+                completions.append(self.chat_completion(**kwargs))
+                total_n -= n_to_use
+            completions = await asyncio.gather(
+                *completions
+            )  # type: List[ChatCompletion]
+            # merge choices into one
+            out = completions[0]
+            for completion in completions[1:]:
+                out.choices.extend(completion.choices)
+            return out
         is_train = kwargs.get("split", "train") == "train"
         most_available_server = 0
         most_available_server_num_slots = -1
@@ -175,6 +204,22 @@ class ServerManager:
         return await self.servers[most_available_server].chat_completion(**kwargs)
 
     async def completion(self, **kwargs) -> Completion:
+        n = kwargs.get("n", 1)
+        if n > self.max_n_completions:
+            # Split into multiple completions
+            completions = []
+            total_n = n
+            while total_n > 0:
+                n_to_use = min(total_n, self.max_n_completions)
+                kwargs["n"] = n_to_use
+                completions.append(self.completion(**kwargs))
+                total_n -= n_to_use
+            completions = await asyncio.gather(*completions)  # type: List[Completion]
+            # merge choices into one
+            out = completions[0]
+            for completion in completions[1:]:
+                out.choices.extend(completion.choices)
+            return out
         is_train = kwargs.get("split", "train") == "train"
         most_available_server = 0
         most_available_server_num_slots = -1

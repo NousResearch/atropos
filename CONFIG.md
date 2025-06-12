@@ -20,7 +20,7 @@ Basic environment configuration settings.
 | `inference_weight`               | `float`                  | `1.0`                                           | Inference weight. Set to `-1` to ignore if doing something special.                                        |
 | `batch_size`                     | `int`                    | `-1`                                            | Batch size for training. Usually set by the trainer via the API.                                           |
 | `max_batches_offpolicy`          | `int`                    | `3`                                             | Maximum number of off-policy batches to have in the queue.                                                 |
-| `tokenizer_name`                 | `str`                    | `"NousResearch/DeepHermes-3-Llama-3-1B-Preview"` | Hugging Face tokenizer to use.                                                                             |
+| `tokenizer_name`                 | `str`                    | `"NousResearch/DeepHermes-3-Llama-3-3B-Preview"` | Hugging Face tokenizer to use.                                                                             |
 | `use_wandb`                      | `bool`                   | `True`                                          | Whether to use Weights & Biases for logging.                                                               |
 | `rollout_server_url`             | `str`                    | `"http://localhost:8000"`                       | URL of the rollout server (FastAPI interface).                                                             |
 | `total_steps`                    | `int`                    | `1000`                                          | Total number of steps to run.                                                                              |
@@ -39,10 +39,11 @@ Settings for the `ServerManager`.
 | :-------- | :------ | :------ | :------------------------------------------------ |
 | `slurm`   | `bool`  | `True`  | Whether the environment is running on SLURM.      |
 | `testing` | `bool`  | `False` | If `True`, uses mock OpenAI data for testing. |
+| `max_n_completions` | `int` | `8` | The maximum number of completions to request at once per server call. Will split any n larger than this into multiple calls. This is to help load balance servers. |
 
 ## Server Baseline Configuration (`atroposlib.envs.server_handling.server_manager.ServerBaseline`)
 
-Baseline configuration used by `ServerManager` if a list of `OpenaiConfig` is not provided, particularly for setting up local or SLURM-based server discovery.
+Baseline configuration used by `ServerManager` if a list of `APIServerConfig` is not provided, particularly for setting up local or SLURM-based server discovery.
 
 | Parameter                  | Type    | Default   | Description                                                                                             |
 | :------------------------- | :------ | :-------- | :------------------------------------------------------------------------------------------------------ |
@@ -52,7 +53,7 @@ Baseline configuration used by `ServerManager` if a list of `OpenaiConfig` is no
 | `model_name`               | `str`   | `default` | Model name to use when calling inference servers.                                                     |
 | `rolling_buffer_length`    | `int`   | `1000`    | Length of the rolling buffer to store server metrics (like request timings, attempts).                   |
 
-## OpenAI Server Configuration (`atroposlib.envs.server_handling.openai_server.OpenaiConfig`)
+## OpenAI Server Configuration (`atroposlib.envs.server_handling.openai_server.APIServerConfig`)
 
 Configuration for individual OpenAI-compatible API servers (including local SGLang/vLLM instances).
 
@@ -65,3 +66,4 @@ Configuration for individual OpenAI-compatible API servers (including local SGLa
 | `num_requests_for_eval`    | `int`        | `64`      | Maximum number of concurrent requests for evaluation.                                                   |
 | `model_name`               | `str`        | `default` | The model name to use. Required for both OpenAI and local models (e.g., `"gpt-4"`, `"NousResearch/..."`). |
 | `rolling_buffer_length`    | `int`        | `1000`    | Length of the rolling buffer to store server metrics (like request timings, attempts).                   |
+| `n_kwarg_is_ignored`       | `bool`       | `False`   | If the n kwarg is ignored by the API you are using, set this to True.                                   |
