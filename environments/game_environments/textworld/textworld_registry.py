@@ -24,27 +24,27 @@ logger = logging.getLogger(__name__)
 class TextWorldChallengeRegistry:
     """Registry for pre-built TextWorld challenges."""
     
-    # Pre-built challenges with their default settings
+    # Pre-built challenges with their settings ranges for randomization
     CHALLENGES = {
         "tw-simple": {
-            "rewards": "balanced",
-            "goal": "detailed",
-            "test": False
+            "rewards": ["sparse", "balanced", "dense"],  # Prefer sparse rewards
+            "goal": ["detailed", "brief", "none"],
+            "test": [False]  # Keep as list for consistency
         },
         "tw-cooking": {
-            "recipe": 1,
-            "recipe_seed": 12345,  # Added required seed
-            "take": 1,
-            "cook": False,
-            "open": False,
-            "drop": False,
-            "go": 6
+            "recipe": [1, 2, 3],         # Number of ingredients in recipe (int)
+            "take": [1, 2, 3],          # Number of ingredients to find (int)
+            "cook": [False, True],       # Whether ingredients need cooking (bool)
+            "open": [False, True],       # Whether containers/doors need opening (bool)
+            "drop": [False, True],       # Whether inventory has limited capacity (bool)
+            "go": [1, 6, 9, 12],        # Number of locations - only these values allowed (int)
+            # Note: recipe-seed is generated dynamically in get_challenge()
         },
         "tw-coin_collector": {
-            "level": 1
+            "level": [1, 2, 3, 4, 5]    # Difficulty levels
         },
         "tw-treasure_hunter": {
-            "level": 1
+            "level": [1, 2, 3, 4, 5]    # Difficulty levels  
         }
     }
     
@@ -56,18 +56,50 @@ class TextWorldChallengeRegistry:
         "tw-treasure_hunter": "medium"
     }
     
-    def __init__(self):
+    def __init__(self, seed: Optional[int] = None):
         self._challenges = self.CHALLENGES.copy()
+        self.rng = random.Random(seed)
         
     def list_challenges(self) -> List[str]:
         """List all available pre-built challenges."""
         return list(self._challenges.keys())
     
-    def get_challenge(self, name: str) -> Tuple[str, Dict[str, Any]]:
-        """Get challenge name and default settings."""
+    def get_challenge(self, name: str, randomize: bool = True) -> Tuple[str, Dict[str, Any]]:
+        """Get challenge name and settings (optionally randomized).
+        
+        Args:
+            name: Challenge name
+            randomize: Whether to randomize settings from available options
+            
+        Returns:
+            Tuple of (challenge_name, settings_dict)
+        """
         if name not in self._challenges:
             raise ValueError(f"Unknown challenge: {name}. Available: {self.list_challenges()}")
-        return name, self._challenges[name].copy()
+        
+        settings_ranges = self._challenges[name]
+        settings = {}
+        
+        for key, options in settings_ranges.items():
+            if randomize and len(options) > 1:
+                # Randomly select from available options
+                settings[key] = self.rng.choice(options)
+            else:
+                # Use first (default) option
+                settings[key] = options[0]
+        
+        # Generate a seed for this specific game instance
+        settings['seed'] = self.rng.randint(0, 65535)
+        
+        # Special handling for tw-cooking - it needs recipe_seed (underscore) and split
+        if name == 'tw-cooking':
+            settings['recipe_seed'] = self.rng.randint(0, 65535)
+            settings['split'] = 'train'  # Required parameter
+            # Ensure take <= recipe
+            if settings.get('take', 1) > settings.get('recipe', 1):
+                settings['take'] = settings['recipe']
+                
+        return name, settings
     
     def get_random_challenge(self, difficulty: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
         """Get a random challenge, optionally filtered by difficulty."""
@@ -83,8 +115,8 @@ class TextWorldChallengeRegistry:
         else:
             filtered = list(self._challenges.keys())
             
-        name = random.choice(filtered)
-        return self.get_challenge(name)
+        name = self.rng.choice(filtered)
+        return self.get_challenge(name, randomize=True)
 
 
 class TextWorldGenerator:
@@ -177,7 +209,7 @@ class TextWorldEnvironmentRegistry:
             cache_size: Maximum number of game configurations to cache
             seed: Random seed for reproducibility
         """
-        self.challenge_registry = TextWorldChallengeRegistry()
+        self.challenge_registry = TextWorldChallengeRegistry(seed)
         self.generator = TextWorldGenerator(seed)
         self.generation_ratio = generation_ratio
         self.cache_size = cache_size

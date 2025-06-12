@@ -13,7 +13,7 @@ import textworld
 from textworld import GameMaker, GameOptions
 from textworld.generator import make_game, compile_game
 
-from ..generation_utils import DEFAULT_OUTPUT_FOLDER
+from ..generation_utils import DEFAULT_OUTPUT_FOLDER, compile_game_with_retry
 from .quest_generator import QuestGenerator
 from .puzzle_generator import PuzzleGenerator
 from .navigation_generator import NavigationGenerator
@@ -191,7 +191,7 @@ class MixedGenerator:
         game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
-        game_file = compile_game(game, options)
+        game_file = compile_game_with_retry(game, options)
         
         if game_file:
             config = {
@@ -281,7 +281,7 @@ class MixedGenerator:
         game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
-        game_file = compile_game(game, options)
+        game_file = compile_game_with_retry(game, options)
         
         if game_file:
             config = {
@@ -329,7 +329,7 @@ class MixedGenerator:
         game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
-        game_file = compile_game(game, options)
+        game_file = compile_game_with_retry(game, options)
         
         if game_file:
             config = {
@@ -444,7 +444,7 @@ class MixedGenerator:
         game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
-        game_file = compile_game(game, options)
+        game_file = compile_game_with_retry(game, options)
         
         if game_file:
             config = {
@@ -494,7 +494,7 @@ class MixedGenerator:
         game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
-        game_file = compile_game(game, options)
+        game_file = compile_game_with_retry(game, options)
         
         if game_file:
             config = {

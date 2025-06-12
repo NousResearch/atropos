@@ -15,355 +15,102 @@ food is edible.
 A room has a text called internal name.
 
 
-The r_1 and the r_0 and the r_10 and the r_7 and the r_11 and the r_8 and the r_13 and the r_9 and the r_14 and the r_2 and the r_3 and the r_5 and the r_6 and the r_4 and the r_12 are rooms.
+The r_1 and the r_0 and the r_3 and the r_2 and the r_4 are rooms.
 
-Understand "room_1" as r_1.
-The internal name of r_1 is "room_1".
-The printed name of r_1 is "-= Room_1 =-".
-The room_1 part 0 is some text that varies. The room_1 part 0 is "You've entered a room_1.
-
-
-
- There is [if d_1 is open]an open[otherwise]a closed[end if]".
-The room_1 part 1 is some text that varies. The room_1 part 1 is " blue door leading east. There is [if d_0 is open]an open[otherwise]a closed[end if]".
-The room_1 part 2 is some text that varies. The room_1 part 2 is " red door leading west.".
-The description of r_1 is "[room_1 part 0][room_1 part 1][room_1 part 2]".
-
-west of r_1 and east of r_0 is a door called d_0.
-east of r_1 and west of r_2 is a door called d_1.
-Understand "room_0" as r_0.
-The internal name of r_0 is "room_0".
-The printed name of r_0 is "-= Room_0 =-".
-The room_0 part 0 is some text that varies. The room_0 part 0 is "You are in a room_0. A normal kind of place.
+Understand "shower" as r_1.
+The internal name of r_1 is "shower".
+The printed name of r_1 is "-= Shower =-".
+The shower part 0 is some text that varies. The shower part 0 is "Okay, so you're in a shower, cool, but is it usual? You better believe it is. You can barely contain your excitement.
 
 
 
- There is [if d_0 is open]an open[otherwise]a closed[end if]".
-The room_0 part 1 is some text that varies. The room_0 part 1 is " red door leading east.".
-The description of r_0 is "[room_0 part 0][room_0 part 1]".
+There is an unguarded exit to the south. There is an unguarded exit to the west.".
+The description of r_1 is "[shower part 0]".
 
-east of r_0 and west of r_1 is a door called d_0.
-Understand "room_8" as r_10.
-The internal name of r_10 is "room_8".
-The printed name of r_10 is "-= Room_8 =-".
-The room_8 part 0 is some text that varies. The room_8 part 0 is "Look at you, bigshot, walking into a room_8 like it isn't some huge deal.
-
-
-
-There is an exit to the east. Don't worry, it is unguarded. There is an exit to the west. Don't worry, it is unguarded.".
-The description of r_10 is "[room_8 part 0]".
-
-The r_7 is mapped west of r_10.
-The r_14 is mapped east of r_10.
-Understand "room_6" as r_7.
-The internal name of r_7 is "room_6".
-The printed name of r_7 is "-= Room_6 =-".
-The room_6 part 0 is some text that varies. The room_6 part 0 is "You are in a room_6. An ordinary one.
+The r_0 is mapped west of r_1.
+The r_2 is mapped south of r_1.
+Understand "scullery" as r_0.
+The internal name of r_0 is "scullery".
+The printed name of r_0 is "-= Scullery =-".
+The scullery part 0 is some text that varies. The scullery part 0 is "You're now in the scullery. The room is well lit.
 
 
 
-You don't like doors? Why not try going east, that entranceway is unblocked. You need an unblocked exit? You should try going north. There is an unguarded exit to the west.".
-The description of r_7 is "[room_6 part 0]".
+You don't like doors? Why not try going east, that entranceway is unblocked.".
+The description of r_0 is "[scullery part 0]".
 
-The r_5 is mapped west of r_7.
-The r_8 is mapped north of r_7.
-The r_10 is mapped east of r_7.
-Understand "room_9" as r_11.
-The internal name of r_11 is "room_9".
-The printed name of r_11 is "-= Room_9 =-".
-The room_9 part 0 is some text that varies. The room_9 part 0 is "You've entered a room_9. Okay, just remember what you're here to do, and everything will go great.
+The r_1 is mapped east of r_0.
+Understand "steam room" as r_3.
+The internal name of r_3 is "steam room".
+The printed name of r_3 is "-= Steam Room =-".
+The steam room part 0 is some text that varies. The steam room part 0 is "You've just shown up in a steam room. You begin to take stock of what's in the room.
 
 
 
-You need an unguarded exit? You should try going north. You don't like doors? Why not try going west, that entranceway is unguarded.".
-The description of r_11 is "[room_9 part 0]".
+There is an exit to the north. Don't worry, it is unguarded. There is an exit to the west. Don't worry, it is unblocked.".
+The description of r_3 is "[steam room part 0]".
 
-The r_8 is mapped west of r_11.
-The r_12 is mapped north of r_11.
-Understand "side_room_6" as r_8.
-The internal name of r_8 is "side_room_6".
-The printed name of r_8 is "-= Side_Room_6 =-".
-The side_room_6 part 0 is some text that varies. The side_room_6 part 0 is "You find yourself in a side_room_6. An usual kind of place.
-
-
-
-You don't like doors? Why not try going east, that entranceway is unblocked. There is an unguarded exit to the south.".
-The description of r_8 is "[side_room_6 part 0]".
-
-The r_7 is mapped south of r_8.
-The r_11 is mapped east of r_8.
-Understand "room_10" as r_13.
-The internal name of r_13 is "room_10".
-The printed name of r_13 is "-= Room_10 =-".
-The room_10 part 0 is some text that varies. The room_10 part 0 is "You are in a room_10.
-
-
-
-You need an unguarded exit? You should try going west.".
-The description of r_13 is "[room_10 part 0]".
-
-The r_9 is mapped west of r_13.
-Understand "room_7" as r_9.
-The internal name of r_9 is "room_7".
-The printed name of r_9 is "-= Room_7 =-".
-The room_7 part 0 is some text that varies. The room_7 part 0 is "Okay, so you're in a room_7, cool, but is it usual? You better believe it is. The room is well lit.
-
-
-
-There is an exit to the east. Don't worry, it is unguarded. You don't like doors? Why not try going west, that entranceway is unblocked.".
-The description of r_9 is "[room_7 part 0]".
-
-The r_6 is mapped west of r_9.
-The r_13 is mapped east of r_9.
-Understand "room_11" as r_14.
-The internal name of r_14 is "room_11".
-The printed name of r_14 is "-= Room_11 =-".
-The room_11 part 0 is some text that varies. The room_11 part 0 is "You've entered a room_11.
-
- Look over there! an ancient altar. [if there is something on the s_0]You see [a list of things on the s_0] on the ancient altar.[end if]".
-The room_11 part 1 is some text that varies. The room_11 part 1 is "[if there is nothing on the s_0]But the thing is empty. What, you think everything in TextWorld should have stuff on it?[end if]".
-The room_11 part 2 is some text that varies. The room_11 part 2 is "
-
-There is an exit to the west. Don't worry, it is unblocked.".
-The description of r_14 is "[room_11 part 0][room_11 part 1][room_11 part 2]".
-
-The r_10 is mapped west of r_14.
-Understand "room_2" as r_2.
-The internal name of r_2 is "room_2".
-The printed name of r_2 is "-= Room_2 =-".
-The room_2 part 0 is some text that varies. The room_2 part 0 is "You've entered a room_2. The room seems oddly familiar, as though it were only superficially different from the other rooms in the building.
-
-
-
- There is [if d_2 is open]an open[otherwise]a closed[end if]".
-The room_2 part 1 is some text that varies. The room_2 part 1 is " green door leading east. There is [if d_1 is open]an open[otherwise]a closed[end if]".
-The room_2 part 2 is some text that varies. The room_2 part 2 is " blue door leading west.".
-The description of r_2 is "[room_2 part 0][room_2 part 1][room_2 part 2]".
-
-west of r_2 and east of r_1 is a door called d_1.
-east of r_2 and west of r_3 is a door called d_2.
-Understand "room_3" as r_3.
-The internal name of r_3 is "room_3".
-The printed name of r_3 is "-= Room_3 =-".
-The room_3 part 0 is some text that varies. The room_3 part 0 is "You've entered a room_3.
-
-
-
- There is [if d_2 is open]an open[otherwise]a closed[end if]".
-The room_3 part 1 is some text that varies. The room_3 part 1 is " green door leading west. You don't like doors? Why not try going east, that entranceway is unblocked. There is an unblocked exit to the north.".
-The description of r_3 is "[room_3 part 0][room_3 part 1]".
-
-west of r_3 and east of r_2 is a door called d_2.
+The r_2 is mapped west of r_3.
 The r_4 is mapped north of r_3.
-The r_5 is mapped east of r_3.
-Understand "room_4" as r_5.
-The internal name of r_5 is "room_4".
-The printed name of r_5 is "-= Room_4 =-".
-The room_4 part 0 is some text that varies. The room_4 part 0 is "You've entered a room_4. Let's see what's in here.
+Understand "garage" as r_2.
+The internal name of r_2 is "garage".
+The printed name of r_2 is "-= Garage =-".
+The garage part 0 is some text that varies. The garage part 0 is "You're now in the garage. You decide to just list off a complete list of everything you see in the room, because hey, why not?
 
 
 
-You don't like doors? Why not try going east, that entranceway is unblocked. You don't like doors? Why not try going west, that entranceway is unblocked.".
-The description of r_5 is "[room_4 part 0]".
+You need an unguarded exit? You should try going east. There is an exit to the north. Don't worry, it is unblocked.".
+The description of r_2 is "[garage part 0]".
 
-The r_3 is mapped west of r_5.
-The r_7 is mapped east of r_5.
-Understand "room_5" as r_6.
-The internal name of r_6 is "room_5".
-The printed name of r_6 is "-= Room_5 =-".
-The room_5 part 0 is some text that varies. The room_5 part 0 is "You find yourself in a room_5.
-
-
-
-There is an exit to the east. Don't worry, it is unguarded. There is an exit to the west. Don't worry, it is unguarded.".
-The description of r_6 is "[room_5 part 0]".
-
-The r_4 is mapped west of r_6.
-The r_9 is mapped east of r_6.
-Understand "side_room_3" as r_4.
-The internal name of r_4 is "side_room_3".
-The printed name of r_4 is "-= Side_Room_3 =-".
-The side_room_3 part 0 is some text that varies. The side_room_3 part 0 is "You've entered a side_room_3.
+The r_1 is mapped north of r_2.
+The r_3 is mapped east of r_2.
+Understand "vault" as r_4.
+The internal name of r_4 is "vault".
+The printed name of r_4 is "-= Vault =-".
+The vault part 0 is some text that varies. The vault part 0 is "You've just sauntered into a vault. The room seems oddly familiar, as though it were only superficially different from the other rooms in the building.
 
 
 
-There is an unguarded exit to the east. There is an exit to the south. Don't worry, it is unguarded.".
-The description of r_4 is "[side_room_3 part 0]".
+There is an unblocked exit to the south.".
+The description of r_4 is "[vault part 0]".
 
 The r_3 is mapped south of r_4.
-The r_6 is mapped east of r_4.
-Understand "side_room_9" as r_12.
-The internal name of r_12 is "side_room_9".
-The printed name of r_12 is "-= Side_Room_9 =-".
-The side_room_9 part 0 is some text that varies. The side_room_9 part 0 is "You find yourself in a side_room_9. A standard kind of place.
+
+The k_0 are keys.
+The k_0 are privately-named.
+The o_0 are object-likes.
+The o_0 are privately-named.
+The r_1 and the r_0 and the r_3 and the r_2 and the r_4 are rooms.
+The r_1 and the r_0 and the r_3 and the r_2 and the r_4 are privately-named.
+
+The description of k_0 is "The passkey is cold to the touch".
+The printed name of k_0 is "passkey".
+Understand "passkey" as k_0.
+The k_0 is in r_1.
+The description of o_0 is "The cloak seems out of place here".
+The printed name of o_0 is "cloak".
+Understand "cloak" as o_0.
+The o_0 is in r_2.
 
 
+The player is in r_2.
 
-There is an exit to the south. Don't worry, it is unblocked.".
-The description of r_12 is "[side_room_9 part 0]".
+The quest0 completed is a truth state that varies.
+The quest0 completed is usually false.
 
-The r_11 is mapped south of r_12.
+Test quest0_0 with "take cloak"
 
-The c_0 and the c_1 and the c_2 are containers.
-The c_0 and the c_1 and the c_2 are privately-named.
-The d_0 and the d_1 and the d_2 are doors.
-The d_0 and the d_1 and the d_2 are privately-named.
-The f_5 and the f_0 and the f_1 and the f_2 and the f_3 and the f_4 are foods.
-The f_5 and the f_0 and the f_1 and the f_2 and the f_3 and the f_4 are privately-named.
-The k_0 and the k_1 and the k_2 and the k_4 and the k_5 are keys.
-The k_0 and the k_1 and the k_2 and the k_4 and the k_5 are privately-named.
-The o_0 and the o_1 and the o_2 and the o_3 and the o_4 and the o_5 are object-likes.
-The o_0 and the o_1 and the o_2 and the o_3 and the o_4 and the o_5 are privately-named.
-The r_1 and the r_0 and the r_10 and the r_7 and the r_11 and the r_8 and the r_13 and the r_9 and the r_14 and the r_2 and the r_3 and the r_5 and the r_6 and the r_4 and the r_12 are rooms.
-The r_1 and the r_0 and the r_10 and the r_7 and the r_11 and the r_8 and the r_13 and the r_9 and the r_14 and the r_2 and the r_3 and the r_5 and the r_6 and the r_4 and the r_12 are privately-named.
-The s_0 and the s_1 are supporters.
-The s_0 and the s_1 are privately-named.
+Every turn:
+	if quest0 completed is true:
+		do nothing;
+	else if The player carries the k_0:
+		end the story; [Lost]
+	else if The player is in r_2 and The player carries the o_0:
+		increase the score by 1; [Quest completed]
+		if 1 is 1 [always true]:
+			Now the quest0 completed is true;
 
-The description of d_0 is "The red door looks noble. [if open]It is open.[else if closed]It is closed.[otherwise]It is locked.[end if]".
-The printed name of d_0 is "red door".
-Understand "red door" as d_0.
-Understand "red" as d_0.
-Understand "door" as d_0.
-The d_0 is locked.
-The description of d_1 is "it's a manageable blue door [if open]It is open.[else if closed]It is closed.[otherwise]It is locked.[end if]".
-The printed name of d_1 is "blue door".
-Understand "blue door" as d_1.
-Understand "blue" as d_1.
-Understand "door" as d_1.
-The d_1 is locked.
-The description of d_2 is "it is what it is, a green door [if open]It is open.[else if closed]It is closed.[otherwise]It is locked.[end if]".
-The printed name of d_2 is "green door".
-Understand "green door" as d_2.
-Understand "green" as d_2.
-Understand "door" as d_2.
-The d_2 is locked.
-The description of c_0 is "The box looks strong, and impossible to destroy. [if open]You can see inside it.[else if closed]You can't see inside it because the lid's in your way.[otherwise]There is a lock on it.[end if]".
-The printed name of c_0 is "box".
-Understand "box" as c_0.
-The c_0 is in r_9.
-The c_0 is open.
-The description of c_1 is "The locker looks strong, and impossible to crack. [if open]It is open.[else if closed]It is closed.[otherwise]It is locked.[end if]".
-The printed name of c_1 is "locker".
-Understand "locker" as c_1.
-The c_1 is in r_6.
-The c_1 is locked.
-The description of c_2 is "The chest looks strong, and impossible to break. [if open]It is open.[else if closed]It is closed.[otherwise]It is locked.[end if]".
-The printed name of c_2 is "chest".
-Understand "chest" as c_2.
-The c_2 is in r_4.
-The c_2 is locked.
-The description of f_5 is "that's an ordinary durian!".
-The printed name of f_5 is "durian".
-Understand "durian" as f_5.
-The f_5 is in r_12.
-The f_5 is edible.
-The description of k_0 is "The metal of the red crystal is polished.".
-The printed name of k_0 is "red crystal".
-Understand "red crystal" as k_0.
-Understand "red" as k_0.
-Understand "crystal" as k_0.
-The k_0 is in r_0.
-The matching key of the d_0 is the k_0.
-The description of k_1 is "The blue crystal looks useful".
-The printed name of k_1 is "blue crystal".
-Understand "blue crystal" as k_1.
-Understand "blue" as k_1.
-Understand "crystal" as k_1.
-The k_1 is in r_12.
-The matching key of the d_1 is the k_1.
-The description of k_2 is "The green crystal looks useful".
-The printed name of k_2 is "green crystal".
-Understand "green crystal" as k_2.
-Understand "green" as k_2.
-Understand "crystal" as k_2.
-The k_2 is in r_5.
-The matching key of the d_2 is the k_2.
-The description of k_4 is "The latchkey is surprisingly heavy.".
-The printed name of k_4 is "latchkey".
-Understand "latchkey" as k_4.
-The k_4 is in r_6.
-The matching key of the c_1 is the k_4.
-The description of k_5 is "The passkey looks useful".
-The printed name of k_5 is "passkey".
-Understand "passkey" as k_5.
-The k_5 is in r_4.
-The matching key of the c_2 is the k_5.
-The description of o_0 is "The ancient scroll looks to fit in here".
-The printed name of o_0 is "ancient scroll".
-Understand "ancient scroll" as o_0.
-Understand "ancient" as o_0.
-Understand "scroll" as o_0.
-The o_0 is in r_1.
-The description of o_1 is "The mystic orb seems out of place here".
-The printed name of o_1 is "mystic orb".
-Understand "mystic orb" as o_1.
-Understand "mystic" as o_1.
-Understand "orb" as o_1.
-The o_1 is in r_2.
-The description of o_2 is "The golden chalice appears to be out of place here".
-The printed name of o_2 is "golden chalice".
-Understand "golden chalice" as o_2.
-Understand "golden" as o_2.
-Understand "chalice" as o_2.
-The o_2 is in r_3.
-The description of o_3 is "The paper towel appears out of place here".
-The printed name of o_3 is "paper towel".
-Understand "paper towel" as o_3.
-Understand "paper" as o_3.
-Understand "towel" as o_3.
-The o_3 is in r_10.
-The description of o_4 is "The lampshade is expensive looking.".
-The printed name of o_4 is "lampshade".
-Understand "lampshade" as o_4.
-The o_4 is in r_8.
-The description of o_5 is "The broom is antiquated.".
-The printed name of o_5 is "broom".
-Understand "broom" as o_5.
-The o_5 is in r_3.
-The description of s_0 is "Place the three sacred items here.".
-The printed name of s_0 is "ancient altar".
-Understand "ancient altar" as s_0.
-Understand "ancient" as s_0.
-Understand "altar" as s_0.
-The s_0 is in r_14.
-The description of s_1 is "The shelf is an unstable piece of trash.".
-The printed name of s_1 is "shelf".
-Understand "shelf" as s_1.
-The s_1 is in r_2.
-The description of f_0 is "The cookie looks delectable.".
-The printed name of f_0 is "cookie".
-Understand "cookie" as f_0.
-The f_0 is edible.
-The player carries the f_0.
-The description of f_1 is "You couldn't pay me to eat that normal thing.".
-The printed name of f_1 is "sandwich".
-Understand "sandwich" as f_1.
-The f_1 is edible.
-The player carries the f_1.
-The description of f_2 is "that's a standard stick of butter!".
-The printed name of f_2 is "stick of butter".
-Understand "stick of butter" as f_2.
-Understand "stick" as f_2.
-Understand "butter" as f_2.
-The f_2 is edible.
-The player carries the f_2.
-The description of f_3 is "You couldn't pay me to eat that ordinary thing.".
-The printed name of f_3 is "banana".
-Understand "banana" as f_3.
-The f_3 is edible.
-The player carries the f_3.
-The description of f_4 is "You couldn't pay me to eat that typical thing.".
-The printed name of f_4 is "loaf of bread".
-Understand "loaf of bread" as f_4.
-Understand "loaf" as f_4.
-Understand "bread" as f_4.
-The f_4 is edible.
-The f_4 is in the c_1.
-
-
-The player is in r_0.
-
-Use scoring. The maximum score is 0.
+Use scoring. The maximum score is 1.
 This is the simpler notify score changes rule:
 	If the score is not the last notified score:
 		let V be the score - the last notified score;
@@ -376,7 +123,7 @@ This is the simpler notify score changes rule:
 		else:
 			say "points.";
 		Now the last notified score is the score;
-	if 1 is 0 [always false]:
+	if quest0 completed is true:
 		end the story finally; [Win]
 
 The simpler notify score changes rule substitutes for the notify score changes rule.
@@ -541,8 +288,9 @@ The last property-aggregation rule (this is the print aggregated properties rule
 		rule succeeds;
 	rule fails;
 
+The objective part 0 is some text that varies. The objective part 0 is "Hey, thanks for coming over to TextWorld! Please recover the cloak from the floor of the garage.".
 
-An objective is some text that varies. The objective is "".
+An objective is some text that varies. The objective is "[objective part 0]".
 Printing the objective is an action applying to nothing.
 Carry out printing the objective:
 	say "[objective]".

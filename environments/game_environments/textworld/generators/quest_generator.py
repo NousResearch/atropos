@@ -13,7 +13,7 @@ import textworld
 from textworld import GameMaker, GameOptions
 from textworld.generator import make_game, compile_game
 
-from ..generation_utils import DEFAULT_OUTPUT_FOLDER
+from ..generation_utils import DEFAULT_OUTPUT_FOLDER, compile_game_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -122,10 +122,12 @@ class QuestGenerator:
             # Generate the game
             game = make_game(options)
             
-            # Compile the game
-            game_file = compile_game(game, options)
+            # Compile the game with retry on cache conflicts
+            game_file = compile_game_with_retry(game, options)
             
             if game_file:
+                # Update seed if it changed during retry
+                seed_value = options.seeds
                 config = {
                     "type": "quest",
                     "quest_type": quest_type,
