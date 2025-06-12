@@ -211,8 +211,13 @@ class AtroposAgent:
         logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] (generate) LLM Chat Prompt (last message content, first 200 chars): {log_prompt_snippet}")
 
         try:
-            raw_response = await self.server_client.chat_completion(
-                messages=messages,
+            # Convert messages to prompt for completion endpoint
+            prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
+            
+            # Update api_kwargs for completion endpoint
+            api_kwargs.pop('model', None)  # model is not used in completion endpoint
+            raw_response = await self.server_client.completion(
+                prompt=prompt,
                 **api_kwargs
             )
 
@@ -220,11 +225,11 @@ class AtroposAgent:
             
             if raw_response and raw_response.choices:
                 first_choice = raw_response.choices[0]
-                if first_choice.message and first_choice.message.content is not None:
-                    content = first_choice.message.content.strip()
+                if hasattr(first_choice, 'text') and first_choice.text is not None:
+                    content = first_choice.text.strip()
                 else:
                     logger.warning(
-                        f"AtroposAgent[{self.config.player_id_for_logging}] (generate) LLM first choice had no message content. Choice: {first_choice}"
+                        f"AtroposAgent[{self.config.player_id_for_logging}] (generate) LLM first choice had no text content. Choice: {first_choice}"
                     )
             else:
                  logger.warning(
@@ -286,36 +291,39 @@ class AtroposAgent:
         llm_generated_actions: List[AtroposAgentAction] = []
         
         try:
-            chat_completions = await self.server_client.chat_completion(
-                messages=history_for_llm_call,
-                model=self.config.model_id,
+            # Convert messages to prompt for completion endpoint to avoid tool call parsing
+            prompt = self.tokenizer.apply_chat_template(history_for_llm_call, tokenize=False)
+            
+            completions = await self.server_client.completion(
+                prompt=prompt,
                 n=n,
                 max_tokens=self.config.max_tokens_per_completion,
-                temperature=self.config.temperature
+                temperature=self.config.temperature,
+                top_p=0.9  # Add top_p for better generation
             )
             
-            if chat_completions and chat_completions.choices:
-                for choice_idx, choice in enumerate(chat_completions.choices):
-                    if choice.message and hasattr(choice.message, 'content') and choice.message.content is not None:
+            if completions and completions.choices:
+                for choice_idx, choice in enumerate(completions.choices):
+                    if hasattr(choice, 'text') and choice.text is not None:
                         llm_generated_actions.append(
-                            AtroposAgentAction(action_text=choice.message.content.strip(), api_error=False, score=0.0)
+                            AtroposAgentAction(action_text=choice.text.strip(), api_error=False, score=0.0)
                         )
                     else:
                         logger.warning(
-                            f"AtroposAgent[{self.config.player_id_for_logging}] (generate_action) LLM choice {choice_idx} had no message content. Choice: {choice}"
+                            f"AtroposAgent[{self.config.player_id_for_logging}] (generate_action) LLM choice {choice_idx} had no text content. Choice: {choice}"
                         )
                         llm_generated_actions.append(
                             AtroposAgentAction(action_text="", api_error=True, score=0.0)
                         )
-                if hasattr(chat_completions, "usage") and chat_completions.usage:
+                if hasattr(completions, "usage") and completions.usage:
                     logger.debug(
                         f"AtroposAgent[{self.config.player_id_for_logging}] (generate_action) Token usage (n={n}): "
-                        f"input={chat_completions.usage.prompt_tokens}, output={chat_completions.usage.completion_tokens}"
+                        f"input={completions.usage.prompt_tokens}, output={completions.usage.completion_tokens}"
                     )
 
             else:
                  logger.warning(
-                    f"AtroposAgent[{self.config.player_id_for_logging}] (generate_action) chat_completion returned no choices or empty response. History snippet: {log_prompt_snippet}"
+                    f"AtroposAgent[{self.config.player_id_for_logging}] (generate_action) completion returned no choices or empty response. History snippet: {log_prompt_snippet}"
                 )
 
         except Exception as e:

@@ -2,6 +2,51 @@
 
 This document contains project-specific instructions and learnings for Claude assistants working on the Atropos RL training framework.
 
+## IMPORTANT: Always Use UV Run
+- **NEVER use `python` directly** - always use `uv run python`
+- This project uses UV for dependency management
+- Example: `uv run python test_improved_prompt.py`
+
+## Current Work: TextWorld Environment Testing (June 11, 2025)
+
+### Testing Setup
+We are testing the TextWorld environment with different models to compare format compliance:
+- **DeepHermes-3-Mistral-24B-Preview**: Had formatting issues with tool calls
+- **DeepHermes-3-Llama-3-8B-Preview**: Currently testing as it may handle the format better
+
+### Key Files and Locations
+- **SGLang launcher scripts**:
+  - `/home/maxpaperclips/atropos/launch_sglang.sh` - Original blocking version
+  - `/home/maxpaperclips/atropos/launch_sglang_nohup.sh` - Non-blocking version with nohup
+- **TextWorld test files**:
+  - `/home/maxpaperclips/atropos/test_improved_prompt.py` - Tests TextWorld environment prompting
+  - `/home/maxpaperclips/atropos/test_direct_tool_call.py` - Direct test of model's tool call format
+- **TextWorld environment**:
+  - `/home/maxpaperclips/atropos/environments/game_environments/textworld/`
+  - `textworld_local_server.py` - Local server for testing with SGLang
+  - `textworld_env.py` - Main environment implementation
+  - `textworld_registry.py` - Registry system for game selection
+
+### Running Tests
+```bash
+# Launch SGLang server (non-blocking)
+./launch_sglang_nohup.sh --model "NousResearch/DeepHermes-3-Llama-3-8B-Preview" --tp 4
+
+# Check server status
+curl http://localhost:30000/health
+
+# Run TextWorld tests
+uv run python test_improved_prompt.py
+uv run python test_direct_tool_call.py
+
+# Run the full TextWorld local server test
+cd environments/game_environments/textworld
+uv run python -m environments.game_environments.textworld.textworld_local_server
+```
+
+### Current Issue
+The 24B model was struggling with the tool call format, producing malformed JSON in `<tool_call>` tags. Testing with 8B model to see if it handles the format better.
+
 ## Recent Work: TextWorld Registry System Complete ✅ (June 11, 2025)
 
 ### Problem Solved
@@ -406,10 +451,17 @@ sbatch environments/intern_bootcamp/run_datagen_parallel_sglang.slurm
 
 **Status**: ✅ **IMPLEMENTED AND READY FOR TESTING**
 
-## Recent Work: TextWorld Registry System ✅ (June 10, 2025)
+## Recent Work: TextWorld Registry System Complete & Tested ✅ (June 11, 2025)
 
 ### Problem Solved
 User needed a registry system for TextWorld similar to bootcamp_registry.py to manage 1000+ game variations through random sampling, mixing pre-built challenges and procedurally generated games.
+
+### Latest Updates (June 11, 2025)
+- ✅ **Launched SGLang server** with DeepHermes-3-Mistral-24B-Preview on port 30000
+- ✅ **Updated textworld_local_server.py** to use new registry system with 70% generated/30% pre-built ratio
+- ✅ **Verified cleanup mechanism** - Registry properly removes both .z8 and .ni files after use
+- ✅ **Ran full integration test** - VR-CLI scoring working with registry-selected games
+- ⚠️ **Issue Found**: LLM struggling with output format (malformed tool calls) - needs investigation
 
 ### Solution Implemented
 

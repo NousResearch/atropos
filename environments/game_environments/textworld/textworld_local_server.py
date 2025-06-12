@@ -28,9 +28,9 @@ async def main():
     )
     logging.getLogger("atroposlib.utils.tool_call_parser").setLevel(logging.DEBUG)
 
-    # Using local SGLang server with DeepHermes-3-Mistral-24B
+    # Using local SGLang server with DeepHermes-3-Llama-3-8B
     server_config = APIServerConfig(
-        model_name="NousResearch/DeepHermes-3-Mistral-24B-Preview",
+        model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
         base_url="http://localhost:30000/v1",
         api_key="dummy",  # SGLang doesn't need a real API key
         num_requests_for_eval=0,
@@ -38,9 +38,15 @@ async def main():
     )
 
     env_config = TextWorldEnvConfig(
-        tokenizer_name="NousResearch/DeepHermes-3-Mistral-24B-Preview",
-        max_token_length=8192,  # Increased for the 24B model
+        tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+        max_token_length=16384,  # Increased for long thinking
         max_steps=20,  # Reduced for quicker testing
+        # Use the new registry system for game selection
+        use_registry=True,
+        registry_mode="random",  # Randomly select between challenges and generated games
+        registry_generation_ratio=0.7,  # 70% generated, 30% pre-built challenges
+        registry_difficulty="random",  # Random difficulty
+        # Old challenge system - will be ignored when use_registry=True
         challenge_name="tw-simple",
         challenge_rewards="sparse",  # Using sparse rewards with VR-CLI
         debug_mode=True,

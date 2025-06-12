@@ -1,438 +1,51 @@
 Use MAX_STATIC_DATA of 500000.
 When play begins, seed the random-number generator with 1234.
 
-container is a kind of thing.
-door is a kind of thing.
-ingredient-like is a kind of thing.
 object-like is a kind of thing.
-supporter is a kind of thing.
-oven-like is a kind of container.
-toaster-like is a kind of container.
-food is a kind of object-like.
-key is a kind of object-like.
-stove-like is a kind of supporter.
-meal-like is a kind of food.
-a thing can be drinkable. a thing is usually not drinkable. a thing can be cookable. a thing is usually not cookable. a thing can be damaged. a thing is usually not damaged. a thing can be sharp. a thing is usually not sharp. a thing can be cuttable. a thing is usually not cuttable. a thing can be a source of heat. Type of cooking is a kind of value. The type of cooking are raw, grilled, roasted and fried. a thing can be needs cooking. Type of cutting is a kind of value. The type of cutting are uncut, sliced, diced and chopped.
-containers are openable, lockable and fixed in place. containers are usually closed.
-door is openable and lockable.
-ingredient-like has a thing called base. ingredient-like has a type of cooking. ingredient-like has a type of cutting.
 object-like is portable.
-supporters are fixed in place.
-oven-like is a source of heat.
-toaster-like is a source of heat.
-food is usually edible. food is cookable. food has a type of cooking. food has a type of cutting. food can be cooked. food can be burned. food can be consumed. food is usually not consumed. food is usually cuttable.
-stove-like is a source of heat.
-A recipe-like is a kind of thing. A recipe-like has a list of ingredient-like called ingredients. A recipe-like has a thing called meal. A recipe-like has a room called cooking location.
 A room has a text called internal name.
 
 
-[Drinking liquid]
-Drinking carried thing is an action applying to one carried thing.
-The block drinking rule is not listed in any rulebook.
-Understand nothing as drinking.
-Understand "drink [something]" as drinking carried thing.
-
-After drinking carried thing:
-	Now the noun is consumed;
-	Continue the action.
-
-Check an actor drinking carried thing (this is the can’t drink unless drinkable rule):
-	if the noun is not a thing or the noun is not drinkable:
-		say "You cannot drink [the noun].";
-		rule fails;
-
-Carry out an actor drinking carried thing (this is the drinking rule):
-	remove the noun from play.
-
-Report an actor drinking carried thing (this is the report drinking rule):
-	if the actor is the player:
-		say "You drink [the noun]. Not bad.";
-	otherwise:
-		say "[The person asked] just drunk [the noun].".
-
-[Eating food]
-After eating a food (called target):
-	Now the target is consumed;
-	Continue the action.
-
-Check eating inedible food (called target):
-	if target is needs cooking:
-		say "You should cook [the target] first.";
-		rule fails.
-
-[Understanding things by their properties - http://inform7.com/learn/man/WI_17_15.html]
-Understand the type of cutting property as describing food.
-Understand the type of cooking property as describing food.
-
-[Processing food]
-Understand the commands  "slice", "prune" as something new.
-The block cutting rule is not listed in any rulebook.
-Dicing it with is an action applying to two carried things.
-Slicing it with is an action applying to two carried things.
-Chopping it with is an action applying to two carried things.
-
-Slicing something with something is a cutting activity.
-Dicing something with something is a cutting activity.
-Chopping something with something is a cutting activity.
-
-Does the player mean slicing something with something carried (called target):
-	if target is not sharp:
-		it is very unlikely;
-
-Does the player mean chopping something with something carried (called target):
-	if target is not sharp:
-		it is very unlikely;
-
-Does the player mean dicing something with something carried (called target):
-	if target is not sharp:
-		it is very unlikely;
-
-Check an actor cutting (this is the generic cut is now allowed rule):
-	say "You need to specify how you want to cut [the noun]. Either slice, dice, or chop it.";
-	rule fails.
-
-Before a cutting activity when the noun is not cuttable:
-	say "Can only cut cuttable food.";
-	rule fails.
-
-Before a cutting activity when the noun is cuttable and the noun is not uncut:
-	say "[The noun] is already [type of cutting of the noun].";
-	rule fails.
-
-Before a cutting activity when the second noun is not sharp:
-	say "Cutting something requires a knife.";
-	rule fails.
-
-Before printing the name of a food (called the food item) which is not uncut while looking, examining, listing contents or taking inventory:
-	say "[type of cutting of food item] ".
-
-[Slicing food]
-Carry out slicing a carried food (called the food item) with a thing (called the tool):
-	if the food item is not uncut:
-		say "[The food item] is already [type of cutting of the food item].";
-		stop;
-	Now the food item is sliced;
-	say "You slice the [food item].".
-
-Understand "slice [something] with/using [something]" as slicing it with.
-
-[Dicing food]
-Carry out dicing a carried food (called the food item) with a thing (called the tool):
-	if the food item is not uncut:
-		say "The [food item] has already been cut.";
-		stop;
-	Now the food item is diced;
-	say "You dice the [food item].".
-
-Understand "dice [something] with/using [something]" as dicing it with.
-
-[Chopping food]
-Carry out chopping a carried food (called the food item) with a thing (called the tool):
-	if the food item is not uncut:
-		say "The [food item] has already been cut.";
-		stop;
-	Now the food item is chopped;
-	say "You chop the [food item].".
-
-Understand the command "chop" as something new. [Remove its association with slicing]
-Understand "chop [something] with/using [something]" as chopping it with.
-
-[Cooking food]
-Cooking it with is an action applying to one carried thing and one thing.
-
-Does the player mean cooking something with something carried:
-	it is very unlikely;
-
-Check cooking something not cookable with something (this is the cook only cookable things rule):
-	say "Can only cook food." instead.
-
-Check cooking something cookable with something not a source of heat (this is the cooking requires a source of heat rule):
-	say "Cooking requires a source of heat." instead.
-
-Carry out cooking a carried food (called the food item) with a thing (called a the source of heat):
-	if the food item is cooked:
-		Now the food item is burned;
-		Now the food item is not edible;
-		say "You burned the [food item]!";
-		stop;
-	otherwise:
-		Now the food item is cooked;
-	if the food item is needs cooking:
-		Now the food item is edible;
-		Now the food item is not needs cooking;
-	if the source of heat is a stove-like:
-		Now the food item is fried;
-		say "You fried the [food item].";
-	else if the source of heat is a oven-like:
-		Now the food item is roasted;
-		say "You roasted the [food item].";
-	else if the source of heat is a toaster-like:
-		Now the food item is grilled;
-		say "You grilled the [food item].".
-
-Understand "cook [something] with/in/on/using [something]" as cooking it with.
-
-Before printing the name of a food (called the food item) while looking, examining, listing contents or taking inventory:
-	if the food item is needs cooking:
-		say "raw ";
-	else if the food item is burned:
-		say "burned ";
-	else if the food item is not raw:
-		say "[type of cooking of food item] ".
-
-
-
-The carrying capacity of the player is 0.
-
-
-[Ingredient]
-Rule for printing the name of an ingredient-like (called I):
-	if type of cutting of I is not uncut:
-		say  "[type of cutting of I] ";
-	if type of cooking of I is not raw:
-		say  "[type of cooking of I] ";
-	say  "[base of I]";
-
-[Preparing a meal]
-Preparing meal is an action applying to nothing.
-Before preparing meal:
-	if location is not the cooking location of the recipe:
-		say "Can only prepare meal in the [cooking location of the recipe].";
-		rule fails;
-	Repeat with ingredient running through the ingredients of the recipe:
-		let F be the base of the ingredient;
-		if player does not carry the F:
-			[say "The recipe requires [a ingredient].";]
-			say "You still miss something.";
-			rule fails;
-		if type of cooking of F is not type of cooking of ingredient:
-			[say "The recipe requires [a ingredient].";]
-			say "Something still needs to be cooked.";
-			rule fails;
-		if type of cutting of F is not type of cutting of ingredient:
-			[say "The recipe requires [a ingredient].";]
-			say "Something still needs to be cut.";
-			rule fails;
-
-Carry out preparing meal:
-	say "Adding the meal to your inventory.";
-	Repeat with ingredient running through the ingredients of recipe:
-		now the base of the ingredient is nowhere;
-	now the player carries the meal of the recipe;
-	set pronouns from the meal of the recipe.
-
-Understand "prepare meal" as preparing meal.
-
-
 The r_0 are rooms.
 
-Understand "kitchen" as r_0.
-The internal name of r_0 is "kitchen".
-The printed name of r_0 is "-= Kitchen =-".
-The kitchen part 0 is some text that varies. The kitchen part 0 is "You are in a kitchen. A typical one.
+Understand "lounge" as r_0.
+The internal name of r_0 is "lounge".
+The printed name of r_0 is "-= Lounge =-".
+The lounge part 0 is some text that varies. The lounge part 0 is "You find yourself in a lounge. A standard kind of place.
 
- You can make out [if c_0 is locked]a locked[else if c_0 is open]an opened[otherwise]a closed[end if]".
-The kitchen part 1 is some text that varies. The kitchen part 1 is " fridge right there by you.[if c_0 is open and there is something in the c_0] The fridge contains [a list of things in the c_0].[end if]".
-The kitchen part 2 is some text that varies. The kitchen part 2 is "[if c_0 is open and the c_0 contains nothing] The fridge is empty! What a waste of a day![end if]".
-The kitchen part 3 is some text that varies. The kitchen part 3 is " Oh wow! Is that what I think it is? It is! It's an oven.[if oven_0 is open and there is something in the oven_0] The oven contains [a list of things in the oven_0].[end if]".
-The kitchen part 4 is some text that varies. The kitchen part 4 is "[if oven_0 is open and the oven_0 contains nothing] The oven is empty! What a waste of a day![end if]".
-The kitchen part 5 is some text that varies. The kitchen part 5 is " You can make out a table. The table is massive.[if there is something on the s_0] On the table you make out [a list of things on the s_0].[end if]".
-The kitchen part 6 is some text that varies. The kitchen part 6 is "[if there is nothing on the s_0] But the thing is empty. Hm. Oh well[end if]".
-The kitchen part 7 is some text that varies. The kitchen part 7 is " You make out a counter. [if there is something on the s_1]On the counter you can see [a list of things on the s_1].[end if]".
-The kitchen part 8 is some text that varies. The kitchen part 8 is "[if there is nothing on the s_1]Looks like someone's already been here and taken everything off it, though. Oh! Why couldn't there just be stuff on it?[end if]".
-The kitchen part 9 is some text that varies. The kitchen part 9 is " You can make out a stove. [if there is something on the stove_0]You see [a list of things on the stove_0] on the stove. It doesn't get more TextWorld than this![end if]".
-The kitchen part 10 is some text that varies. The kitchen part 10 is "[if there is nothing on the stove_0]But the thing is empty.[end if]".
-The kitchen part 11 is some text that varies. The kitchen part 11 is "
+
 
 ".
-The description of r_0 is "[kitchen part 0][kitchen part 1][kitchen part 2][kitchen part 3][kitchen part 4][kitchen part 5][kitchen part 6][kitchen part 7][kitchen part 8][kitchen part 9][kitchen part 10][kitchen part 11]".
+The description of r_0 is "[lounge part 0]".
 
 
-The RECIPE are recipe-likes.
-The RECIPE are privately-named.
-The c_0 are containers.
-The c_0 are privately-named.
-The f_0 and the f_1 and the f_2 are foods.
-The f_0 and the f_1 and the f_2 are privately-named.
-The ingredient_0 are ingredient-likes.
-The ingredient_0 are privately-named.
-The meal_0 are meal-likes.
-The meal_0 are privately-named.
-The o_0 and the o_1 are object-likes.
-The o_0 and the o_1 are privately-named.
-The oven_0 are oven-likes.
-The oven_0 are privately-named.
+The o_0 are object-likes.
+The o_0 are privately-named.
 The r_0 are rooms.
 The r_0 are privately-named.
-The s_0 and the s_1 are supporters.
-The s_0 and the s_1 are privately-named.
-The slot_0 are things.
-The slot_0 are privately-named.
-The stove_0 are stove-likes.
-The stove_0 are privately-named.
 
-The description of c_0 is "The [noun] looks stuffy. [if open]You can see inside it.[else if locked]There is a lock on it and seems impossible to open.[otherwise]You can't see inside it because the lid's in your way.[end if]".
-The printed name of c_0 is "fridge".
-Understand "fridge" as c_0.
-The c_0 is in r_0.
-The c_0 is open.
-The description of oven_0 is "Useful for roasting things.".
-The printed name of oven_0 is "oven".
-Understand "oven" as oven_0.
-The oven_0 is in r_0.
-The oven_0 is open.
-The description of s_0 is "The [noun] is shaky.".
-The printed name of s_0 is "table".
-Understand "table" as s_0.
-The s_0 is in r_0.
-The description of s_1 is "The [noun] is solid.".
-The printed name of s_1 is "counter".
-Understand "counter" as s_1.
-The s_1 is in r_0.
-The description of stove_0 is "Useful for frying things.".
-The printed name of stove_0 is "stove".
-Understand "stove" as stove_0.
-The stove_0 is in r_0.
-The description of f_0 is "You couldn't pay me to eat that [noun].".
-The printed name of f_0 is "red apple".
-Understand "red apple" as f_0.
-Understand "red" as f_0.
-Understand "apple" as f_0.
-The base of ingredient_0 is f_0.
-The f_0 is cookable.
-The f_0 is cooked.
-The f_0 is cuttable.
-The f_0 is edible.
-The f_0 is on the s_1.
-The f_0 is raw.
-The f_0 is uncut.
-The description of f_1 is "You couldn't pay me to eat that [noun].".
-The printed name of f_1 is "red potato".
-Understand "red potato" as f_1.
-Understand "red" as f_1.
-Understand "potato" as f_1.
-The f_1 is cookable.
-The f_1 is cuttable.
-The f_1 is inedible.
-The f_1 is needs cooking.
-The f_1 is on the s_1.
-The f_1 is uncut.
-The description of f_2 is "That's a [noun]!".
-The printed name of f_2 is "cilantro".
-Understand "cilantro" as f_2.
-The f_2 is cuttable.
-The f_2 is edible.
-The f_2 is in the c_0.
-The f_2 is uncut.
-The description of meal_0 is "".
-The printed name of meal_0 is "meal".
-Understand "meal" as meal_0.
-The meal_0 is edible.
-The meal of the RECIPE is the meal_0..
-The description of slot_0 is "".
-The printed name of slot_0 is "".
-When play begins, increase the carrying capacity of the player by 1..
-The description of ingredient_0 is "".
-The printed name of ingredient_0 is "".
-When play begins, add ingredient_0 to the ingredients of the RECIPE.
-The ingredient_0 is raw.
-The ingredient_0 is uncut.
-The description of RECIPE is "".
-The printed name of RECIPE is "".
-The description of o_0 is "You open the copy of 'Cooking: A Modern Approach (3rd Ed.)' and start reading:[line break][line break]Recipe #1[line break]---------[line break]Gather all following ingredients and follow the directions to prepare this tasty meal.[line break][line break]Ingredients:[line break]red apple[line break][line break]Directions:[line break]prepare meal[line break]".
-The printed name of o_0 is "cookbook".
-Understand "recipe" as o_0.
-Understand "cookbook" as o_0.
-The o_0 is on the s_0.
-The description of o_1 is "The [noun] is modern.".
-The printed name of o_1 is "knife".
-Understand "knife" as o_1.
-The o_1 is on the s_0.
-The o_1 is sharp.
+The description of o_0 is "The coin appears to be to fit in here".
+The printed name of o_0 is "coin".
+Understand "coin" as o_0.
+The o_0 is in r_0.
 
 
 The player is in r_0.
 
 The quest0 completed is a truth state that varies.
 The quest0 completed is usually false.
+
+Test quest0_0 with "take coin"
+
 Every turn:
 	if quest0 completed is true:
 		do nothing;
-	else if The f_0 is burned:
-		end the story; [Lost]
-
-The quest1 completed is a truth state that varies.
-The quest1 completed is usually false.
-
-Test quest1_0 with ""
-
-Every turn:
-	if quest1 completed is true:
-		do nothing;
-	else if The player carries the f_0:
+	else if The player carries the o_0:
 		increase the score by 1; [Quest completed]
 		if 1 is 1 [always true]:
-			Now the quest1 completed is true;
+			Now the quest0 completed is true;
 
-The quest2 completed is a truth state that varies.
-The quest2 completed is usually false.
-Every turn:
-	if quest2 completed is true:
-		do nothing;
-	else if The f_0 is consumed:
-		end the story; [Lost]
-	else if The f_0 is fried:
-		end the story; [Lost]
-	else if The f_0 is grilled:
-		end the story; [Lost]
-	else if The f_0 is roasted:
-		end the story; [Lost]
-
-The quest3 completed is a truth state that varies.
-The quest3 completed is usually false.
-Every turn:
-	if quest3 completed is true:
-		do nothing;
-	else if The f_0 is consumed:
-		end the story; [Lost]
-	else if The f_0 is chopped:
-		end the story; [Lost]
-	else if The f_0 is diced:
-		end the story; [Lost]
-	else if The f_0 is sliced:
-		end the story; [Lost]
-
-The quest4 completed is a truth state that varies.
-The quest4 completed is usually false.
-
-Test quest4_0 with ""
-
-Every turn:
-	if quest4 completed is true:
-		do nothing;
-	else if The f_0 is consumed:
-		end the story; [Lost]
-	else if The player carries the meal_0:
-		increase the score by 1; [Quest completed]
-		if 1 is 1 [always true]:
-			Now the quest4 completed is true;
-
-The quest5 completed is a truth state that varies.
-The quest5 completed is usually false.
-
-Test quest5_0 with ""
-
-Every turn:
-	if quest5 completed is true:
-		do nothing;
-	else if The meal_0 is burned:
-		end the story; [Lost]
-	else if The meal_0 is consumed:
-		increase the score by 1; [Quest completed]
-		if 1 is 1 [always true]:
-			Now the quest5 completed is true;
-
-Use scoring. The maximum score is 3.
+Use scoring. The maximum score is 1.
 This is the simpler notify score changes rule:
 	If the score is not the last notified score:
 		let V be the score - the last notified score;
@@ -445,7 +58,7 @@ This is the simpler notify score changes rule:
 		else:
 			say "points.";
 		Now the last notified score is the score;
-	if quest1 completed is true and quest4 completed is true and quest5 completed is true:
+	if quest0 completed is true:
 		end the story finally; [Win]
 
 The simpler notify score changes rule substitutes for the notify score changes rule.
@@ -610,7 +223,7 @@ The last property-aggregation rule (this is the print aggregated properties rule
 		rule succeeds;
 	rule fails;
 
-The objective part 0 is some text that varies. The objective part 0 is "You are hungry! Let's cook a delicious meal. Check the cookbook in the kitchen for the recipe. Once done, enjoy your meal!".
+The objective part 0 is some text that varies. The objective part 0 is "Welcome to TextWorld! Recover the coin from the floor of the lounge.".
 
 An objective is some text that varies. The objective is "[objective part 0]".
 Printing the objective is an action applying to nothing.
