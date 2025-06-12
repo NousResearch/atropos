@@ -33,6 +33,7 @@ class TextWorldChallengeRegistry:
         },
         "tw-cooking": {
             "recipe": 1,
+            "recipe_seed": 12345,  # Added required seed
             "take": 1,
             "cook": False,
             "open": False,

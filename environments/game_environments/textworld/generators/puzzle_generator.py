@@ -118,7 +118,9 @@ class PuzzleGenerator:
             return game_file, config
             
         except Exception as e:
+            import traceback
             logger.error(f"Error generating puzzle game: {e}")
+            traceback.print_exc()
             return None, {}
     
     def _generate_door_sequence_puzzle(self,
@@ -142,30 +144,60 @@ class PuzzleGenerator:
         # Create linear path with doors
         keys = template["objects"][:nb_rooms-1]
         for i in range(nb_rooms - 1):
+            # Connect rooms - maker.connect expects exit objects, not room objects
             path = maker.connect(rooms[i].exits["east"], rooms[i+1].exits["west"])
             door = maker.new_door(path, name=f"{keys[i].split()[0]} door")
             
             # Place key in a room (not the current one)
             key = maker.new(type="k", name=keys[i])
             key_room_idx = self.rng.choice([j for j in range(nb_rooms) if j != i+1])
-            maker.move(key, rooms[key_room_idx])
+            rooms[key_room_idx].add(key)
             
             # Make door require key
             maker.add_fact("match", key, door)
             maker.add_fact("locked", door)
         
-        # Add goal object in last room
+        # Add goal object in a random room (but not the starting room)
         treasure = maker.new(type="o", name="treasure")
-        maker.move(treasure, rooms[-1])
+        treasure_room_idx = self.rng.choice(range(1, nb_rooms))  # Not room 0 (start)
+        rooms[treasure_room_idx].add(treasure)
         
-        # Create quest
+        # Add some dead-end branches to avoid "last room = treasure" pattern
+        if difficulty in ["hard", "expert"] and nb_rooms > 4:
+            # Create 1-2 dead end branches
+            num_branches = self.rng.randint(1, 2)
+            for _ in range(num_branches):
+                branch_from = self.rng.choice(range(nb_rooms))
+                dead_end = maker.new_room(f"dead_end_{branch_from}")
+                # Connect to a random direction that's free
+                directions = ["north", "south"]  # Avoid east/west used for main path
+                for direction in directions:
+                    opposite = {"north": "south", "south": "north"}[direction]
+                    if not rooms[branch_from].exits[direction].destination:
+                        maker.connect(rooms[branch_from].exits[direction], dead_end.exits[opposite])
+                        # Add a distractor object
+                        distractor = maker.new(type="o", name=self.rng.choice(["fake treasure", "empty chest", "old scroll", "dusty book"]))
+                        dead_end.add(distractor)
+                        break
+        
+        # Create quest - we need to navigate to where the treasure actually is
         quest_commands = []
-        for i, key_name in enumerate(keys):
-            quest_commands.extend([
-                f"take {key_name}",
-                f"unlock {key_name.split()[0]} door with {key_name}",
-                "go east"
-            ])
+        
+        # First collect all keys (order doesn't matter for collection)
+        for key_name in keys:
+            quest_commands.append(f"take {key_name}")
+            
+        # Then navigate through doors to the treasure room
+        # This is simplified - in reality the player would need to explore
+        current_room = 0
+        while current_room < treasure_room_idx:
+            if current_room < len(keys):
+                quest_commands.extend([
+                    f"unlock {keys[current_room].split()[0]} door with {keys[current_room]}",
+                    "go east"
+                ])
+            current_room += 1
+            
         quest_commands.append("take treasure")
         
         maker.set_quest_from_commands(quest_commands)
@@ -178,12 +210,14 @@ class PuzzleGenerator:
         game = maker.build()
         
         options = GameOptions()
-        options.seeds = self.rng.randint(0, 65535)
+        seed_value = self.rng.randint(0, 65535)
+
+        options.seeds = seed_value
         
         if filename_prefix is None:
             filename_prefix = "puzzle_door_sequence"
         
-        game_filename = f"{filename_prefix}_{difficulty}_seed{options.seeds}.z8"
+        game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
         game_file = compile_game(game, options)
@@ -196,7 +230,7 @@ class PuzzleGenerator:
                 "description": template["description"],
                 "nb_rooms": nb_rooms,
                 "nb_doors": len(keys),
-                "seed": options.seeds
+                "seed": seed_value
             }
             return game_file, config
         
@@ -235,15 +269,15 @@ class PuzzleGenerator:
         for i, (digit, clue_name) in enumerate(zip(combination, clue_objects)):
             clue = maker.new(type="o", name=clue_name, desc=f"It has the number {digit} written on it.")
             room_idx = (i + 1) % nb_rooms
-            maker.move(clue, rooms[room_idx])
+            rooms[room_idx].add(clue)
         
         # Create locked container with treasure
         safe = maker.new(type="c", name="safe", desc=f"A safe with a {combo_length}-digit combination lock.")
-        maker.move(safe, rooms[0])
+        rooms[0].add(safe)
         maker.add_fact("locked", safe)
         
         treasure = maker.new(type="o", name="treasure")
-        maker.move(treasure, safe)
+        safe.add(treasure)
         
         # Create quest (examining all clues then opening safe)
         quest_commands = []
@@ -261,12 +295,14 @@ class PuzzleGenerator:
         game = maker.build()
         
         options = GameOptions()
-        options.seeds = self.rng.randint(0, 65535)
+        seed_value = self.rng.randint(0, 65535)
+
+        options.seeds = seed_value
         
         if filename_prefix is None:
             filename_prefix = "puzzle_combination"
         
-        game_filename = f"{filename_prefix}_{difficulty}_seed{options.seeds}.z8"
+        game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
         game_file = compile_game(game, options)
@@ -279,7 +315,7 @@ class PuzzleGenerator:
                 "description": template["description"],
                 "nb_rooms": nb_rooms,
                 "combination_length": combo_length,
-                "seed": options.seeds
+                "seed": seed_value
             }
             return game_file, config
         
@@ -310,7 +346,7 @@ class PuzzleGenerator:
         # Create scale in middle room
         scale_room_idx = nb_rooms // 2
         scale = maker.new(type="s", name="scale", desc="A balance scale with two plates.")
-        maker.move(scale, rooms[scale_room_idx])
+        rooms[scale_room_idx].add(scale)
         
         # Create weights
         weights = []
@@ -322,7 +358,7 @@ class PuzzleGenerator:
                 weights.append(weight)
                 # Distribute weights across rooms
                 room_idx = self.rng.randint(0, nb_rooms - 1)
-                maker.move(weight, rooms[room_idx])
+                rooms[room_idx].add(weight)
         
         # Create door that opens with correct balance
         if nb_rooms > 2:
@@ -332,7 +368,7 @@ class PuzzleGenerator:
         
         # Add treasure in final room
         treasure = maker.new(type="o", name="treasure")
-        maker.move(treasure, rooms[-1])
+        rooms[-1].add(treasure)
         
         # Create quest
         target_weight = 4 if difficulty == "easy" else 5
@@ -352,12 +388,14 @@ class PuzzleGenerator:
         game = maker.build()
         
         options = GameOptions()
-        options.seeds = self.rng.randint(0, 65535)
+        seed_value = self.rng.randint(0, 65535)
+
+        options.seeds = seed_value
         
         if filename_prefix is None:
             filename_prefix = "puzzle_weight"
         
-        game_filename = f"{filename_prefix}_{difficulty}_seed{options.seeds}.z8"
+        game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
         game_file = compile_game(game, options)
@@ -371,7 +409,7 @@ class PuzzleGenerator:
                 "nb_rooms": nb_rooms,
                 "nb_weights": len(weights),
                 "target_weight": target_weight,
-                "seed": options.seeds
+                "seed": seed_value
             }
             return game_file, config
         
@@ -388,7 +426,9 @@ class PuzzleGenerator:
         """Generate a basic puzzle using standard generation."""
         # Use standard game generation with puzzle-themed settings
         options = GameOptions()
-        options.seeds = self.rng.randint(0, 65535)
+        seed_value = self.rng.randint(0, 65535)
+
+        options.seeds = seed_value
         options.nb_rooms = params["nb_rooms"]
         options.nb_objects = params["nb_objects"]
         options.quest_length = params["quest_length"]
@@ -403,7 +443,7 @@ class PuzzleGenerator:
         if filename_prefix is None:
             filename_prefix = f"puzzle_{puzzle_type}"
         
-        game_filename = f"{filename_prefix}_{difficulty}_seed{options.seeds}.z8"
+        game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
         game_file = compile_game(game, options)
@@ -417,7 +457,7 @@ class PuzzleGenerator:
                 "nb_rooms": params["nb_rooms"],
                 "nb_objects": params["nb_objects"],
                 "quest_length": params["quest_length"],
-                "seed": options.seeds
+                "seed": seed_value
             }
             return game_file, config
         

@@ -86,6 +86,7 @@ python3 -m sglang.launch_server \
     --port ${SGLANG_PORT} \
     --tp 8 \
     --disable-outlines-disk-cache \
+    --grammar-backend xgrammar
     > ${LOGDIR}/sglang.log 2>&1 &
 
 SGLANG_PID=$!

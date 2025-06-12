@@ -115,11 +115,13 @@ class NavigationGenerator:
             
             # Add goal at end
             goal = maker.new(type="o", name="golden key", desc="The key to escape this place.")
-            maker.move(goal, end_room)
+            end_room.add(goal)
             
-            # Create exit door at start (locked)
-            exit_door = maker.new(type="d", name="exit door", desc="The way out.")
-            maker.move(exit_door, start_room)
+            # Create exit door at start (locked) - needs to be between rooms
+            # Create a special exit room
+            exit_room = maker.new_room("exit")
+            exit_path = maker.connect(start_room.exits["south"], exit_room.exits["north"])
+            exit_door = maker.new_door(exit_path, name="exit door", desc="The way out.")
             maker.add_fact("match", goal, exit_door)
             maker.add_fact("locked", exit_door)
             
@@ -144,12 +146,14 @@ class NavigationGenerator:
             game = maker.build()
             
             options = GameOptions()
-            options.seeds = self.rng.randint(0, 65535)
+            seed_value = self.rng.randint(0, 65535)
+
+            options.seeds = seed_value
             
             if filename_prefix is None:
                 filename_prefix = f"navigation_{nav_type}"
             
-            game_filename = f"{filename_prefix}_{difficulty}_seed{options.seeds}.z8"
+            game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
             options.path = f"{output_folder}/{game_filename}"
             
             game_file = compile_game(game, options)
@@ -163,7 +167,7 @@ class NavigationGenerator:
                     "nb_rooms": len(rooms),
                     "layout": template["layout"],
                     "has_dead_ends": template["dead_ends"],
-                    "seed": options.seeds
+                    "seed": seed_value
                 }
                 
                 logger.info(f"Generated navigation game: {nav_type} ({difficulty}) - {game_file}")
@@ -319,7 +323,9 @@ class NavigationGenerator:
         """Generate a mixed layout combining different patterns."""
         # For simplicity, create a basic interconnected layout
         options = GameOptions()
-        options.seeds = self.rng.randint(0, 65535)
+        seed_value = self.rng.randint(0, 65535)
+
+        options.seeds = seed_value
         options.nb_rooms = params["nb_rooms"]
         options.nb_objects = 0  # We'll add objects manually
         
@@ -348,7 +354,7 @@ class NavigationGenerator:
         for landmark_name, room in zip(selected_landmarks, landmark_rooms):
             landmark = maker.new(type="o", name=landmark_name,
                                desc=f"A distinctive {landmark_name} that helps with navigation.")
-            maker.move(landmark, room)
+            room.add(landmark)
     
     def _add_navigation_aids(self,
                             maker: GameMaker,
@@ -360,7 +366,7 @@ class NavigationGenerator:
             map_room = self.rng.choice(rooms[:len(rooms)//3])
             game_map = maker.new(type="o", name="map",
                                desc="A map showing the layout of this place.")
-            maker.move(game_map, map_room)
+            map_room.add(game_map)
         
         # Add directional signs in some rooms
         num_signs = params.get("nb_signs", 2)
@@ -369,7 +375,7 @@ class NavigationGenerator:
         for i, room in enumerate(sign_rooms):
             sign = maker.new(type="o", name=f"sign",
                            desc="A sign with directions.")
-            maker.move(sign, room)
+            room.add(sign)
     
     def _generate_navigation_quest(self,
                                   start_room: Any,

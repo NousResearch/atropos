@@ -97,7 +97,8 @@ class QuestGenerator:
         
         # Create game options
         options = GameOptions()
-        options.seeds = self.rng.randint(0, 65535)
+        seed_value = self.rng.randint(0, 65535)
+        options.seeds = seed_value
         options.nb_rooms = params["nb_rooms"]
         options.nb_objects = params["nb_objects"]
         options.quest_length = params["quest_length"]
@@ -114,7 +115,7 @@ class QuestGenerator:
         if filename_prefix is None:
             filename_prefix = f"quest_{quest_type}_{difficulty}"
         
-        game_filename = f"{filename_prefix}_seed{options.seeds}.z8"
+        game_filename = f"{filename_prefix}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
         try:
@@ -135,7 +136,7 @@ class QuestGenerator:
                     "quest_length": params["quest_length"],
                     "quest_breadth": params["quest_breadth"],
                     "quest_depth": params["quest_depth"],
-                    "seed": options.seeds
+                    "seed": seed_value
                 }
                 
                 logger.info(f"Generated quest game: {quest_type} ({difficulty}) - {game_file}")
@@ -192,12 +193,13 @@ class QuestGenerator:
             
             # Create options for compilation
             options = GameOptions()
-            options.seeds = self.rng.randint(0, 65535)
+            seed_value = self.rng.randint(0, 65535)
+            options.seeds = seed_value
             
             if filename_prefix is None:
                 filename_prefix = "quest_custom"
             
-            game_filename = f"{filename_prefix}_seed{options.seeds}.z8"
+            game_filename = f"{filename_prefix}_seed{seed_value}.z8"
             options.path = f"{output_folder}/{game_filename}"
             
             # Compile the game
@@ -212,7 +214,7 @@ class QuestGenerator:
                     "nb_rooms": params["nb_rooms"],
                     "nb_objects": params["nb_objects"],
                     "commands": commands,
-                    "seed": options.seeds
+                    "seed": seed_value
                 }
                 
                 logger.info(f"Generated custom quest game: {game_file}")
@@ -253,8 +255,8 @@ class QuestGenerator:
                 "nb_rooms": 10,
                 "nb_objects": 15,
                 "quest_length": 8,
-                "quest_breadth": 3,
-                "quest_depth": 8
+                "quest_breadth": 2,  # Reduced from 3 to make generation feasible
+                "quest_depth": 10   # Increased depth to compensate
             },
             "expert": {
                 "nb_rooms": 15,

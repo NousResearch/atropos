@@ -146,17 +146,17 @@ class MixedGenerator:
                     # Place key in a side room (puzzle)
                     key = maker.new(type="k", name=puzzle_keys[i])
                     key_room = self.rng.choice([r for r in rooms if r != rooms[i + 1]])
-                    maker.move(key, key_room)
+                    key_room.add(key)
                     maker.add_fact("match", key, door)
                     
                     # Place quest item behind door
                     if i < len(quest_items):
                         item = maker.new(type="o", name=quest_items[i])
-                        maker.move(item, rooms[i + 1])
+                        rooms[i + 1].add(item)
         
         # Create final goal
         altar = maker.new(type="s", name="ancient altar", desc="Place the three sacred items here.")
-        maker.move(altar, rooms[-1])
+        rooms[-1].add(altar)
         
         # Build quest commands
         quest_commands = []
@@ -181,12 +181,14 @@ class MixedGenerator:
         game = maker.build()
         
         options = GameOptions()
-        options.seeds = self.rng.randint(0, 65535)
+        seed_value = self.rng.randint(0, 65535)
+
+        options.seeds = seed_value
         
         if filename_prefix is None:
             filename_prefix = "mixed_quest_puzzle"
         
-        game_filename = f"{filename_prefix}_{difficulty}_seed{options.seeds}.z8"
+        game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
         game_file = compile_game(game, options)
@@ -199,7 +201,7 @@ class MixedGenerator:
                 "description": template["description"],
                 "nb_rooms": len(rooms),
                 "features": template["features"],
-                "seed": options.seeds
+                "seed": seed_value
             }
             return game_file, config
         
@@ -226,7 +228,7 @@ class MixedGenerator:
         
         for landmark_name, room in zip(landmarks, landmark_rooms):
             landmark = maker.new(type="o", name=landmark_name)
-            maker.move(landmark, room)
+            room.add(landmark)
         
         # Create puzzle elements in the maze
         # Color sequence puzzle
@@ -236,7 +238,7 @@ class MixedGenerator:
         for i, color in enumerate(colors[:min(4, params["nb_rooms"] // 2)]):
             switch = maker.new(type="o", name=f"{color} switch")
             switch_room = self.rng.choice(rooms[1:-1])
-            maker.move(switch, switch_room)
+            switch_room.add(switch)
             switches.append((color, switch))
         
         # Create exit that requires switches
@@ -247,7 +249,7 @@ class MixedGenerator:
         
         # Place treasure
         treasure = maker.new(type="o", name="maze treasure")
-        maker.move(treasure, rooms[-1])
+        rooms[-1].add(treasure)
         
         # Create walkthrough
         quest_commands = ["look"]
@@ -269,12 +271,14 @@ class MixedGenerator:
         game = maker.build()
         
         options = GameOptions()
-        options.seeds = self.rng.randint(0, 65535)
+        seed_value = self.rng.randint(0, 65535)
+
+        options.seeds = seed_value
         
         if filename_prefix is None:
             filename_prefix = "mixed_navigation_puzzle"
         
-        game_filename = f"{filename_prefix}_{difficulty}_seed{options.seeds}.z8"
+        game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
         game_file = compile_game(game, options)
@@ -289,7 +293,7 @@ class MixedGenerator:
                 "nb_landmarks": len(landmark_rooms),
                 "nb_switches": len(switches),
                 "features": template["features"],
-                "seed": options.seeds
+                "seed": seed_value
             }
             return game_file, config
         
@@ -304,7 +308,9 @@ class MixedGenerator:
         """Generate an open exploration game with multiple quests."""
         # Use standard generation with custom parameters
         options = GameOptions()
-        options.seeds = self.rng.randint(0, 65535)
+        seed_value = self.rng.randint(0, 65535)
+
+        options.seeds = seed_value
         options.nb_rooms = params["nb_rooms"]
         options.nb_objects = params["nb_objects"]
         options.nb_parallel_quests = params.get("nb_parallel_quests", 3)
@@ -320,7 +326,7 @@ class MixedGenerator:
         if filename_prefix is None:
             filename_prefix = "mixed_exploration_quest"
         
-        game_filename = f"{filename_prefix}_{difficulty}_seed{options.seeds}.z8"
+        game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
         game_file = compile_game(game, options)
@@ -336,7 +342,7 @@ class MixedGenerator:
                 "nb_parallel_quests": options.nb_parallel_quests,
                 "quest_length": params["quest_length"],
                 "features": template["features"],
-                "seed": options.seeds
+                "seed": seed_value
             }
             return game_file, config
         
@@ -376,18 +382,18 @@ class MixedGenerator:
                     # Hide key
                     key = maker.new(type="k", name=key_name)
                     key_room = self.rng.choice(rooms[:i * 3 + 2])
-                    maker.move(key, key_room)
+                    key_room.add(key)
                     maker.add_fact("match", key, door)
         
         # 2. Treasures
         treasures = ["ruby", "emerald", "diamond", "ancient artifact"]
         for treasure_name, room in zip(treasures, treasure_rooms):
             treasure = maker.new(type="o", name=treasure_name)
-            maker.move(treasure, room)
+            room.add(treasure)
         
         # 3. Boss and final treasure
         boss_key = maker.new(type="k", name="boss key")
-        maker.move(boss_key, self.rng.choice(rooms[len(rooms)//2:-1]))
+        self.rng.choice(rooms[len(rooms)//2:-1]).add(boss_key)
         
         # Boss door
         boss_path = self._find_or_create_path(maker, rooms[-2], boss_room)
@@ -398,7 +404,7 @@ class MixedGenerator:
         
         # Final treasure
         legendary_sword = maker.new(type="o", name="legendary sword")
-        maker.move(legendary_sword, boss_room)
+        boss_room.add(legendary_sword)
         
         # Create quest
         quest_commands = [
@@ -422,18 +428,20 @@ class MixedGenerator:
         for _ in range(params["nb_objects"] // 2):
             obj_name = self.rng.choice(atmosphere_objects)
             obj = maker.new(type="o", name=obj_name)
-            maker.move(obj, self.rng.choice(rooms))
+            self.rng.choice(rooms).add(obj)
         
         # Build and compile
         game = maker.build()
         
         options = GameOptions()
-        options.seeds = self.rng.randint(0, 65535)
+        seed_value = self.rng.randint(0, 65535)
+
+        options.seeds = seed_value
         
         if filename_prefix is None:
             filename_prefix = "mixed_dungeon_crawler"
         
-        game_filename = f"{filename_prefix}_{difficulty}_seed{options.seeds}.z8"
+        game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
         game_file = compile_game(game, options)
@@ -448,7 +456,7 @@ class MixedGenerator:
                 "nb_treasures": len(treasure_rooms) + 1,
                 "has_boss_room": True,
                 "features": template["features"],
-                "seed": options.seeds
+                "seed": seed_value
             }
             return game_file, config
         
@@ -463,7 +471,9 @@ class MixedGenerator:
         """Generate a full adventure game."""
         # For the most complex type, use the standard generator with maximum features
         options = GameOptions()
-        options.seeds = self.rng.randint(0, 65535)
+        seed_value = self.rng.randint(0, 65535)
+
+        options.seeds = seed_value
         options.nb_rooms = params["nb_rooms"]
         options.nb_objects = params["nb_objects"]
         options.nb_parallel_quests = 4
@@ -481,7 +491,7 @@ class MixedGenerator:
         if filename_prefix is None:
             filename_prefix = "mixed_adventure"
         
-        game_filename = f"{filename_prefix}_{difficulty}_seed{options.seeds}.z8"
+        game_filename = f"{filename_prefix}_{difficulty}_seed{seed_value}.z8"
         options.path = f"{output_folder}/{game_filename}"
         
         game_file = compile_game(game, options)
@@ -497,7 +507,7 @@ class MixedGenerator:
                 "nb_parallel_quests": 4,
                 "quest_complexity": "high",
                 "features": template["features"],
-                "seed": options.seeds
+                "seed": seed_value
             }
             return game_file, config
         
