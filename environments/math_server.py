@@ -5,6 +5,7 @@ from concurrent.futures import ProcessPoolExecutor
 from difflib import SequenceMatcher
 from typing import Dict, List, Optional, Tuple
 
+import wandb
 from datasets import load_dataset
 from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
@@ -12,12 +13,11 @@ from math_verify.errors import TimeoutException
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
-import wandb
 from atroposlib.envs.base import (
+    APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
     EvalHandlingEnum,
-    OpenaiConfig,
     ScoredDataGroup,
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
@@ -154,7 +154,7 @@ class MathEnv(BaseEnv):
     def __init__(
         self,
         config: RSConfig,
-        server_configs: List[OpenaiConfig],
+        server_configs: List[APIServerConfig],
         slurm=True,
         testing=False,
     ):
@@ -177,7 +177,7 @@ class MathEnv(BaseEnv):
         self.iter = 0
 
     @classmethod
-    def config_init(self) -> Tuple[RSConfig, List[OpenaiConfig]]:
+    def config_init(self) -> Tuple[RSConfig, List[APIServerConfig]]:
         env_config = RSConfig(
             tokenizer_name="deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
             group_size=8,
@@ -192,7 +192,7 @@ class MathEnv(BaseEnv):
             eval_limit_ratio=0.1,
         )
         server_configs = [
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
                 base_url="http://localhost:9004/v1",
                 api_key="x",
@@ -655,7 +655,7 @@ class MathEnv(BaseEnv):
         )
         # check if all the same
         # print(scores['scores'])
-        # Fill in the correct/incorrect lens after so we're only looking at actual training data
+        # Fill in the correct/incorrect lenses after so we're only looking at actual training data
         self.correct_answer_len.extend(
             [
                 len(scores["tokens"][i])

@@ -1,7 +1,7 @@
 import math
 
+import numpy as np
 import pytest
-import torch
 
 # Adjust the import below if your functions are in a different module.
 from atroposlib.utils.advantages import (
@@ -23,9 +23,9 @@ def test_allclose_to_first_vector():
     """Test that return_vector=True returns a tensor of booleans."""
     values = [1.0, 1.000000001, 1.000000002]
     result = allclose_to_first(values, return_vector=True)
-    assert isinstance(result, torch.Tensor)
+    assert isinstance(result, np.ndarray)
     # All comparisons should be True.
-    assert torch.all(result)
+    assert np.all(result)
 
 
 def test_allclose_to_first_not_close():
@@ -74,15 +74,15 @@ def test_compute_stats_jagged():
 
 def test_compute_discounted_returns():
     """Test compute_discounted_returns with a tensor input."""
-    rewards = torch.tensor([1.0, 1.0, 1.0])
+    rewards = np.array([1.0, 1.0, 1.0])
     gamma = 0.9
     returns = compute_discounted_returns(rewards, gamma)
     # For a 3-element vector:
     # t=2: 1.0
     # t=1: 1.0 + 0.9*1.0 = 1.9
     # t=0: 1.0 + 0.9*1.9 = 2.71
-    expected = torch.tensor([2.71, 1.9, 1.0])
-    assert torch.allclose(returns, expected, rtol=1e-5, atol=1e-8)
+    expected = np.array([2.71, 1.9, 1.0])
+    assert np.allclose(returns, expected, rtol=1e-5, atol=1e-8)
 
 
 def test_compute_discounted_returns_list_input():
@@ -90,8 +90,8 @@ def test_compute_discounted_returns_list_input():
     rewards = [1, 1, 1]
     gamma = 0.0  # With gamma=0, the returns should equal the rewards.
     returns = compute_discounted_returns(rewards, gamma)
-    expected = torch.tensor([1.0, 1.0, 1.0])
-    assert torch.allclose(returns, expected, rtol=1e-5, atol=1e-8)
+    expected = np.array([1.0, 1.0, 1.0])
+    assert np.allclose(returns, expected, rtol=1e-5, atol=1e-8)
 
 
 def test_compute_grpo_process_supervision_advantages_cumsum():

@@ -1,14 +1,17 @@
 import base64
 import json
-import os
 import random
-import sys
 import traceback
 from typing import List, Optional, Tuple
 
 from datasets import load_dataset
 
-from atroposlib.envs.base import BaseEnv, BaseEnvConfig, OpenaiConfig, ScoredDataGroup
+from atroposlib.envs.base import (
+    APIServerConfig,
+    BaseEnv,
+    BaseEnvConfig,
+    ScoredDataGroup,
+)
 from atroposlib.type_definitions import GameHistory, Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
@@ -23,13 +26,11 @@ class MultimodalComplexEnv(BaseEnv):
     async def collect_trajectories(
         self, item: Item
     ) -> Tuple[GameHistory | None, List[Item]]:
-        print("DEBUG: Starting collect_trajectories")
         to_score = list()
         to_backlog = list()
 
         # Get the current image if it was stored
         if hasattr(self, "current_image"):
-            print("DEBUG: Using current_image for multimodal content")
 
             # Convert PIL image to base64
             import io
@@ -55,14 +56,12 @@ class MultimodalComplexEnv(BaseEnv):
 
                     if not text_content:
                         text_content = "Please solve this problem and provide your answer as \\boxed{answer}."
-                except Exception as e:
-                    print(f"DEBUG: Error parsing JSON: {e}")
+                except Exception:
                     text_content = "Please solve this problem and provide your answer as \\boxed{answer}."
             else:
                 text_content = user_content
 
             # Create messages with the new format
-            print("DEBUG: Creating multimodal message with new format")
             messages = [
                 {
                     "role": "system",
@@ -83,7 +82,6 @@ class MultimodalComplexEnv(BaseEnv):
             ]
 
         else:
-            print("DEBUG: No image available, using text-only message")
             messages = [
                 {
                     "role": "system",
@@ -92,32 +90,23 @@ class MultimodalComplexEnv(BaseEnv):
                 dict(item[0][0]),
             ]
 
-        print("DEBUG: About to call chat_completion")
         chat_completions = await self.server.chat_completion(
             messages=messages,
             n=self.config.group_size,
             max_tokens=1024 * 2,
             timeout=60,  # Add timeout to prevent hanging (60 seconds is more reasonable)
         )
-        print("DEBUG: chat_completion call successful")
 
         for i, chat_completion in enumerate(chat_completions.choices):
-            print(f"DEBUG: Processing completion {i+1}/{len(chat_completions.choices)}")
             messages = (
                 dict(item[0][0]),
                 {"role": "assistant", "content": chat_completion.message.content},
             )
             to_score.append((messages, item[1], base64_image))
 
-        print("DEBUG: Finished processing completions")
+        to_postprocess = await self.score(to_score)
 
-        print("DEBUG: Returning from collect_trajectories")
-        return to_score, to_backlog
-
-    async def postprocess_histories(
-        self, trajectories: List[GameHistory]
-    ) -> ScoredDataGroup:
-        pass
+        return to_postprocess, to_backlog
 
     async def evaluate(self, *args, **kwargs):
         """
@@ -140,20 +129,13 @@ class MultimodalComplexEnv(BaseEnv):
         Get the next items to be rolled out, including the image
         """
         try:
-            print("DEBUG: Starting get_next_item")
 
             # Get next dataset item
             next_item = self.train[self.iter % len(self.train)]
             self.iter += 1
 
-            print(f"DEBUG: Retrieved dataset item {self.iter-1}")
-
-            # For debugging, we'll use a simple text-only prompt and store the image separately
-            # This is because the collect_trajectories method will handle the multimodal formatting
-
             # Store image as a class attribute so collect_trajectories can access it
             self.current_image = next_item["image"]
-            print("DEBUG: Stored image in current_image attribute")
 
             # Create a simple text prompt - the image will be added in collect_trajectories
             # This avoids the unhashable type error with lists in frozensets
@@ -173,11 +155,9 @@ class MultimodalComplexEnv(BaseEnv):
             img_byte_arr = img_byte_arr.getvalue()
             base64_image = base64.b64encode(img_byte_arr).decode("utf-8")
 
-            print("DEBUG: Created simple text-only prompt for get_next_item")
             return (prompt, answer, base64_image)
 
-        except Exception as e:
-            print(f"DEBUG: Error in get_next_item: {str(e)}")
+        except Exception:
             traceback.print_exc()
 
             # Create a dummy item as fallback
@@ -207,9 +187,6 @@ class MultimodalComplexEnv(BaseEnv):
             try:
                 model_answer = (
                     item[0][-1]["content"].split("\\boxed{")[-1].split("}")[0]
-                )
-                print(
-                    f"DEBUG: Model answer: {model_answer} and RG data: {rollout_group_data[0][1]}"
                 )
 
                 # Handle both numeric and yes/no answers
@@ -243,36 +220,26 @@ class MultimodalComplexEnv(BaseEnv):
         return scores
 
     @classmethod
-    def config_init(cls) -> Tuple[BaseEnvConfig, List[OpenaiConfig]]:
-        if not os.environ.get("OPENAI_API_KEY"):
-            print("ERROR: OPENAI_API_KEY environment variable is not set!")
-            print("Please set it using: export OPENAI_API_KEY=your_api_key")
-            sys.exit(1)
-
-        print(
-            f"DEBUG: Using API key starting with: {os.environ.get('OPENAI_API_KEY')[:5]}..."
-        )
-
+    def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         config = BaseEnvConfig(
             wandb_name="clevr_complex",
-            tokenizer_name="gpt2",
-            group_size=2,
-            use_wandb=False,
+            tokenizer_name="Qwen/Qwen2-VL-2B-Instruct",
+            group_size=8,
+            use_wandb=True,
             max_num_workers=2,
             rollout_server_url="http://localhost:8000",
             total_steps=1000,
-            batch_size=1,
-            steps_per_eval=10,
-            ensure_scores_are_not_same=False,
+            batch_size=12,
+            steps_per_eval=100,
+            max_token_length=2048,
         )
 
-        print("DEBUG: Creating OpenAI configuration")
         server_configs = [
-            OpenaiConfig(
-                model_name="gpt-4o",  # Using GPT-4o which has multimodal capabilities
-                base_url=None,
-                api_key=os.environ.get("OPENAI_API_KEY"),
-                num_requests_for_eval=1,
+            APIServerConfig(
+                model_name="Qwen/Qwen2-VL-2B-Instruct",
+                base_url="http://localhost:9001/v1",
+                api_key="x",
+                num_requests_for_eval=256,
             ),
         ]
 

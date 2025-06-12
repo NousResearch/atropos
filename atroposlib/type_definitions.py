@@ -1,6 +1,7 @@
-from typing import Any, Dict, List, Literal, Optional, TypedDict
+from typing import Any, Dict, List, Literal, Optional
 
 from openai.types.chat import ChatCompletionContentPartParam
+from typing_extensions import TypedDict
 
 Content = str | list[ChatCompletionContentPartParam]
 Item = Any

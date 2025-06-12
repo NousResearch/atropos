@@ -1,13 +1,15 @@
 import time
 import uuid
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from atroposlib.api.utils import grab_exact_from_heterogeneous_queue
+
+# Message import removed - using Dict[str, Any] for more flexible validation
 
 app = FastAPI(title="AtroposLib API")
 
@@ -50,10 +52,33 @@ class ScoredData(BaseModel):
     tokens: List[List[int]]
     masks: List[List[int]]
     scores: List[float]
+    advantages: Optional[List[List[float]]] = None
     ref_logprobs: Optional[List[List[float]]] = None
+    messages: Optional[List[List[Dict[str, Any]]]] = (
+        None  # Changed from Message TypedDict to Dict
+    )
     overrides: Optional[List[dict]] = None
     group_overrides: Optional[dict] = None
     images: Optional[Any] = None
+
+    @field_validator("messages", mode="before")
+    @classmethod
+    def validate_messages(cls, v):
+        """Validate messages field to ensure required fields are present.
+
+        This validator only checks that messages have 'role' and 'content' fields.
+        The 'reward' field is completely optional.
+        """
+        if v is None:
+            return None
+
+        for message_list in v:
+            for msg in message_list:
+                # Ensure the message has the required fields
+                if "role" not in msg or "content" not in msg:
+                    raise ValueError("Message must have 'role' and 'content' fields")
+
+        return v
 
 
 class Status(BaseModel):
@@ -100,6 +125,15 @@ async def register(registration: Registration):
 
 @app.post("/register-env")
 async def register_env_url(register_env: RegisterEnv):
+    try:
+        if not app.state.started:
+            return {
+                "status": "wait for trainer to start",
+            }
+    except AttributeError:
+        return {
+            "status": "wait for trainer to start",
+        }
     try:
         isinstance(app.state.envs, list)
     except AttributeError:
@@ -203,7 +237,9 @@ async def get_latest_example():
             "tokens": [],
             "masks": [],
             "scores": [],
+            "advantages": [],
             "ref_logprobs": [],
+            "messages": [],
             "images": [],
         }
 
@@ -215,7 +251,9 @@ async def scored_data(scored_data: ScoredData):
             "tokens": scored_data.tokens,
             "masks": scored_data.masks,
             "scores": scored_data.scores,
+            "advantages": scored_data.advantages,
             "ref_logprobs": scored_data.ref_logprobs,
+            "messages": scored_data.messages,
             "overrides": scored_data.overrides,
             "group_overrides": scored_data.group_overrides,
             "images": scored_data.images,
@@ -236,8 +274,12 @@ async def scored_data_list(scored_data_list: List[ScoredData]):
                 "tokens": scored_data.tokens,
                 "masks": scored_data.masks,
                 "scores": scored_data.scores,
+                "advantages": scored_data.advantages,
                 "ref_logprobs": scored_data.ref_logprobs,
                 "images": scored_data.images,
+                "messages": scored_data.messages,
+                "overrides": scored_data.overrides,
+                "group_overrides": scored_data.group_overrides,
             }
         )
 

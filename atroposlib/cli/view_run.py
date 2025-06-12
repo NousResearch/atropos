@@ -5,6 +5,8 @@ import aiohttp
 import gradio as gr
 from transformers import AutoTokenizer
 
+from atroposlib.utils.io import parse_http_response
+
 
 def find_common_prefix(strings):
     if not strings:
@@ -46,7 +48,7 @@ async def check_for_batch():
     while True:
         async with aiohttp.ClientSession() as session:
             async with session.get("http://localhost:8000/batch") as response:
-                data = await response.json()
+                data = await parse_http_response(response)
                 print(data)
                 if data["batch"] is not None:
                     return data["batch"]

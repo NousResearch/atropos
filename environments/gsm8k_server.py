@@ -6,7 +6,12 @@ from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
 from tqdm.asyncio import tqdm_asyncio
 
-from atroposlib.envs.base import BaseEnv, BaseEnvConfig, OpenaiConfig, ScoredDataGroup
+from atroposlib.envs.base import (
+    APIServerConfig,
+    BaseEnv,
+    BaseEnvConfig,
+    ScoredDataGroup,
+)
 from atroposlib.type_definitions import Item, number
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
@@ -38,7 +43,7 @@ class GSM8kEnv(BaseEnv):
     def __init__(
         self,
         config: BaseEnvConfig,
-        server_configs: List[OpenaiConfig],
+        server_configs: List[APIServerConfig],
         slurm=True,
         testing=False,
     ):
@@ -50,7 +55,7 @@ class GSM8kEnv(BaseEnv):
         self.completion_lengths = []
 
     @classmethod
-    def config_init(cls) -> Tuple[BaseEnvConfig, List[OpenaiConfig]]:
+    def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = BaseEnvConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
             group_size=8,
@@ -63,7 +68,7 @@ class GSM8kEnv(BaseEnv):
             wandb_name="gsm8k",
         )
         server_configs = [
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
                 base_url="http://localhost:9001/v1",
                 api_key="x",
