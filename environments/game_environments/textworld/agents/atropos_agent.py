@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class AtroposAgentConfig(BaseModel):
     """Configuration for AtroposAgent."""
     # General LLM parameters
-    model_id: str = Field(default="NousResearch/DeepHermes-3-Mistral-24B-Preview", description="LLM model ID for server calls.")
+    model_id: str = Field(default="NousResearch/DeepHermes-3-Llama-3-8B-Preview", description="LLM model ID for server calls.")
     temperature: float = Field(
         default=0.7, 
         ge=0.0, 

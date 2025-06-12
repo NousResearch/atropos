@@ -44,8 +44,36 @@ cd environments/game_environments/textworld
 uv run python -m environments.game_environments.textworld.textworld_local_server
 ```
 
-### Current Issue
-The 24B model was struggling with the tool call format, producing malformed JSON in `<tool_call>` tags. Testing with 8B model to see if it handles the format better.
+### Issues Found and Solutions (June 11, 2025)
+
+#### Problem: SGLang Tool Call Parser
+- SGLang automatically tries to parse tool calls from chat completions, causing "Tool Call Parser Not Given!" 400 errors
+- This cannot be disabled in SGLang configuration
+- Both 24B and 8B models were affected when using chat completions endpoint
+
+#### Solution Implemented
+- Modified `AtroposAgent` in `atropos_agent.py` to use **completions endpoint** instead of chat completions
+- Changed both `generate()` and `generate_action()` methods to:
+  1. Convert messages to prompt using `tokenizer.apply_chat_template()`
+  2. Use `server_client.completion()` instead of `server_client.chat_completion()`
+  3. Extract text from `choice.text` instead of `choice.message.content`
+
+#### Results
+- ✅ **8B model** (DeepHermes-3-Llama-3-8B-Preview) successfully generates proper `<think>` and `<tool_call>` XML blocks
+- Model follows the format correctly with very long reasoning chains (as expected for a reasoning model)
+- No more 400 errors from SGLang
+
+#### 24B Model Test Results (June 11, 2025)
+- ❌ **24B model** (DeepHermes-3-Mistral-24B-Preview) does NOT follow the XML format correctly
+- Even with the completions endpoint fix, the 24B model:
+  - Does not generate `<think>` tags
+  - Does not generate `<tool_call>` tags
+  - Produces repetitive text and appears to include internal tokens like `<|start_header_id|>`
+  - Generates "Thought Process:" instead of using XML tags
+
+#### Conclusion
+- **Use the 8B model** for TextWorld environment as it correctly follows the XML tool call format
+- The 24B model appears to have different training/prompting requirements and doesn't work with this format
 
 ## Recent Work: TextWorld Registry System Complete ✅ (June 11, 2025)
 
