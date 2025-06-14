@@ -343,7 +343,7 @@ This environment was inspired by AllenAI's RLVR-IFEVAL environment and uses Alle
 - Dataset: https://huggingface.co/datasets/allenai/RLVR-IFeval
 - Paper: https://arxiv.org/abs/2411.15124
 
-Environment for training models to follow natural language instructions and constraints, based on the `allenai/RLVR-IFeval` dataset and environment.
+Environment for training models to follow natural language instructions and constraints, based on the `allenai/RLVR-IFeval` dataset with advanced adaptive curriculum learning and comprehensive data management.
 
 **Input Format:**
 - Each item from the processed `allenai/RLVR-IFeval` dataset contains:
@@ -358,24 +358,110 @@ You are a deep thinking AI, you may use extremely long chains of thought to deep
 
 **Reward Function:**
 - Score of 1.0 if the model's response correctly follows the instruction, as determined by the specific verifier function associated with the input prompt.
-- Score of 0.0 if the response fails the verifier function.
+- Score of 0.0 if the response fails the verifier function or has malformed `<think>` tags (must have exactly one opening and one closing tag).
 - Length penalty applied if all responses in a batch are correct (receive a score of 1.0 before penalty):
-  - No penalty for responses under a certain percentage (e.g., 75%) of max token length.
-  - Linear penalty scaling from 1.0 down to 0.0 for responses between the threshold and 100% of max length.
+  - No penalty for responses under 75% of max token length.
+  - Linear penalty scaling from 1.0 down to 0.0 for responses between 75% and 100% of max length.
   - Returns None if all scores are identical after potential penalties (no learning signal).
 
-**Unique Configuration and Features:**
-- **Dataset Configuration (`IFConfig`):
-  - `dataset_name`: Specifies the primary dataset to use (defaults to `allenai/RLVR-IFeval`).
-  - `dataset_config_name`: Optional name for a specific configuration or subset of the dataset.
-  - `test_set_ratio`: Defines the proportion of the dataset reserved for testing (defaults to 5%).
+**Key Features:**
 
-- **Verifier-Based Scoring:** Utilizes a comprehensive map of verifier functions (`IF_FUNCTIONS_MAP`) to evaluate whether the model's
-output adheres to diverse and specific constraints defined in the input instructions (e.g., keyword presence, response length, JSON format, etc.).
+**1. Adaptive Curriculum System:**
+- **Cycling Queue**: Items are managed in an active training queue where solved items are removed from circulation
+- **Flexible Solving Criteria**: Items can be marked as "solved" based on:
+  - Group average score > `max_group_average_for_training` (default: 0.75) - too easy for training
+  - Group average score ≥ 0.9 - mastered through high performance
+  - Single correct rollout when `solve_on_single_correct=True` - immediate removal on any success
+- **Attempt Tracking**: Tracks how many times each item has been attempted
+- **Queue Reset**: When all items are solved, the queue resets with previously solved items for continued training
+- **Comprehensive Logging**: Shows task names, group average scores, solve reasons, and contextual messages
 
-- **Specialized Dataset Processing:** The `setup` method is specifically designed to parse the `allenai/RLVR-IFeval` dataset, extracting user instructions, the corresponding verifier function name, and its arguments.
+**2. Dataset State Persistence:**
+- **Automatic Dumping**: Saves active queue every 100 iterations to `atropos/environments/datasets/remaining_unsolved.jsonl`
+- **Rich Metadata**: Includes attempt counts, queue positions, iteration info, and curriculum state
+- **Resume Capability**: `resume_from_unsolved_dataset` config option to load from saved state
+- **Conflict Handling**: When both `dataset_name` and `resume_from_unsolved_dataset` are set:
+  - Training items come from resume file (overrides dataset_name)
+  - Test/evaluation items come from dataset_name for consistent evaluation
+  - System validates compatibility and warns about mismatches
 
-- **Fallback Mechanism:** Includes a fallback to a small, predefined dummy dataset if the primary dataset (`allenai/RLVR-IFeval`) cannot be loaded, ensuring operational continuity for testing or development.
+**3. Data Dumping Infrastructure:**
+- **Structured Conversations**: Saves rollouts as proper chat conversations with role/content format
+- **Group Format**: Data saved with group-level metadata including constraint details and group average scores
+- **Configurable Thresholds**: `rollout_save_score_threshold` (default: 0.7) for filtering quality rollouts
+- **Failed Rollout Tracking**: Separate `dump_failed_rollouts` option for debugging constraint violations
+- **Batch Processing**: Automatic saving when buffers reach size limits (100 for rollouts, 50 for failed)
+- **Unique Identifiers**: Each run gets a UUID for file organization
+- **Save Location**: `atropos/environments/data_dumps/` with descriptive filenames
+
+**4. Enhanced Logging and Monitoring:**
+- **Log Suppression**: `suppress_base_env_logs` (default: True) reduces verbose base environment, httpx, and httpcore logs
+- **Curriculum Metrics**: WandB tracking of active items, solved items, percent solved, and average attempts
+- **Group-Level Insights**: Shows which tasks are being mastered vs. which remain challenging
+- **Training Progress**: Clear indication when groups are skipped for being too easy vs. used for training
+
+**Configuration Options (`IFConfig`):**
+- `dataset_name`: Primary dataset (default: "allenai/RLVR-IFeval")
+- `dataset_config_name`: Optional dataset configuration
+- `test_set_ratio`: Test set proportion (default: 0.05)
+- `dump_rollouts`: Enable successful rollout saving (default: False)
+- `dump_failed_rollouts`: Enable failed rollout saving for debugging (default: False)
+- `rollout_save_score_threshold`: Minimum score for saving rollouts (default: 0.7)
+- `max_group_average_for_training`: Skip groups above this score (default: 0.75)
+- `dataset_shuffle_seed`: Reproducible dataset shuffling (default: 42)
+- `resume_from_unsolved_dataset`: Path to resume file (default: None)
+- `suppress_base_env_logs`: Reduce verbose logging (default: True)
+- `solve_on_single_correct`: Mark item as solved if any rollout gets it correct (default: False)
+
+**Verifier Functions:**
+Comprehensive map of 24 verifier functions (`IF_FUNCTIONS_MAP`) covering diverse constraints:
+- **Content Requirements**: `verify_keywords`, `verify_keyword_frequency`, `validate_forbidden_words`
+- **Format Constraints**: `validate_json_format`, `validate_title`, `validate_quotation`
+- **Structure Requirements**: `verify_paragraph_count`, `verify_bullet_points`, `validate_sections`
+- **Language Constraints**: `validate_response_language`, `validate_uppercase`, `validate_lowercase`
+- **Length Requirements**: `validate_word_constraint`, `verify_sentence_constraint`
+- **Special Formatting**: `verify_postscript`, `validate_placeholders`, `validate_highlighted_sections`
+- **Response Patterns**: `validate_repeat_prompt`, `validate_two_responses`, `validate_end`
+- **Character Constraints**: `verify_letter_frequency`, `validate_no_commas`
+- **Advanced Features**: `validate_choice`, `validate_frequency_capital_words`
+
+**Usage Examples:**
+```bash
+# Basic training
+python instruction_following_algorithm_environment.py serve
+
+# With data dumping enabled
+python instruction_following_algorithm_environment.py serve \
+    --env.dump_rollouts=True \
+    --env.rollout_save_score_threshold=0.8
+
+# Resume from previous session
+python instruction_following_algorithm_environment.py serve \
+    --env.resume_from_unsolved_dataset="atropos/environments/datasets/remaining_unsolved.jsonl"
+
+# Adjust difficulty threshold
+python instruction_following_algorithm_environment.py serve \
+    --env.max_group_average_for_training=0.8
+
+# Enable single-correct solving (remove items immediately when any rollout succeeds)
+python instruction_following_algorithm_environment.py serve \
+    --env.solve_on_single_correct=True
+```
+
+**Evaluation Metrics:**
+- `eval/percent_correct`: Overall accuracy on test set
+- `curriculum/active_items`: Number of items still in training circulation
+- `curriculum/solved_items`: Number of items removed as solved
+- `curriculum/percent_solved`: Percentage of total items solved
+- `curriculum/avg_attempts_active`: Average attempts for items still in circulation
+- `train/percent_correct`: Training accuracy with group-level insights
+
+**Specialized Dataset Processing:**
+- Robust parsing of `allenai/RLVR-IFeval` format with comprehensive error handling
+- Extraction of user instructions, verifier function names, and arguments
+- Validation of verifier function availability in `IF_FUNCTIONS_MAP`
+- Fallback to dummy dataset if primary dataset loading fails
+- Configurable dataset shuffling for reproducible experiments
 
 ---
 
