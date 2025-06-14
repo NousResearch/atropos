@@ -257,7 +257,7 @@ Take a look at the [output directory](examples/usage/outputs/experiment-4/) to s
 
 ### Example 5: Running experiments with SLURM (convenience)
 
-You can run experiments with SLURM. This is a convenience feature that allows you to run experiments on remote clusters. It splits each run of the experiment into a seperate job.
+You can run experiments with SLURM. This is a convenience feature that allows you to run experiments on remote clusters. It splits each run of the experiment into a separate job.
 
 ```yaml
 engine:
@@ -268,7 +268,7 @@ engine:
 ```
 
 - The `slurm_array` scheduler will put the runs into an array job. Therefore all slurm relevant parameters (e.g. devices, time, workers, ...) need to be equal across all runs. Using this scheduler is only recommended when running a single task.
-The `slurm_jobs` scheduler on the other hand will put each run into a seperate job.
+The `slurm_jobs` scheduler on the other hand will put each run into a separate job.
 - arguments put in `sbatch_args` will be passed to sbatch.
   e.g. `partition: my_gpu_partition` is parsed to `--partition=my_gpu_partition`
 

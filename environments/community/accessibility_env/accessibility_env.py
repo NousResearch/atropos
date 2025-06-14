@@ -263,7 +263,7 @@ class AccessibilityEnv(BaseEnv):
                 if not can_proceed_with_rule_checks:  # Parsing failed
                     current_item_score = (
                         -1.0 * num_issues_targeted
-                    )  # Penalize per targeted issue if unparseable
+                    )  # Penalize per targeted issue if unparsable
                 elif num_issues_actually_fixed == num_issues_targeted:
                     current_item_score = 1.0  # All targeted issues fixed
                 elif (
@@ -275,9 +275,7 @@ class AccessibilityEnv(BaseEnv):
                 else:  # Parseable, but no targeted issues fixed
                     current_item_score = -0.5
             else:  # No issues were targeted for this item (e.g., input was considered good by dataset design)
-                if (
-                    not can_proceed_with_rule_checks
-                ):  # LLM made a good input unparseable
+                if not can_proceed_with_rule_checks:  # LLM made a good input unparsable
                     current_item_score = -1.0
                 else:  # Parseable, and no issues were targeted (good input remained good)
                     current_item_score = 0.0  # Neutral score
