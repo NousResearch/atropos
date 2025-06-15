@@ -194,3 +194,5 @@ uv.lock
 .aider*
 CLAUDE.md
 **/logs/**
+*.zip
+
