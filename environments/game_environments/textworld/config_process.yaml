@@ -29,8 +29,14 @@ registry_difficulty: "random"  # Will vary between easy, medium, hard, expert
 
 # VR-CLI settings for outcome prediction scoring
 vrcli_enabled: true
-vrcli_weight: 0.7  # Weight for combining VR-CLI score with environment reward
+vrcli_weight: 0.3  # Weight for VR-CLI score (prediction accuracy)
 vrcli_discount_factor: 0.99  # For credit assignment in sparse rewards
+
+# LaTRo settings for action quality scoring
+latro_enabled: true
+latro_weight: 0.3  # Weight for LaTRo score (action confidence)
+
+# Environment reward weight (implicit: 1 - vrcli_weight - latro_weight = 0.4)
 
 # Memory system settings
 atropos_agent_config:

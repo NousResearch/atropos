@@ -179,13 +179,133 @@ Ran complete TextWorld episode with `textworld_local_server.py`:
 - ✅ **Registry system working** - Generated "quest_puzzle_hard" game
 - ✅ **Complex objective following** - Agent navigating multi-step puzzle correctly
 
-#### Data Generation Ready
-Created rejection sampling configuration and SLURM script:
-- **Config**: `/environments/game_environments/textworld/config_process.yaml`
-- **SLURM script**: `/environments/game_environments/textworld/run_datagen_with_sglang.slurm`
-- **Filter script**: `/environments/game_environments/textworld/filter_dataset.py`
-- **Settings**: 16 alternatives per game state, 10,000 steps total
-- **Ready to submit**: `sbatch environments/game_environments/textworld/run_datagen_with_sglang.slurm`
+### Data Generation Progress (June 16, 2025)
+
+#### Job Fixes Applied
+1. **Argument error fixed** - Removed incorrect atropos_agent_config parameters from SLURM script
+2. **Asyncio error fixed** - Changed from `asyncio.run(main_cli())` to `TextWorldEnv.cli()` pattern
+3. **SGLang logprobs error fixed** - Changed `logprobs=0` to `logprobs=1` for VR-CLI scoring compatibility
+
+#### Data Generation Status (Job 14120)
+- **Running successfully** with 4 parallel workers
+- **Inline memory working** - Model generating `<memory>` blocks correctly
+- **VR-CLI scoring operational** - Getting perplexity-based scores for predictions
+- **Episode tracking working** - Each ScoredDataGroup has episode_id and turn_number
+- **Game variety confirmed** - Using 70% generated games, 30% pre-built challenges
+
+#### Key Metrics Observed
+- **VR-CLI scores**: 75.8% are zero (expected for poor predictions)
+- **Non-zero VR-CLI range**: 0.00015 to 0.91 (good diversity)
+- **Average episode length**: 4 turns
+- **Memory generation rate**: Successfully generating inline memories
+
+#### Analysis Tools Created
+- **analyze_episodes.py**: Script to reconstruct episodes and analyze scoring distributions
+- Allows episode-by-episode analysis and VR-CLI score investigation
+
+### Next Steps & Task List (June 16, 2025)
+
+#### 1. VR-CLI Implementation Verification ⚠️
+**Current Issues:**
+- Our implementation differs from the paper - we're not using discrete reward levels (0, 0.5, 0.9, 1.0)
+- We're using a continuous score: `max(0.0, (base_ppl - pred_ppl) / base_ppl)`
+- The paper uses percentage improvement with thresholds
+- Need to verify if our perplexity calculation matches the paper's approach
+
+**Tasks:**
+- [ ] Update VR-CLI scoring to match paper's discrete reward levels
+- [ ] Verify perplexity calculation uses per-token perplexity as in paper
+- [ ] Test with different temperature settings for perplexity calculation
+- [ ] Compare our results with expected improvements from the paper
+
+#### 2. Reward Weighting Adjustment
+**Current**: 70% VR-CLI + 30% environment reward
+**Proposed**: Make environment reward more prominent
+
+**Tasks:**
+- [ ] Change vrcli_weight from 0.7 to 0.3 or 0.4
+- [ ] Consider additive rewards: `vrcli_score + env_reward` instead of weighted average
+- [ ] Test impact on episode success rates
+- [ ] Analyze which weighting produces better game outcomes
+
+#### 3. Memory System Analysis
+**Questions to investigate:**
+- How often are previous memories being retrieved and used?
+- Are memories building coherently across turns?
+- Is the memory retrieval threshold appropriate?
+- Should memories persist across episodes?
+
+**Tasks:**
+- [ ] Add memory retrieval statistics to analyze_episodes.py
+- [ ] Track memory similarity scores when retrieving
+- [ ] Analyze memory coherence across turns
+- [ ] Test different memory_top_k values (currently 3)
+- [ ] Consider implementing memory decay or importance weighting
+
+#### 4. LaTRo Implementation
+**Implement cross-entropy based rewards as alternative/complement to VR-CLI**
+
+**Tasks:**
+- [ ] Implement LaTRo reward calculation: `log π(correct_action | state + reasoning)`
+- [ ] Add KL divergence penalty term
+- [ ] Create hybrid reward: VR-CLI + LaTRo + environment
+- [ ] Compare performance with VR-CLI alone
+- [ ] Test on different game types (puzzle vs navigation vs quest)
+
+#### 5. Game Diversity Analysis
+**Verify registry is producing diverse games**
+
+**Tasks:**
+- [ ] Add game type tracking to metadata
+- [ ] Analyze distribution of generated vs pre-built games
+- [ ] Track difficulty levels used
+- [ ] Ensure all game types are being sampled
+- [ ] Check if certain game types lead to better learning
+
+#### 6. Sparse Reward Analysis
+**Understanding VR-CLI's effectiveness in sparse environments**
+
+**Tasks:**
+- [ ] Track episodes with zero environment rewards throughout
+- [ ] Compare VR-CLI guidance in sparse vs dense reward episodes
+- [ ] Analyze if VR-CLI helps discover winning strategies
+- [ ] Plot learning curves: VR-CLI-guided vs random baseline
+
+#### 7. Format Compliance & Error Analysis
+**Understanding model failures**
+
+**Tasks:**
+- [ ] Track tool call parsing failures
+- [ ] Analyze when model fails to generate memory blocks
+- [ ] Check correlation between thinking length and success
+- [ ] Monitor token usage vs max_tokens limit
+
+#### 8. Performance Optimization
+**Ensure efficient data generation**
+
+**Tasks:**
+- [ ] Monitor SGLang server memory usage
+- [ ] Check for memory leaks in long-running episodes
+- [ ] Optimize batch sizes for throughput
+- [ ] Profile VR-CLI perplexity calculations
+
+#### 9. Evaluation Metrics
+**Define success metrics for the system**
+
+**Tasks:**
+- [ ] Implement win rate tracking over time
+- [ ] Create learning efficiency metrics
+- [ ] Compare step-based vs episode-based rewards
+- [ ] Measure sample efficiency (wins per 1000 episodes)
+
+#### 10. Configuration Experiments
+**Test different hyperparameters**
+
+**Tasks:**
+- [ ] Test different temperature values for action generation
+- [ ] Vary number of alternatives (currently 16)
+- [ ] Test different max_steps values
+- [ ] Experiment with thinking summarization thresholds
 
 ### Previous Work: TextWorld Environment Testing (Completed)
 We tested the TextWorld environment with different models to compare format compliance:

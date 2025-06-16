@@ -84,6 +84,15 @@ class TextWorldEnvConfig(BaseEnvConfig):
         default=0.99,
         description="Discount factor for credit assignment in sparse reward setting",
     )
+    
+    # LaTRo specific configurations
+    latro_enabled: bool = Field(
+        default=True, description="Use LaTRo scoring for action quality"
+    )
+    latro_weight: float = Field(
+        default=0.3,
+        description="Weight for LaTRo score (action confidence)",
+    )
 
     debug_mode: bool = False
 
