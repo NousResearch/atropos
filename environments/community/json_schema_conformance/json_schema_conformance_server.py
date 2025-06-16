@@ -5,10 +5,10 @@ import random
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
+import wandb
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
-import wandb
 from atroposlib.envs.base import BaseEnv, BaseEnvConfig, Item, ScoredDataGroup
 from atroposlib.envs.server_handling.server_baseline import APIServerConfig
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
