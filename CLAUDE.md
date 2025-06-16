@@ -72,13 +72,64 @@ The TextWorld environment currently uses a separate LLM call to generate memory 
      - Or adjust training to ensure model still produces thinking blocks despite their absence in history
 
 ### Implementation Tasks
-- [ ] Update system prompt in `textworld_env.py` to include memory block instructions
-- [ ] Add memory extraction logic to `AtroposAgent.generate_action()`
-- [ ] Create XML parsing utilities for memory blocks
-- [ ] Update memory storage to use inline memories
+- [x] Update system prompt in `textworld_env.py` to include memory block instructions
+- [x] Add memory extraction logic to `AtroposAgent.record_selected_action_and_learn_from_turn()`
+- [x] Create XML parsing utilities for memory blocks in `utils/memory_parser.py`
+- [x] Update memory storage to use inline memories (with fallback to LLM summarization)
 - [ ] Test with 8B model to ensure format compliance
 - [ ] Compare memory quality between inline and separate generation
 - [ ] Monitor token usage and adjust if needed
+
+### Next Steps for Testing (IMPORTANT - RUN ON GPU NODE)
+1. **Allocate a GPU node**:
+   ```bash
+   srun --gpus=8 --pty bash
+   ```
+
+2. **Launch SGLang server with 8B model**:
+   ```bash
+   cd /home/maxpaperclips/atropos
+   ./launch_sglang_nohup.sh --model "NousResearch/DeepHermes-3-Llama-3-8B-Preview" --tp 4
+   ```
+
+3. **Wait for server to be ready**:
+   ```bash
+   # Check server status
+   curl http://localhost:30000/health
+   ```
+
+4. **Run the inline memory test**:
+   ```bash
+   cd /home/maxpaperclips/atropos
+   uv run python test_inline_memory.py
+   ```
+
+5. **Run full TextWorld environment test**:
+   ```bash
+   cd /home/maxpaperclips/atropos/environments/game_environments/textworld
+   uv run python textworld_local_server.py
+   ```
+
+### What We've Implemented
+1. **Memory Parser** (`utils/memory_parser.py`):
+   - `extract_memory_block()`: Extracts content from `<memory>` tags
+   - `validate_memory_content()`: Ensures memory meets quality requirements
+   - `extract_thinking_and_memory()`: Extracts both thinking and memory blocks
+
+2. **Updated AtroposAgent**:
+   - Modified `record_selected_action_and_learn_from_turn()` to first try extracting inline memory
+   - Falls back to LLM summarization if no valid inline memory found
+   - Logs whether inline or LLM-generated memory was used
+
+3. **Updated System Prompt**:
+   - Added memory generation instructions between thinking and tool call
+   - Included example responses showing memory blocks
+   - Emphasized building upon previous memories for continuity
+
+4. **Test Script** (`test_inline_memory.py`):
+   - Tests memory generation across multiple turns
+   - Shows how memories should build upon each other
+   - Validates memory extraction and quality
 
 ### Example Expected Output
 ```xml
@@ -105,6 +156,36 @@ Previous exploration of kitchen successful - have stove and ingredients located.
 **Turn 3 Memory**: "Have eggs in inventory. Milk and flour still in fridge. Next: find mixing bowl, then gather remaining ingredients."
 
 This creates a coherent narrative that the model can follow and build upon.
+
+### Inline Memory System Testing Results (June 15, 2025)
+
+#### Test Script Results
+Successfully tested inline memory generation with `test_inline_memory.py`:
+- **Test Case 1**: ✅ Model generated proper `<memory>` block with validation passing
+- **Test Case 2**: ✅ Model generated `<memory>` block that built upon previous memories
+- **Test Case 3**: ❌ Model improvised with `<remember>` tags instead of `<memory>` tags
+
+#### Key Findings
+1. **Inline memory generation works** when model uses correct XML tags
+2. **8B model can follow format** but may occasionally improvise
+3. **Max tokens must be 16384** to allow room for long thinking chains + memory blocks
+4. **Memory extraction and validation** working correctly in AtroposAgent
+
+#### Full Episode Testing
+Ran complete TextWorld episode with `textworld_local_server.py`:
+- ✅ **Memory generation working** - Model successfully generated memory blocks
+- ✅ **Memory retrieval attempted** - System checked for relevant memories (though none found on turn 1 as expected)
+- ✅ **VR-CLI scoring functioning** - Action predictions being evaluated
+- ✅ **Registry system working** - Generated "quest_puzzle_hard" game
+- ✅ **Complex objective following** - Agent navigating multi-step puzzle correctly
+
+#### Data Generation Ready
+Created rejection sampling configuration and SLURM script:
+- **Config**: `/environments/game_environments/textworld/config_process.yaml`
+- **SLURM script**: `/environments/game_environments/textworld/run_datagen_with_sglang.slurm`
+- **Filter script**: `/environments/game_environments/textworld/filter_dataset.py`
+- **Settings**: 16 alternatives per game state, 10,000 steps total
+- **Ready to submit**: `sbatch environments/game_environments/textworld/run_datagen_with_sglang.slurm`
 
 ### Previous Work: TextWorld Environment Testing (Completed)
 We tested the TextWorld environment with different models to compare format compliance:

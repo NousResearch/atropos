@@ -8,6 +8,7 @@ from atroposlib.envs.base import ServerManager
 
 # Import the new memory manager
 from .atropos_memory_manager import AtroposMemoryManager as TextWorldMemoryManager, MEMORY_SYSTEM_PREREQUISITES_AVAILABLE
+from ..utils.memory_parser import extract_memory_block, validate_memory_content
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG) # Keep this commented or control via TextWorldEnv config
@@ -380,23 +381,31 @@ class AtroposAgent:
             selected_action_obj = last_turn_data['alternatives'][selected_action_index]
             
             if not selected_action_obj['api_error'] and selected_action_obj['action_text']:
-                turn_assistant_message = Message(role="assistant", content=selected_action_obj['action_text'], reward=None)
+                # Extract memory from the agent's response
+                response_text = selected_action_obj['action_text']
+                memory_content = extract_memory_block(response_text)
                 
-                history_window_for_memory: List[Message] = []
-                
-                if self.system_prompt_content:
-                     history_window_for_memory.append(Message(role="system", content=self.system_prompt_content, reward=None))
-                history_window_for_memory.append(turn_obs_message)
-                history_window_for_memory.append(turn_assistant_message)
-
-                logger.debug(f"AtroposAgent[{self.config.player_id_for_logging}] Attempting to summarize and store memory for turn {last_turn_data['turn_number']}.")
-                
-                memory_summary = await self.summarize_turn_for_memory(history_window_for_memory)
-                
-                if memory_summary:
-                    await self.memory_manager.add_memory(memory_summary)
+                if memory_content and validate_memory_content(memory_content):
+                    logger.info(f"AtroposAgent[{self.config.player_id_for_logging}] Extracted inline memory for turn {last_turn_data['turn_number']}: {memory_content[:50]}...")
+                    await self.memory_manager.add_memory(memory_content)
                 else:
-                    logger.warning(f"AtroposAgent[{self.config.player_id_for_logging}] Failed to generate memory summary for turn {last_turn_data['turn_number']}.")
+                    # Fallback to LLM-based summarization if no valid inline memory found
+                    logger.info(f"AtroposAgent[{self.config.player_id_for_logging}] No valid inline memory found, falling back to LLM summarization for turn {last_turn_data['turn_number']}.")
+                    
+                    turn_assistant_message = Message(role="assistant", content=response_text, reward=None)
+                    history_window_for_memory: List[Message] = []
+                    
+                    if self.system_prompt_content:
+                        history_window_for_memory.append(Message(role="system", content=self.system_prompt_content, reward=None))
+                    history_window_for_memory.append(turn_obs_message)
+                    history_window_for_memory.append(turn_assistant_message)
+                    
+                    memory_summary = await self.summarize_turn_for_memory(history_window_for_memory)
+                    
+                    if memory_summary:
+                        await self.memory_manager.add_memory(memory_summary)
+                    else:
+                        logger.warning(f"AtroposAgent[{self.config.player_id_for_logging}] Failed to generate memory summary for turn {last_turn_data['turn_number']}.")
             else:
                 logger.warning(f"AtroposAgent[{self.config.player_id_for_logging}] Selected action was an error or empty. Skipping memory generation for turn {last_turn_data['turn_number']}.")
         elif self.config.enable_memory:

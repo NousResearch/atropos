@@ -271,25 +271,38 @@ class TextWorldEnv(BaseEnv):
             "I'm in the kitchen. I see a stove and a fridge. The objective says to cook something. "
             "Let me check what's in the fridge first to see what ingredients are available."
             "\\n</think>\\n"
+            "<memory>\\n"
+            "Kitchen has stove and fridge. Main objective is cooking. Need to find ingredients."
+            "\\n</memory>\\n"
             "<tool_call>\\n"
             """{"name": "execute_command", "arguments": {"command": "open fridge", "expected_outcome": "The fridge opens, revealing its contents. I expect to see various food items or ingredients inside that I can take and use for cooking."}}"""
             "\\n</tool_call>\\n\\n"
-            "EXAMPLE RESPONSE 2:\\n"
+            "EXAMPLE RESPONSE 2 (with previous memories):\\n"
             "<think>\\n"
-            "There's a locked door here and I have a key in my inventory. I should try using the key on the door."
+            "Looking at my previous memories, I was exploring the kitchen to find cooking ingredients. "
+            "I successfully opened the fridge and found eggs, milk, and flour. My goal is still to "
+            "cook something. Now I need to take these ingredients and find a recipe or mixing bowl. "
+            "The previous action of opening the fridge worked as expected."
             "\\n</think>\\n"
+            "<memory>\\n"
+            "Found eggs, milk, and flour in kitchen fridge. Still need mixing bowl or recipe to cook. "
+            "Previous exploration of kitchen successful - have stove and ingredients located."
+            "\\n</memory>\\n"
             "<tool_call>\\n"
-            """{"name": "execute_command", "arguments": {"command": "unlock door with key", "expected_outcome": "The key turns in the lock and the door unlocks. I should now be able to open the door and go through it."}}"""
+            """{"name": "execute_command", "arguments": {"command": "take eggs", "expected_outcome": "I take the eggs from the fridge and add them to my inventory"}}"""
             "\\n</tool_call>\\n\\n"
             "EXAMPLE RESPONSE 3:\\n"
             "<think>\\n"
-            "I need to pick up this sword to defend myself. It's lying on the ground in this room."
+            "There's a locked door here and I have a key in my inventory. I should try using the key on the door."
             "\\n</think>\\n"
+            "<memory>\\n"
+            "Found locked door in current room. Have key in inventory that might open it."
+            "\\n</memory>\\n"
             "<tool_call>\\n"
-            """{"name": "execute_command", "arguments": {"command": "take sword", "expected_outcome": "I pick up the sword and add it to my inventory. I should now be carrying the sword and can use it later."}}"""
+            """{"name": "execute_command", "arguments": {"command": "unlock door with key", "expected_outcome": "The key turns in the lock and the door unlocks. I should now be able to open the door and go through it."}}"""
             "\\n</tool_call>\\n\\n"
-            "Remember: Your entire response must be exactly two XML blocks: <think>...</think> followed by <tool_call>...</tool_call>\\n\\n"
-            "FINAL REMINDER: After your <think> block, you MUST wrap your JSON function call in <tool_call> tags. "
+            "Remember: Your entire response must be exactly three XML blocks: <think>...</think> followed by <memory>...</memory> followed by <tool_call>...</tool_call>\\n\\n"
+            "FINAL REMINDER: After your <think> block and <memory> block, you MUST wrap your JSON function call in <tool_call> tags. "
             "The JSON goes INSIDE the <tool_call> tags, not after them."
         )
         # Ensure AtroposAgentConfig is instantiated
@@ -521,7 +534,7 @@ class TextWorldEnv(BaseEnv):
             prompt=full_text,
             max_tokens=0,  # We're not generating, just getting logprobs
             echo=True,  # Return logprobs for the input
-            logprobs=0,  # Return log probability of the selected tokens
+            logprobs=1,  # Return log probability of the selected tokens (must be > 0 for SGLang)
             temperature=0.0,
         )
 
@@ -1211,8 +1224,4 @@ class TextWorldEnv(BaseEnv):
 
 
 if __name__ == "__main__":
-
-    async def main_cli():
-        await TextWorldEnv.cli()
-
-    asyncio.run(main_cli())
+    TextWorldEnv.cli()
