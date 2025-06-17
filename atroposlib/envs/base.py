@@ -16,7 +16,6 @@ from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
 import aiohttp
 import jsonlines
 import numpy as np
-import wandb
 import yaml
 from pydantic import BaseModel, Field
 from pydantic_cli import Cmd, FailedExecutionException, run_and_exit
@@ -24,6 +23,7 @@ from rich import print as rprint
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 from transformers import AutoTokenizer
 
+import wandb
 from atroposlib.envs.constants import ENV_NAMESPACE, NAMESPACE_SEP, OPENAI_NAMESPACE
 from atroposlib.envs.server_handling.openai_server import resolve_openai_configs
 from atroposlib.frontend.jsonl2html import generate_html
@@ -163,6 +163,14 @@ class BaseEnvConfig(BaseModel):
     use_parallel_processing: bool = Field(
         default=False,
         description="Whether to use parallel processing for process command (runs multiple groups concurrently)",
+    )
+    strip_tokens_and_masks: bool = Field(
+        default=False,
+        description="Whether to strip tokens and masks from saved data (reduces file size for SFT datasets)",
+    )
+    do_send_to_api: bool = Field(
+        default=True,
+        description="Whether to send data to the API server (True for serve mode, False for process mode)",
     )
 
 
@@ -689,7 +697,14 @@ class BaseEnv(ABC):
             await self.add_rollouts_for_wandb(group, item)
 
             if self.jsonl_writer is not None:
-                self.jsonl_writer.write(group)
+                # Strip tokens and masks if configured to do so
+                if self.config.strip_tokens_and_masks:
+                    group_to_write = {
+                        k: v for k, v in group.items() if k not in ["tokens", "masks"]
+                    }
+                else:
+                    group_to_write = group
+                self.jsonl_writer.write(group_to_write)
                 print(f"Wrote scored group to {self.config.data_path_to_save_groups}")
 
             valid_groups.append(group)
@@ -877,9 +892,9 @@ class BaseEnv(ABC):
         Rollout manager
         """
         await self.setup()
-        
+
         # Only register with API server if we plan to send data to it
-        if getattr(self.config, 'do_send_to_api', True):
+        if getattr(self.config, "do_send_to_api", True):
             await self.setup_wandb()
             await self.register_env()
             await self.get_server_info()
@@ -888,23 +903,26 @@ class BaseEnv(ABC):
             import random
             import string
             from datetime import datetime
+
             random_id = "".join(random.choices(string.ascii_lowercase, k=6))
             current_date = datetime.now().strftime("%Y-%m-%d")
             wandb_run_name = f"{self.name}-{current_date}-{random_id}"
             wandb.init(
-                project=getattr(self, 'wandb_project', 'atropos'),
+                project=getattr(self, "wandb_project", "atropos"),
                 name=wandb_run_name,
-                group=getattr(self, 'wandb_group', 'standalone'),
+                group=getattr(self, "wandb_group", "standalone"),
                 config=self.config.model_dump(),
             )
         # Wait for other instances to get setup :)
         await asyncio.sleep(5)
-        
+
         # For standalone mode (do_send_to_api=False), use process_manager logic instead
-        if not getattr(self.config, 'do_send_to_api', True):
-            logger.info("Running in standalone mode (do_send_to_api=False), switching to process_manager logic")
+        if not getattr(self.config, "do_send_to_api", True):
+            logger.info(
+                "Running in standalone mode (do_send_to_api=False), switching to process_manager logic"
+            )
             return await self.process_manager()
-        
+
         while True:
             if self.last_loop_time is not None:
                 self.mainloop_timings.append(
@@ -1035,72 +1053,93 @@ class BaseEnv(ABC):
         self.curr_step = 0
         self.completed_groups = 0
         self.failed_groups = 0
-        
+
         # Use max_num_workers for parallel groups processing
         max_parallel_groups = self.config.max_num_workers
         if max_parallel_groups == -1:
-            max_parallel_groups = self.config.max_num_workers_per_node * len(self.server.servers)
-        
-        print(f"Starting to process {self.n_groups_to_process} groups with up to {max_parallel_groups} parallel workers...")
-        print(f"Each group will process {self.group_size_to_process} trajectories in parallel")
+            max_parallel_groups = self.config.max_num_workers_per_node * len(
+                self.server.servers
+            )
+
+        print(
+            f"Starting to process {self.n_groups_to_process} groups with up to "
+            f"{max_parallel_groups} parallel workers..."
+        )
+        print(
+            f"Each group will process {self.group_size_to_process} trajectories in parallel"
+        )
 
         # Main processing loop using worker pool pattern
         while self.completed_groups < self.n_groups_to_process:
-            
+
             # Add new workers up to the maximum
-            while (len(self.workers) < max_parallel_groups and 
-                   (self.completed_groups + len(self.workers)) < self.n_groups_to_process):
-                
+            while (
+                len(self.workers) < max_parallel_groups
+                and (self.completed_groups + len(self.workers))
+                < self.n_groups_to_process
+            ):
+
                 # Generate a UUID for tracking this group
                 group_uuid = str(uuid.uuid4())
-                
+
                 # Get item from backlog or create new one
                 if len(self.backlog) > 0:
                     item = self.backlog.pop()
                 else:
                     item = await self.get_next_item()
-                
+
                 if item is None:
                     print("No more items available")
                     break
-                
+
                 # Store the item for this group
                 self.running_items[group_uuid] = item
-                
+
                 # Create worker task for processing this group
                 worker = asyncio.create_task(self.handle_process_group(group_uuid))
                 self.workers.add(worker)
-                
+
                 # Set up completion callback
                 worker.add_done_callback(
                     lambda fut, item=item: (
                         self.workers.discard(fut),
-                        self._handle_group_completion(fut)
+                        self._handle_group_completion(fut),
                     )[-1]
                 )
-                
-                print(f"Started processing group {self.completed_groups + len(self.workers)}/{self.n_groups_to_process}")
-            
+
+                print(
+                    f"Started processing group {self.completed_groups + len(self.workers)}/{self.n_groups_to_process}"
+                )
+
             # Wait a bit before checking for more work
             await asyncio.sleep(0.1)
-            
+
             # Log progress periodically
-            if len(self.workers) > 0 and self.completed_groups > 0 and self.completed_groups % 10 == 0:
-                print(f"Progress: {self.completed_groups}/{self.n_groups_to_process} completed, {len(self.workers)} active workers")
-        
+            if (
+                len(self.workers) > 0
+                and self.completed_groups > 0
+                and self.completed_groups % 10 == 0
+            ):
+                print(
+                    f"Progress: {self.completed_groups}/{self.n_groups_to_process} completed, "
+                    f"{len(self.workers)} active workers"
+                )
+
         # Wait for all remaining workers to complete
         if self.workers:
             print(f"Waiting for final {len(self.workers)} workers to complete...")
             await asyncio.gather(*self.workers, return_exceptions=True)
-        
-        print(f"Completed processing: {self.completed_groups} successful, {self.failed_groups} failed")
-        
+
+        print(
+            f"Completed processing: {self.completed_groups} successful, {self.failed_groups} failed"
+        )
+
         # Close the output file if it's open
         if self.jsonl_writer is not None:
             self.jsonl_writer.close()
-        
+
         generate_html(self.config.data_path_to_save_groups)
-    
+
     async def handle_process_group(self, group_uuid: str) -> Optional[ScoredDataGroup]:
         """
         Handle processing of a single group (adapted from handle_env for process mode)
@@ -1109,25 +1148,25 @@ class BaseEnv(ABC):
         if item is None:
             print(f"Group {group_uuid} not found... returning")
             return None
-            
+
         start_time = time.time()
         logger.debug(f"handle_process_group: Starting group with item: {item}")
-        
+
         try:
             # Override the group_size for this processing
             self.config.group_size = self.group_size_to_process
-            
+
             # Collect trajectories (this runs the group_size trajectories in parallel)
             to_postprocess, to_backlog = await self.collect_trajectories(item)
-            
+
             # Add any items to the backlog
             if len(to_backlog) > 0:
                 self.backlog.extend(to_backlog)
-            
+
             if to_postprocess is not None and len(to_postprocess) > 0:
                 # Post-process the trajectories
                 processed_data = await self.postprocess_histories(to_postprocess)
-                
+
                 # Save to output file (don't send to API)
                 await self.handle_send_to_api(
                     processed_data,
@@ -1135,13 +1174,13 @@ class BaseEnv(ABC):
                     do_send_to_api=False,
                     abort_on_any_max_length_exceeded=False,
                 )
-                
-                logger.debug(f"handle_process_group: Successfully processed group")
+
+                logger.debug("handle_process_group: Successfully processed group")
                 return processed_data
             else:
                 logger.debug("handle_process_group: No trajectories collected")
                 return None
-                
+
         except Exception as e:
             logger.error(f"Error processing group: {item}, error: {e}")
             return None
@@ -1150,7 +1189,7 @@ class BaseEnv(ABC):
             self.running_items.pop(group_uuid, None)
             duration = max(0.0, time.time() - start_time)
             self.task_duration.append(duration)
-    
+
     def _handle_group_completion(self, future):
         """Handle completion of a group processing task"""
         try:
@@ -1158,7 +1197,9 @@ class BaseEnv(ABC):
             if result is not None:
                 self.completed_groups += 1
                 self.task_successful.append(1)
-                print(f"✓ Group {self.completed_groups}/{self.n_groups_to_process} completed successfully")
+                print(
+                    f"✓ Group {self.completed_groups}/{self.n_groups_to_process} completed successfully"
+                )
             else:
                 self.failed_groups += 1
                 self.task_successful.append(0)
@@ -1380,6 +1421,7 @@ class BaseEnv(ABC):
             use_wandb=True,
             max_num_workers=8,  # Enable parallel processing by default
             use_parallel_processing=True,  # Use high-performance parallel processing by default
+            do_send_to_api=False,  # Process mode doesn't send to API, just saves to file
         )
         PROCESS_MODE_OPENAI_DEFAULT_CONFIG = APIServerConfig(
             model_name="gpt-4.1-nano",
@@ -1568,22 +1610,25 @@ class BaseEnv(ABC):
                 else:
                     processing_mode = "sequential (original)"
                     manager_method = env.process_manager
-                
+
                 print(
                     f"Processing {env_config.total_steps} groups of "
                     f"{env_config.group_size} responses using {processing_mode} mode and "
                     f"writing to {env_config.data_path_to_save_groups}"
                 )
-                
+
                 if env_config.use_parallel_processing:
-                    print(f"Running up to {env_config.max_num_workers} groups in parallel")
-                
+                    print(
+                        f"Running up to {env_config.max_num_workers} groups in parallel"
+                    )
+
                 # Handle the case where we might already be in an event loop
                 try:
                     loop = asyncio.get_running_loop()
                     task = loop.create_task(manager_method())
                     loop.run_until_complete(task)
                 except RuntimeError:
+                    # No running loop, create one
                     asyncio.run(manager_method())
 
         return CliProcessConfig
