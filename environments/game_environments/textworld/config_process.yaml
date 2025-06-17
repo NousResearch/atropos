@@ -24,8 +24,8 @@ max_trajectory_tokens: 24576
 
 # Game generation settings
 use_registry: true
-registry_mode: "random"
-registry_generation_ratio: 0.7  # 70% generated, 30% pre-built challenges
+registry_mode: "challenge"  # Use only pre-built challenges
+registry_generation_ratio: 0.0  # 0% generated, 100% pre-built challenges
 registry_difficulty: "random"  # Will vary between easy, medium, hard, expert
 
 # VR-CLI settings for outcome prediction scoring

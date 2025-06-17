@@ -146,11 +146,11 @@ class TextWorldEnvConfig(BaseEnvConfig):
         description="Whether to use the registry for game selection"
     )
     registry_mode: str = Field(
-        default="random",
+        default="challenge",
         description="Registry mode: random, generated, challenge"
     )
     registry_generation_ratio: float = Field(
-        default=0.7,
+        default=0.0,
         description="Ratio of generated games vs pre-built (0.0 to 1.0)"
     )
     registry_difficulty: Optional[str] = Field(
@@ -230,20 +230,7 @@ class TextWorldEnv(BaseEnv):
         self.episodes: Dict[str, TextWorldEpisodeState] = {}
         self._temp_dir = tempfile.mkdtemp(prefix="textworld_env_")
 
-        # Initialize Memory Manager
-        self.memory_manager = None
-        if (
-            self.config.atropos_agent_config.enable_memory
-            and MEMORY_SYSTEM_PREREQUISITES_AVAILABLE
-        ):
-            self.memory_manager = AtroposMemoryManager(
-                embedding_dim_config_val=self.config.atropos_agent_config.embedding_dim,
-                player_id_for_logging=f"{self.config.atropos_agent_config.player_id_for_logging}_Memory",
-            )
-        elif self.config.atropos_agent_config.enable_memory:
-            logger.warning(
-                "Memory is enabled in config, but prerequisites are not met. Memory disabled."
-            )
+        # Memory manager will be created per-agent in _create_agent_for_episode()
 
         # Define TextWorld command execution tool with outcome prediction
         self.textworld_tools = [
@@ -347,12 +334,8 @@ class TextWorldEnv(BaseEnv):
         else:
             agent_cfg.model_id = self.config.default_server_config.model_name
 
-        self.agent = AtroposAgent(
-            server_client=self.server,
-            tokenizer=self.tokenizer,
-            config=agent_cfg,
-            memory_manager=self.memory_manager,  # Pass the memory manager
-        )
+        # Store agent configuration for later use in creating episode-specific agents
+        self.agent_config = agent_cfg
 
         if self.config.debug_mode:
             logger.setLevel(logging.DEBUG)
@@ -364,6 +347,26 @@ class TextWorldEnv(BaseEnv):
                 generation_ratio=self.config.registry_generation_ratio,
                 seed=self.config.seed if hasattr(self.config, 'seed') else None
             )
+
+    def _create_agent_for_episode(self) -> AtroposAgent:
+        """Create a new agent instance for an episode with its own memory manager."""
+        # Create a new memory manager for this agent
+        episode_memory_manager = None
+        if MEMORY_SYSTEM_PREREQUISITES_AVAILABLE:
+            episode_memory_manager = AtroposMemoryManager(
+                embedding_dim_config_val=self.agent_config.embedding_dim,
+                player_id_for_logging=f"Agent_{uuid.uuid4().hex[:8]}"
+            )
+            logger.info(f"Created new memory manager for episode agent")
+        
+        # Create new agent with its own memory manager
+        agent = AtroposAgent(
+            server_client=self.server,
+            tokenizer=self.tokenizer,
+            config=self.agent_config,
+            memory_manager=episode_memory_manager
+        )
+        return agent
 
     async def setup(self):
         """Ensure prerequisites are met for TextWorld."""
@@ -483,8 +486,6 @@ class TextWorldEnv(BaseEnv):
             env = textworld.gym.make(registered_env_id)
             raw_obs, infos = env.reset()
             formatted_initial_obs = self._format_observation(raw_obs, infos)
-
-            self.agent.new_game()
 
             ep_state = TextWorldEpisodeState(
                 episode_id=episode_id,
@@ -641,11 +642,11 @@ class TextWorldEnv(BaseEnv):
         else:
             return 1.0  # Significant improvement
 
-    def _get_action_history_from_agent(self) -> List[str]:
+    def _get_action_history_from_agent(self, agent: AtroposAgent) -> List[str]:
         """Extract the canonical action history from the agent."""
         action_history = []
         
-        for turn_data in self.agent.game_log['turn']:
+        for turn_data in agent.game_log['turn']:
             if turn_data['selected_alternative'] is not None:
                 selected_idx = turn_data['selected_alternative']
                 if 0 <= selected_idx < len(turn_data['alternatives']):
@@ -663,11 +664,11 @@ class TextWorldEnv(BaseEnv):
         
         return action_history
     
-    def _create_env_copy_with_replay(self, ep_state: TextWorldEpisodeState) -> Optional[TextworldGymEnv]:
+    def _create_env_copy_with_replay(self, ep_state: TextWorldEpisodeState, agent: AtroposAgent) -> Optional[TextworldGymEnv]:
         """Create a new environment instance and replay actions to reach current state."""
         try:
             # Get the action history from the agent
-            action_history = self._get_action_history_from_agent()
+            action_history = self._get_action_history_from_agent(agent)
             
             # Register a new environment instance with the same game file
             requested_infos = textworld.EnvInfos(
@@ -712,7 +713,7 @@ class TextWorldEnv(BaseEnv):
             return None
 
     async def _evaluate_candidates(
-        self, ep_state: TextWorldEpisodeState, candidates: List[Tuple[str, str, str]]
+        self, ep_state: TextWorldEpisodeState, candidates: List[Tuple[str, str, str]], agent: AtroposAgent
     ) -> List[Dict[str, Any]]:
         """Evaluate each candidate by executing in copied environment."""
         evaluations = []
@@ -722,7 +723,7 @@ class TextWorldEnv(BaseEnv):
                 action = "look"  # Default action
 
             # Create environment copy with replay
-            env_copy = self._create_env_copy_with_replay(ep_state)
+            env_copy = self._create_env_copy_with_replay(ep_state, agent)
             if env_copy is None:
                 logger.error(f"Failed to create environment copy for candidate {i}")
                 evaluations.append({
@@ -832,7 +833,7 @@ class TextWorldEnv(BaseEnv):
         return evaluations
 
     async def _next_step(
-        self, ep_state: TextWorldEpisodeState, current_turn_num: int
+        self, ep_state: TextWorldEpisodeState, current_turn_num: int, agent: AtroposAgent
     ) -> Tuple[Optional[ScoredDataGroup], bool]:
         """Execute one step of the TextWorld episode using VR-CLI evaluation."""
         logger.info(f"[DEBUG] _next_step called for episode {ep_state.episode_id}, turn {current_turn_num}")
@@ -856,7 +857,7 @@ class TextWorldEnv(BaseEnv):
         # 2. Generate candidate actions with predictions
         logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Calling agent.generate_action with n={self.config.group_size}")
         try:
-            group_actions = await self.agent.generate_action(
+            group_actions = await agent.generate_action(
                 current_observation, n=self.config.group_size
             )
             logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Received {len(group_actions) if group_actions else 0} actions from agent")
@@ -888,7 +889,7 @@ class TextWorldEnv(BaseEnv):
             return None, True
 
         # 4. Evaluate candidates using VR-CLI
-        evaluations = await self._evaluate_candidates(ep_state, candidates)
+        evaluations = await self._evaluate_candidates(ep_state, candidates, agent)
 
         if not evaluations:
             logger.error(f"[Episode: {ep_state.episode_id}] No evaluations returned")
@@ -900,7 +901,7 @@ class TextWorldEnv(BaseEnv):
 
         # 6. Record selected action with agent
         try:
-            await self.agent.record_selected_action_and_learn_from_turn(
+            await agent.record_selected_action_and_learn_from_turn(
                 selected_action_index=best_idx
             )
         except Exception as e:
@@ -939,7 +940,7 @@ class TextWorldEnv(BaseEnv):
         scores = []
 
         # Get canonical history for all alternatives
-        canonical_history = self.agent.get_final_canonical_dialogue()
+        canonical_history = agent.get_final_canonical_dialogue()
 
         for i, eval_data in enumerate(evaluations):
             # Build message history for this alternative
@@ -1004,6 +1005,11 @@ class TextWorldEnv(BaseEnv):
 
         logger.info(f"[DEBUG] Starting episode {ep_state.episode_id} with max_turns={ep_state.max_turns}")
         policy_sdgs_for_episode: List[ScoredDataGroup] = []
+        
+        # Create a new agent for this episode with its own memory
+        agent = self._create_agent_for_episode()
+        agent.new_game()
+        logger.info(f"[Episode: {ep_state.episode_id}] Created new agent with isolated memory")
 
         try:
             # Execute episode turns
@@ -1015,7 +1021,7 @@ class TextWorldEnv(BaseEnv):
                     break
 
                 scored_data_group_for_turn, episode_is_done_after_step = (
-                    await self._next_step(ep_state, current_turn_num)
+                    await self._next_step(ep_state, current_turn_num, agent)
                 )
 
                 if scored_data_group_for_turn:

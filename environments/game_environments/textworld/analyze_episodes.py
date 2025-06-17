@@ -72,15 +72,26 @@ def analyze_episode(episode_data: List[Dict[str, Any]], episode_id: str) -> None
             best_final_idx = max(range(len(final_scores)), key=lambda i: final_scores[i])
             print(f"  Best final score: {final_scores[best_final_idx]:.4f} (alternative {best_final_idx})")
         
-        # Show memory if present
-        messages = turn_data.get('messages', [[]])[0]  # First alternative's messages
-        for msg in messages:
-            if msg.get('role') == 'assistant' and '<memory>' in msg.get('content', ''):
-                import re
-                memory_match = re.search(r'<memory>(.*?)</memory>', msg['content'], re.DOTALL)
-                if memory_match:
-                    print(f"  Memory: {memory_match.group(1).strip()}")
-                    break
+        # Show memory from chosen alternative
+        if chosen_idx >= 0 and 'messages' in turn_data and chosen_idx < len(turn_data['messages']):
+            messages = turn_data['messages'][chosen_idx]
+            for msg in messages:
+                if msg.get('role') == 'assistant' and '<memory>' in msg.get('content', ''):
+                    import re
+                    memory_match = re.search(r'<memory>(.*?)</memory>', msg['content'], re.DOTALL)
+                    if memory_match:
+                        print(f"  Memory: {memory_match.group(1).strip()}")
+                        break
+        
+        # Also show the objective from the first turn
+        if turn_num == 0 and 'messages' in turn_data and turn_data['messages']:
+            for msg in turn_data['messages'][0]:  # Check first alternative for objective
+                if msg.get('role') == 'user' and 'Objective:' in msg.get('content', ''):
+                    import re
+                    obj_match = re.search(r'Objective: ([^\n]+)', msg['content'])
+                    if obj_match:
+                        print(f"  Objective: {obj_match.group(1).strip()}")
+                        break
 
 
 def main():
