@@ -118,9 +118,7 @@ class PuzzleGenerator:
             return game_file, config
             
         except Exception as e:
-            import traceback
             logger.error(f"Error generating puzzle game: {e}")
-            traceback.print_exc()
             return None, {}
     
     def _generate_door_sequence_puzzle(self,
@@ -254,11 +252,12 @@ class PuzzleGenerator:
             if i == 0:
                 maker.set_player(room)
         
-        # Connect rooms in a hub pattern
-        for i in range(1, nb_rooms):
-            direction = ["north", "south", "east", "west"][i-1]
-            opposite = {"north": "south", "south": "north", "east": "west", "west": "east"}[direction]
-            maker.connect(rooms[0].exits[direction], rooms[i].exits[opposite])
+        # Connect rooms in a hub pattern (limit to 4 rooms since we only have 4 directions)
+        directions = ["north", "south", "east", "west"]
+        opposite = {"north": "south", "south": "north", "east": "west", "west": "east"}
+        for i in range(1, min(nb_rooms, len(directions) + 1)):
+            direction = directions[i-1]
+            maker.connect(rooms[0].exits[direction], rooms[i].exits[opposite[direction]])
         
         # Create combination (based on difficulty)
         combo_length = 3 if difficulty == "easy" else 4 if difficulty == "medium" else 5

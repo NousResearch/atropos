@@ -33,13 +33,13 @@ echo "Cleaning up any existing SGLang servers..."
 pkill -f "sglang.launch_server" || true
 sleep 5
 
-# Launch SGLang server with tensor parallelism across 4 GPUs (8B model needs less)
+# Launch SGLang server with tensor parallelism across all 8 GPUs
 echo "Launching SGLang server on port $PORT with model $MODEL_NAME..."
 cd /home/maxpaperclips/sglang
-CUDA_VISIBLE_DEVICES=0,1,2,3 nohup uv run python -m sglang.launch_server \
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 nohup uv run python -m sglang.launch_server \
     --model-path $MODEL_NAME \
     --port $PORT \
-    --tp 4 \
+    --tp 8 \
     --grammar-backend xgrammar \
     --host 0.0.0.0 \
     --log-level info \

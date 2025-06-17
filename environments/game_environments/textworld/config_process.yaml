@@ -16,6 +16,7 @@ max_num_workers: 4
 total_steps: 10000
 group_size: 16  # Number of alternative responses per game state
 num_rollouts_per_group_for_logging: 16
+wandb_name: "textworld-datagen"
 
 # TextWorld specific settings
 max_steps: 50  # Max steps per episode
@@ -32,11 +33,17 @@ vrcli_enabled: true
 vrcli_weight: 0.3  # Weight for VR-CLI score (prediction accuracy)
 vrcli_discount_factor: 0.99  # For credit assignment in sparse rewards
 
-# LaTRo settings for action quality scoring
-latro_enabled: true
-latro_weight: 0.3  # Weight for LaTRo score (action confidence)
+# LaTRo settings for action quality scoring (disabled for now)
+latro_enabled: false
+latro_weight: 0.0  # Weight for LaTRo score (action confidence)
 
-# Environment reward weight (implicit: 1 - vrcli_weight - latro_weight = 0.4)
+# Environment reward weight (implicit: 1 - vrcli_weight - latro_weight = 0.7)
+
+# Token length penalty settings
+token_length_penalty_enabled: true
+token_length_penalty_weight: 0.1  # Up to 10% adjustment
+token_length_baseline: 500  # Baseline token count (no penalty/bonus)
+token_length_penalty_scale: 0.0002  # Penalty per token over baseline
 
 # Memory system settings
 atropos_agent_config:
@@ -65,7 +72,7 @@ policy_agent_server_config:
   api_key: "dummy"
 
 # Debug settings
-debug_mode: false
+debug_mode: true
 
 # Logging
 use_wandb: false  # For data generation, we don't need WandB

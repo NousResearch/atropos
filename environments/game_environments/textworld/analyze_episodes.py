@@ -53,7 +53,16 @@ def analyze_episode(episode_data: List[Dict[str, Any]], episode_id: str) -> None
         # Find best alternatives by different metrics
         if vrcli_scores:
             best_vrcli_idx = max(range(len(vrcli_scores)), key=lambda i: vrcli_scores[i])
-            print(f"  Best VR-CLI score: {vrcli_scores[best_vrcli_idx]:.4f} (alternative {best_vrcli_idx})")
+            print(f"  Best VR-CLI score: {vrcli_scores[best_vrcli_idx]:.1f} (alternative {best_vrcli_idx})")
+            
+            # Show VR-CLI distribution for this turn
+            vrcli_dist = {
+                0.0: sum(1 for s in vrcli_scores if s == 0.0),
+                0.5: sum(1 for s in vrcli_scores if s == 0.5),
+                0.9: sum(1 for s in vrcli_scores if s == 0.9),
+                1.0: sum(1 for s in vrcli_scores if s == 1.0),
+            }
+            print(f"  VR-CLI distribution: 0.0:{vrcli_dist[0.0]} | 0.5:{vrcli_dist[0.5]} | 0.9:{vrcli_dist[0.9]} | 1.0:{vrcli_dist[1.0]}")
         
         if env_rewards:
             best_env_idx = max(range(len(env_rewards)), key=lambda i: env_rewards[i])
@@ -62,10 +71,6 @@ def analyze_episode(episode_data: List[Dict[str, Any]], episode_id: str) -> None
         if final_scores:
             best_final_idx = max(range(len(final_scores)), key=lambda i: final_scores[i])
             print(f"  Best final score: {final_scores[best_final_idx]:.4f} (alternative {best_final_idx})")
-        
-        # Check for zero VR-CLI scores
-        zero_vrcli = sum(1 for s in vrcli_scores if s == 0.0)
-        print(f"  Zero VR-CLI scores: {zero_vrcli}/{len(vrcli_scores)}")
         
         # Show memory if present
         messages = turn_data.get('messages', [[]])[0]  # First alternative's messages
@@ -108,14 +113,30 @@ def main():
                 all_vrcli_scores.extend(turn_data.get('metadata', {}).get('vrcli_scores', []))
         
         if all_vrcli_scores:
-            zero_scores = sum(1 for s in all_vrcli_scores if s == 0.0)
-            non_zero_scores = [s for s in all_vrcli_scores if s > 0.0]
-            print(f"\nVR-CLI Score Statistics:")
+            # Count discrete VR-CLI reward levels
+            reward_counts = {
+                0.0: sum(1 for s in all_vrcli_scores if s == 0.0),
+                0.5: sum(1 for s in all_vrcli_scores if s == 0.5),
+                0.9: sum(1 for s in all_vrcli_scores if s == 0.9),
+                1.0: sum(1 for s in all_vrcli_scores if s == 1.0),
+            }
+            other_scores = [s for s in all_vrcli_scores if s not in [0.0, 0.5, 0.9, 1.0]]
+            
+            print(f"\nVR-CLI Score Statistics (Discrete Rewards):")
             print(f"  Total scores: {len(all_vrcli_scores)}")
-            print(f"  Zero scores: {zero_scores} ({zero_scores/len(all_vrcli_scores)*100:.1f}%)")
-            if non_zero_scores:
-                print(f"  Non-zero score range: {min(non_zero_scores):.6f} - {max(non_zero_scores):.6f}")
-                print(f"  Average non-zero score: {sum(non_zero_scores)/len(non_zero_scores):.6f}")
+            print(f"\n  Discrete reward distribution:")
+            print(f"    0.0 (negligible):  {reward_counts[0.0]:5d} ({reward_counts[0.0]/len(all_vrcli_scores)*100:5.1f}%)")
+            print(f"    0.5 (small):       {reward_counts[0.5]:5d} ({reward_counts[0.5]/len(all_vrcli_scores)*100:5.1f}%)")
+            print(f"    0.9 (moderate):    {reward_counts[0.9]:5d} ({reward_counts[0.9]/len(all_vrcli_scores)*100:5.1f}%)")
+            print(f"    1.0 (significant): {reward_counts[1.0]:5d} ({reward_counts[1.0]/len(all_vrcli_scores)*100:5.1f}%)")
+            
+            if other_scores:
+                print(f"\n  WARNING: Found {len(other_scores)} scores not matching discrete levels!")
+                print(f"  Other scores: {sorted(set(other_scores))[:10]}")
+            
+            # Also show average score
+            avg_score = sum(all_vrcli_scores) / len(all_vrcli_scores)
+            print(f"\n  Average VR-CLI score: {avg_score:.3f}")
         
         # Show episode length distribution
         print(f"\nEpisode length distribution:")

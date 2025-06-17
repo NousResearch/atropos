@@ -203,109 +203,195 @@ Ran complete TextWorld episode with `textworld_local_server.py`:
 - **analyze_episodes.py**: Script to reconstruct episodes and analyze scoring distributions
 - Allows episode-by-episode analysis and VR-CLI score investigation
 
-### Next Steps & Task List (June 16, 2025)
+### VR-CLI Implementation Updates (Completed: December 2024) ✅
 
-#### 1. VR-CLI Implementation Verification ⚠️
-**Current Issues:**
-- Our implementation differs from the paper - we're not using discrete reward levels (0, 0.5, 0.9, 1.0)
-- We're using a continuous score: `max(0.0, (base_ppl - pred_ppl) / base_ppl)`
-- The paper uses percentage improvement with thresholds
-- Need to verify if our perplexity calculation matches the paper's approach
+#### Summary of Implementation Session
+We successfully updated the VR-CLI implementation to match the paper's specifications and added token length penalties:
 
+1. **VR-CLI Formula Fixed** ✅
+   - Updated from continuous scoring to percentage improvement: `[1 - PPL(y|x,a)/PPL(y|x)] × 100`
+   - Implemented discrete reward levels: 0.0 (<0.05), 0.5 (0.05-1), 0.9 (1-2), 1.0 (≥2)
+   - Verified per-token perplexity calculation is correct
+
+2. **Reward Weighting Adjusted** ✅
+   - Changed VR-CLI weight from 0.7 to 0.3
+   - Disabled LaTRo (weight = 0.0) for now
+   - Environment reward now gets 0.7 weight (1.0 - 0.3 - 0.0)
+   - Properly handles three-way reward split for future LaTRo integration
+
+3. **Credit Assignment Enhanced** ✅
+   - Verified discount factor (γ = 0.99) is properly applied
+   - Implemented credit assignment for unselected alternatives with same action
+   - Future returns now propagated to all alternatives that would have taken the same action
+
+4. **Analysis Tools Updated** ✅
+   - analyze_episodes.py now shows discrete VR-CLI reward distribution
+   - Per-turn analysis displays reward level counts
+   - Overall statistics show percentage breakdown by reward level
+
+5. **Token Length Penalty Added** ✅
+   - Implemented configurable token length penalty/bonus system
+   - Baseline: 500 tokens (neutral point)
+   - Up to 10% reward adjustment based on response length
+   - Shorter responses get bonus when outcomes are good
+   - Longer responses get extra penalty when outcomes are bad
+   - Helps encourage concise, efficient reasoning
+
+### Current Implementation State (Ready for GPU Testing)
+
+## Recent Debugging Session: TextWorld Data Generation Hanging (June 16, 2025)
+
+### Problem
+TextWorld data generation jobs are hanging after initial setup. Jobs 14118, 14119, 14174, 14175, 14177, and 14178 all failed to generate data, while job 14120 successfully generated 1.6GB.
+
+### What We Tried
+1. **Fixed GPU allocation**: Changed from 4 GPUs (tp=4) to 8 GPUs (tp=8) in the SLURM script
+2. **Added debug logging**: 
+   - Added logging to `get_next_item()` and `collect_trajectories()` in textworld_env.py
+   - Added logging to `_next_step()` to trace episode execution
+   - Added logging to `parallel_process_manager()` in base.py
+   - Set `debug_mode: true` in config (though it showed as false in output)
+3. **Added wandb_name**: Set `wandb_name: "textworld-datagen"` in config
+4. **Observations**:
+   - SGLang server starts successfully
+   - Config and server_configs are printed
+   - Process hangs after printing server configs
+   - No debug output appears after config print
+   - SGLang logs show only one POST request to /generate endpoint
+   - WandB initializes despite `use_wandb: false` in config
+
+### Unknowns
+- Is the hang in the TextWorld environment initialization or SGLang?
+- Why does job 14120 work but others fail?
+- Is the parallel processing manager even starting?
+- Could SGLang be hanging on the first request?
+
+### Problem Resolved ✅ (June 16, 2025)
+
+The issue was that `do_send_to_api` was not a field in `BaseEnvConfig`, causing the process command to run `env_manager` which waits for a training backend instead of running standalone data generation.
+
+#### Solution Implemented
+1. **Added `do_send_to_api` field to `BaseEnvConfig`** with default value `True` (for serve mode)
+2. **Set `do_send_to_api=False` in process mode defaults** to ensure data generation runs standalone
+3. **Verified fix works** - Job 14186 running successfully without hanging
+
+#### Key Code Changes
+- Added to `BaseEnvConfig` in `/home/maxpaperclips/atropos/atroposlib/envs/base.py`:
+  ```python
+  do_send_to_api: bool = Field(
+      default=True,
+      description="Whether to send data to the API server (True for serve mode, False for process mode)",
+  )
+  ```
+- Updated `PROCESS_MODE_ENV_DEFAULT_CONFIG` to include `do_send_to_api=False`
+
+This ensures that:
+- `serve` command: Sends data to training API (default `True`)
+- `process` command: Saves data to file without waiting for backend (overridden to `False`)
+
+### Current Implementation State (Ready for GPU Testing)
+
+#### Key Configuration Parameters
+```yaml
+# Reward weights (in textworld_env.py and config_process.yaml)
+vrcli_weight: 0.3          # VR-CLI contribution
+latro_weight: 0.0          # LaTRo disabled for now
+# Environment weight: 0.7   # (1.0 - 0.3 - 0.0)
+
+# Token length penalty
+token_length_penalty_enabled: true
+token_length_penalty_weight: 0.1      # Max 10% adjustment
+token_length_baseline: 500            # Neutral point (tokens)
+token_length_penalty_scale: 0.0002    # Penalty per token over baseline
+
+# Credit assignment
+vrcli_discount_factor: 0.99          # For multi-step episodes
+```
+
+#### Expected Behavior During Testing
+1. **VR-CLI Rewards**: Should see mostly 0.0 and 0.5 scores, with occasional 0.9 and rare 1.0
+2. **Token Length**: Responses around 500 tokens get no adjustment; shorter get bonus, longer get penalty
+3. **Credit Assignment**: Final episode outcomes propagate back through all steps
+4. **Alternative Actions**: Unselected alternatives that chose the same action also get future returns
+
+#### Testing Commands
+```bash
+# On GPU node with SGLang server running
+cd /home/maxpaperclips/atropos/environments/game_environments/textworld
+uv run python textworld_local_server.py
+
+# To analyze generated data
+uv run python analyze_episodes.py data/textworld_deephermes8b_dataset_*.jsonl --stats-only
+```
+
+### Remaining Tasks
+
+#### Testing & Validation (IMMEDIATE - ON GPU NODE)
 **Tasks:**
-- [ ] Update VR-CLI scoring to match paper's discrete reward levels
-- [ ] Verify perplexity calculation uses per-token perplexity as in paper
-- [ ] Test with different temperature settings for perplexity calculation
-- [ ] Compare our results with expected improvements from the paper
+- [ ] Test updated VR-CLI implementation with different game types
+- [ ] Verify discrete reward distribution matches expectations
+- [ ] Check token length penalty is working as intended
+- [ ] Compare with any existing baseline data if available
 
-#### 2. Reward Weighting Adjustment
-**Current**: 70% VR-CLI + 30% environment reward
-**Proposed**: Make environment reward more prominent
+#### Post-Testing Adjustments
+**Based on test results, may need to:**
+- [ ] Adjust VR-CLI percentage thresholds if too many 0.0 rewards
+- [ ] Fine-tune token length baseline (currently 500)
+- [ ] Modify penalty scale if too harsh/lenient
+- [ ] Consider game-specific adjustments
 
-**Tasks:**
-- [ ] Change vrcli_weight from 0.7 to 0.3 or 0.4
-- [ ] Consider additive rewards: `vrcli_score + env_reward` instead of weighted average
-- [ ] Test impact on episode success rates
-- [ ] Analyze which weighting produces better game outcomes
-
-#### 3. Memory System Analysis
-**Questions to investigate:**
-- How often are previous memories being retrieved and used?
-- Are memories building coherently across turns?
-- Is the memory retrieval threshold appropriate?
-- Should memories persist across episodes?
-
+#### Memory System Analysis (LOWER PRIORITY)
 **Tasks:**
 - [ ] Add memory retrieval statistics to analyze_episodes.py
 - [ ] Track memory similarity scores when retrieving
 - [ ] Analyze memory coherence across turns
 - [ ] Test different memory_top_k values (currently 3)
-- [ ] Consider implementing memory decay or importance weighting
 
-#### 4. LaTRo Implementation
+### Future Work & Ablations
+
+#### LaTRo Implementation (Postponed for Ablation Study)
 **Implement cross-entropy based rewards as alternative/complement to VR-CLI**
 
-**Tasks:**
+**Future Tasks:**
 - [ ] Implement LaTRo reward calculation: `log π(correct_action | state + reasoning)`
 - [ ] Add KL divergence penalty term
 - [ ] Create hybrid reward: VR-CLI + LaTRo + environment
 - [ ] Compare performance with VR-CLI alone
 - [ ] Test on different game types (puzzle vs navigation vs quest)
 
-#### 5. Game Diversity Analysis
-**Verify registry is producing diverse games**
+#### Additional Analysis & Optimization
+**Lower priority tasks for system improvement**
 
-**Tasks:**
-- [ ] Add game type tracking to metadata
-- [ ] Analyze distribution of generated vs pre-built games
-- [ ] Track difficulty levels used
-- [ ] Ensure all game types are being sampled
-- [ ] Check if certain game types lead to better learning
+1. **Game Diversity Analysis**
+   - [ ] Add game type tracking to metadata
+   - [ ] Analyze distribution of generated vs pre-built games
+   - [ ] Track difficulty levels used
+   - [ ] Check if certain game types lead to better learning
 
-#### 6. Sparse Reward Analysis
-**Understanding VR-CLI's effectiveness in sparse environments**
+2. **Sparse Reward Analysis**
+   - [ ] Track episodes with zero environment rewards throughout
+   - [ ] Compare VR-CLI guidance in sparse vs dense reward episodes
+   - [ ] Analyze if VR-CLI helps discover winning strategies
 
-**Tasks:**
-- [ ] Track episodes with zero environment rewards throughout
-- [ ] Compare VR-CLI guidance in sparse vs dense reward episodes
-- [ ] Analyze if VR-CLI helps discover winning strategies
-- [ ] Plot learning curves: VR-CLI-guided vs random baseline
+3. **Format Compliance & Error Analysis**
+   - [ ] Track tool call parsing failures
+   - [ ] Analyze when model fails to generate memory blocks
+   - [ ] Monitor token usage vs max_tokens limit
 
-#### 7. Format Compliance & Error Analysis
-**Understanding model failures**
+4. **Performance Optimization**
+   - [ ] Monitor SGLang server memory usage
+   - [ ] Optimize batch sizes for throughput
+   - [ ] Profile VR-CLI perplexity calculations
 
-**Tasks:**
-- [ ] Track tool call parsing failures
-- [ ] Analyze when model fails to generate memory blocks
-- [ ] Check correlation between thinking length and success
-- [ ] Monitor token usage vs max_tokens limit
+5. **Evaluation Metrics**
+   - [ ] Implement win rate tracking over time
+   - [ ] Create learning efficiency metrics
+   - [ ] Measure sample efficiency (wins per 1000 episodes)
 
-#### 8. Performance Optimization
-**Ensure efficient data generation**
-
-**Tasks:**
-- [ ] Monitor SGLang server memory usage
-- [ ] Check for memory leaks in long-running episodes
-- [ ] Optimize batch sizes for throughput
-- [ ] Profile VR-CLI perplexity calculations
-
-#### 9. Evaluation Metrics
-**Define success metrics for the system**
-
-**Tasks:**
-- [ ] Implement win rate tracking over time
-- [ ] Create learning efficiency metrics
-- [ ] Compare step-based vs episode-based rewards
-- [ ] Measure sample efficiency (wins per 1000 episodes)
-
-#### 10. Configuration Experiments
-**Test different hyperparameters**
-
-**Tasks:**
-- [ ] Test different temperature values for action generation
-- [ ] Vary number of alternatives (currently 16)
-- [ ] Test different max_steps values
-- [ ] Experiment with thinking summarization thresholds
+6. **Configuration Experiments**
+   - [ ] Test different temperature values for action generation
+   - [ ] Vary number of alternatives (currently 16)
+   - [ ] Experiment with thinking summarization thresholds
 
 ### Previous Work: TextWorld Environment Testing (Completed)
 We tested the TextWorld environment with different models to compare format compliance:

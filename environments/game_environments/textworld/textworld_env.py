@@ -77,20 +77,38 @@ class TextWorldEnvConfig(BaseEnvConfig):
         default=True, description="Use VR-CLI scoring for action predictions"
     )
     vrcli_weight: float = Field(
-        default=0.7,
-        description="Weight for combining VR-CLI score with environment reward",
+        default=0.3,
+        description="Weight for VR-CLI score in combined reward",
     )
     vrcli_discount_factor: float = Field(
         default=0.99,
         description="Discount factor for credit assignment in sparse reward setting",
     )
     
+    # Token length penalty configuration
+    token_length_penalty_enabled: bool = Field(
+        default=True,
+        description="Apply token length penalty/bonus to rewards"
+    )
+    token_length_penalty_weight: float = Field(
+        default=0.1,
+        description="Weight for token length penalty (0.1 = up to 10% adjustment)"
+    )
+    token_length_baseline: int = Field(
+        default=500,
+        description="Baseline token count for neutral penalty (no bonus/penalty)"
+    )
+    token_length_penalty_scale: float = Field(
+        default=0.0002,
+        description="Scale factor for token length penalty (penalty per token over baseline)"
+    )
+    
     # LaTRo specific configurations
     latro_enabled: bool = Field(
-        default=True, description="Use LaTRo scoring for action quality"
+        default=False, description="Use LaTRo scoring for action quality (disabled for now)"
     )
     latro_weight: float = Field(
-        default=0.3,
+        default=0.0,
         description="Weight for LaTRo score (action confidence)",
     )
 
@@ -493,6 +511,7 @@ class TextWorldEnv(BaseEnv):
 
     async def get_next_item(self) -> Optional[Dict[str, Any]]:
         """Provide a new, initialized TextWorldEpisodeState for trajectory collection."""
+        logger.info(f"[DEBUG] get_next_item called, creating new episode...")
         episode_state = await self._get_or_create_episode(
             episode_seed=self.config.game_seed
         )
@@ -500,6 +519,7 @@ class TextWorldEnv(BaseEnv):
             logger.error("Failed to create new TextWorld episode.")
             return None
 
+        logger.info(f"[DEBUG] Successfully created episode: {episode_state.episode_id}")
         return {"episode_state": episode_state, "episode_id": episode_state.episode_id}
 
     def _parse_action_with_prediction(
@@ -572,7 +592,14 @@ class TextWorldEnv(BaseEnv):
     async def _vrcli_score(
         self, current_obs: str, predicted_outcome: str, actual_outcome: str
     ) -> float:
-        """Score prediction quality using perplexity improvement."""
+        """Score prediction quality using perplexity improvement with discrete reward levels.
+        
+        Following the VR-CLI paper, we calculate percentage improvement and map to discrete rewards:
+        - 0.0: improvement < 0.05 (negligible)
+        - 0.5: 0.05 ≤ improvement < 1 (small improvement) 
+        - 0.9: 1 ≤ improvement < 2 (moderate improvement)
+        - 1.0: improvement ≥ 2 (significant improvement)
+        """
         if not predicted_outcome:
             return 0.0
 
@@ -597,8 +624,22 @@ class TextWorldEnv(BaseEnv):
         base_ppl = await self._calculate_perplexity_from_server(base_messages)
         pred_ppl = await self._calculate_perplexity_from_server(prediction_messages)
 
-        # Score is improvement in perplexity
-        return max(0.0, (base_ppl - pred_ppl) / base_ppl)
+        # Calculate percentage improvement using VR-CLI formula
+        # Improvement = [1 - PPL(y|x,a)/PPL(y|x)] × 100
+        if base_ppl == 0 or base_ppl == float('inf'):
+            return 0.0
+            
+        improvement = (1 - pred_ppl / base_ppl) * 100
+        
+        # Map to discrete reward levels
+        if improvement < 0.05:
+            return 0.0  # Negligible improvement
+        elif improvement < 1.0:
+            return 0.5  # Small improvement
+        elif improvement < 2.0:
+            return 0.9  # Moderate improvement
+        else:
+            return 1.0  # Significant improvement
 
     def _get_action_history_from_agent(self) -> List[str]:
         """Extract the canonical action history from the agent."""
@@ -685,11 +726,19 @@ class TextWorldEnv(BaseEnv):
             if env_copy is None:
                 logger.error(f"Failed to create environment copy for candidate {i}")
                 evaluations.append({
+                    "index": i,
                     "action": action,
                     "prediction": prediction,
                     "vrcli_score": 0.0,
+                    "latro_score": 0.0,
                     "env_reward": 0.0,
                     "combined_score": 0.0,
+                    "response_text": response_text,
+                    "response_tokens": 0,
+                    "token_length_adjustment": 0.0,
+                    "actual_outcome": "",
+                    "done": False,
+                    "info": {},
                     "error": True
                 })
                 continue
@@ -704,11 +753,41 @@ class TextWorldEnv(BaseEnv):
                     ep_state.last_formatted_obs, prediction, actual_outcome
                 )
 
-                # Combine scores
+                # Calculate LaTRo score if enabled (currently disabled)
+                latro_score = 0.0
+                if self.config.latro_enabled and hasattr(self, '_calculate_latro_score'):
+                    # LaTRo would calculate log P(action | state + reasoning)
+                    # For now this is disabled
+                    latro_score = 0.0
+                
+                # Combine scores with proper weighting
+                # Environment reward gets remaining weight after VR-CLI and LaTRo
+                env_weight = 1.0 - self.config.vrcli_weight - self.config.latro_weight
                 combined_score = (
                     self.config.vrcli_weight * vrcli_score
-                    + (1 - self.config.vrcli_weight) * reward
+                    + self.config.latro_weight * latro_score
+                    + env_weight * reward
                 )
+                
+                # Apply token length penalty/bonus if enabled
+                token_length_adjustment = 0.0
+                if self.config.token_length_penalty_enabled:
+                    # Count tokens in the response (assistant's message only)
+                    response_tokens = len(self.tokenizer.encode(response_text, add_special_tokens=False))
+                    
+                    # Calculate adjustment based on deviation from baseline
+                    # Negative adjustment (penalty) for longer responses, positive (bonus) for shorter
+                    token_deviation = response_tokens - self.config.token_length_baseline
+                    token_length_adjustment = -token_deviation * self.config.token_length_penalty_scale
+                    
+                    # Cap the adjustment to the configured weight
+                    max_adjustment = self.config.token_length_penalty_weight
+                    token_length_adjustment = max(-max_adjustment, min(max_adjustment, token_length_adjustment))
+                    
+                    # Apply adjustment proportional to the base score
+                    # If score is negative (bad outcome), longer responses get bigger penalty
+                    # If score is positive (good outcome), shorter responses get bonus
+                    combined_score *= (1.0 + token_length_adjustment)
 
                 evaluations.append(
                     {
@@ -716,9 +795,12 @@ class TextWorldEnv(BaseEnv):
                         "action": action,
                         "prediction": prediction,
                         "vrcli_score": vrcli_score,
+                        "latro_score": latro_score,
                         "env_reward": reward,
                         "combined_score": combined_score,
                         "response_text": response_text,
+                        "response_tokens": response_tokens if self.config.token_length_penalty_enabled else 0,
+                        "token_length_adjustment": token_length_adjustment if self.config.token_length_penalty_enabled else 0.0,
                         "actual_outcome": actual_outcome,
                         "done": done,
                         "info": info,
@@ -732,9 +814,12 @@ class TextWorldEnv(BaseEnv):
                         "action": action,
                         "prediction": prediction,
                         "vrcli_score": 0.0,
+                        "latro_score": 0.0,
                         "env_reward": 0.0,
                         "combined_score": 0.0,
                         "response_text": response_text,
+                        "response_tokens": 0,
+                        "token_length_adjustment": 0.0,
                         "actual_outcome": "",
                         "done": False,
                         "info": {},
@@ -750,6 +835,7 @@ class TextWorldEnv(BaseEnv):
         self, ep_state: TextWorldEpisodeState, current_turn_num: int
     ) -> Tuple[Optional[ScoredDataGroup], bool]:
         """Execute one step of the TextWorld episode using VR-CLI evaluation."""
+        logger.info(f"[DEBUG] _next_step called for episode {ep_state.episode_id}, turn {current_turn_num}")
 
         # 1. Get current observation
         if current_turn_num == 0:
@@ -765,15 +851,19 @@ class TextWorldEnv(BaseEnv):
             current_observation = self._format_observation(raw_obs, infos)
 
         ep_state.last_formatted_obs = current_observation
+        logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Observation length: {len(current_observation)}")
 
         # 2. Generate candidate actions with predictions
+        logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Calling agent.generate_action with n={self.config.group_size}")
         try:
             group_actions = await self.agent.generate_action(
                 current_observation, n=self.config.group_size
             )
+            logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Received {len(group_actions) if group_actions else 0} actions from agent")
         except Exception as e:
             logger.error(
-                f"[Episode: {ep_state.episode_id}] Error getting actions from agent: {e}"
+                f"[Episode: {ep_state.episode_id}] Error getting actions from agent: {e}",
+                exc_info=True
             )
             return None, True
 
@@ -886,7 +976,10 @@ class TextWorldEnv(BaseEnv):
                 "episode_id": ep_state.episode_id,
                 "type": "policy_training_data",
                 "vrcli_scores": [e["vrcli_score"] for e in evaluations],
+                "latro_scores": [e["latro_score"] for e in evaluations],
                 "env_rewards": [e["env_reward"] for e in evaluations],
+                "response_tokens": [e["response_tokens"] for e in evaluations],
+                "token_length_adjustments": [e["token_length_adjustment"] for e in evaluations],
             },
         )
 
@@ -898,6 +991,8 @@ class TextWorldEnv(BaseEnv):
         self, item: Dict[str, Any]
     ) -> Tuple[List[ScoredDataGroup], List[Dict[str, Any]]]:
         """Run a full TextWorld episode collecting data for each step."""
+        logger.info(f"[DEBUG] collect_trajectories called with item: {item.get('episode_id', 'unknown')}")
+        
         if not item or "episode_state" not in item:
             logger.error("Invalid item received - missing 'episode_state'")
             return [], []
@@ -907,12 +1002,16 @@ class TextWorldEnv(BaseEnv):
             logger.error("Episode state is None")
             return [], []
 
+        logger.info(f"[DEBUG] Starting episode {ep_state.episode_id} with max_turns={ep_state.max_turns}")
         policy_sdgs_for_episode: List[ScoredDataGroup] = []
 
         try:
             # Execute episode turns
             for current_turn_num in range(ep_state.max_turns):
+                logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Starting turn {current_turn_num + 1}/{ep_state.max_turns}")
+                
                 if ep_state.done:
+                    logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Episode done, breaking")
                     break
 
                 scored_data_group_for_turn, episode_is_done_after_step = (
@@ -921,8 +1020,10 @@ class TextWorldEnv(BaseEnv):
 
                 if scored_data_group_for_turn:
                     policy_sdgs_for_episode.append(scored_data_group_for_turn)
+                    logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Turn {current_turn_num + 1} completed with {len(scored_data_group_for_turn['scores'])} scores")
 
                 if episode_is_done_after_step:
+                    logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Episode done after step, breaking")
                     break
 
                 if current_turn_num == ep_state.max_turns - 1 and not ep_state.done:
@@ -930,7 +1031,8 @@ class TextWorldEnv(BaseEnv):
 
         except Exception as e:
             logger.error(
-                f"[Episode: {ep_state.episode_id}] Error during trajectory collection: {e}"
+                f"[Episode: {ep_state.episode_id}] Error during trajectory collection: {e}", 
+                exc_info=True
             )
             ep_state.done = True
         finally:
@@ -950,7 +1052,11 @@ class TextWorldEnv(BaseEnv):
         ep_state: TextWorldEpisodeState,
         policy_sdgs_for_episode: List[ScoredDataGroup],
     ) -> None:
-        """Apply credit assignment for sparse rewards using discounted returns."""
+        """Apply credit assignment for sparse rewards using discounted returns.
+        
+        Also assigns credit to unselected alternatives that produced the same action
+        as the selected candidate, as they would have led to the same outcome.
+        """
         if not policy_sdgs_for_episode:
             return
 
@@ -979,19 +1085,49 @@ class TextWorldEnv(BaseEnv):
                 immediate_reward + self.config.vrcli_discount_factor * discounted_return
             )
 
-            # Update scores for the chosen action
+            # Update scores for the chosen action and alternatives with same action
             sdg = policy_sdgs_for_episode[t]
             chosen_idx = ep_state.canonical_chosen_alternative_indices[t]
 
             if 0 <= chosen_idx < len(sdg["scores"]):
+                # Extract the chosen action from messages
+                chosen_action = None
+                if "messages" in sdg and chosen_idx < len(sdg["messages"]):
+                    chosen_messages = sdg["messages"][chosen_idx]
+                    if chosen_messages and chosen_messages[-1]["role"] == "assistant":
+                        # Parse the action from the chosen alternative's response
+                        response_text = chosen_messages[-1]["content"]
+                        action, _ = self._parse_action_with_prediction(response_text)
+                        chosen_action = action
+
                 # The scores already contain VR-CLI + immediate reward combination
-                # Now we add the future discounted return to the chosen action
+                # Now we add the future discounted return
                 new_scores = list(sdg["scores"])
                 # Add the future return (not including immediate reward to avoid double counting)
                 future_return = self.config.vrcli_discount_factor * (
                     discounted_return - immediate_reward
                 )
+                
+                # Update score for chosen alternative
                 new_scores[chosen_idx] += future_return
+                
+                # Also update scores for unselected alternatives with the same action
+                if chosen_action is not None and "messages" in sdg:
+                    for alt_idx in range(len(sdg["messages"])):
+                        if alt_idx != chosen_idx and alt_idx < len(new_scores):
+                            alt_messages = sdg["messages"][alt_idx]
+                            if alt_messages and alt_messages[-1]["role"] == "assistant":
+                                alt_response = alt_messages[-1]["content"]
+                                alt_action, _ = self._parse_action_with_prediction(alt_response)
+                                if alt_action == chosen_action:
+                                    # This alternative would have led to the same outcome
+                                    new_scores[alt_idx] += future_return
+                                    logger.debug(
+                                        f"[Episode: {ep_state.episode_id}] Turn {t}: "
+                                        f"Alternative {alt_idx} also gets future return "
+                                        f"for same action '{chosen_action}'"
+                                    )
+                
                 sdg["scores"] = new_scores
 
                 # Log credit assignment info

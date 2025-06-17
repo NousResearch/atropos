@@ -168,6 +168,10 @@ class BaseEnvConfig(BaseModel):
         default=False,
         description="Whether to strip tokens and masks from saved data (dramatically reduces file size for SFT datasets)",
     )
+    do_send_to_api: bool = Field(
+        default=True,
+        description="Whether to send data to the API server (True for serve mode, False for process mode)",
+    )
 
 
 class BaseEnv(ABC):
@@ -1027,7 +1031,9 @@ class BaseEnv(ABC):
         High-performance process manager that runs multiple groups in parallel
         using the worker pool pattern from the serve command.
         """
+        print(f"[DEBUG] parallel_process_manager started!")
         await self.setup()
+        print(f"[DEBUG] setup() completed")
 
         if self.config.use_wandb:
             random_id = "".join(random.choices(string.ascii_lowercase, k=6))
@@ -1050,8 +1056,9 @@ class BaseEnv(ABC):
         if max_parallel_groups == -1:
             max_parallel_groups = self.config.max_num_workers_per_node * len(self.server.servers)
         
-        print(f"Starting to process {self.n_groups_to_process} groups with up to {max_parallel_groups} parallel workers...")
-        print(f"Each group will process {self.group_size_to_process} trajectories in parallel")
+        print(f"[DEBUG] Starting to process {self.n_groups_to_process} groups with up to {max_parallel_groups} parallel workers...")
+        print(f"[DEBUG] Each group will process {self.group_size_to_process} trajectories in parallel")
+        print(f"[DEBUG] Total steps configured: {self.config.total_steps}")
 
         # Main processing loop using worker pool pattern
         while self.completed_groups < self.n_groups_to_process:
@@ -1059,6 +1066,8 @@ class BaseEnv(ABC):
             # Add new workers up to the maximum
             while (len(self.workers) < max_parallel_groups and 
                    (self.completed_groups + len(self.workers)) < self.n_groups_to_process):
+                
+                print(f"[DEBUG] Spawning new worker. Current workers: {len(self.workers)}, Completed: {self.completed_groups}")
                 
                 # Generate a UUID for tracking this group
                 group_uuid = str(uuid.uuid4())
@@ -1389,6 +1398,7 @@ class BaseEnv(ABC):
             use_wandb=True,
             max_num_workers=8,  # Enable parallel processing by default
             use_parallel_processing=True,  # Use high-performance parallel processing by default
+            do_send_to_api=False,  # Process mode doesn't send to API, just saves to file
         )
         PROCESS_MODE_OPENAI_DEFAULT_CONFIG = APIServerConfig(
             model_name="gpt-4.1-nano",
@@ -1593,6 +1603,7 @@ class BaseEnv(ABC):
                     task = loop.create_task(manager_method())
                     loop.run_until_complete(task)
                 except RuntimeError:
+                    # No running loop, create one
                     asyncio.run(manager_method())
 
         return CliProcessConfig
