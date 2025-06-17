@@ -1,10 +1,10 @@
 # Ethereum Virtual Machine (EVM) Transaction Agent Environment
 
-Atropos environment for training language models to generate and execute profitable Ethereum transactions using Anvil (Foundry's local blockchain simulation).
+Atropos environment for training language models to generate and execute profitable Ethereum transactions.  An active forked version of the blockchain is created using Anvil (https://getfoundry.sh/guides/forking-mainnet-with-cast-anvil) to allow for execution and state inspection to verify transactions execute and perform the desired action.
 
 ## Overview
 
-This environment trains language models to become proficient Ethereum transaction agents. It presents natural language transaction requests and rewards models for generating correct transaction JSON that successfully executes on a simulated blockchain. The agent learns to handle ETH transfers, ERC-20 token transfers, and complex DeFi interactions through reinforcement learning.
+This environment trains language models to become proficient at text to transaction for EVM blockchains.  The existing config allows for ETH and ERC-20 transfers to be generated in natural language dynamically by LLM calls.  These are designed to target different types of transactions with increasing frequency towards those transaction types that the model is scoring poorly on. The agent learns to handle ETH transfers, ERC-20 token transfers, and complex DeFi interactions through reinforcement learning.
 
 ## Features
 
@@ -31,17 +31,63 @@ The environment trains on three primary transaction categories:
 2. **ERC-20 Transfer (18 decimals)**: Standard token transfers (DAI, WETH, CRV)
 3. **ERC-20 Transfer (non-18 decimals)**: Tokens with different decimal precision (USDC, USDT)
 
-## Scoring System
+## Verified Scoring System with Anvil
 
-The reward function evaluates transactions across five dimensions:
+Unlike traditional RL environments that rely on simulated or estimated rewards, this environment provides **cryptographically verified rewards** by executing transactions on a real Ethereum Virtual Machine simulation powered by Anvil. This ensures that scoring is based on actual blockchain state changes rather than heuristic approximations.
 
-1. **Successful Execution (30%)**: Transaction executes without reverting
-2. **Correct Balance Changes (50%)**: Expected token/ETH amounts transferred
-3. **Thinking Quality (10%)**: Depth and quality of reasoning in `<think>` tags
-4. **Address Accuracy (5%)**: Correct destination address matching
-5. **Data Field Correctness (5%)**: Proper transaction data encoding
+### Anvil-Powered Verification
 
-**Score Range**: -0.2 to 1.0 (penalties for missing thinking, rewards for correct execution)
+**Anvil** (Foundry's blockchain simulator) enables true verification by:
+
+- **Real EVM Execution**: Transactions run on an actual Ethereum Virtual Machine, not a simplified simulation
+- **Mainnet Fork**: Uses real mainnet state with actual token contracts and balances
+- **Cryptographic Verification**: Transaction success/failure is determined by EVM consensus rules
+- **Atomic State Management**: Blockchain snapshots ensure clean evaluation without side effects
+- **Gas Estimation**: Real gas consumption and fee calculation for realistic training
+
+### Scoring Methodology
+
+The environment employs a **snapshot-execute-verify-revert** cycle for each transaction:
+
+```
+1. Snapshot blockchain state
+2. Record pre-execution balances
+3. Execute agent's transaction
+4. Measure actual state changes
+5. Calculate verified score
+6. Revert to clean snapshot
+```
+
+This process ensures that:
+- ✅ **No False Positives**: Only correctly executed transactions receive rewards
+- ✅ **Precise Measurement**: Exact balance changes are measured, not estimated
+- ✅ **Isolated Evaluation**: Each transaction is evaluated independently
+- ✅ **Real-World Validity**: Successful transactions would work on actual mainnet
+
+### Five-Dimensional Scoring
+
+The reward function evaluates transactions across five verified dimensions:
+
+1. **Correct Balance Changes (0.5 points)**:
+   - **Most Critical Component**: Measures actual on-chain balance differences
+   - Compares pre/post execution balances with cryptographic precision
+   - For ETH: Exact wei amounts transferred to destination
+   - For ERC-20: Exact token units transferred (accounting for decimals)
+   - Verified against real contract state, not estimated
+
+2. **Successful Execution (0.3 points)**:
+   - Verified by EVM status code (`0x1` = success)
+   - Ensures transaction doesn't revert due to insufficient funds, gas, or logic errors
+   - Only awarded if transaction is mined successfully
+
+3. **Thinking Quality (±0.1 points)**:
+4. **Destination Address Accuracy (0.05 points)**:
+5. **Data Field Correctness (0.05 points)**:
+
+**Total Score Range**: -0.2 to 1.0
+- **Perfect execution**: 1.0 (all components correct)
+- **Missing thinking**: -0.2 (penalty for unexplained decisions)
+- **Partial success**: Proportional scoring based on verified components
 
 ## Prerequisites
 
@@ -109,25 +155,7 @@ The environment uses `configs/token_transfers.yaml` for blockchain configuration
 - **Gas Settings**: Limit and price configuration
 - **Token Addresses**: Whitelisted ERC-20 tokens
 
-## Environment Architecture
-
-### Question Generation
-- Uses GPT-4o-mini to generate realistic transaction requests
-- Adapts to current wallet balances and available tokens
-- Varies tone and complexity (casual, formal, urgent styles)
-
-### Transaction Execution
-- Creates blockchain snapshots before execution
-- Executes transactions using Foundry's `cast send`
-- Measures balance changes for scoring
-- Reverts to snapshot to maintain clean state
-
-### Adaptive Learning
-- Tracks performance by question type
-- 80/20 strategy: focuses on weak areas while maintaining mastery
-- Targets question types with <90% performance
-
-## Training Applications
+## Potential Training Applications
 
 - **DeFi Agent Development**: Training models for decentralized finance interactions
 - **Transaction Automation**: Building agents for routine blockchain operations
