@@ -16,11 +16,11 @@ import traceback
 from typing import Any, Dict, List, Optional, Tuple
 
 from anvil import AnvilBackend, AnvilConfig
+from evm_config import EVMEnvConfig
 from openai import OpenAI
-from pydantic import Field
 from utils import cleanup_blockchain, cleanup_manager, setup_evm_error_message
 
-from atroposlib.envs.base import BaseEnv, BaseEnvConfig, ScoredDataGroup
+from atroposlib.envs.base import BaseEnv, ScoredDataGroup
 from atroposlib.envs.server_handling.server_manager import APIServerConfig
 from atroposlib.type_definitions import Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
@@ -66,33 +66,6 @@ Example 2:
     "data": "0xa9059cbb000000000000000000000000ea29e9da69317d80075fbfc836e843c6d65971f50000000000000000000000000000000000000000000000000000000005f5e100"  # noqa: E501
 }
 """
-
-
-class EVMEnvConfig(BaseEnvConfig):
-    """Configuration for the EVM Environment"""
-
-    # Logging configuration
-    debug_logging: bool = Field(
-        default=False, description="Enable detailed debug logging"
-    )
-    suppress_base_env_logs: bool = Field(
-        default=True,
-        description="Suppress base environment INFO logs to reduce noise",
-    )
-
-    anvil_config_path: str = Field(
-        "configs/token_transfers.yaml",
-        description="Path to Anvil configuration YAML file",
-    )
-    max_steps: int = Field(1, description="Only one step per transaction episode")
-    question_types: List[str] = Field(
-        default=[
-            "ETH transfer",
-            "ERC-20 transfer using 18 decimal token",
-            "ERC-20 transfer using a non-18 decimal token",
-        ],
-        description="Types of questions to generate for the agent",
-    )
 
 
 class EVMEnv(BaseEnv):
@@ -173,9 +146,9 @@ class EVMEnv(BaseEnv):
             self.current_prompt_data = prompt_data
 
             # Display Generated Input
-            print("\n=== Generated Input ===")
-            print(prompt_text)
-            print("=" * 50)
+            self.logger.debug("\n=== Generated Input ===")
+            self.logger.debug(prompt_text)
+            self.logger.debug("=" * 50)
 
             prompt = tuple(
                 [frozenset({"role": "user", "content": prompt_text}.items())]
@@ -202,8 +175,8 @@ class EVMEnv(BaseEnv):
             else:
                 avg_scores[qtype] = 0.0  # Prioritize untested question types
 
-        # Split into weak and strong areas based on 90% performance threshold
-        weak_threshold = 0.9  # 90% performance threshold
+        # Split into weak and strong areas based on configurable performance threshold
+        weak_threshold = self.config.weak_performance_threshold
 
         weak_qtypes = [
             qtype for qtype, score in avg_scores.items() if score < weak_threshold
@@ -212,15 +185,12 @@ class EVMEnv(BaseEnv):
             qtype for qtype, score in avg_scores.items() if score >= weak_threshold
         ]
 
-        # 80% focus on weak areas, 20% on strong areas for mastery maintenance
-        if random.random() < 0.8 and weak_qtypes:
-            # Target weakest areas - select from bottom performers
+        # Configurable focus on weak areas vs strong areas for mastery maintenance
+        if random.random() < self.config.weak_area_focus_ratio and weak_qtypes:
             selected_type = random.choice(weak_qtypes)
         elif strong_qtypes:
-            # Maintain mastery in strong areas
             selected_type = random.choice(strong_qtypes)
         else:
-            # Fallback to any available question type
             selected_type = random.choice(list(avg_scores.keys()))
 
         return selected_type
@@ -295,19 +265,21 @@ Examples:
         try:
             # Generate multiple responses in a single call for efficiency
             response = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=self.config.question_generation_model,
                 messages=[{"role": "user", "content": llm_prompt}],
-                temperature=0.6,
-                max_tokens=256,
-                n=3,  # Generate 3 responses in one call
+                temperature=self.config.question_generation_temperature,
+                max_tokens=self.config.question_generation_max_tokens,
+                n=self.config.question_generation_n,
             )
 
             # Try each response until we find a valid one
             for i, choice in enumerate(response.choices):
                 generated_content = choice.message.content.strip()
 
-                # Extract JSON from response (reusing the same pattern)
-                prompt_data = self._extract_prompt_json(generated_content)
+                # Extract JSON from response using generic function
+                prompt_data = self._extract_json_from_response(
+                    generated_content, ["question_type", "request"], "prompt"
+                )
 
                 # Validate required fields
                 if prompt_data and self._validate_prompt_data(
@@ -378,29 +350,6 @@ Examples:
 
         return None
 
-    def _extract_prompt_json(self, generated_content: str) -> Optional[Dict[str, Any]]:
-        """Extract JSON from the LLM-generated prompt content"""
-        try:
-            # Try to parse the whole content as JSON first
-            return json.loads(generated_content.strip())
-        except json.JSONDecodeError:
-            # Look for JSON blocks within the content
-            json_patterns = [
-                r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}",  # Simple nested JSON
-                r"```json\s*(\{.*?\})\s*```",  # JSON in code blocks
-                r"```\s*(\{.*?\})\s*```",  # JSON in generic code blocks
-            ]
-
-            for pattern in json_patterns:
-                matches = re.findall(pattern, generated_content, re.DOTALL)
-                for match in matches:
-                    try:
-                        return json.loads(match.strip())
-                    except json.JSONDecodeError:
-                        continue
-
-            return None
-
     def _extract_transaction_json(self, response: str) -> Optional[Dict[str, Any]]:
         """Extract transaction JSON from LLM response"""
         return self._extract_json_from_response(
@@ -466,9 +415,9 @@ Examples:
                 self.last_completions.append(choice.message.content)
 
                 # Display Generated Output
-                print(f"\n=== Generated Output {i+1} ===")
-                print(choice.message.content)
-                print("=" * 50)
+                self.logger.debug(f"\n=== Generated Output {i+1} ===")
+                self.logger.debug(choice.message.content)
+                self.logger.debug("=" * 50)
 
                 history = [
                     {"role": "system", "content": system_msg["content"]},
@@ -518,9 +467,9 @@ Examples:
                 score = await self._score_transaction(agent_response)
 
                 # Display Score
-                print(f"\n=== Score {i+1} ===")
-                print(f"{score}")
-                print("=" * 50)
+                self.logger.debug(f"\n=== Score {i+1} ===")
+                self.logger.debug(f"{score}")
+                self.logger.debug("=" * 50)
 
                 # Track performance for this question type
                 if self.current_question_type:
@@ -799,6 +748,7 @@ Examples:
     @classmethod
     def config_init(cls) -> Tuple[EVMEnvConfig, List[APIServerConfig]]:
         """Initialize configuration for EVM environment"""
+        # pydantic-settings automatically loads from YAML file
         env_config = EVMEnvConfig(
             tokenizer_name="NousResearch/Hermes-3-Llama-3.1-8B",
             group_size=4,
