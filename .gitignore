@@ -8,6 +8,10 @@ __pycache__/
 # C extensions
 *.so
 
+# TextWorld generated game files
+environments/game_environments/textworld/tw_generated_games/*.z8
+environments/game_environments/textworld/tw_generated_games/*.ni
+
 # Distribution / packaging
 .Python
 build/
