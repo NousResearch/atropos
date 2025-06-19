@@ -128,7 +128,7 @@ class BaseEnvConfig(BaseModel):
     )
     tokenizer_name: str = Field(
         default="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
-        description="Hugging Face tokenzer to use.",
+        description="Hugging Face tokenizer to use.",
     )
     use_wandb: bool = Field(default=True, description="Whether to use wandb")
     rollout_server_url: str = Field(

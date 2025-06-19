@@ -40,7 +40,7 @@ def log_pokemon(pokemon: Pokemon, is_opponent: bool = False):
             f"HP: {pokemon.current_hp}/{pokemon.max_hp} ({pokemon.current_hp_fraction * 100:.1f}%)",
             f"Base stats: {pokemon.base_stats}",
             f"Stats: {pokemon.stats}",
-            f"{'Possible abililities' if is_opponent else 'Ability'}: {pokemon.ability}",
+            f"{'Possible abilities' if is_opponent else 'Ability'}: {pokemon.ability}",
             f"{'Possible items' if is_opponent else 'Item'}: {pokemon.item}",
             f"Status: {pokemon.status}",
         ]
