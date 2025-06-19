@@ -90,40 +90,40 @@ env:
   # Task configuration - RandomTask selects from all available bootcamp tasks
   task_name: "RandomTask"
   task_params: {}
-  
+
   # Reward configuration for scoring
   correct_reward: 1.0
   incorrect_reward: -0.5
   format_bonus: 0.2
-  
+
   # Generation parameters
   group_size: ${GROUP_SIZE}  # Generate responses per problem for rejection sampling
   batch_size: -1  # Disable batching for direct file writing
   total_steps: ${TOTAL_STEPS}  # Process problems
   max_num_workers: ${MAX_WORKERS}  # Number of parallel groups to process
   use_parallel_processing: true  # Enable new parallel processing mode
-  
+
   # Reasoning requirements
   require_reasoning: true
   min_reasoning_length: 50
-  
+
   # Sampling parameters for DeepHermes
   temperature: 0.7
   top_p: 0.9
   max_token_length: 24576
-  
+
   # Output configuration
   data_path_to_save_groups: "${OUTPUT_FILE}"
   ensure_scores_are_not_same: false  # Allow rejection sampling
   include_messages: true  # Save full conversations
-  
+
   # Tokenizer for processing (use same model as generation model)
   tokenizer_name: "${MODEL_NAME}"
-  
+
   # WandB tracking
   use_wandb: true
   wandb_name: "intern_bootcamp_deephermes24b_parallel_sglang_generation"
-  
+
   # Enable direct rollout dumping to datadumps directory
   dump_rollouts: true
   min_score_to_save: 0.0  # Only save responses with score >= 0.0
@@ -134,7 +134,7 @@ openai:
   model_name: "${MODEL_NAME}"
   base_url: "http://localhost:${SGLANG_PORT}/v1"
   api_key: "dummy"  # SGLang doesn't need a real API key
-  
+
 # Server configuration for serve mode
 slurm: true
 testing: false
