@@ -54,7 +54,7 @@ The environment expects a dataset with the following columns:
 I need to analyze the erroneous JSON against the UserProfile model:
 
 1. "name": "" - violates min_length=2 constraint
-2. "age": -5 - violates ge=0 constraint  
+2. "age": -5 - violates ge=0 constraint
 3. "email": "not-an-email" - invalid email format
 4. "status": "unknown_status" - not in allowed Literal values ['active', 'inactive', 'pending']
 5. "join_date": "invalid-date-format" - invalid date format
@@ -153,7 +153,7 @@ For editing tasks, the environment includes error introduction. Configure these 
 env_config = PydanticEnvConfig(
     # Task configuration
     task_type="editing",  # instead of "generation"
-    
+
     # Error introduction settings
     error_types_enabled=[
         "type_error",           # Type mismatches (str -> int, etc.)
@@ -165,7 +165,7 @@ env_config = PydanticEnvConfig(
     max_errors_per_item=1, # How many errors should we introduce?
     error_introduction_probability=1.0, # What percentage of the time should we introduce errors?
     error_introduction_seed=42,  # For reproducible errors
-    
+
     # ... other config options
 )
 ```
@@ -190,7 +190,7 @@ env_config = PydanticEnvConfig(
 2. **Training Loop**:
    - Gets next item from dataset (cycles through training set)
    - **For Generation Tasks**: Sends prompt directly to language model
-   - **For Editing Tasks**: 
+   - **For Editing Tasks**:
      - Automatically generates erroneous data if not provided
      - Creates editing prompt with Pydantic model and erroneous JSON
      - Asks model to identify and fix validation errors
