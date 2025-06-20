@@ -569,7 +569,10 @@ def _generate_invalid_url(valid_url: str = "") -> str:
             else "www.example.com"
         ),
         # Invalid protocol
-        lambda: f"{random.choice(['htp://', 'htttp://', 'http:/', 'http:/'])}{valid_url.split('://', 1)[1] if '://' in valid_url else 'example.com'}",
+        lambda: (
+            f"{random.choice(['htp://', 'htttp://', 'http:/', 'http:/'])}"
+            f"{valid_url.split('://', 1)[1] if '://' in valid_url else 'example.com'}"
+        ),
         # Missing domain
         lambda: random.choice(["http://", "https://", "http:///path"]),
         # Invalid port
@@ -581,7 +584,7 @@ def _generate_invalid_url(valid_url: str = "") -> str:
         # Spaces in URL
         lambda: f"http://{random.choice(['example .com', 'exam ple.com', 'example.com '])}/path",
         # Double slashes in wrong places
-        lambda: f"http:example.com" if not valid_url else valid_url.replace("://", ":"),
+        lambda: "http:example.com" if not valid_url else valid_url.replace("://", ":"),
         # Special cases
         lambda: random.choice(
             [
@@ -619,7 +622,13 @@ def _generate_invalid_uuid(valid_uuid: str = "") -> str:
         # Wrong length - too long
         lambda: "550e8400-e29b-41d4-a716-446655440000-extra",
         # Invalid characters (not hexadecimal)
-        lambda: f"{''.join(random.choices('ghijklmnopqrstuvwxyz!@#$%', k=8))}-{''.join(random.choices('0123456789abcdef', k=4))}-{''.join(random.choices('0123456789abcdef', k=4))}-{''.join(random.choices('0123456789abcdef', k=4))}-{''.join(random.choices('0123456789abcdef', k=12))}",
+        lambda: (
+            f"{''.join(random.choices('ghijklmnopqrstuvwxyz!@#$%', k=8))}-"
+            f"{''.join(random.choices('0123456789abcdef', k=4))}-"
+            f"{''.join(random.choices('0123456789abcdef', k=4))}-"
+            f"{''.join(random.choices('0123456789abcdef', k=4))}-"
+            f"{''.join(random.choices('0123456789abcdef', k=12))}"
+        ),
         # Wrong format - missing hyphens
         lambda: "550e8400e29b41d4a716446655440000",
         # Wrong format - extra hyphens

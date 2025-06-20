@@ -1792,7 +1792,6 @@ class PydanticSchemaFollowingEnv(BaseEnv):
     def _generate_field_value(self, field_name: str, field_info) -> Any:
         """Generate a realistic value for a specific field based on its type and constraints."""
         annotation = field_info.annotation
-        field_name_lower = field_name.lower()
 
         # Handle Union types (like Optional[T])
         if hasattr(annotation, "__origin__") and annotation.__origin__ is Union:
