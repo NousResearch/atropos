@@ -13,7 +13,8 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
-from ..core.database import DatabaseManager
+from core.database import DatabaseManager
+from ai_scientist_wrapper import generate_gemini_paper, generate_vr_research_paper
 
 
 class AIScientistIntegration:

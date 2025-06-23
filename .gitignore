@@ -165,3 +165,4 @@ celerybeat.pid
 
 # Rope project settings
 .ropeproject
+point_e_model_cache/*.pt

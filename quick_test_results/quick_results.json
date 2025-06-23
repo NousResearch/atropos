@@ -1,0 +1,32 @@
+[
+  {
+    "agent_count": 10,
+    "success": true,
+    "duration": 0.5763108730316162,
+    "steps_per_second": 43.50988310237629,
+    "memory_used_mb": 12.859375,
+    "total_memory_mb": 196.78125,
+    "llm_requests": 250,
+    "cache_hit_rate": 0.96
+  },
+  {
+    "agent_count": 25,
+    "success": true,
+    "duration": 2.648103952407837,
+    "steps_per_second": 9.447706477566454,
+    "memory_used_mb": 1.328125,
+    "total_memory_mb": 198.125,
+    "llm_requests": 625,
+    "cache_hit_rate": 0.96
+  },
+  {
+    "agent_count": 50,
+    "success": true,
+    "duration": 4.5252296924591064,
+    "steps_per_second": 5.52686001596849,
+    "memory_used_mb": 1.484375,
+    "total_memory_mb": 199.609375,
+    "llm_requests": 1250,
+    "cache_hit_rate": 0.96
+  }
+]

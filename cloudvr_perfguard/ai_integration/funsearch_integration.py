@@ -13,7 +13,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from ..core.database import DatabaseManager
+from core.database import DatabaseManager
+from funsearch_wrapper import run_funsearch_optimization, generate_gemini_function
 
 
 class FunSearchIntegration:

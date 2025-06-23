@@ -89,6 +89,10 @@ async def shutdown_event():
 
 # --- API Endpoints ---
 
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
 @app.get("/")
 async def root():
     return {

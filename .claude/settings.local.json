@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(rm:*)",
+      "Bash(sqlite3:*)",
+      "Bash(gcloud auth:*)",
+      "Bash(gcloud config get-value:*)",
+      "Bash(cp:*)",
+      "Bash(gcloud builds submit:*)",
+      "Bash(gcloud projects:*)",
+      "Bash(chmod:*)",
+      "Bash(gcloud builds list:*)",
+      "Bash(gcloud run deploy:*)",
+      "Bash(--image gcr.io/amien-research-pipeline/society-simulation:latest )",
+      "Bash(--platform managed )",
+      "Bash(--region us-central1 )",
+      "Bash(--allow-unauthenticated )",
+      "Bash(--memory 2Gi )",
+      "Bash(--cpu 2 )",
+      "Bash(--timeout 3600 )",
+      "Bash(--max-instances 100 )",
+      "Bash(--set-env-vars PROJECT_ID=amien-research-pipeline)"
+    ],
+    "deny": []
+  }
+}

@@ -1,0 +1,643 @@
+{
+  "metadata": {
+    "agents": 25,
+    "steps": 100,
+    "world_size": [
+      100,
+      100
+    ],
+    "timestamp": 1749067770.1793542,
+    "arguments": {
+      "agents": 25,
+      "steps": 100,
+      "world_size": [
+        100,
+        100
+      ],
+      "llm": "none",
+      "model": null,
+      "api_key": null,
+      "visualize": false,
+      "save": "test_results.json",
+      "load": null,
+      "continue_steps": null,
+      "config": null,
+      "verbose": false,
+      "quiet": false,
+      "benchmark": false,
+      "test": false
+    }
+  },
+  "statistics": {
+    "step": 100,
+    "agents": 25,
+    "avg_energy": 0.36340922574104895,
+    "avg_happiness": 1.5522925997281996,
+    "total_connections": 58,
+    "total_resources": {
+      "food": 1558.0000000000025,
+      "currency": 16915,
+      "materials": 423,
+      "tools": 78
+    },
+    "agent_types": {
+      "craftsman": 2,
+      "unemployed": 5,
+      "farmer": 3,
+      "leader": 7,
+      "trader": 5,
+      "scholar": 3
+    },
+    "cultural_groups": {
+      "scholars": 8,
+      "wanderers": 4,
+      "harmonists": 5,
+      "builders": 4,
+      "guardians": 4
+    },
+    "agent_states": {
+      "socializing": 8,
+      "idle": 6,
+      "working": 7,
+      "moving": 2,
+      "trading": 2
+    }
+  },
+  "agents": [
+    {
+      "agent_id": "agent_0",
+      "type": "craftsman",
+      "cultural_group": "scholars",
+      "position": {
+        "x": 29.94674080416252,
+        "y": 36.05168136723703,
+        "z": 0.0
+      },
+      "state": "socializing",
+      "energy": 0.42,
+      "happiness": 2.59,
+      "health": 0.87,
+      "age": 24.8,
+      "resources": {
+        "food": 15.999999999999787,
+        "currency": 9,
+        "materials": 33,
+        "tools": 4
+      },
+      "social_connections": 6,
+      "memories": 3
+    },
+    {
+      "agent_id": "agent_1",
+      "type": "unemployed",
+      "cultural_group": "wanderers",
+      "position": {
+        "x": 46.99239958285087,
+        "y": 58.23852476053287,
+        "z": 0.0
+      },
+      "state": "socializing",
+      "energy": 0.43,
+      "happiness": 2.55,
+      "health": 0.94,
+      "age": 31.2,
+      "resources": {
+        "food": 2.000000000000057,
+        "currency": 913,
+        "materials": 23,
+        "tools": 2
+      },
+      "social_connections": 4,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_2",
+      "type": "farmer",
+      "cultural_group": "harmonists",
+      "position": {
+        "x": 29.50848512441381,
+        "y": 61.04963676762889,
+        "z": 0.0
+      },
+      "state": "idle",
+      "energy": 0.42,
+      "happiness": 1.44,
+      "health": 0.94,
+      "age": 23.3,
+      "resources": {
+        "food": 403.0000000000008,
+        "currency": 874,
+        "materials": 21,
+        "tools": 1
+      },
+      "social_connections": 0,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_3",
+      "type": "farmer",
+      "cultural_group": "harmonists",
+      "position": {
+        "x": 19.188521184294526,
+        "y": 50.26270492053789,
+        "z": 0.0
+      },
+      "state": "working",
+      "energy": 0.33,
+      "happiness": 1.53,
+      "health": 0.95,
+      "age": 54.2,
+      "resources": {
+        "food": 417.0000000000009,
+        "currency": 357,
+        "materials": 23,
+        "tools": 4
+      },
+      "social_connections": 1,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_4",
+      "type": "leader",
+      "cultural_group": "wanderers",
+      "position": {
+        "x": 82.68474177736186,
+        "y": 81.0951668922295,
+        "z": 0.0
+      },
+      "state": "idle",
+      "energy": 0.41,
+      "happiness": 1.0,
+      "health": 0.9,
+      "age": 35.8,
+      "resources": {
+        "food": 0,
+        "currency": 1065,
+        "materials": 8,
+        "tools": 2
+      },
+      "social_connections": 1,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_5",
+      "type": "leader",
+      "cultural_group": "builders",
+      "position": {
+        "x": 66.65147273139547,
+        "y": 64.94635064357028,
+        "z": 0.0
+      },
+      "state": "moving",
+      "energy": 0.35,
+      "happiness": 0.98,
+      "health": 0.91,
+      "age": 23.0,
+      "resources": {
+        "food": 0,
+        "currency": 454,
+        "materials": 25,
+        "tools": 2
+      },
+      "social_connections": 2,
+      "memories": 1
+    },
+    {
+      "agent_id": "agent_6",
+      "type": "unemployed",
+      "cultural_group": "guardians",
+      "position": {
+        "x": 42.29266435137174,
+        "y": 50.89429657501022,
+        "z": 0.0
+      },
+      "state": "idle",
+      "energy": 0.43,
+      "happiness": 1.03,
+      "health": 0.87,
+      "age": 59.6,
+      "resources": {
+        "food": 0,
+        "currency": 952,
+        "materials": 14,
+        "tools": 4
+      },
+      "social_connections": 4,
+      "memories": 1
+    },
+    {
+      "agent_id": "agent_7",
+      "type": "trader",
+      "cultural_group": "scholars",
+      "position": {
+        "x": 35.137156878474805,
+        "y": 48.88706949145474,
+        "z": 0.0
+      },
+      "state": "idle",
+      "energy": 0.45,
+      "happiness": 0.11,
+      "health": 0.93,
+      "age": 48.9,
+      "resources": {
+        "food": 1.000000000000039,
+        "currency": 427,
+        "materials": 5,
+        "tools": 3
+      },
+      "social_connections": 1,
+      "memories": 6
+    },
+    {
+      "agent_id": "agent_8",
+      "type": "unemployed",
+      "cultural_group": "guardians",
+      "position": {
+        "x": 52.17480283389182,
+        "y": 53.131610770889594,
+        "z": 0.0
+      },
+      "state": "working",
+      "energy": 0.35,
+      "happiness": 1.23,
+      "health": 0.99,
+      "age": 48.3,
+      "resources": {
+        "food": 3.000000000000039,
+        "currency": 875,
+        "materials": 19,
+        "tools": 5
+      },
+      "social_connections": 2,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_9",
+      "type": "leader",
+      "cultural_group": "wanderers",
+      "position": {
+        "x": 48.26238822739049,
+        "y": 84.79886624603091,
+        "z": 0.0
+      },
+      "state": "socializing",
+      "energy": 0.34,
+      "happiness": 2.92,
+      "health": 0.94,
+      "age": 53.1,
+      "resources": {
+        "food": 0,
+        "currency": 589,
+        "materials": 20,
+        "tools": 2
+      },
+      "social_connections": 4,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_10",
+      "type": "trader",
+      "cultural_group": "scholars",
+      "position": {
+        "x": 87.1320329076811,
+        "y": 2.6893182208176936,
+        "z": 0.0
+      },
+      "state": "trading",
+      "energy": 0.28,
+      "happiness": 0.08,
+      "health": 1.0,
+      "age": 64.1,
+      "resources": {
+        "food": 2.000000000000039,
+        "currency": 494,
+        "materials": 1,
+        "tools": 5
+      },
+      "social_connections": 2,
+      "memories": 2
+    },
+    {
+      "agent_id": "agent_11",
+      "type": "trader",
+      "cultural_group": "wanderers",
+      "position": {
+        "x": 44.31524859695389,
+        "y": 44.37565461444141,
+        "z": 0.0
+      },
+      "state": "trading",
+      "energy": 0.34,
+      "happiness": 0.0,
+      "health": 0.92,
+      "age": 59.4,
+      "resources": {
+        "food": 4.9999999999998614,
+        "currency": 837,
+        "materials": 3,
+        "tools": 2
+      },
+      "social_connections": 1,
+      "memories": 6
+    },
+    {
+      "agent_id": "agent_12",
+      "type": "craftsman",
+      "cultural_group": "scholars",
+      "position": {
+        "x": 96.45056242164672,
+        "y": 2.3548496902173865,
+        "z": 0.0
+      },
+      "state": "socializing",
+      "energy": 0.34,
+      "happiness": 2.62,
+      "health": 0.87,
+      "age": 57.9,
+      "resources": {
+        "food": 3.000000000000046,
+        "currency": 311,
+        "materials": 27,
+        "tools": 1
+      },
+      "social_connections": 2,
+      "memories": 1
+    },
+    {
+      "agent_id": "agent_13",
+      "type": "leader",
+      "cultural_group": "builders",
+      "position": {
+        "x": 16.956931490105283,
+        "y": 96.77124939757148,
+        "z": 0.0
+      },
+      "state": "moving",
+      "energy": 0.4,
+      "happiness": 0.77,
+      "health": 0.99,
+      "age": 62.5,
+      "resources": {
+        "food": 2.0000000000000533,
+        "currency": 307,
+        "materials": 29,
+        "tools": 4
+      },
+      "social_connections": 3,
+      "memories": 3
+    },
+    {
+      "agent_id": "agent_14",
+      "type": "leader",
+      "cultural_group": "guardians",
+      "position": {
+        "x": 68.40517466586667,
+        "y": 38.208984890014115,
+        "z": 0.0
+      },
+      "state": "working",
+      "energy": 0.27,
+      "happiness": 1.09,
+      "health": 0.85,
+      "age": 55.2,
+      "resources": {
+        "food": 1.9999999999999787,
+        "currency": 1273,
+        "materials": 19,
+        "tools": 3
+      },
+      "social_connections": 0,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_15",
+      "type": "leader",
+      "cultural_group": "scholars",
+      "position": {
+        "x": 81.42444881300472,
+        "y": 10.506923393622591,
+        "z": 0.0
+      },
+      "state": "socializing",
+      "energy": 0.42,
+      "happiness": 2.82,
+      "health": 0.88,
+      "age": 27.3,
+      "resources": {
+        "food": 17.999999999999787,
+        "currency": 132,
+        "materials": 15,
+        "tools": 3
+      },
+      "social_connections": 2,
+      "memories": 1
+    },
+    {
+      "agent_id": "agent_16",
+      "type": "leader",
+      "cultural_group": "builders",
+      "position": {
+        "x": 29.16835680621201,
+        "y": 69.86807915787922,
+        "z": 0.0
+      },
+      "state": "idle",
+      "energy": 0.41,
+      "happiness": 1.03,
+      "health": 0.88,
+      "age": 23.2,
+      "resources": {
+        "food": 6.000000000000043,
+        "currency": 1238,
+        "materials": 11,
+        "tools": 1
+      },
+      "social_connections": 1,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_17",
+      "type": "scholar",
+      "cultural_group": "harmonists",
+      "position": {
+        "x": 58.335051343494584,
+        "y": 86.16293792062449,
+        "z": 0.0
+      },
+      "state": "idle",
+      "energy": 0.43,
+      "happiness": 1.33,
+      "health": 0.83,
+      "age": 51.3,
+      "resources": {
+        "food": 0,
+        "currency": 743,
+        "materials": 8,
+        "tools": 5
+      },
+      "social_connections": 1,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_18",
+      "type": "trader",
+      "cultural_group": "scholars",
+      "position": {
+        "x": 25.73934258282018,
+        "y": 22.328352041560162,
+        "z": 0.0
+      },
+      "state": "socializing",
+      "energy": 0.34,
+      "happiness": 2.95,
+      "health": 0.93,
+      "age": 51.7,
+      "resources": {
+        "food": 8.999999999999897,
+        "currency": 122,
+        "materials": 16,
+        "tools": 5
+      },
+      "social_connections": 4,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_19",
+      "type": "farmer",
+      "cultural_group": "scholars",
+      "position": {
+        "x": 39.89238846517924,
+        "y": 0.7091371695155724,
+        "z": 0.0
+      },
+      "state": "working",
+      "energy": 0.38,
+      "happiness": 1.63,
+      "health": 0.88,
+      "age": 52.8,
+      "resources": {
+        "food": 404.00000000000085,
+        "currency": 107,
+        "materials": 7,
+        "tools": 3
+      },
+      "social_connections": 0,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_20",
+      "type": "scholar",
+      "cultural_group": "guardians",
+      "position": {
+        "x": 68.75411697959518,
+        "y": 42.410429176847856,
+        "z": 0.0
+      },
+      "state": "working",
+      "energy": 0.29,
+      "happiness": 1.01,
+      "health": 0.97,
+      "age": 24.5,
+      "resources": {
+        "food": 5.999999999999957,
+        "currency": 1286,
+        "materials": 17,
+        "tools": 5
+      },
+      "social_connections": 2,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_21",
+      "type": "trader",
+      "cultural_group": "scholars",
+      "position": {
+        "x": 25.42354923641469,
+        "y": 29.552152790334162,
+        "z": 0.0
+      },
+      "state": "socializing",
+      "energy": 0.4,
+      "happiness": 3.35,
+      "health": 0.99,
+      "age": 53.1,
+      "resources": {
+        "food": 2.0000000000000604,
+        "currency": 950,
+        "materials": 17,
+        "tools": 3
+      },
+      "social_connections": 6,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_22",
+      "type": "unemployed",
+      "cultural_group": "builders",
+      "position": {
+        "x": 69.63797517997574,
+        "y": 52.34678758667191,
+        "z": 0.0
+      },
+      "state": "working",
+      "energy": 0.27,
+      "happiness": 1.02,
+      "health": 0.88,
+      "age": 53.1,
+      "resources": {
+        "food": 11.00000000000005,
+        "currency": 1200,
+        "materials": 25,
+        "tools": 3
+      },
+      "social_connections": 2,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_23",
+      "type": "unemployed",
+      "cultural_group": "harmonists",
+      "position": {
+        "x": 11.923908294446807,
+        "y": 62.6364324211376,
+        "z": 0.0
+      },
+      "state": "socializing",
+      "energy": 0.31,
+      "happiness": 2.75,
+      "health": 0.83,
+      "age": 25.5,
+      "resources": {
+        "food": 0,
+        "currency": 567,
+        "materials": 20,
+        "tools": 4
+      },
+      "social_connections": 4,
+      "memories": 0
+    },
+    {
+      "agent_id": "agent_24",
+      "type": "scholar",
+      "cultural_group": "harmonists",
+      "position": {
+        "x": 51.89989615135923,
+        "y": 36.591234510206704,
+        "z": 0.0
+      },
+      "state": "working",
+      "energy": 0.26,
+      "happiness": 0.97,
+      "health": 0.94,
+      "age": 60.6,
+      "resources": {
+        "food": 0,
+        "currency": 833,
+        "materials": 17,
+        "tools": 2
+      },
+      "social_connections": 3,
+      "memories": 0
+    }
+  ]
+}

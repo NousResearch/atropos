@@ -1,0 +1,51 @@
+{
+  "experiment_name": "Basic Society Simulation",
+  "description": "Default configuration for society simulation",
+  
+  "simulation": {
+    "agents": 50,
+    "steps": 500,
+    "world_size": [100, 100],
+    "seed": 42
+  },
+  
+  "llm": {
+    "provider": "none",
+    "model": null,
+    "temperature": 0.7,
+    "max_tokens": 150,
+    "enable_caching": true
+  },
+  
+  "agents": {
+    "initial_energy_range": [0.7, 1.0],
+    "initial_happiness_range": [0.4, 0.8],
+    "initial_resources": {
+      "food": [10, 50],
+      "currency": [100, 1000],
+      "materials": [5, 25],
+      "tools": [1, 5]
+    },
+    "personality_distribution": {
+      "extroversion": [0.0, 1.0],
+      "conscientiousness": [0.0, 1.0],
+      "openness": [0.0, 1.0],
+      "agreeableness": [0.0, 1.0]
+    }
+  },
+  
+  "world": {
+    "interaction_radius": 15.0,
+    "trade_radius": 20.0,
+    "movement_speed": 2.0,
+    "enable_population_events": true,
+    "event_frequency": 100
+  },
+  
+  "output": {
+    "save_results": true,
+    "visualization": false,
+    "verbose": false,
+    "statistics_interval": 40
+  }
+}

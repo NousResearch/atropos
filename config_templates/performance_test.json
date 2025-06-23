@@ -1,0 +1,51 @@
+{
+  "experiment_name": "Performance Stress Test",
+  "description": "Large-scale simulation for performance testing",
+  
+  "simulation": {
+    "agents": 200,
+    "steps": 500,
+    "world_size": [150, 150],
+    "seed": 999
+  },
+  
+  "llm": {
+    "provider": "none",
+    "model": null,
+    "temperature": 0.7,
+    "max_tokens": 100,
+    "enable_caching": true
+  },
+  
+  "agents": {
+    "initial_energy_range": [0.8, 1.0],
+    "initial_happiness_range": [0.5, 0.7],
+    "initial_resources": {
+      "food": [20, 60],
+      "currency": [150, 1500],
+      "materials": [10, 30],
+      "tools": [1, 8]
+    },
+    "personality_distribution": {
+      "extroversion": [0.1, 1.0],
+      "conscientiousness": [0.2, 0.9],
+      "openness": [0.0, 1.0],
+      "agreeableness": [0.1, 1.0]
+    }
+  },
+  
+  "world": {
+    "interaction_radius": 20.0,
+    "trade_radius": 25.0,
+    "movement_speed": 3.0,
+    "enable_population_events": false,
+    "event_frequency": 200
+  },
+  
+  "output": {
+    "save_results": true,
+    "visualization": false,
+    "verbose": false,
+    "statistics_interval": 50
+  }
+}

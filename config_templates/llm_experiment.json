@@ -1,0 +1,52 @@
+{
+  "experiment_name": "LLM-Driven Society Simulation",
+  "description": "Society simulation with LLM-powered agent intelligence",
+  
+  "simulation": {
+    "agents": 25,
+    "steps": 300,
+    "world_size": [80, 80],
+    "seed": 123
+  },
+  
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-3.5-turbo",
+    "temperature": 0.8,
+    "max_tokens": 200,
+    "enable_caching": true,
+    "fallback_enabled": true
+  },
+  
+  "agents": {
+    "initial_energy_range": [0.6, 1.0],
+    "initial_happiness_range": [0.3, 0.9],
+    "initial_resources": {
+      "food": [15, 40],
+      "currency": [200, 800],
+      "materials": [8, 20],
+      "tools": [2, 6]
+    },
+    "personality_distribution": {
+      "extroversion": [0.2, 0.9],
+      "conscientiousness": [0.3, 0.8],
+      "openness": [0.4, 1.0],
+      "agreeableness": [0.3, 0.9]
+    }
+  },
+  
+  "world": {
+    "interaction_radius": 12.0,
+    "trade_radius": 18.0,
+    "movement_speed": 1.5,
+    "enable_population_events": true,
+    "event_frequency": 75
+  },
+  
+  "output": {
+    "save_results": true,
+    "visualization": true,
+    "verbose": true,
+    "statistics_interval": 25
+  }
+}
