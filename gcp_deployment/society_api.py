@@ -34,12 +34,13 @@ class CloudSimulationManager:
         try:
             print(f"🚀 Starting simulation {sim_id}: {agents} agents, {steps} steps")
             
-            # Run the simulation
+            # Run the optimized simulation
             start_time = time.time()
             result = subprocess.run([
-                'python', '/app/run_simulation_cloud.py',
+                'python', '/app/run_simulation_optimized.py',
                 '--agents', str(agents),
                 '--steps', str(steps),
+                '--parallel',
                 '--save', f'/tmp/sim_{sim_id}_results.json'
             ], capture_output=True, text=True, timeout=3600)
             
