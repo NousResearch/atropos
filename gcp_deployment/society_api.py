@@ -40,8 +40,6 @@ class CloudSimulationManager:
                 'python', '/app/run_simulation_cloud.py',
                 '--agents', str(agents),
                 '--steps', str(steps),
-                '--optimized',
-                '--workers', str(workers),
                 '--save', f'/tmp/sim_{sim_id}_results.json'
             ], capture_output=True, text=True, timeout=3600)
             
