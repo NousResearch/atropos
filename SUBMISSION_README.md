@@ -44,4 +44,4 @@ The project uses Weights & Biases for experiment tracking. View the latest run [
 - `spatial_rl_mvp/`: Core environment implementation
 - `visualization/`: Web-based visualization
 - `environment.yml`: Conda environment specification
-- `.env.example`: Environment variables template 
+- `.env.example`: Environment variables template

@@ -53,12 +53,12 @@ resource "google_cloud_run_service" "api_service" {
     spec {
       containers {
         image = "gcr.io/amien-research-pipeline/amien-api-service:latest"
-        
+
         env {
           name  = "PROJECT_ID"
           value = "amien-research-pipeline"
         }
-        
+
         env {
           name = "GEMINI_API_KEY"
           value_from {

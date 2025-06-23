@@ -66,7 +66,7 @@ gcloud run deploy $SERVICE_NAME \
 
 if [ $? -eq 0 ]; then
     echo "✅ Cloud Run service deployed successfully"
-    
+
     # Get the service URL
     SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region=$REGION --format="value(status.url)")
     echo ""
@@ -85,11 +85,11 @@ if [ $? -eq 0 ]; then
     echo "        -H 'Content-Type: application/json' \\"
     echo "        -d '{\"agents\": 500, \"steps\": 100}'"
     echo ""
-    
+
     # Test the deployment
     echo "🧪 Testing deployment..."
     curl -s "$SERVICE_URL/" | jq . || echo "Service is starting up..."
-    
+
 else
     echo "❌ Cloud Run deployment failed"
     exit 1

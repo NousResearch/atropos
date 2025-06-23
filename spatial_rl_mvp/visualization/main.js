@@ -132,10 +132,10 @@ function updateScene(objectStates) { // objectStates is List of Dicts from serve
                 console.warn("Unsupported object type for visualization:", objState.type);
                 geometry = new THREE.BoxGeometry(1, 1, 1); // Default placeholder
             }
-            
+
             const color = new THREE.Color(...(objState.color_rgba ? objState.color_rgba.slice(0,3) : [0.5, 0.5, 0.5]));
             const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.5, metalness: 0.1 });
-            
+
             threeObject = new THREE.Mesh(geometry, material);
             threeObject.name = objState.id; // Useful for debugging
             threeObject.castShadow = true; // Object casts shadows
@@ -183,4 +183,4 @@ function onWindowResize() {
 }
 
 // --- Start Everything ---
-init(); 
+init();

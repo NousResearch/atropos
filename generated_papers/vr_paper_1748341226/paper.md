@@ -26,7 +26,7 @@ The performance metrics reveal substantial insights into the behavior of the tes
 
 * **FPS Statistics:** The average FPS across all applications was 63.3 (std: 13.6), with a minimum of 37.5 FPS and a maximum of 110.7 FPS. The median FPS was 60.8, while the 95th percentile reached 87.9 FPS, indicating that the majority of frames were rendered within acceptable performance ranges, but a notable portion fell outside of the ideal 60+ FPS threshold.
 
-* **Frame Time Statistics:** The average frame time was 16.49ms (std: 3.34ms), with a minimum of 9.03ms and a maximum of 26.66ms. The 95th percentile frame time of 22.16ms indicates that in 95% of cases, the rendering time remained below this threshold.  
+* **Frame Time Statistics:** The average frame time was 16.49ms (std: 3.34ms), with a minimum of 9.03ms and a maximum of 26.66ms. The 95th percentile frame time of 22.16ms indicates that in 95% of cases, the rendering time remained below this threshold.
 
 * **Comfort Score Statistics:** The average comfort score was 77.9/100 (std: 8.23), with a minimum of 60.3 and a maximum of 95.9. The median comfort score of 76.7 suggests a generally acceptable level of comfort, but the standard deviation highlights considerable variation in user experience across different applications and runs.
 

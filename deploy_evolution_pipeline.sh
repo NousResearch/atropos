@@ -81,7 +81,7 @@ fi
 # Note on Monitoring Dashboard:
 # Creating a monitoring dashboard (evolution-dashboard.json) via gcloud CLI is complex.
 # It's usually done through the GCP Console UI or by using Terraform/Deployment Manager.
-# The JSON structure is quite detailed. 
+# The JSON structure is quite detailed.
 # For now, instruct user to set this up manually or provide a template JSON they can import.
 echo "\n--- Monitoring Dashboard Setup --- "
 echo "Please create or update your GCP Monitoring Dashboard manually."
@@ -92,4 +92,4 @@ echo "- Container crash counts & logs (especially for long-running evolution tas
 echo "- 4xx/5xx error rates"
 
 echo "\n✅ ${SERVICE_NAME} deployment script finished."
-echo "Service URL: ${SERVICE_URL}" 
+echo "Service URL: ${SERVICE_URL}"

@@ -146,4 +146,4 @@ else
     echo ""
 fi
 
-echo "📄 Setup log saved to: setup_$(date +%Y%m%d_%H%M%S).log" 
+echo "📄 Setup log saved to: setup_$(date +%Y%m%d_%H%M%S).log"

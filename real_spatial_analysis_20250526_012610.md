@@ -1,8 +1,8 @@
 
 # Real Spatial Reasoning Performance Analysis
 
-**Generated from Actual AMIEN/Padres Experimental Data**  
-**Date:** 2025-05-26 01:26:10  
+**Generated from Actual AMIEN/Padres Experimental Data**
+**Date:** 2025-05-26 01:26:10
 **Status:** Real Data Analysis
 
 ## Abstract

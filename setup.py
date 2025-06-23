@@ -3,27 +3,31 @@
 Setup script for 2,500-Agent LLM Society Simulation
 """
 
-from setuptools import setup, find_packages
 import os
+
+from setuptools import find_packages, setup
+
 
 # Read requirements from requirements.txt
 def read_requirements():
-    requirements_path = os.path.join(os.path.dirname(__file__), 'requirements.txt')
-    with open(requirements_path, 'r') as f:
+    requirements_path = os.path.join(os.path.dirname(__file__), "requirements.txt")
+    with open(requirements_path, "r") as f:
         requirements = []
         for line in f:
             line = line.strip()
-            if line and not line.startswith('#'):
+            if line and not line.startswith("#"):
                 requirements.append(line)
     return requirements
 
+
 # Read long description from README
 def read_long_description():
-    readme_path = os.path.join(os.path.dirname(__file__), 'README.md')
+    readme_path = os.path.join(os.path.dirname(__file__), "README.md")
     if os.path.exists(readme_path):
-        with open(readme_path, 'r', encoding='utf-8') as f:
+        with open(readme_path, "r", encoding="utf-8") as f:
             return f.read()
     return "2,500-Agent LLM-Driven Society Simulation"
+
 
 setup(
     name="llm-society-simulation",
@@ -55,7 +59,7 @@ setup(
             "google-cloud-storage>=2.10.0",
             "google-cloud-aiplatform>=1.30.0",
             "google-cloud-logging>=3.5.0",
-        ]
+        ],
     },
     classifiers=[
         "Development Status :: 3 - Alpha",
@@ -78,4 +82,4 @@ setup(
     },
     include_package_data=True,
     zip_safe=False,
-) 
+)

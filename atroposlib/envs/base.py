@@ -16,7 +16,6 @@ from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
 import aiohttp
 import jsonlines
 import numpy as np
-import wandb
 import yaml
 from pydantic import BaseModel, Field
 from pydantic_cli import Cmd, FailedExecutionException, run_and_exit
@@ -24,6 +23,7 @@ from rich import print as rprint
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 from transformers import AutoTokenizer
 
+import wandb
 from atroposlib.envs.constants import ENV_NAMESPACE, NAMESPACE_SEP, OPENAI_NAMESPACE
 from atroposlib.envs.server_handling.openai_server import resolve_openai_configs
 from atroposlib.frontend.jsonl2html import generate_html
@@ -652,7 +652,7 @@ class BaseEnv(ABC):
             ):
                 logger.warning(
                     f"Group structure invalid, or token count mismatch (expected {group_size}), "
-                    f"or 'tokens' key missing. Skipping group: {str(group)[:200]}..."
+                    "or "tokens' key missing. Skipping group: {str(group)[:200]}..."
                 )
                 continue
 
@@ -1054,7 +1054,7 @@ class BaseEnv(ABC):
             def run(self) -> None:
                 """The logic to execute for the 'serve' command."""
                 # Set default wandb name if not provided and class has a name
-                # Note: This modifies the 'self' instance based on CLI args before full parsing.
+                # Note: This modifies the 'sel" instance based on CLI args before full parsing.
                 wandb_name_attr = f"{ENV_NAMESPACE}{NAMESPACE_SEP}wandb_name"
                 if (
                     getattr(self, wandb_name_attr, None) is None

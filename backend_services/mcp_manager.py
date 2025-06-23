@@ -1,9 +1,10 @@
 # backend_services/mcp_manager.py
-import importlib
-import os
-import inspect
 import asyncio
+import importlib
+import inspect
 import json
+import os
+
 
 class MCPManager:
     """
@@ -20,7 +21,7 @@ class MCPManager:
                                      Expected key: "mcp_server_configurations" as shown in docs.
         """
         self.config = config if config else {}
-        self.mcp_servers = {} # Stores instantiated server objects
+        self.mcp_servers = {}  # Stores instantiated server objects
         self._initialize_servers()
 
     def _initialize_servers(self):
@@ -29,7 +30,9 @@ class MCPManager:
         Dynamically loads server classes from the .mcp_servers package.
         """
         if "mcp_server_configurations" not in self.config:
-            print("Warning: 'mcp_server_configurations' not found in MCPManager config. No servers will be initialized.")
+            print(
+                "Warning: 'mcp_server_configurations' not found in MCPManager config. No servers will be initialized."
+            )
             return
 
         server_configs = self.config["mcp_server_configurations"]
@@ -45,9 +48,11 @@ class MCPManager:
             specific_config = conf.get("config", {})
 
             if not module_name or not class_name:
-                print(f"Warning: Skipping server '{server_name}' due to missing 'module_name' or 'class_name' in config.")
+                print(
+                    "Warning: Skipping server "{server_name}' due to missing 'module_name' or 'class_name' in config."
+                )
                 continue
-            
+
             try:
                 # Construct the full module path for importlib
                 full_module_path = f"{servers_package_path}.{module_name}"
@@ -56,17 +61,27 @@ class MCPManager:
                 # Get the class from the imported module
                 ServerClass = getattr(module, class_name)
                 # Instantiate the server with its name and specific config
-                server_instance = ServerClass(server_name=server_name, config=specific_config)
+                server_instance = ServerClass(
+                    server_name=server_name, config=specific_config
+                )
                 self.mcp_servers[server_name] = server_instance
-                print(f"Successfully initialized and registered MCP Server: {server_name} of type {class_name}")
+                print(
+                    f"Successfully initialized and registered MCP Server: {server_name} of type {class_name}"
+                )
             except ImportError as e:
-                print(f"Error importing module for server '{server_name}' (module: {full_module_path}): {e}")
+                print(
+                    "Error importing module for server "{server_name}' (module: {full_module_path}): {e}"
+                )
             except AttributeError as e:
-                print(f"Error: Class '{class_name}' not found in module '{full_module_path}' for server '{server_name}': {e}")
+                print(
+                    "Error: Class "{class_name}' not found in module '{full_module_path}' for server '{server_name}': {e}"
+                )
             except Exception as e:
-                print(f"Error initializing server '{server_name}' ({class_name}): {e}")
+                print("Error initializing server "{server_name}' ({class_name}): {e}")
 
-    async def call_tool(self, server_name: str, tool_name: str, parameters: dict) -> any:
+    async def call_tool(
+        self, server_name: str, tool_name: str, parameters: dict
+    ) -> any:
         """
         Calls a specific tool on a designated MCP server.
 
@@ -83,10 +98,12 @@ class MCPManager:
             NotImplementedError: If the tool is not supported by the server.
         """
         if server_name not in self.mcp_servers:
-            raise ValueError(f"MCP Server '{server_name}' not found or not initialized.")
+            raise ValueError(
+                "MCP Server "{server_name}' not found or not initialized."
+            )
 
         server = self.mcp_servers[server_name]
-        
+
         # First, check if the server has an async_call_tool method
         if hasattr(server, "async_call_tool"):
             try:
@@ -94,24 +111,30 @@ class MCPManager:
             except NotImplementedError:
                 # Fall back to call_tool if async_call_tool doesn't support this tool
                 pass
-        
+
         # Delegate to the server's call_tool method
         # The specific server is responsible for knowing its tools.
         try:
             # Check if the server's call_tool is awaitable (async)
             server_call_tool_method = getattr(server, "call_tool")
-            
+
             # Use inspect.iscoroutinefunction to check if it's an async method
             if inspect.iscoroutinefunction(server_call_tool_method):
                 return await server_call_tool_method(tool_name, parameters)
             else:
-                return server_call_tool_method(tool_name, parameters) # Synchronous call
-        except NotImplementedError: # Re-raise if tool isn't found on the server
-            raise NotImplementedError(f"Tool '{tool_name}' is not supported by server '{server_name}'.")
+                return server_call_tool_method(
+                    tool_name, parameters
+                )  # Synchronous call
+        except NotImplementedError:  # Re-raise if tool isn't found on the server
+            raise NotImplementedError(
+                "Tool "{tool_name}' is not supported by server '{server_name}'."
+            )
         except Exception as e:
             # Catch other exceptions from the server's tool call and log/re-raise appropriately
-            print(f"Error during call_tool on server '{server_name}' for tool '{tool_name}': {e}")
-            raise # Or return a structured error object
+            print(
+                "Error during call_tool on server "{server_name}' for tool '{tool_name}': {e}"
+            )
+            raise  # Or return a structured error object
 
     def get_server(self, server_name: str) -> any:
         """
@@ -125,6 +148,7 @@ class MCPManager:
         Lists the names of all initialized MCP servers.
         """
         return list(self.mcp_servers.keys())
+
 
 # Example Usage (conceptual):
 if __name__ == "__main__":
@@ -149,38 +173,34 @@ if __name__ == "__main__":
                 "class_name": "ClaudeMCPServer",
                 "config": {
                     "api_key": "YOUR_ANTHROPIC_API_KEY_PLACEHOLDER",
-                    "model_name": "claude-3-opus-20240229"
-                }
+                    "model_name": "claude-3-opus-20240229",
+                },
             },
             "bq_main_data": {
                 "module_name": "bigquery_mcp_server",
                 "class_name": "BigQueryMCPServer",
                 "config": {
                     "project_id": "your-gcp-project-id-placeholder",
-                    "dataset_id": "ai_research_data_main"
-                }
+                    "dataset_id": "ai_research_data_main",
+                },
             },
             "firestore_config_db": {
                 "module_name": "firestore_mcp_server",
                 "class_name": "FirestoreMCPServer",
-                "config": {
-                    "project_id": "your-gcp-project-id-placeholder"
-                }
+                "config": {"project_id": "your-gcp-project-id-placeholder"},
             },
             "padres_env_service": {
                 "module_name": "padres_mcp_server",
                 "class_name": "PadresMCPServer",
                 "config": {
                     "service_base_url": "http://mock-padres-service.example.com/api"
-                }
+                },
             },
             "pubsub_events": {
                 "module_name": "pubsub_mcp_server",
                 "class_name": "PubSubMCPServer",
-                "config": {
-                    "project_id": "your-gcp-project-id-placeholder"
-                }
-            }
+                "config": {"project_id": "your-gcp-project-id-placeholder"},
+            },
         }
     }
 
@@ -196,40 +216,80 @@ if __name__ == "__main__":
             try:
                 gen_params = {
                     "prompt": "Hello Claude, from MCPManager! Write a haiku about code.",
-                    "max_tokens": 30
+                    "max_tokens": 30,
                 }
-                response = await manager_instance.call_tool(server_name="claude_main", tool_name="generate_text", parameters=gen_params)
-                print(f"MCPManager Response from claude_main.generate_text:\n{response}")
+                response = await manager_instance.call_tool(
+                    server_name="claude_main",
+                    tool_name="generate_text",
+                    parameters=gen_params,
+                )
+                print(
+                    f"MCPManager Response from claude_main.generate_text:\n{response}"
+                )
 
                 count_params = {"text": "This is a test."}
-                token_count = await manager_instance.call_tool(server_name="claude_main", tool_name="count_tokens", parameters=count_params)
-                print(f"MCPManager Response from claude_main.count_tokens: {token_count}")
-                
+                token_count = await manager_instance.call_tool(
+                    server_name="claude_main",
+                    tool_name="count_tokens",
+                    parameters=count_params,
+                )
+                print(
+                    f"MCPManager Response from claude_main.count_tokens: {token_count}"
+                )
+
                 claude_server_instance = manager_instance.get_server("claude_main")
                 if claude_server_instance:
-                    print(f"Status of claude_main server: {claude_server_instance.get_status()}")
+                    print(
+                        f"Status of claude_main server: {claude_server_instance.get_status()}"
+                    )
 
             except ValueError as ve:
                 print(f"ValueError during manager test for claude_main: {ve}")
             except NotImplementedError as nie:
                 print(f"NotImplementedError during manager test for claude_main: {nie}")
             except Exception as e:
-                print(f"An unexpected error occurred during manager test for claude_main: {e}")
+                print(
+                    f"An unexpected error occurred during manager test for claude_main: {e}"
+                )
         else:
-            print("\nClaude server ('claude_main') was not initialized, skipping tests through manager.")
+            print(
+                "\nClaude server ('claude_main') was not initialized, skipping tests through manager."
+            )
 
         if "padres_env_service" in manager_instance.list_servers():
             print("\nTesting PadresMCPServer via MCPManager...")
             try:
-                setup_params = {"task_name": "TestPadresTask", "task_params": {"mode": "easy"}}
-                setup_response = await manager_instance.call_tool(server_name="padres_env_service", tool_name="setup_environment", parameters=setup_params)
-                print(f"MCPManager Response from padres_env_service.setup_environment:\n{json.dumps(setup_response, indent=2)}")
-                
-                env_id = setup_response.get("environment_id") if isinstance(setup_response, dict) else None
+                setup_params = {
+                    "task_name": "TestPadresTask",
+                    "task_params": {"mode": "easy"},
+                }
+                setup_response = await manager_instance.call_tool(
+                    server_name="padres_env_service",
+                    tool_name="setup_environment",
+                    parameters=setup_params,
+                )
+                print(
+                    f"MCPManager Response from padres_env_service.setup_environment:\n{json.dumps(setup_response, indent=2)}"
+                )
+
+                env_id = (
+                    setup_response.get("environment_id")
+                    if isinstance(setup_response, dict)
+                    else None
+                )
                 if env_id and setup_response.get("error") is None:
-                    action_params = {"environment_id": env_id, "action_name": "look_around"}
-                    action_response = await manager_instance.call_tool(server_name="padres_env_service", tool_name="execute_action", parameters=action_params)
-                    print(f"MCPManager Response from padres_env_service.execute_action:\n{json.dumps(action_response, indent=2)}")
+                    action_params = {
+                        "environment_id": env_id,
+                        "action_name": "look_around",
+                    }
+                    action_response = await manager_instance.call_tool(
+                        server_name="padres_env_service",
+                        tool_name="execute_action",
+                        parameters=action_params,
+                    )
+                    print(
+                        f"MCPManager Response from padres_env_service.execute_action:\n{json.dumps(action_response, indent=2)}"
+                    )
             except Exception as e:
                 print(f"Error testing padres_env_service: {e}")
 
@@ -238,4 +298,4 @@ if __name__ == "__main__":
         # For brevity, only Claude and Padres tests are fully converted to async here.
 
     asyncio.run(run_mcp_manager_tests(manager))
-    print("\nMCPManager conceptual test complete.") 
+    print("\nMCPManager conceptual test complete.")

@@ -48,20 +48,20 @@ class HybridSocietyModel:
     def __init__(self):
         # Mesa-frames for spatial simulation
         self.spatial_model = MesaFramesModel()
-        
+
         # Atropos for LLM cognition
         self.cognitive_layer = AtroposEnvironment()
-        
+
         # Synchronization layer
         self.sync_manager = SpatialCognitiveSync()
-    
+
     def step(self):
         # Spatial physics step
         spatial_state = self.spatial_model.step()
-        
+
         # LLM decision making
         decisions = self.cognitive_layer.process_batch(spatial_state)
-        
+
         # Apply decisions to spatial model
         self.sync_manager.apply_decisions(spatial_state, decisions)
 ```
@@ -86,7 +86,7 @@ class HybridSocietyModel:
             <gpu:variable><gpu:type>int</gpu:type><gpu:name>MAX_AGENTS</gpu:name></gpu:variable>
         </gpu:constant>
     </gpu:environment>
-    
+
     <gpu:agent>
         <gpu:name>SocietyAgent</gpu:name>
         <gpu:memory>
@@ -150,12 +150,12 @@ class AssetGenerationPipeline:
         self.point_e = PointEModel()
         self.dreamfusion = StableDreamFusion()
         self.cache = AssetCache()
-    
+
     def generate_asset(self, text_prompt, quality_level="medium"):
         # Check cache first
         if cached_asset := self.cache.get(text_prompt):
             return cached_asset
-        
+
         if quality_level == "fast":
             # Point-E for real-time generation
             return self.point_e.generate(text_prompt)
@@ -184,13 +184,13 @@ class HybridMemorySystem:
     def __init__(self, agent_id):
         # ChromaDB for development and small-scale
         self.chroma = chromadb.Client()
-        
+
         # Qdrant for production scaling
         self.qdrant = QdrantClient(host="localhost", port=6333)
-        
+
         # Automatic switching based on data size
         self.use_qdrant = False
-    
+
     def store_memory(self, content, embedding):
         if len(self.get_all_memories()) > 10000:
             self.use_qdrant = True
@@ -224,7 +224,7 @@ compute:
     count: 4
     gpu: "4x NVIDIA A100 40GB"
     memory: "340GB"
-    
+
   cpu_coordination:
     type: "n1-standard-32"
     count: 2
@@ -234,7 +234,7 @@ storage:
   bigquery:
     dataset: "society_simulation"
     daily_ingestion: "100GB"
-    
+
   cloud_storage:
     bucket: "society-assets"
     size: "10TB"
@@ -275,10 +275,10 @@ app.add_middleware(
 async def process_agent_action(agent_id: int, context: AgentContext):
     # Async LLM processing
     decision = await llm_service.generate_decision(agent_id, context)
-    
+
     # Update spatial simulation
     await spatial_service.update_agent(agent_id, decision)
-    
+
     return {"action": decision, "timestamp": datetime.utcnow()}
 ```
 
@@ -321,7 +321,7 @@ async def process_agent_action(agent_id: int, context: AgentContext):
 ### Phase α: Foundation (Months 1-3)
 **Primary Stack:**
 - Mesa-frames for spatial simulation
-- Atropos for LLM integration  
+- Atropos for LLM integration
 - ChromaDB for agent memory
 - Local development environment
 
@@ -384,4 +384,4 @@ async def process_agent_action(agent_id: int, context: AgentContext):
 4. **Month 2**: Add Point-E asset generation
 5. **Month 3**: Performance optimization and Phase β planning
 
-This comprehensive analysis provides a solid foundation for building the 2,500-agent LLM-driven society simulation with confidence in technology choices and implementation strategy. 
+This comprehensive analysis provides a solid foundation for building the 2,500-agent LLM-driven society simulation with confidence in technology choices and implementation strategy.

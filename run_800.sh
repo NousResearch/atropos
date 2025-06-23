@@ -28,8 +28,8 @@ for i in {1..800}; do
     if [ $CURL_EXIT_CODE -ne 0 ]; then
         echo "Warning: Experiment $i encountered curl error (exit code: $CURL_EXIT_CODE). Check service logs."
     fi
-    
-    sleep 0.5 
+
+    sleep 0.5
 done
 
 echo "800 experiment batch run finished."
@@ -40,4 +40,4 @@ if gsutil -q stat gs://gen-lang-client-0029379200-research-data/experiments/${TO
     echo "Total experiments stored in GCS today (${TODAY_DATE_FOR_GCS}.jsonl): $stored experiments."
 else
     echo "No experiment file found for today (${TODAY_DATE_FOR_GCS}.jsonl) at the end of the run."
-fi 
+fi

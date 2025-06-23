@@ -1,6 +1,9 @@
 import numpy as np
 
-def vr_optimization_function(gpu_util, vram_usage, cpu_util, scene_complexity, duration, gpu_type):
+
+def vr_optimization_function(
+    gpu_util, vram_usage, cpu_util, scene_complexity, duration, gpu_type
+):
     """
     Optimizes VR performance for frame time consistency, aiming for a score between 0 and 1.
 
@@ -18,17 +21,28 @@ def vr_optimization_function(gpu_util, vram_usage, cpu_util, scene_complexity, d
 
     # Input validation
     try:
-        if not all(isinstance(i, (int, float)) for i in [gpu_util, vram_usage, cpu_util, scene_complexity, duration, gpu_type]):
+        if not all(
+            isinstance(i, (int, float))
+            for i in [
+                gpu_util,
+                vram_usage,
+                cpu_util,
+                scene_complexity,
+                duration,
+                gpu_type,
+            ]
+        ):
             raise ValueError("All inputs must be numeric.")
         if not 0 <= gpu_util <= 100 or not 0 <= cpu_util <= 100:
             raise ValueError("GPU and CPU utilization must be between 0 and 100.")
         if vram_usage < 0 or scene_complexity < 0 or duration < 0 or gpu_type < 0:
-            raise ValueError("VRAM usage, scene complexity, duration, and GPU type cannot be negative.")
+            raise ValueError(
+                "VRAM usage, scene complexity, duration, and GPU type cannot be negative."
+            )
 
     except ValueError as e:
         print(f"Error: {e}")
         return -1
-
 
     # Feature normalization (min-max scaling)
     gpu_util_norm = gpu_util / 100  # Normalize to 0-1
@@ -38,18 +52,32 @@ def vr_optimization_function(gpu_util, vram_usage, cpu_util, scene_complexity, d
     scene_complexity_norm = min(scene_complexity, 5) / 5  # Cap at 5 and normalize
 
     # GPU type influence -  assuming higher number indicates better performance
-    gpu_type_influence = gpu_type / (gpu_type + 1) # Example influence function. Adjust as needed based on your GPU type mapping.
+    gpu_type_influence = gpu_type / (
+        gpu_type + 1
+    )  # Example influence function. Adjust as needed based on your GPU type mapping.
 
     # Frame time consistency penalty
-    frame_time_consistency = np.exp(-duration) # Exponentially penalize longer durations
-
+    frame_time_consistency = np.exp(
+        -duration
+    )  # Exponentially penalize longer durations
 
     # Optimization logic (weighted average) - adjust weights as needed
-    weights = np.array([0.25, 0.15, 0.25, 0.2, 0.15, 0.15]) # Weights for gpu,vram,cpu,scene,duration,gpu_type respectively
+    weights = np.array(
+        [0.25, 0.15, 0.25, 0.2, 0.15, 0.15]
+    )  # Weights for gpu,vram,cpu,scene,duration,gpu_type respectively
 
-    normalized_features = np.array([gpu_util_norm, vram_usage, cpu_util_norm, scene_complexity_norm, frame_time_consistency, gpu_type_influence ])
-    
-    #Avoid division by zero if all weights are zero.
+    normalized_features = np.array(
+        [
+            gpu_util_norm,
+            vram_usage,
+            cpu_util_norm,
+            scene_complexity_norm,
+            frame_time_consistency,
+            gpu_type_influence,
+        ]
+    )
+
+    # Avoid division by zero if all weights are zero.
     if np.sum(weights) == 0:
         return 0
 

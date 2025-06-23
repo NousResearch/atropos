@@ -3,9 +3,9 @@
 ## Abstract
 This study presents a comprehensive analysis of VR application performance using automated testing methodologies.
     We conducted 3 performance tests with a 100.0% success rate.
-    
+
     Key findings include: Average frame rate: 89.2 FPS (std: 1.8); 95th percentile frame time: 11.5ms; Best performing GPU: RTX4080 (91.2 FPS).
-    
+
     The results provide insights into VR performance optimization opportunities and demonstrate the effectiveness
     of automated performance testing for VR applications.
 
@@ -14,9 +14,9 @@ This study presents a comprehensive analysis of VR application performance using
 ## Abstract
 This study presents a comprehensive analysis of VR application performance using automated testing methodologies.
     We conducted 3 performance tests with a 100.0% success rate.
-    
+
     Key findings include: Average frame rate: 89.2 FPS (std: 1.8); 95th percentile frame time: 11.5ms; Best performing GPU: RTX4080 (91.2 FPS).
-    
+
     The results provide insights into VR performance optimization opportunities and demonstrate the effectiveness
     of automated performance testing for VR applications.
 

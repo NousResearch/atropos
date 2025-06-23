@@ -26,4 +26,4 @@
         "num_trials": 10,
         "evaluation_metrics": ["task_completion_rate", "path_efficiency"]
     }
-] 
+]

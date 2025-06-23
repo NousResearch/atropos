@@ -8,7 +8,7 @@ Successfully integrated AI research tools with CloudVR-PerfGuard for autonomous 
 
 ### Components Status
 - AI Scientist: ✅ Available
-- FunSearch: ✅ Available  
+- FunSearch: ✅ Available
 - Gemini AI: ✅ Available
 
 ### Research Output

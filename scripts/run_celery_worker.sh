@@ -44,4 +44,4 @@ celery -A backend_services.celery_app worker -l INFO
 # To run with a specific queue (if you define queues later):
 # celery -A backend_services.celery_app worker -l INFO -Q my_custom_queue
 
-echo "Celery worker stopped." 
+echo "Celery worker stopped."

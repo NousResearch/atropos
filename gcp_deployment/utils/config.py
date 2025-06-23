@@ -1,8 +1,10 @@
-from dataclasses import dataclass, field, asdict
-from typing import Optional, Tuple, List, Dict, Any
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
+
 import yaml
 
 # Default values, can be overridden by a config file or CLI arguments
+
 
 @dataclass
 class LLMConfig:
@@ -15,9 +17,10 @@ class LLMConfig:
     api_max_backoff: float = 16.0
     cache_responses: bool = True
     rate_limit_per_second: int = 10
-    max_cache_size: int = 1000 # New: Max number of items in LLM response cache
+    max_cache_size: int = 1000  # New: Max number of items in LLM response cache
     request_timeout: float = 60.0
     # Add other LLM related configs like API keys, specific paths if needed
+
 
 @dataclass
 class AgentConfig:
@@ -32,35 +35,48 @@ class AgentConfig:
     initial_employed_prob: float = 0.5
     # Potentially: persona_options, etc.
 
+
 @dataclass
 class SimulationConfig:
     max_steps: int = 1000
-    world_size: Tuple[int, int] = (100, 100) # Example world size
-    tick_rate: float = 0.1 # Seconds per simulation step, if using timed delays
-    seed: Optional[int] = None # For reproducibility
+    world_size: Tuple[int, int] = (100, 100)  # Example world size
+    tick_rate: float = 0.1  # Seconds per simulation step, if using timed delays
+    seed: Optional[int] = None  # For reproducibility
     autosave_enabled: bool = True
-    autosave_interval_steps: Optional[int] = 100 # Save every 100 steps, None to disable interval
+    autosave_interval_steps: Optional[int] = (
+        100  # Save every 100 steps, None to disable interval
+    )
     autosave_file_pattern: str = "autosave_step_{step}.json"
-    autosave_directory: str = "autosaves" # Subdirectory within the main output.directory
+    autosave_directory: str = (
+        "autosaves"  # Subdirectory within the main output.directory
+    )
+
 
 @dataclass
 class OutputConfig:
     directory: str = "./results"
     metrics_file: str = "metrics.db"
     log_file: str = "simulation.log"
-    generated_assets_dir: str = "generated_assets" # For Point-E outputs
-    database_url: Optional[str] = "sqlite:///./llm_society_dynamic_data.db" # For dynamic data like memories, transactions
+    generated_assets_dir: str = "generated_assets"  # For Point-E outputs
+    database_url: Optional[str] = (
+        "sqlite:///./llm_society_dynamic_data.db"  # For dynamic data like memories, transactions
+    )
+
 
 @dataclass
 class MonitoringConfig:
     enable_metrics: bool = True
-    metrics_interval: int = 10 # Steps per metrics collection
+    metrics_interval: int = 10  # Steps per metrics collection
     # Add wandb or other monitoring tool configs if used
 
+
 @dataclass
-class AssetsConfig: # New section for asset related configurations
-    enable_generation: bool = True # To globally enable/disable asset generation by agents
+class AssetsConfig:  # New section for asset related configurations
+    enable_generation: bool = (
+        True  # To globally enable/disable asset generation by agents
+    )
     # Could add more specific Point-E configs here if needed, e.g., model choice, quality etc.
+
 
 @dataclass
 class Config:
@@ -69,9 +85,9 @@ class Config:
     simulation: SimulationConfig = field(default_factory=SimulationConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
-    assets: AssetsConfig = field(default_factory=AssetsConfig) # Added assets config
+    assets: AssetsConfig = field(default_factory=AssetsConfig)  # Added assets config
 
-    def to_dict(self) -> Dict[str, Any]: # For saving config snapshot
+    def to_dict(self) -> Dict[str, Any]:  # For saving config snapshot
         return asdict(self)
 
     @staticmethod
@@ -81,27 +97,32 @@ class Config:
     @staticmethod
     def load(config_path: str) -> "Config":
         try:
-            with open(config_path, 'r') as f:
+            with open(config_path, "r") as f:
                 config_dict = yaml.safe_load(f)
-            
-            # A more robust loading would involve mapping dict keys to dataclass fields, 
+
+            # A more robust loading would involve mapping dict keys to dataclass fields,
             # possibly using a library like dacite or manually traversing.
             # For simplicity, this example assumes top-level keys match dataclass field names.
-            
+
             # Example of manual nested dataclass creation:
-            llm_conf = LLMConfig(**config_dict.get('llm', {}))
-            agent_conf = AgentConfig(**config_dict.get('agents', {}))
-            sim_conf_data = config_dict.get('simulation', {})
+            llm_conf = LLMConfig(**config_dict.get("llm", {}))
+            agent_conf = AgentConfig(**config_dict.get("agents", {}))
+            sim_conf_data = config_dict.get("simulation", {})
             # Ensure autosave_interval_steps is None if not present or explicitly null in YAML
-            if "autosave_interval_steps" in sim_conf_data and sim_conf_data["autosave_interval_steps"] is None:
-                pass # It's already None or will be handled by dataclass default if key is missing
+            if (
+                "autosave_interval_steps" in sim_conf_data
+                and sim_conf_data["autosave_interval_steps"] is None
+            ):
+                pass  # It's already None or will be handled by dataclass default if key is missing
             elif "autosave_interval_steps" not in sim_conf_data:
-                 sim_conf_data["autosave_interval_steps"] = SimulationConfig.autosave_interval_steps # Use dataclass default
-            
+                sim_conf_data["autosave_interval_steps"] = (
+                    SimulationConfig.autosave_interval_steps
+                )  # Use dataclass default
+
             sim_conf = SimulationConfig(**sim_conf_data)
-            out_conf = OutputConfig(**config_dict.get('output', {}))
-            mon_conf = MonitoringConfig(**config_dict.get('monitoring', {}))
-            asset_conf = AssetsConfig(**config_dict.get('assets', {}))
+            out_conf = OutputConfig(**config_dict.get("output", {}))
+            mon_conf = MonitoringConfig(**config_dict.get("monitoring", {}))
+            asset_conf = AssetsConfig(**config_dict.get("assets", {}))
 
             return Config(
                 llm=llm_conf,
@@ -109,16 +130,21 @@ class Config:
                 simulation=sim_conf,
                 output=out_conf,
                 monitoring=mon_conf,
-                assets=asset_conf
+                assets=asset_conf,
             )
         except FileNotFoundError:
-            print(f"Warning: Config file {config_path} not found. Using default config.")
+            print(
+                f"Warning: Config file {config_path} not found. Using default config."
+            )
             return Config.default()
         except Exception as e:
-            print(f"Error loading config file {config_path}: {e}. Using default config.")
+            print(
+                f"Error loading config file {config_path}: {e}. Using default config."
+            )
             return Config.default()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # Test default config
     default_config = Config.default()
     print("Default Config:")
@@ -143,9 +169,9 @@ assets:
   enable_generation: false
 """
     dummy_yaml_path = "dummy_config.yaml"
-    with open(dummy_yaml_path, 'w') as f:
+    with open(dummy_yaml_path, "w") as f:
         f.write(dummy_yaml_content)
-    
+
     loaded_config = Config.load(dummy_yaml_path)
     print("\nLoaded Config (from dummy_config.yaml):")
     print(f"  LLM Model: {loaded_config.llm.model_name}")
@@ -155,4 +181,5 @@ assets:
     print(f"  Asset Generation Enabled: {loaded_config.assets.enable_generation}")
 
     import os
-    os.remove(dummy_yaml_path) # Clean up dummy file 
+
+    os.remove(dummy_yaml_path)  # Clean up dummy file

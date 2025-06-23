@@ -2,33 +2,33 @@
 
 ## Abstract
 
-This paper presents a novel approach to quick discovery results using evolutionary algorithms 
-and performance-driven optimization in virtual reality environments. We developed and evaluated 
-100 evolved functions across 1 
+This paper presents a novel approach to quick discovery results using evolutionary algorithms
+and performance-driven optimization in virtual reality environments. We developed and evaluated
+100 evolved functions across 1
 different optimization scenarios, achieving significant improvements in VR interaction effectiveness.
 
-Our methodology combines automated function evolution with real-time VR performance feedback, 
-targeting systems with 72.5 average FPS and 0.75 comfort scores. 
-The evolved algorithms demonstrate substantial improvements in visual cue effectiveness, with the best 
+Our methodology combines automated function evolution with real-time VR performance feedback,
+targeting systems with 72.5 average FPS and 0.75 comfort scores.
+The evolved algorithms demonstrate substantial improvements in visual cue effectiveness, with the best
 performing functions showing optimization scores of 132.74487908399996.
 
-Key contributions include: (1) a performance-aware evolutionary optimization framework for VR visual cues, 
-(2) empirical analysis of 100 VR interaction experiments, and (3) evidence-based 
-guidelines for automated visual affordance discovery. Results indicate that evolved visual cue optimization 
+Key contributions include: (1) a performance-aware evolutionary optimization framework for VR visual cues,
+(2) empirical analysis of 100 VR interaction experiments, and (3) evidence-based
+guidelines for automated visual affordance discovery. Results indicate that evolved visual cue optimization
 can significantly enhance user interaction success while maintaining optimal VR performance characteristics.
 
-The findings have important implications for VR application development, automated user experience optimization, 
+The findings have important implications for VR application development, automated user experience optimization,
 and the broader field of human-computer interaction in immersive environments.
 
 ## 1. Introduction
 
-Virtual Reality (VR) applications require carefully designed visual cues to ensure effective user interactions 
-with virtual objects. Traditional approaches to visual affordance design rely on manual optimization and 
-heuristic guidelines, which may not account for the complex interplay between visual cue parameters, 
+Virtual Reality (VR) applications require carefully designed visual cues to ensure effective user interactions
+with virtual objects. Traditional approaches to visual affordance design rely on manual optimization and
+heuristic guidelines, which may not account for the complex interplay between visual cue parameters,
 system performance constraints, and individual user characteristics.
 
-This research addresses the challenge of quick discovery results through automated 
-evolutionary optimization. Our approach leverages real-time VR performance data to guide the evolution 
+This research addresses the challenge of quick discovery results through automated
+evolutionary optimization. Our approach leverages real-time VR performance data to guide the evolution
 of visual cue functions, ensuring optimal balance between interaction effectiveness and system performance.
 
 ### Research Questions
@@ -59,7 +59,7 @@ The evolutionary process incorporates real-time VR performance metrics:
 
 ### 3.1 Function Evolution Performance
 
-The evolutionary process generated 100 optimized functions 
+The evolutionary process generated 100 optimized functions
 across 1 different scenarios.
 
 **Best Scores by Evolution Type:**
@@ -79,7 +79,7 @@ across 1 different scenarios.
 
 ### 4.2 Implications for VR Design
 
-The results demonstrate that automated evolutionary optimization can significantly enhance VR visual cue 
+The results demonstrate that automated evolutionary optimization can significantly enhance VR visual cue
 effectiveness while maintaining performance requirements. This approach enables:
 
 1. **Adaptive Optimization**: Functions that adjust to varying performance constraints
@@ -88,8 +88,8 @@ effectiveness while maintaining performance requirements. This approach enables:
 
 ## 5. Conclusion
 
-This research presents a novel framework for automated visual affordance discovery in VR environments. 
-The evolutionary approach successfully optimized visual cue parameters while maintaining system performance, 
+This research presents a novel framework for automated visual affordance discovery in VR environments.
+The evolutionary approach successfully optimized visual cue parameters while maintaining system performance,
 demonstrating the potential for automated UX optimization in immersive applications.
 
 ### Future Work

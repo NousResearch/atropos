@@ -6,7 +6,7 @@ The society simulator has a **working core** that demonstrates:
 
 - ✅ **Multi-agent simulation** (tested up to 100 agents)
 - ✅ **Agent decision making** with personality traits
-- ✅ **Social interaction** and network formation  
+- ✅ **Social interaction** and network formation
 - ✅ **Economic systems** (trading, resources, work)
 - ✅ **Cultural dynamics** with group influence
 - ✅ **Population events** (disasters, festivals, etc.)
@@ -14,7 +14,7 @@ The society simulator has a **working core** that demonstrates:
 
 **Performance Results:**
 - 25 agents: 2,116 SPS
-- 50 agents: 488 SPS  
+- 50 agents: 488 SPS
 - 100 agents: 136 SPS
 
 ## Critical Issues Identified
@@ -31,7 +31,7 @@ The society simulator has a **working core** that demonstrates:
 
 ### 3. **Missing Core Features**
 - No actual LLM integration working
-- No 3D visualization 
+- No 3D visualization
 - No proper persistence/save/load
 - Limited scalability beyond 100 agents
 
@@ -137,7 +137,7 @@ The society simulator has a **working core** that demonstrates:
 # Priority 1: Create working entry point
 python run_simulation.py --help
 
-# Priority 2: Fix dependency issues  
+# Priority 2: Fix dependency issues
 pip install -r requirements-minimal.txt
 
 # Priority 3: Add basic LLM integration
@@ -174,7 +174,7 @@ python run_simulation.py --agents 200 --benchmark
 
 ### Medium Term (1-3 months)
 1. **Advanced AI behaviors**: Memory, planning, emotions
-2. **Real-time visualization**: Interactive 3D environment  
+2. **Real-time visualization**: Interactive 3D environment
 3. **Research framework**: A/B testing, statistics
 4. **Scale optimization**: 1000+ agents
 
@@ -186,7 +186,7 @@ python run_simulation.py --agents 200 --benchmark
 - ✅ Basic visualization available
 - ✅ Documentation complete
 
-### Phase 2 Success  
+### Phase 2 Success
 - 🎯 500 agents with LLM personalities (>50 SPS)
 - 🎯 Emergent social behaviors observed
 - 🎯 Advanced economic and cultural systems

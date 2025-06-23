@@ -94,4 +94,4 @@ Integrating a system like "Atropos" (representing deeper behavioral analysis, po
     *   Draft v2.0 paper with these deeper, trajectory-based insights.
     *   Update Unity package and design guidelines with v2.0 findings.
 
-This phased approach allows for continuous delivery of value and learning, with v1.0 providing a strong foundation and initial discoveries that inform the more complex v2.0 integration. 
+This phased approach allows for continuous delivery of value and learning, with v1.0 providing a strong foundation and initial discoveries that inform the more complex v2.0 integration.

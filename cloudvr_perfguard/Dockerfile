@@ -19,4 +19,4 @@ EXPOSE 8000
 # Command to run the continuous research pipeline
 # The main script and its command might need adjustment based on the actual entry point
 # For now, assuming the continuous pipeline is the primary executable
-CMD ["python", "cloudvr_perfguard/ai_integration/continuous_research_pipeline.py"] 
+CMD ["python", "cloudvr_perfguard/ai_integration/continuous_research_pipeline.py"]

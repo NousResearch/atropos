@@ -253,4 +253,4 @@ pip install -r requirements.txt
 python test_basic_simulation.py
 ```
 
-**Ready to simulate 2,500 LLM-driven agents? Let's build the future of AI societies!** 🚀 
+**Ready to simulate 2,500 LLM-driven agents? Let's build the future of AI societies!** 🚀

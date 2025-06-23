@@ -15,4 +15,4 @@ google-auth-oauthlib # For Google API auth (user flow, service accounts)
 # anthropic (for ClaudeMCPServer)
 # slack_sdk (for SlackMCPServer)
 # celery
-# redis 
+# redis

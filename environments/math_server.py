@@ -5,7 +5,6 @@ from concurrent.futures import ProcessPoolExecutor
 from difflib import SequenceMatcher
 from typing import Dict, List, Optional, Tuple
 
-import wandb
 from datasets import load_dataset
 from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
@@ -13,6 +12,7 @@ from math_verify.errors import TimeoutException
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
+import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
@@ -415,7 +415,7 @@ class MathEnv(BaseEnv):
                         (
                             item[0],
                             item[1],
-                            "rlaif",
+                            "rlai",
                             tuple(
                                 [
                                     frozenset(item.items())
@@ -542,7 +542,7 @@ class MathEnv(BaseEnv):
     async def collect_trajectories(self, item) -> Tuple[List, List]:
         if item[2] == "normal":
             return await self.collect_trajectories_normal(item)
-        elif item[2] == "rlaif":
+        elif item[2] == "rlai":
             return await self.collect_trajectories_rlaif(item)
         elif item[2] == "judge":
             return await self.collect_trajectories_judge(item)
@@ -591,7 +591,7 @@ class MathEnv(BaseEnv):
                 ):
                     to_postprocess["overrides"][-1]["set_advantage_to_zero"] = True
                 to_postprocess["messages"].append(out_dict["messages"])
-            print("selfcorrect done, sending batch off")
+            print("selfcorrect done, sending batch of")
             return to_postprocess, []
         else:
             raise ValueError(f"Unknown rollout type: {item[2]}")
@@ -687,7 +687,7 @@ class MathEnv(BaseEnv):
                 break
             except TypeError:
                 print(
-                    f"Error in getting next item, trying again, "
+                    "Error in getting next item, trying again, "
                     f"data: {next_item['question']} -> {next_item['final_answer']}"
                 )
         return (prompt, answer, "normal")

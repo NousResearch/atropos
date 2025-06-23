@@ -180,4 +180,4 @@ See `.env.example` for required environment variables and their descriptions.
 - Docker container logs
 - BigQuery query logs
 - API endpoint health checks
-- System metrics (CPU, Memory, Disk) 
+- System metrics (CPU, Memory, Disk)

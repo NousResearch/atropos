@@ -150,7 +150,7 @@ def _verify_answer(
                     # Allow for small floating point differences
                     return abs(extracted_value - gold_value) < tolerance
                 except ValueError:
-                    logger.warning(f"Could not convert '{boxed_matches[0]}' to float")
+                    logger.warning("Could not convert "{boxed_matches[0]}' to float")
 
             # If no boxed answer, check for a final answer after ####
             if "####" in content:

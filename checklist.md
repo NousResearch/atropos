@@ -105,4 +105,4 @@ This checklist is to ensure all components of the 24/7 AI Research Pipeline are 
 ## IX. Documentation
 
 - [ ] **`README.md` is comprehensive and guides users through setup and deployment?**
-- [ ] **`project_structure.md` accurately reflects the current file organization?** 
+- [ ] **`project_structure.md` accurately reflects the current file organization?**

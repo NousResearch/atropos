@@ -199,7 +199,7 @@ class BlackjackEnv(BaseEnv):
                 else "Parser indicated error, but no specific message was returned in the typical error slot."
             )
             logger.warning(
-                f"Failed to parse tool call. Full response: '{response}'. Error detail: {error_detail}"
+                "Failed to parse tool call. Full response: "{response}'. Error detail: {error_detail}"
             )
             return -1
 
@@ -210,8 +210,8 @@ class BlackjackEnv(BaseEnv):
             return 0
         else:
             logger.warning(
-                f"Successfully parsed tool call, but action is invalid. Action: '{action}'. "
-                f"Full response: '{response}'. Parsed args: {parsed_args}"
+                "Successfully parsed tool call, but action is invalid. Action: "{action}'. "
+                "Full response: "{response}'. Parsed args: {parsed_args}"
             )
             return -1
 
@@ -286,7 +286,7 @@ class BlackjackEnv(BaseEnv):
                 current_obs, _, term_replay, trunc_replay, _ = sim_env.step(prev_action)
                 if term_replay or trunc_replay:
                     logger.debug(
-                        f"[_estimate_value] State became terminal during action replay "
+                        "[_estimate_value] State became terminal during action replay "
                         f"(action {action_idx+1}/{len(env_actions_to_replay)} of prev_actions). Value is 0."
                     )
                     is_terminal_after_replay = True
@@ -299,7 +299,7 @@ class BlackjackEnv(BaseEnv):
 
         except Exception as e:
             logger.error(
-                f"[_estimate_value] Error during exact value"
+                "[_estimate_value] Error during exact value"
                 f" calculation for seed {episode_seed_for_sim}, "
                 f"actions {env_actions_to_replay}: {e}",
                 exc_info=True,
@@ -362,7 +362,7 @@ class BlackjackEnv(BaseEnv):
                 logger.error(
                     f"[Next Step Seed: {ep.seed} Turn: {current_turn + 1}] "
                     f"Expected {G} responses, got {len(responses) if responses else 0}. "
-                    f"Aborting step."
+                    "Aborting step."
                 )
                 return None, True  # Indicate error and episode termination
         except Exception as e_sample:
@@ -481,7 +481,7 @@ class BlackjackEnv(BaseEnv):
                 except Exception as e_vn:
                     logger.error(
                         f"[Next Step Seed: {ep.seed} Turn: {current_turn + 1} Alt: {i}] "
-                        f"Error estimating V(s') for alternative: {e_vn}",
+                        "Error estimating V(s") for alternative: {e_vn}",
                         exc_info=True,
                     )
                     alt_value_next.append(0.0)
@@ -504,10 +504,10 @@ class BlackjackEnv(BaseEnv):
             else:
                 logger.warning(
                     f"[Next Step Seed: {ep.seed} Turn: {current_turn + 1} Alt: {i}] "
-                    f"Skipping advantage calculation due to missing data or value_t. "
+                    "Skipping advantage calculation due to missing data or value_t. "
                     f"len(alt_combined_rewards)={len(alt_combined_rewards)}, len(alt_value_next)={len(alt_value_next)}"
                 )
-                alt_advantages.append(-float("inf"))
+                alt_advantages.append(-float("in"))
 
         if not (
             len(alt_tokens) == G
@@ -518,10 +518,10 @@ class BlackjackEnv(BaseEnv):
         ):
             logger.error(
                 f"[Next Step Seed: {ep.seed} Turn: {current_turn + 1}] "
-                f"Mismatch in alternative list lengths before creating ScoredDataGroup. "
+                "Mismatch in alternative list lengths before creating ScoredDataGroup. "
                 f"Tokens:{len(alt_tokens)}, Masks:{len(alt_masks)}, Adv:{len(alt_advantages)}, "
                 f"Msgs:{len(alt_next_state_msgs)}, ParsedAct:{len(alt_parsed_actions)}. Expected {G} for all. "
-                f"Aborting step."
+                "Aborting step."
             )
             return None, True
 
@@ -546,12 +546,12 @@ class BlackjackEnv(BaseEnv):
         chosen_advantage_for_log = (
             alt_advantages[best_advantage_idx]
             if best_advantage_idx < len(alt_advantages)
-            else float("-inf")
+            else float("-in")
         )
         chosen_token_length_for_log = (
             alt_token_lengths[best_advantage_idx]
             if best_advantage_idx < len(alt_token_lengths)
-            else float("-inf")
+            else float("-in")
         )
         logger.debug(
             f"[Next Step Seed: {ep.seed} Turn: {current_turn + 1}] "

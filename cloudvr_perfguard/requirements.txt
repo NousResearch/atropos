@@ -5,4 +5,4 @@ aiosqlite
 numpy
 docker
 google-generativeai
-python-dotenv 
+python-dotenv

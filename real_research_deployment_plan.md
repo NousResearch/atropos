@@ -79,26 +79,26 @@ class RealVRResearchPipeline:
         self.padres_url = os.getenv('PADRES_API_URL')
         if not self.padres_url:
             raise ValueError("PADRES_API_URL must be set for real research")
-        
+
         self.gemini_key = os.getenv('GEMINI_API_KEY')
         self.perplexity_key = os.getenv('PERPLEXITY_API_KEY')
-        
+
     def run_real_vr_experiment(self):
         """Run actual VR experiment with real physics simulation"""
         # 1. Setup real VR environment
         setup_response = requests.post(f"{self.padres_url}/setup_environment")
         setup_response.raise_for_status()
-        
+
         # 2. Execute real VR action
         action_response = requests.post(f"{self.padres_url}/execute_action")
         action_response.raise_for_status()
-        
+
         # 3. Get real physics data
         real_data = action_response.json()
-        
+
         # 4. Real AI analysis
         analysis = self.analyze_with_real_ai(real_data)
-        
+
         return {
             'experiment_id': datetime.utcnow().isoformat(),
             'real_vr_data': real_data,
@@ -113,23 +113,23 @@ class RealVRResearchPipeline:
 class RealResearchOrchestrator:
     def __init__(self):
         self.pipeline = RealVRResearchPipeline()
-        
+
     async def run_real_research_batch(self, num_experiments=100):
         """Run batch of real VR experiments"""
         results = []
-        
+
         for i in range(num_experiments):
             try:
                 # Real experiment with real physics
                 result = self.pipeline.run_real_vr_experiment()
                 results.append(result)
-                
+
                 # Log real progress
                 print(f"✅ Real experiment {i+1}/{num_experiments} completed")
-                
+
             except Exception as e:
                 print(f"❌ Real experiment {i+1} failed: {e}")
-                
+
         return results
 ```
 
@@ -143,23 +143,23 @@ class RealResearchOrchestrator:
 class RealVRAffordanceDiscovery:
     def __init__(self):
         self.api = RealVRResearchPipeline()
-        
+
     def discover_real_affordances(self):
         """Discover real VR affordances through actual experiments"""
-        
+
         # Real parameter space (not synthetic)
         real_parameters = {
             'object_positions': self.generate_real_positions(),
             'physics_properties': self.generate_real_physics(),
             'interaction_types': ['grab', 'push', 'rotate', 'throw']
         }
-        
+
         discoveries = []
-        
+
         for params in real_parameters:
             # Run real VR experiment
             result = self.api.run_real_vr_experiment()
-            
+
             # Analyze real physics outcomes
             if result['real_vr_data']['reward'] > 0.8:
                 discoveries.append({
@@ -167,7 +167,7 @@ class RealVRAffordanceDiscovery:
                     'real_outcome': result['real_vr_data'],
                     'discovery_type': 'REAL_PHYSICS_DISCOVERY'
                 })
-                
+
         return discoveries
 ```
 
@@ -177,26 +177,26 @@ class RealVRAffordanceDiscovery:
 class RealHumanVRStudies:
     def __init__(self):
         self.vr_api = RealVRResearchPipeline()
-        
+
     def conduct_real_user_studies(self, num_participants=50):
         """Conduct real user studies with actual VR interactions"""
-        
+
         real_user_data = []
-        
+
         for participant_id in range(num_participants):
             # Real VR session
             session_data = self.run_real_vr_session(participant_id)
-            
+
             # Real performance metrics
             metrics = self.analyze_real_performance(session_data)
-            
+
             real_user_data.append({
                 'participant_id': participant_id,
                 'real_vr_session': session_data,
                 'real_metrics': metrics,
                 'data_source': 'REAL_HUMAN_VR_INTERACTION'
             })
-            
+
         return real_user_data
 ```
 
@@ -211,22 +211,22 @@ class RealResearchValidation:
     def __init__(self):
         self.real_data_sources = [
             'REAL_VR_PHYSICS_SIMULATION',
-            'REAL_HUMAN_VR_INTERACTION', 
+            'REAL_HUMAN_VR_INTERACTION',
             'REAL_SPATIAL_REASONING_TASKS'
         ]
-        
+
     def validate_discoveries_with_real_data(self, discoveries):
         """Validate discoveries using real experimental data"""
-        
+
         validated_discoveries = []
-        
+
         for discovery in discoveries:
             # Test against real VR environment
             real_validation = self.test_in_real_vr(discovery)
-            
+
             # Test with real human participants
             human_validation = self.test_with_real_humans(discovery)
-            
+
             if real_validation['success'] and human_validation['success']:
                 validated_discoveries.append({
                     'discovery': discovery,
@@ -234,7 +234,7 @@ class RealResearchValidation:
                     'human_validation': human_validation,
                     'validation_status': 'REAL_WORLD_VALIDATED'
                 })
-                
+
         return validated_discoveries
 ```
 
@@ -248,10 +248,10 @@ class RealResearchValidation:
 class RealResearchPaperGenerator:
     def __init__(self):
         self.real_data_analyzer = RealDataAnalyzer()
-        
+
     def generate_real_research_paper(self, validated_discoveries):
         """Generate research paper from real experimental data"""
-        
+
         paper = {
             'title': 'Real-World VR Affordance Discovery Through Physics-Based Simulation',
             'abstract': self.generate_real_abstract(validated_discoveries),
@@ -268,7 +268,7 @@ class RealResearchPaperGenerator:
                 'api_endpoint': os.getenv('PADRES_API_URL')
             }
         }
-        
+
         return paper
 ```
 
@@ -322,8 +322,8 @@ class RealResearchPaperGenerator:
 ## **NEXT STEPS**
 
 1. **IMMEDIATE**: Deploy Padres API to Cloud Run
-2. **TODAY**: Run first 10 real VR experiments  
+2. **TODAY**: Run first 10 real VR experiments
 3. **THIS WEEK**: Scale to 100 real experiments
 4. **THIS MONTH**: Generate first real research paper
 
-**LET'S STOP SIMULATING AND START DISCOVERING! 🚀** 
+**LET'S STOP SIMULATING AND START DISCOVERING! 🚀**

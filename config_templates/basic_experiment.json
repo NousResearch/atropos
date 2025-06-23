@@ -1,14 +1,14 @@
 {
   "experiment_name": "Basic Society Simulation",
   "description": "Default configuration for society simulation",
-  
+
   "simulation": {
     "agents": 50,
     "steps": 500,
     "world_size": [100, 100],
     "seed": 42
   },
-  
+
   "llm": {
     "provider": "none",
     "model": null,
@@ -16,7 +16,7 @@
     "max_tokens": 150,
     "enable_caching": true
   },
-  
+
   "agents": {
     "initial_energy_range": [0.7, 1.0],
     "initial_happiness_range": [0.4, 0.8],
@@ -33,7 +33,7 @@
       "agreeableness": [0.0, 1.0]
     }
   },
-  
+
   "world": {
     "interaction_radius": 15.0,
     "trade_radius": 20.0,
@@ -41,7 +41,7 @@
     "enable_population_events": true,
     "event_frequency": 100
   },
-  
+
   "output": {
     "save_results": true,
     "visualization": false,

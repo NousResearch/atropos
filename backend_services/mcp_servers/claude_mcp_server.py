@@ -1,5 +1,7 @@
 from .base_mcp_server import BaseMCPServer
+
 # from anthropic import Anthropic # Import the actual SDK when ready
+
 
 class ClaudeMCPServer(BaseMCPServer):
     """
@@ -21,34 +23,51 @@ class ClaudeMCPServer(BaseMCPServer):
     def _validate_config(self):
         """Validates that 'api_key' and 'model_name' are in the config."""
         if "api_key" not in self.config:
-            raise ValueError(f"Missing 'api_key' in config for ClaudeMCPServer: {self.server_name}")
+            raise ValueError(
+                "Missing "api_key' in config for ClaudeMCPServer: {self.server_name}"
+            )
         if "model_name" not in self.config:
-            raise ValueError(f"Missing 'model_name' in config for ClaudeMCPServer: {self.server_name}")
+            raise ValueError(
+                "Missing "model_name' in config for ClaudeMCPServer: {self.server_name}"
+            )
         # Add more validation as needed (e.g., for model name format)
 
     def _initialize_client(self):
         """Initializes the Anthropic client."""
         # self.client = Anthropic(
         #     api_key=self.config["api_key"],
-        #     timeout=self.config.get("timeout"), 
+        #     timeout=self.config.get("timeout"),
         #     max_retries=self.config.get("max_retries", 2)
         # )
         # print(f"Anthropic client initialized for {self.server_name} with model {self.config['model_name']}.")
-        print(f"Anthropic client (mock) initialized for {self.server_name} with model {self.config['model_name']}. (Actual SDK TBI)")
+        print(
+            f"Anthropic client (mock) initialized for {self.server_name} with model {self.config['model_name']}. (Actual SDK TBI)"
+        )
         # Perform a quick test call if desired, e.g., list models or a simple health check
         # try:
         #    pass # Replace with a simple API call to check connectivity
         # except Exception as e:
         #    print(f"Warning: Initial connection test to Anthropic API failed for {self.server_name}: {e}")
 
-    def _generate_text(self, prompt: str, max_tokens: int = 1024, temperature: float = 0.7, system_message: str = None, stop_sequences: list = None) -> str:
+    def _generate_text(
+        self,
+        prompt: str,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        system_message: str = None,
+        stop_sequences: list = None,
+    ) -> str:
         """
         Core text generation method using the Claude API.
         (Placeholder: Actual Claude API call logic will be added here.)
         """
-        print(f"  {self.server_name}._generate_text called with prompt (first 50 chars): '{prompt[:50]}...'")
-        print(f"    Model: {self.config['model_name']}, Max Tokens: {max_tokens}, Temp: {temperature}")
-        
+        print(
+            f"  {self.server_name}._generate_text called with prompt (first 50 chars): '{prompt[:50]}...'"
+        )
+        print(
+            f"    Model: {self.config['model_name']}, Max Tokens: {max_tokens}, Temp: {temperature}"
+        )
+
         # Placeholder for actual API call:
         # messages = []
         # if system_message:
@@ -88,8 +107,10 @@ class ClaudeMCPServer(BaseMCPServer):
         # except Exception as e:
         #     print(f"Error counting tokens with Claude API for {self.server_name}: {e}")
         #     raise
-        print(f"  {self.server_name}._count_tokens (mock) for text (first 30 chars): '{text[:30]}...'")
-        return len(text) // 4 # Placeholder approximation
+        print(
+            f"  {self.server_name}._count_tokens (mock) for text (first 30 chars): '{text[:30]}...'"
+        )
+        return len(text) // 4  # Placeholder approximation
 
     def call_tool(self, tool_name: str, parameters: dict) -> any:
         """
@@ -104,38 +125,47 @@ class ClaudeMCPServer(BaseMCPServer):
         if tool_name == "generate_text":
             prompt = parameters.get("prompt")
             if not prompt:
-                raise ValueError(f"Missing 'prompt' parameter for 'generate_text' tool in {self.server_name}.")
+                raise ValueError(
+                    "Missing "prompt' parameter for 'generate_text' tool in {self.server_name}."
+                )
             return self._generate_text(
                 prompt=prompt,
                 max_tokens=parameters.get("max_tokens", 1024),
                 temperature=parameters.get("temperature", 0.7),
                 system_message=parameters.get("system_message"),
-                stop_sequences=parameters.get("stop_sequences")
+                stop_sequences=parameters.get("stop_sequences"),
             )
         elif tool_name == "count_tokens":
             text = parameters.get("text")
             if not text:
-                raise ValueError(f"Missing 'text' parameter for 'count_tokens' tool in {self.server_name}.")
+                raise ValueError(
+                    "Missing "text' parameter for 'count_tokens' tool in {self.server_name}."
+                )
             return self._count_tokens(text)
         else:
-            raise NotImplementedError(f"Tool '{tool_name}' is not supported by {self.server_name} ({self.__class__.__name__}).")
+            raise NotImplementedError(
+                "Tool "{tool_name}' is not supported by {self.server_name} ({self.__class__.__name__})."
+            )
+
 
 # Example Usage (conceptual - would be integrated via MCPManager)
 if __name__ == "__main__":
     print("Testing ClaudeMCPServer...")
     # This config would ideally come from a secure source or a general pipeline config file
     sample_claude_config = {
-        "api_key": "YOUR_ANTHROPIC_API_KEY", # Replace with a real or dummy key for local testing if mock is used
-        "model_name": "claude-3-opus-20240229"
+        "api_key": "YOUR_ANTHROPIC_API_KEY",  # Replace with a real or dummy key for local testing if mock is used
+        "model_name": "claude-3-opus-20240229",
     }
 
     try:
-        claude_server = ClaudeMCPServer(server_name="claude_main_test", config=sample_claude_config)
-        
+        claude_server = ClaudeMCPServer(
+            server_name="claude_main_test", config=sample_claude_config
+        )
+
         # Test generate_text
         gen_params = {
             "prompt": "Explain the concept of a Large Language Model in one sentence.",
-            "max_tokens": 50
+            "max_tokens": 50,
         }
         response = claude_server.call_tool("generate_text", gen_params)
         print(f"\nGenerate Text Response:\n{response}")
@@ -144,7 +174,7 @@ if __name__ == "__main__":
         count_params = {"text": "This is a sample sentence to count tokens for."}
         token_count = claude_server.call_tool("count_tokens", count_params)
         print(f"\nToken Count Response: {token_count}")
-        
+
         status = claude_server.get_status()
         print(f"\nServer Status: {status}")
 
@@ -155,4 +185,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-    print("\nClaudeMCPServer test complete.") 
+    print("\nClaudeMCPServer test complete.")

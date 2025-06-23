@@ -41,7 +41,7 @@ python test_basic_simulation.py
 
 ## 🔄 Fallback Behavior
 
-**No API Key Required for Testing!** 
+**No API Key Required for Testing!**
 
 Our system automatically falls back to intelligent mock responses when:
 - No API key is provided
@@ -120,4 +120,4 @@ With Gemini API configured, you're ready to run sophisticated LLM-driven agent s
 ```bash
 # Quick start with Gemini
 python src/main.py --agents 50 --steps 200 --model gemini-pro
-``` 
+```

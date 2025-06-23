@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+
 class BaseMCPServer(ABC):
     """
     Abstract base class for all MCP (Multi-Controller Piper) server implementations.
@@ -21,7 +22,9 @@ class BaseMCPServer(ABC):
         self.config = config
         self._validate_config()
         self._initialize_client()
-        print(f"MCP Server '{self.server_name}' initialized of type {self.__class__.__name__}.")
+        print(
+            "MCP Server "{self.server_name}' initialized of type {self.__class__.__name__}."
+        )
 
     @abstractmethod
     def _validate_config(self):
@@ -46,7 +49,7 @@ class BaseMCPServer(ABC):
         It executes a specific "tool" (i.e., a function or capability) offered by this server.
 
         Args:
-            tool_name (str): The name of the tool/function to execute 
+            tool_name (str): The name of the tool/function to execute
                                (e.g., "generate_text", "run_query", "search_web").
             parameters (dict): A dictionary of parameters required by the tool.
 
@@ -71,7 +74,12 @@ class BaseMCPServer(ABC):
         Optional: Returns the current status of the MCP server (e.g., connectivity, rate limits).
         Default implementation indicates it's a basic, active server.
         """
-        return {"server_name": self.server_name, "status": "active", "type": self.__class__.__name__}
+        return {
+            "server_name": self.server_name,
+            "status": "active",
+            "type": self.__class__.__name__,
+        }
+
 
 # Example of a concrete (though still abstract in functionality) server for an LLM
 # This would typically be in its own file like `llm_mcp.py`
@@ -97,4 +105,4 @@ class BaseMCPServer(ABC):
 #                 raise ValueError("'text' parameter is required for count_tokens tool.")
 #             return self.count_tokens(text)
 #         else:
-#             raise NotImplementedError(f"Tool '{tool_name}' is not supported by {self.server_name}.") 
+#             raise NotImplementedError("Tool "{tool_name}' is not supported by {self.server_name}.")

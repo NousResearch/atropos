@@ -89,4 +89,4 @@ For local development outside of Docker:
 5.  You can then run scripts directly, e.g.:
     ```bash
     python cloudvr_perfguard/ai_integration/continuous_research_pipeline.py start
-    ``` 
+    ```

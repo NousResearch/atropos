@@ -3,12 +3,12 @@ import random
 import re
 from typing import Dict, List, Optional, Tuple
 
-import wandb
 from datasets import Dataset, load_dataset
 from langdetect import LangDetectException, detect
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
+import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
@@ -194,8 +194,8 @@ class InstructionFollowingEnv(BaseEnv):
                         raise ValueError("Parsed ground_truth is not a dictionary.")
                 except (json.JSONDecodeError, ValueError) as e:
                     print(
-                        f"Warning: Could not parse 'ground_truth' JSON for item {i}. Error: {e}. "
-                        f"GT String: '{ground_truth_json_str}'. Prompt: {prompt_text[:50]}... Skipping."
+                        "Warning: Could not parse "ground_truth' JSON for item {i}. Error: {e}. "
+                        "GT String: "{ground_truth_json_str}'. Prompt: {prompt_text[:50]}... Skipping."
                     )
                     continue
 
@@ -209,7 +209,7 @@ class InstructionFollowingEnv(BaseEnv):
 
                 if func_name_from_gt not in IF_FUNCTIONS_MAP:
                     print(
-                        f"Warning: func_name '{func_name_from_gt}' in item {i} not in IF_FUNCTIONS_MAP. "
+                        "Warning: func_name "{func_name_from_gt}' in item {i} not in IF_FUNCTIONS_MAP. "
                         f"Prompt: {prompt_text[:50]}... Skipping."
                     )
                     continue
@@ -253,8 +253,8 @@ class InstructionFollowingEnv(BaseEnv):
             # For RLVR-IFeval, a failure here suggests issues with Hugging Face access,
             # dataset integrity, or fundamental code errors.
             print(
-                f"CRITICAL: Failed to load or process primary dataset '{dataset_name}': {e}. "
-                f"Using a DUMMY dataset as fallback."
+                "CRITICAL: Failed to load or process primary dataset "{dataset_name}': {e}. "
+                "Using a DUMMY dataset as fallback."
             )
             dummy_data_for_fallback = [
                 {
@@ -275,7 +275,7 @@ class InstructionFollowingEnv(BaseEnv):
             full_dataset = Dataset.from_list(dummy_data_for_fallback)
             print(
                 f"Initialized with DUMMY dataset of {len(full_dataset)} items "
-                f"due to previous errors."
+                "due to previous errors."
             )
 
         full_dataset = full_dataset.shuffle(seed=42)
@@ -365,7 +365,7 @@ class InstructionFollowingEnv(BaseEnv):
 
         # 4. If <think> appears after </think>, malformed.
         if idx_think_open >= idx_think_close_start:
-            # print(f"DEBUG: <think> tag appears at or after </think> tag. Response: '{model_response_text[:200]}...'")
+            # print("DEBUG: <think> tag appears at or after </think> tag. Response: "{model_response_text[:200]}...'")
             return 0.0
 
         # 5. Extract text_to_verify (content after the first </think>)
@@ -380,7 +380,7 @@ class InstructionFollowingEnv(BaseEnv):
         # If all checks pass, proceed with verification using text_to_verify
         if func_name not in IF_FUNCTIONS_MAP:
             print(
-                f"Warning: Verifier function '{func_name}' not found in IF_FUNCTIONS_MAP."
+                "Warning: Verifier function "{func_name}' not found in IF_FUNCTIONS_MAP."
             )
             return 0.0
 
@@ -410,12 +410,12 @@ class InstructionFollowingEnv(BaseEnv):
 
         except LangDetectException:
             print(
-                f"Warning: langdetect failed for func_name '{func_name}'. Scoring as incorrect."
+                "Warning: langdetect failed for func_name "{func_name}'. Scoring as incorrect."
             )
             return 0.0
         except ImportError as e:
             print(
-                f"Warning: ImportError during verifier function '{func_name}': {e}. Check dependencies."
+                "Warning: ImportError during verifier function "{func_name}': {e}. Check dependencies."
             )
             return 0.0
         except TypeError as e:
@@ -425,7 +425,7 @@ class InstructionFollowingEnv(BaseEnv):
             return 0.0
         except Exception as e:
             print(
-                f"Unexpected error in verifier function '{func_name}' with args {args}: {e}"
+                "Unexpected error in verifier function "{func_name}' with args {args}: {e}"
             )
             return 0.0
 
@@ -435,7 +435,7 @@ class InstructionFollowingEnv(BaseEnv):
             score_value = float(raw_score)
         else:
             print(
-                f"Warning: Verifier '{func_name}' returned unexpected type: {type(raw_score)}. Expected bool or tuple."
+                "Warning: Verifier "{func_name}' returned unexpected type: {type(raw_score)}. Expected bool or tuple."
             )
             score_value = 0.0
 
@@ -783,7 +783,7 @@ def validate_response_language(text: str, language: str) -> bool:
         return detected_language == language
     except LangDetectException:  # Catching specific exception from detect()
         print(
-            f"Warning: langdetect failed to detect language for text: '{text[:50]}...'"
+            "Warning: langdetect failed to detect language for text: "{text[:50]}...'"
         )
         return False
 

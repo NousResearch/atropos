@@ -2,7 +2,7 @@
     "gcp_project_id": "mock-gcp-project-id",
     "padres_cloud_run_url": "http://localhost:8080",
     "mock_mode": true,
-    
+
     "firestore_collections": {
         "experiments": "experiment_configs",
         "prompts": "prompt_templates",
@@ -22,17 +22,17 @@
 
     "mcp_server_configurations": {
         "gemini_pro_main": {
-            "module_name": "gemini_mcp_server", 
+            "module_name": "gemini_mcp_server",
             "class_name": "GeminiMCPServer",
             "config": {
-                "api_key": "ENV_GOOGLE_API_KEY", 
+                "api_key": "ENV_GOOGLE_API_KEY",
                 "model_name": "gemini-pro",
                 "generation_config": {"temperature": 0.7, "max_output_tokens": 1024},
                 "mock_mode": true
             }
         },
         "gemini_1_5_pro_latest": {
-            "module_name": "gemini_mcp_server", 
+            "module_name": "gemini_mcp_server",
             "class_name": "GeminiMCPServer",
             "config": {
                 "api_key": "ENV_GOOGLE_API_KEY",
@@ -42,17 +42,17 @@
             }
         },
         "bq_main": {
-            "module_name": "bigquery_mcp_server", 
+            "module_name": "bigquery_mcp_server",
             "class_name": "BigQueryMCPServer",
             "config": {
-                "project_id": "mock-gcp-project-id", 
-                "dataset_id": "ai_research_data", 
+                "project_id": "mock-gcp-project-id",
+                "dataset_id": "ai_research_data",
                 "location": "US",
                 "mock_mode": true
             }
         },
         "firestore_main": {
-            "module_name": "firestore_mcp_server", 
+            "module_name": "firestore_mcp_server",
             "class_name": "FirestoreMCPServer",
             "config": {
                 "project_id": "mock-gcp-project-id",
@@ -75,7 +75,7 @@
             }
         },
         "padres_sim_env": {
-            "module_name": "padres_mcp_server", 
+            "module_name": "padres_mcp_server",
             "class_name": "PadresMCPServer",
             "config": {
                 "service_base_url": "http://localhost:8088",
@@ -83,7 +83,7 @@
             }
         },
         "pubsub_main": {
-            "module_name": "pubsub_mcp_server", 
+            "module_name": "pubsub_mcp_server",
             "class_name": "PubSubMCPServer",
             "config": {
                 "project_id": "mock-gcp-project-id",
@@ -91,7 +91,7 @@
             }
         },
         "perplexity_main": {
-            "module_name": "perplexity_mcp_server", 
+            "module_name": "perplexity_mcp_server",
             "class_name": "PerplexityMCPServer",
             "config": {
                 "api_key": "ENV_PERPLEXITY_API_KEY",
@@ -99,7 +99,7 @@
             }
         },
         "claude_main": {
-            "module_name": "claude_mcp_server", 
+            "module_name": "claude_mcp_server",
             "class_name": "ClaudeMCPServer",
             "config": {
                 "api_key": "ENV_ANTHROPIC_API_KEY",
@@ -145,4 +145,4 @@
     },
 
     "comment": "This is a configuration with mock_mode enabled for local testing without GCP credentials."
-} 
+}

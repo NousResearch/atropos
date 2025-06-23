@@ -165,19 +165,19 @@ def resolve_openai_configs(
     if (is_multi_server_yaml or is_multi_server_default) and openai_cli_config:
         raise FailedExecutionException(
             f"CLI overrides for OpenAI settings (--{openai_full_prefix}*) are not supported "
-            f"when multiple servers are defined (either via YAML list under '{OPENAI_NAMESPACE}' "
+            "when multiple servers are defined (either via YAML list under "{OPENAI_NAMESPACE}' "
             "or a default list with length >= 2)."
         )
 
     if is_multi_server_yaml:
         logger.info(
-            f"Using multi-server configuration defined in YAML under '{OPENAI_NAMESPACE}'."
+            "Using multi-server configuration defined in YAML under "{OPENAI_NAMESPACE}'."
         )
         try:
             server_configs = [APIServerConfig(**cfg) for cfg in openai_yaml_config]
         except Exception as e:
             raise FailedExecutionException(
-                f"Error parsing multi-server OpenAI configuration from YAML under '{OPENAI_NAMESPACE}': {e}"
+                "Error parsing multi-server OpenAI configuration from YAML under "{OPENAI_NAMESPACE}': {e}"
             ) from e
     elif isinstance(default_server_configs, ServerBaseline):
         logger.info("Using ServerBaseline configuration.")
@@ -204,7 +204,7 @@ def resolve_openai_configs(
         else:
             logger.warning(
                 f"Unexpected type for default_server_configs: {type(default_server_configs)}. "
-                f"Proceeding with single OpenAI server configuration based on merged settings."
+                "Proceeding with single OpenAI server configuration based on merged settings."
             )
             server_configs = [final_openai_config]
 

@@ -7,4 +7,4 @@ class GoogleDocsMCP:
         print(f"(Placeholder) Formatting Google Doc: {doc_id}")
 
     def append_to_document(self, document_id, content):
-        print(f"(Placeholder) Appending to Google Doc {document_id}: {content}") 
+        print(f"(Placeholder) Appending to Google Doc {document_id}: {content}")

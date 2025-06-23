@@ -162,4 +162,4 @@ Ensuring the asynchronous components are robust for long-running autonomous oper
     *   **Queue Management**: If the LLMCoordinator uses internal queues, monitor their size. Implement backpressure mechanisms or strategies if queues grow too large (e.g., temporarily pause new requests from agents).
 
 2.  **Other Asynchronous Tasks:**
-    *   Review all uses of `asyncio.create_task` or other background task mechanisms to ensure they have proper error handling and lifecycle management. 
+    *   Review all uses of `asyncio.create_task` or other background task mechanisms to ensure they have proper error handling and lifecycle management.

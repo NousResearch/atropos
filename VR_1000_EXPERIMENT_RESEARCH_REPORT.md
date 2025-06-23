@@ -1,9 +1,9 @@
 # Cloud-Based Physics Simulation Infrastructure for VR Experiment Prototyping
 
-**Study Date**: May 26, 2025  
-**Total Experiments**: 1,000  
-**Success Rate**: 100.0%  
-**Study Duration**: 11.5 minutes  
+**Study Date**: May 26, 2025
+**Total Experiments**: 1,000
+**Success Rate**: 100.0%
+**Study Duration**: 11.5 minutes
 **Research Type**: Physics Simulation Infrastructure for Spatial Task Prototyping
 
 ---
@@ -127,7 +127,7 @@ The system's reliability (100% success rate) and efficiency (87 experiments/minu
 
 ---
 
-**Study Conducted By**: AMIEN Research Pipeline  
-**Infrastructure**: Google Cloud Run + PyBullet Physics  
-**Contact**: Available for collaboration and replication  
+**Study Conducted By**: AMIEN Research Pipeline
+**Infrastructure**: Google Cloud Run + PyBullet Physics
+**Contact**: Available for collaboration and replication
 **Date**: May 26, 2025

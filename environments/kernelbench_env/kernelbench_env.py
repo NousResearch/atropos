@@ -26,9 +26,6 @@ from typing import Dict, List, Optional, Tuple, TypedDict, Union
 
 from datasets import load_dataset
 
-# KernelBench imports
-from src.eval import eval_kernel_against_ref
-
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
@@ -37,6 +34,9 @@ from atroposlib.envs.base import (
 )
 from atroposlib.type_definitions import Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+
+# KernelBench imports
+from src.eval import eval_kernel_against_ref
 
 # Set the start method to 'spawn' for CUDA compatibility
 mp.set_start_method("spawn", force=True)

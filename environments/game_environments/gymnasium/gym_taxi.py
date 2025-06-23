@@ -107,7 +107,7 @@ TO_ACTION_MAP = {
     2: "east",
     3: "west",
     4: "pickup",
-    5: "dropoff",
+    5: "dropof",
 }
 
 

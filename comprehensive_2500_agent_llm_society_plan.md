@@ -39,7 +39,7 @@ class SocietyAgent(BaseAgent):
         self.social_connections = []
         self.memory_store = VectorStore()
         self.llm_client = LLMClient()
-    
+
     @Action(description="Make social interaction decision")
     def interact_with_neighbor(self, context):
         # 7B LLM decision making
@@ -65,7 +65,7 @@ struct SocietyAgent {
 
 // GPU kernel for spatial interactions
 __global__ void social_interaction_kernel(
-    AgentData* agents, 
+    AgentData* agents,
     int num_agents,
     float interaction_radius
 ) {
@@ -99,7 +99,7 @@ lora_config = LoraConfig(
 # Specialized agent personality models
 agent_types = {
     "social_leader": "models/social-leader-7b-lora",
-    "craftsperson": "models/craftsperson-7b-lora", 
+    "craftsperson": "models/craftsperson-7b-lora",
     "merchant": "models/merchant-7b-lora",
     "explorer": "models/explorer-7b-lora"
 }
@@ -151,7 +151,7 @@ class AgentMemorySystem:
         self.collection = self.chroma_client.create_collection(
             f"agent_{agent_id}_memory"
         )
-        
+
     def store_experience(self, experience, embedding):
         self.collection.add(
             documents=[experience],
@@ -163,7 +163,7 @@ class AgentMemorySystem:
             }],
             ids=[f"exp_{len(self.collection)}"]
         )
-    
+
     def retrieve_relevant_memories(self, query_embedding, k=5):
         results = self.collection.query(
             query_embeddings=[query_embedding],
@@ -185,18 +185,18 @@ infrastructure:
     - type: "n1-standard-32" # CPU for coordination
       count: 2
       purpose: "Mesa-frames coordination"
-  
+
   storage:
     - bigquery_dataset: "society_simulation"
       tables:
         - "agent_interactions"
-        - "spatial_movements" 
+        - "spatial_movements"
         - "llm_decisions"
         - "asset_generations"
-    
+
     - cloud_storage: "society-assets-bucket"
       purpose: "3D models and point clouds"
-  
+
   monitoring:
     - vertex_ai_pipelines: true
     - cloud_logging: true
@@ -232,7 +232,7 @@ infrastructure:
 2. **Spatial Environment**
    ```python
    from mesa_frames import HexGrid
-   
+
    class SocietyModel(Model):
        def __init__(self, num_agents=500):
            super().__init__()
@@ -254,14 +254,14 @@ infrastructure:
        Energy: {energy}
        Nearby agents: {neighbors}
        Recent events: {recent_memories}
-       
+
        What action do you take? (move/interact/craft/rest)""",
-       
+
        "leader": """You are a community leader. Consider:
        Community status: {community_stats}
        Resource availability: {resources}
        Citizen needs: {citizen_requests}
-       
+
        What leadership decision do you make?"""
    }
    ```
@@ -286,7 +286,7 @@ infrastructure:
                <gpu:variable><gpu:type>int</gpu:type><gpu:name>MAX_AGENTS</gpu:name></gpu:variable>
            </gpu:constant>
        </gpu:environment>
-       
+
        <gpu:agent>
            <gpu:name>SocietyAgent</gpu:name>
            <gpu:memory>
@@ -294,7 +294,7 @@ infrastructure:
                <gpu:variable><gpu:type>int</gpu:type><gpu:name>agent_type</gpu:name></gpu:variable>
                <gpu:variable><gpu:type>float</gpu:type><gpu:name>energy</gpu:name></gpu:variable>
            </gpu:memory>
-           
+
            <gpu:functions>
                <gpu:function><gpu:name>move</gpu:name></gpu:function>
                <gpu:function><gpu:name>interact</gpu:name></gpu:function>
@@ -311,12 +311,12 @@ infrastructure:
            self.graph = nx.Graph()
            self.influence_weights = {}
            self.trust_matrix = np.zeros((2500, 2500))
-       
+
        def update_social_ties(self, agent_a, agent_b, interaction_outcome):
            # Update trust based on interaction success
            trust_delta = self.calculate_trust_change(interaction_outcome)
            self.trust_matrix[agent_a.id][agent_b.id] += trust_delta
-           
+
            # Update network topology
            if trust_delta > 0.5:
                self.graph.add_edge(agent_a.id, agent_b.id, weight=trust_delta)
@@ -332,7 +332,7 @@ infrastructure:
                "energy": ResourcePool(initial=15000, regeneration_rate=200)
            }
            self.market = MarketMechanism()
-       
+
        def process_trade(self, buyer, seller, resource_type, quantity, price):
            # Implement supply/demand economics
            transaction = Transaction(buyer, seller, resource_type, quantity, price)
@@ -358,18 +358,18 @@ public class SocietyAgentBehavior : Agent
         // Initialize agent state from backend simulation
         InitializeFromBackend();
     }
-    
+
     public override void CollectObservations(VectorSensor sensor)
     {
         // Spatial observations
         sensor.AddObservation(transform.position);
         sensor.AddObservation(GetNearbyAgents());
-        
+
         // Social observations
         sensor.AddObservation(GetSocialConnections());
         sensor.AddObservation(GetResourceLevels());
     }
-    
+
     public override void OnActionReceived(ActionBuffers actions)
     {
         // Execute actions from LLM decisions
@@ -398,7 +398,7 @@ training_configs = {
         "learning_rate": 2e-4
     },
     "craftsperson": {
-        "base_model": "qwen-long-cprs-7b", 
+        "base_model": "qwen-long-cprs-7b",
         "lora_r": 8,
         "lora_alpha": 16,
         "training_data": "crafting_scenarios.jsonl",
@@ -409,10 +409,10 @@ training_configs = {
 
 def fine_tune_agent_model(config):
     from transformers import Trainer, TrainingArguments
-    
+
     model = AutoModelForCausalLM.from_pretrained(config["base_model"])
     model = get_peft_model(model, LoraConfig(**config))
-    
+
     trainer = Trainer(
         model=model,
         train_dataset=load_dataset(config["training_data"]),
@@ -424,7 +424,7 @@ def fine_tune_agent_model(config):
             gradient_accumulation_steps=16
         )
     )
-    
+
     trainer.train()
     return model
 ```
@@ -439,13 +439,13 @@ class HierarchicalMemory:
         self.episodic_memory = ChromaDB(f"episodic_{agent_id}")
         self.semantic_memory = ChromaDB(f"semantic_{agent_id}")
         self.importance_threshold = 0.7
-    
+
     def store_experience(self, experience):
         importance = self.calculate_importance(experience)
-        
+
         # Always store in working memory
         self.working_memory.append(experience)
-        
+
         # Store important events in episodic memory
         if importance > self.importance_threshold:
             embedding = self.encode_experience(experience)
@@ -454,18 +454,18 @@ class HierarchicalMemory:
                 embeddings=[embedding],
                 metadatas=[{"importance": importance}]
             )
-        
+
         # Extract and store semantic knowledge
         semantic_knowledge = self.extract_semantic_patterns(experience)
         if semantic_knowledge:
             self.semantic_memory.add(semantic_knowledge)
-    
+
     def retrieve_for_decision(self, current_context):
         # Multi-level memory retrieval
         working_mem = list(self.working_memory)
         episodic_mem = self.episodic_memory.query(current_context, n_results=5)
         semantic_mem = self.semantic_memory.query(current_context, n_results=3)
-        
+
         return self.combine_memories(working_mem, episodic_mem, semantic_mem)
 ```
 
@@ -479,7 +479,7 @@ class SimulationLogger:
         self.dataset_id = "society_simulation"
         self.batch_size = 1000
         self.pending_logs = []
-    
+
     def log_agent_interaction(self, agent_a, agent_b, interaction_type, outcome):
         log_entry = {
             "timestamp": datetime.utcnow().isoformat(),
@@ -491,16 +491,16 @@ class SimulationLogger:
             "trust_change": self.calculate_trust_change(outcome),
             "energy_cost": self.calculate_energy_cost(interaction_type)
         }
-        
+
         self.pending_logs.append(log_entry)
-        
+
         if len(self.pending_logs) >= self.batch_size:
             self.flush_logs()
-    
+
     def flush_logs(self):
         table_ref = self.bq_client.dataset(self.dataset_id).table("agent_interactions")
         job = self.bq_client.load_table_from_json(
-            self.pending_logs, 
+            self.pending_logs,
             table_ref,
             job_config=bigquery.LoadJobConfig(
                 create_disposition="CREATE_IF_NEEDED",
@@ -526,7 +526,7 @@ class SimulationLogger:
 
 ### Development Timeline
 - **Phase α**: 3 months × $2,500/month = $7,500
-- **Phase β**: 4 months × $9,550/month = $38,200  
+- **Phase β**: 4 months × $9,550/month = $38,200
 - **Phase γ**: 3 months × $9,550/month = $28,650
 - **Total Project Cost**: $74,350
 
@@ -542,7 +542,7 @@ class SimulationLogger:
    - Mitigation: Implement gradient checkpointing and model sharding
    - Fallback: Reduce agent complexity or implement agent batching
 
-2. **LLM Inference Latency**  
+2. **LLM Inference Latency**
    - Mitigation: Use async inference with request batching
    - Fallback: Pre-compute common responses, cache decision patterns
 
@@ -567,7 +567,7 @@ class SimulationLogger:
 - **Memory**: <32GB per 1,000 agents
 - **Scalability**: Linear scaling up to 10,000 agents
 
-### Simulation Quality Metrics  
+### Simulation Quality Metrics
 - **Social Emergence**: Formation of stable communities (>75% retention)
 - **Economic Complexity**: Trade networks with >3 intermediary nodes
 - **Cultural Evolution**: Emergence of shared behaviors and norms
@@ -585,9 +585,9 @@ This comprehensive plan leverages state-of-the-art technologies to create an unp
 
 Key success factors include:
 - Proper integration of Mesa-frames with Atropos for LLM cognition
-- FLAME GPU 2 optimization for large-scale physics simulation  
+- FLAME GPU 2 optimization for large-scale physics simulation
 - Effective LoRA fine-tuning for agent specialization
 - Robust cloud infrastructure with comprehensive monitoring
 - Careful cost management and performance optimization
 
-The resulting system will represent a significant advancement in agent-based modeling and provide a foundation for future research in digital societies, social simulation, and human behavior modeling. 
+The resulting system will represent a significant advancement in agent-based modeling and provide a foundation for future research in digital societies, social simulation, and human behavior modeling.

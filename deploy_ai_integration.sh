@@ -293,7 +293,7 @@ cat > DEPLOYMENT_SUMMARY.md << EOF
    echo "your-real-openai-key" | gcloud secrets versions add openai-api-key --data-file=-
    \`\`\`
 
-2. **Test Deployment**: 
+2. **Test Deployment**:
    \`\`\`bash
    curl $SERVICE_URL/health
    \`\`\`
@@ -328,4 +328,4 @@ echo -e "${YELLOW}⚠️ IMPORTANT: Update API keys in Secret Manager${NC}"
 echo -e "${BLUE}📊 Service URL: $SERVICE_URL${NC}"
 echo -e "${BLUE}📈 Monitor at: https://console.cloud.google.com/monitoring/dashboards${NC}"
 echo ""
-echo -e "${GREEN}🚀 AMIEN is now running in production!${NC}" 
+echo -e "${GREEN}🚀 AMIEN is now running in production!${NC}"

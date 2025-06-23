@@ -143,7 +143,7 @@ def truncate_thinking(
 
     except Exception as e:
         logger.error(
-            f"Error in truncate_thinking for text '{response_text[:200]}...': {e}",
+            "Error in truncate_thinking for text "{response_text[:200]}...': {e}",
             exc_info=True,
         )
         return response_text
@@ -181,7 +181,7 @@ def ensure_trajectory_token_limit(
         ):
             logger.warning(
                 f"[_ensure_trajectory_token_limit] Step {step_idx} in MC env "
-                f"is missing critical data. Skipping."
+                "is missing critical data. Skipping."
             )
             continue
 
@@ -280,7 +280,7 @@ def ensure_trajectory_token_limit(
                         working_messages[alt_idx].pop(1)
                     else:
                         logger.error(
-                            f"[_ensure_trajectory_token_limit] MC env: Critical error during pop for "
+                            "[_ensure_trajectory_token_limit] MC env: Critical error during pop for "
                             f"alt {alt_idx}, step {step_idx}. List too short."
                         )
                         retokenization_error_this_step = True
@@ -343,7 +343,7 @@ def ensure_trajectory_token_limit(
 
     if len(filtered_trajectory) < len(trajectory):
         logger.warning(
-            f"[_ensure_trajectory_token_limit] MC env: Filtered out "
+            "[_ensure_trajectory_token_limit] MC env: Filtered out "
             f"{len(trajectory) - len(filtered_trajectory)} steps "
             f"due to token limit constraints. Original: {len(trajectory)}, Filtered: {len(filtered_trajectory)}"
         )

@@ -63,7 +63,7 @@ print_header "📁 Creating Directory Structure..."
 
 directories=(
     "logs"
-    "experiments" 
+    "experiments"
     "papers"
     "functions"
     "data"
@@ -206,42 +206,42 @@ from enhanced_research_orchestrator import EnhancedResearchOrchestrator
 
 async def monitor_pipeline():
     """Monitor the Enhanced AMIEN pipeline"""
-    
+
     config = {
         "project_id": "spatial-research-pipeline",  # Update with your project ID
         "use_ai_scientist_v2": True
     }
-    
+
     orchestrator = EnhancedResearchOrchestrator(
         project_id=config["project_id"],
         config=config
     )
-    
+
     print("📊 Enhanced AMIEN Pipeline Monitor")
     print("=" * 50)
-    
+
     while True:
         try:
             stats = await orchestrator.get_discovery_statistics()
-            
+
             print(f"\n🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             print("-" * 30)
-            
+
             if stats:
                 ai_stats = stats.get("ai_scientist", {})
                 fun_stats = stats.get("funsearch", {})
                 active_stats = stats.get("active_discoveries", {})
                 rates = stats.get("discovery_rates", {})
-                
+
                 print(f"🤖 AI Scientist: {ai_stats.get('total_papers', 0)} papers")
                 print(f"🔬 FunSearch: {fun_stats.get('total_functions', 0)} functions")
                 print(f"🔄 Active: {sum(active_stats.values())} discoveries")
                 print(f"📈 Rate: {rates.get('total_discoveries_per_day', 0):.1f}/day")
             else:
                 print("⚠️  No statistics available")
-            
+
             await asyncio.sleep(30)  # Update every 30 seconds
-            
+
         except KeyboardInterrupt:
             print("\n👋 Monitoring stopped")
             break
@@ -302,4 +302,4 @@ Happy discovering! 🔬✨
 
 EOF
 
-print_status "Setup script completed successfully!" 
+print_status "Setup script completed successfully!"

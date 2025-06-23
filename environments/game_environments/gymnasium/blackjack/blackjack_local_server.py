@@ -110,7 +110,7 @@ async def main():
                     1, episode_summary["num_total_actions"]
                 )
                 logger.info(
-                    f"Action accuracy (valid tool calls): "
+                    "Action accuracy (valid tool calls): "
                     f"{episode_summary['num_correct_actions']}/{episode_summary['num_total_actions']} "
                     f"({accuracy:.2%})"
                 )

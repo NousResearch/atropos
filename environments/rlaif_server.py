@@ -3,9 +3,9 @@ import copy
 import random
 from typing import Dict, List, Optional, Tuple
 
-import wandb
 from datasets import load_dataset
 
+import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
@@ -84,7 +84,7 @@ class RLAIFEnv(BaseEnv):
             steps_per_eval=10000,
             max_token_length=8192,
             score_buffer_size=4,
-            wandb_name="rlaif",
+            wandb_name="rlai",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
         )

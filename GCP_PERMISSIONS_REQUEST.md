@@ -1,28 +1,28 @@
 # 🔐 Google Cloud Permissions Request for AMIEN Deployment
 
 ## Request Summary
-**Project**: `amien-research-pipeline`  
-**User**: `carlos@raxverse.com`  
-**Purpose**: Deploy AMIEN AI Research System to production  
+**Project**: `amien-research-pipeline`
+**User**: `carlos@raxverse.com`
+**Purpose**: Deploy AMIEN AI Research System to production
 
 ## Required Permissions
 
 ### 1. Cloud Scheduler API Access
-**Service**: `scheduler.googleapis.com`  
-**Required Role**: `Cloud Scheduler Admin` or `Editor`  
+**Service**: `scheduler.googleapis.com`
+**Required Role**: `Cloud Scheduler Admin` or `Editor`
 **Reason**: Needed for automated daily/weekly research generation cycles
 
 ### 2. Additional Roles Needed
 - **Cloud Run Admin**: Deploy API services
-- **Compute Engine Admin**: Run large-scale VR experiments  
+- **Compute Engine Admin**: Run large-scale VR experiments
 - **Storage Admin**: Store research artifacts
 - **Service Account Admin**: Create service accounts for automation
 
 ## Current Status
-✅ **Billing**: Linked and active (£402 credits)  
-✅ **Project**: Created (`amien-research-pipeline`)  
-✅ **Basic APIs**: Enabled (Cloud Run, Storage, Compute)  
-❌ **Cloud Scheduler**: Permission denied  
+✅ **Billing**: Linked and active (£402 credits)
+✅ **Project**: Created (`amien-research-pipeline`)
+✅ **Basic APIs**: Enabled (Cloud Run, Storage, Compute)
+❌ **Cloud Scheduler**: Permission denied
 
 ## Business Justification
 - **AMIEN System**: AI research generation platform for VR affordances
@@ -89,10 +89,10 @@ gcloud scheduler jobs list
 ---
 
 ## Contact Information
-**Requestor**: Carlos  
-**Email**: carlos@raxverse.com  
-**Project**: AMIEN AI Research System  
-**Urgency**: Medium (system ready, waiting on permissions)  
+**Requestor**: Carlos
+**Email**: carlos@raxverse.com
+**Project**: AMIEN AI Research System
+**Urgency**: Medium (system ready, waiting on permissions)
 
 ## Next Steps
 1. Admin grants permissions using commands above
@@ -100,4 +100,4 @@ gcloud scheduler jobs list
 3. Verify deployment with health checks
 4. Begin automated research generation
 
-**Note**: System is 85% deployed and fully functional locally. This is the final step to go live. 
+**Note**: System is 85% deployed and fully functional locally. This is the final step to go live.

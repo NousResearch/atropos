@@ -46,4 +46,4 @@ The environment implements a reward function that balances:
 2. Spatial relationship constraints
 3. Task completion verification
 
-The current implementation focuses on basic spatial tasks but is designed to be extensible for more complex scenarios. The reward function is structured to prevent common reward hacking strategies by requiring both position accuracy and spatial relationship satisfaction. 
+The current implementation focuses on basic spatial tasks but is designed to be extensible for more complex scenarios. The reward function is structured to prevent common reward hacking strategies by requiring both position accuracy and spatial relationship satisfaction.

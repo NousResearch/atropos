@@ -120,4 +120,4 @@ A table to log various significant events occurring in the simulation (e.g., age
 *   **Data Types**: Chosen for PostgreSQL. `REAL` for floating-point, `INTEGER` for steps, `TEXT` for strings, `UUID` for unique IDs, `TIMESTAMPTZ` for real-world time, `JSONB` for flexible structured data, `TEXT[]` for arrays of tags.
 *   **Indexes**: Suggested basic indexes for common query patterns. More specific indexes will depend on actual analytics and retrieval needs.
 
-This schema design is a starting point and can be expanded or refined as the simulation's data persistence requirements become clearer. 
+This schema design is a starting point and can be expanded or refined as the simulation's data persistence requirements become clearer.

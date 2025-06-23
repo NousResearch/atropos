@@ -38,12 +38,12 @@ population:
   initial_population: 25          # Start small
   target_population: 2500         # Goal population
   max_population: 3000           # Hard limit
-  
+
   # Birth/Death rates (per simulation step)
   base_birth_rate: 0.0008        # ~0.08% chance per agent per step
-  base_death_rate: 0.0003        # ~0.03% chance per agent per step  
+  base_death_rate: 0.0003        # ~0.03% chance per agent per step
   aging_rate: 0.005              # Agents age 0.005 years per step
-  
+
   # Event probabilities (per step)
   disaster_probability: 0.0001   # ~1 every 10,000 steps
   tech_event_probability: 0.00008 # ~1 every 12,500 steps
@@ -63,7 +63,7 @@ The system implements realistic population growth curves:
 
 ### 🌪️ Natural Disasters
 - **Earthquake**: High damage, localized impact
-- **Flood**: Medium damage, affects low-lying areas  
+- **Flood**: Medium damage, affects low-lying areas
 - **Storm**: Lower damage, widespread impact
 - **Drought**: Affects resources and long-term stability
 - **Wildfire**: High damage, can spread
@@ -162,7 +162,7 @@ python src/main.py --config config_population_test.yaml --agents 25 --steps 5000
 The system provides comprehensive real-time monitoring:
 
 ```
-📊 Step 1590 | ⚡ 52.86 SPS | 👥 118 agents | 🎯 Target: 100 (118.0%) | 
+📊 Step 1590 | ⚡ 52.86 SPS | 👥 118 agents | 🎯 Target: 100 (118.0%) |
 👴 Avg Age: 9.3 | ⚖️ Stability: 0.97 | ☠️ Deaths: 30 | 📰 Events: 3
 ```
 
@@ -179,10 +179,10 @@ The system provides comprehensive real-time monitoring:
    Environmental Stress: 0.12
    Tech Level: 1.45
    Resource Availability: 1.18
-   
+
    Age Distribution:
      Children: 612
-     Young Adults: 1024  
+     Young Adults: 1024
      Adults: 689
      Seniors: 131
 ```
@@ -206,7 +206,7 @@ Starting with 25 agents, the population naturally grows to 2,500 over several th
 
 A major plague reduces population by 30%, triggering:
 1. **Immediate Response**: Lower birth rates due to stress
-2. **Recovery Phase**: Gradual population rebuilding  
+2. **Recovery Phase**: Gradual population rebuilding
 3. **Adaptation**: Improved disease resistance
 
 ### Scenario 3: Technological Boom
@@ -268,4 +268,4 @@ This system brings us significantly closer to the ultimate goal of a 2,500-agent
 
 ---
 
-*Ready to watch your virtual society grow, adapt, and thrive! 🌱* 
+*Ready to watch your virtual society grow, adapt, and thrive! 🌱*

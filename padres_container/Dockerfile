@@ -51,4 +51,4 @@ ENV PYTHONPATH=/padres_app
 CMD ["sh", "-c", "cd /padres_app/app && python -m uvicorn main:app --host 0.0.0.0 --port 8088"]
 
 # TEMPORARY CMD for debugging startup issues:
-# CMD ["python", "app/main.py"] 
+# CMD ["python", "app/main.py"]

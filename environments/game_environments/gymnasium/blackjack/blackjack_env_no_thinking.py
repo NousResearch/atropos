@@ -124,13 +124,13 @@ class BlackjackEnvNoThinking(BaseEnv):
                 else "Parser indicated error, but no specific message was returned."
             )
             logger.warning(
-                f"Failed to parse tool call. Full response: '{llm_response}'. Error: {error_detail}"
+                "Failed to parse tool call. Full response: "{llm_response}'. Error: {error_detail}"
             )
             return None
 
         if parsed_name != "take_action":
             logger.warning(
-                f"Expected tool call name 'take_action', but got '{parsed_name}'. Response: '{llm_response}'"
+                "Expected tool call name "take_action', but got '{parsed_name}'. Response: '{llm_response}'"
             )
             return None
 
@@ -141,9 +141,9 @@ class BlackjackEnvNoThinking(BaseEnv):
             return ACTION_STICK
         else:
             logger.warning(
-                f"Successfully parsed tool call '{parsed_name}', "
-                f"but action argument is invalid. Action: '{action_str}'. "
-                f"Full response: '{llm_response}'. Parsed args: {parsed_args}"
+                "Successfully parsed tool call "{parsed_name}', "
+                "but action argument is invalid. Action: "{action_str}'. "
+                "Full response: "{llm_response}'. Parsed args: {parsed_args}"
             )
             return None
 

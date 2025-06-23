@@ -1,14 +1,14 @@
 {
   "experiment_name": "Performance Stress Test",
   "description": "Large-scale simulation for performance testing",
-  
+
   "simulation": {
     "agents": 200,
     "steps": 500,
     "world_size": [150, 150],
     "seed": 999
   },
-  
+
   "llm": {
     "provider": "none",
     "model": null,
@@ -16,7 +16,7 @@
     "max_tokens": 100,
     "enable_caching": true
   },
-  
+
   "agents": {
     "initial_energy_range": [0.8, 1.0],
     "initial_happiness_range": [0.5, 0.7],
@@ -33,7 +33,7 @@
       "agreeableness": [0.1, 1.0]
     }
   },
-  
+
   "world": {
     "interaction_radius": 20.0,
     "trade_radius": 25.0,
@@ -41,7 +41,7 @@
     "enable_population_events": false,
     "event_frequency": 200
   },
-  
+
   "output": {
     "save_results": true,
     "visualization": false,

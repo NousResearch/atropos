@@ -12,26 +12,26 @@ Key Features:
 - Memory-efficient agent state management
 """
 
-from .flame_gpu_simulation import FlameGPUSimulation
 from .agent_kernels import (
-    SocialInteractionKernel,
-    EconomicTradeKernel,
     CulturalInfluenceKernel,
-    MovementKernel,
+    EconomicTradeKernel,
     FamilyInteractionKernel,
-    ResourceManagementKernel
+    MovementKernel,
+    ResourceManagementKernel,
+    SocialInteractionKernel,
 )
+from .flame_gpu_simulation import FlameGPUSimulation
 from .gpu_memory_manager import GPUMemoryManager
 from .performance_profiler import FlameGPUProfiler
 
 __all__ = [
-    'FlameGPUSimulation',
-    'SocialInteractionKernel',
-    'EconomicTradeKernel', 
-    'CulturalInfluenceKernel',
-    'MovementKernel',
-    'FamilyInteractionKernel',
-    'ResourceManagementKernel',
-    'GPUMemoryManager',
-    'FlameGPUProfiler'
-] 
+    "FlameGPUSimulation",
+    "SocialInteractionKernel",
+    "EconomicTradeKernel",
+    "CulturalInfluenceKernel",
+    "MovementKernel",
+    "FamilyInteractionKernel",
+    "ResourceManagementKernel",
+    "GPUMemoryManager",
+    "FlameGPUProfiler",
+]

@@ -1,4 +1,4 @@
-# Add Padres dependencies here later 
+# Add Padres dependencies here later
 pybullet==3.2.5
 websockets
 numpy
@@ -8,4 +8,4 @@ wandb # for process_mode and general logging
 anthropic # for llm_services if used directly by spatial_env or its demo runner
 # We are aiming for the service API to not directly make LLM calls,
 # so anthropic might not be strictly needed here if that refactoring is complete.
-# For now, include fastapi & uvicorn for the API service. 
+# For now, include fastapi & uvicorn for the API service.

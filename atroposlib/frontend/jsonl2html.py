@@ -51,7 +51,7 @@ def create_html_for_group(group_data, index):
         print(
             f"Warning: Group {index} has mismatched lengths for messages "
             f"({len(messages)}) and scores ({len(scores)}). "
-            f"Skipping items.",
+            "Skipping items.",
             file=sys.stderr,
         )
         min_len = min(len(messages), len(scores))
@@ -66,7 +66,7 @@ def create_html_for_group(group_data, index):
         score_class = get_score_class(score)
         item_id = f"group-{index}-item-{i}"
         items_html += textwrap.dedent(
-            f"""\
+            """\
             <div class="item {score_class}" id="{item_id}">
                 <h4>Content {i}</h4>
                 <div class="content-block">
@@ -87,7 +87,7 @@ def create_html_for_group(group_data, index):
 
     # Use <details> and <summary> for native collapsibility
     group_html = textwrap.dedent(
-        f"""\
+        """\
         <details>
             <summary>Group {index}</summary>
             <div class="group-content">
@@ -163,7 +163,7 @@ def generate_html(input_path: str, output_path: str = None):
                     else:
                         print(
                             f"Warning: Skipping line {line_num}. "
-                            f"Invalid format (missing 'messages' or 'scores'): "
+                            "Invalid format (missing "messages' or 'scores'): "
                             f"{line[:100]}...",
                             file=sys.stderr,
                         )
@@ -200,7 +200,7 @@ def generate_html(input_path: str, output_path: str = None):
         )
     except KeyError as e:
         print(
-            f"Error: Template file '{TEMPLATE_FILE}' is missing a required placeholder: {{{e}}}",
+            "Error: Template file "{TEMPLATE_FILE}' is missing a required placeholder: {{{e}}}",
             file=sys.stderr,
         )
         sys.exit(1)

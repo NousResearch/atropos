@@ -30,7 +30,7 @@ Cross-application analysis revealed that dynamic occlusion culling offered signi
 
 **5. AI DISCOVERIES**
 
-The AI autonomously identified several novel optimization strategies.  Unexpectedly, it discovered a positive correlation between increased ambient occlusion and FPS in the flight simulator.  Further investigation revealed that this was due to a specific interaction between the game engine’s rendering pipeline and the chosen ambient occlusion technique, effectively reducing overdraw. The RL agent learned to dynamically adjust anti-aliasing based on the scene's motion complexity, minimizing aliasing artifacts while conserving rendering resources.  
+The AI autonomously identified several novel optimization strategies.  Unexpectedly, it discovered a positive correlation between increased ambient occlusion and FPS in the flight simulator.  Further investigation revealed that this was due to a specific interaction between the game engine’s rendering pipeline and the chosen ambient occlusion technique, effectively reducing overdraw. The RL agent learned to dynamically adjust anti-aliasing based on the scene's motion complexity, minimizing aliasing artifacts while conserving rendering resources.
 
 Furthermore, the anomaly detection algorithm flagged an unusually low FPS in specific scenarios within the puzzle game.  Analysis revealed a memory leak related to object instantiation, a previously unknown bug that manual testing had failed to detect. This highlights the AI’s capability to uncover unexpected performance bottlenecks beyond simple parameter tuning.
 

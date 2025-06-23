@@ -33,7 +33,7 @@ class AIScientistManager:
     def __init__(self):
         self.v1_templates = ["spatial_reasoning", "vr_affordances", "visual_cues"]
         self.v2_agentic = True
-        
+
     def generate_research_paper(self, experiment_results):
         # Use v1 for well-defined spatial reasoning problems
         # Use v2 for open-ended VR exploration
@@ -60,7 +60,7 @@ class FunSearchManager:
     def __init__(self):
         self.evaluator_nodes = 150
         self.sampler_nodes = 15
-        
+
     def evolve_spatial_functions(self, vr_environment_data):
         # Evolve priority functions for spatial reasoning
         # Discover new VR affordance algorithms
@@ -82,7 +82,7 @@ class SpatialFunctionEvolver:
             # FunSearch will evolve this function
             pass
         """
-        
+
     def evaluate_spatial_function(self, function, test_cases):
         # Evaluate how well the function performs spatial reasoning
         # Use Padres API results as ground truth
@@ -104,7 +104,7 @@ class SyntheticUserManager:
     def __init__(self):
         self.cultural_profiles = self.load_cultural_data()
         self.neurological_profiles = self.load_neurological_data()
-        
+
     def generate_diverse_users(self, count=10000):
         # Generate users with different:
         # - Cultural backgrounds (50+ countries)
@@ -129,7 +129,7 @@ class VREnvironmentManager:
             'contexts': ['office', 'home', 'outdoor', 'industrial'],
             'lighting': ['bright', 'dim', 'colored', 'dynamic']
         }
-        
+
     def create_parallel_environments(self, count=1000):
         # Create diverse VR testing environments
         # Each with different physics, contexts, lighting
@@ -149,7 +149,7 @@ class CrossDomainInspiration:
             'casinos': 'attention_capture_mechanisms',
             'nature': 'organic_movement_patterns'
         }
-        
+
     def generate_inspired_hypotheses(self, domain):
         # Use AI Scientist to generate papers inspired by other domains
         # "Firefly-Inspired VR Visual Cues for Enhanced Spatial Navigation"
@@ -167,12 +167,12 @@ ai_scientist_cluster:
   instances: 10
   machine_type: "n1-standard-8"
   gpu: "nvidia-tesla-t4"
-  
+
 funsearch_cluster:
   samplers: 15
   evaluators: 150
   machine_type: "n1-standard-4"
-  
+
 vr_simulation_cluster:
   instances: 50
   machine_type: "n1-highmem-8"
@@ -265,4 +265,4 @@ export S2_API_KEY="your_semantic_scholar_key"  # For literature search
 4. **Week 3**: Scale to full multi-environment testing
 5. **Week 4**: Launch continuous discovery pipeline
 
-This integration plan transforms AMIEN from a research pipeline into a **discovery engine** capable of autonomous scientific breakthroughs in VR spatial reasoning. 
+This integration plan transforms AMIEN from a research pipeline into a **discovery engine** capable of autonomous scientific breakthroughs in VR spatial reasoning.

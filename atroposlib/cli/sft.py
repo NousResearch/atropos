@@ -213,7 +213,7 @@ async def sft_data_grabber(
     # Check for file existence before opening
     if os.path.exists(filepath) and not append_to_previous:
         raise ValueError(
-            f"File '{filepath}' already exists and --append-to-previous is False."
+            "File "{filepath}' already exists and --append-to-previous is False."
         )
 
     # Open the file in write or append mode

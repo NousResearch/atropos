@@ -1,14 +1,14 @@
 # VR Performance Analysis: A Practical Study
 
 ## Abstract
-This study presents a comprehensive performance analysis of VRTestApp 
-        using automated testing methodologies. We conducted 1 performance tests 
-        with a 100.0% success rate. 
-        
-        Key findings include: Average frame rate: 85.3 FPS (std: 0.0); Best performing GPU: T4 (85.3 FPS); Average VR comfort score: 87.2/100. 
-        
-        The results provide insights into VR performance characteristics and identify optimization opportunities 
-        for improved user experience. Our methodology demonstrates the effectiveness of automated performance 
+This study presents a comprehensive performance analysis of VRTestApp
+        using automated testing methodologies. We conducted 1 performance tests
+        with a 100.0% success rate.
+
+        Key findings include: Average frame rate: 85.3 FPS (std: 0.0); Best performing GPU: T4 (85.3 FPS); Average VR comfort score: 87.2/100.
+
+        The results provide insights into VR performance characteristics and identify optimization opportunities
+        for improved user experience. Our methodology demonstrates the effectiveness of automated performance
         testing for VR application analysis.
 
 # Introduction

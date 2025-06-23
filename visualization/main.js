@@ -44,9 +44,9 @@ if (btnNextLLMTask) {
             // Optionally disable the button temporarily to prevent spamming
             btnNextLLMTask.disabled = true;
             // Re-enable after a delay, or based on a response from the server if implemented
-            setTimeout(() => { 
+            setTimeout(() => {
                 if (socket && socket.readyState === WebSocket.OPEN) {
-                    btnNextLLMTask.disabled = false; 
+                    btnNextLLMTask.disabled = false;
                 }
             }, 3000); // Re-enable after 3s, adjust as needed
         } else {
@@ -58,4 +58,4 @@ if (btnNextLLMTask) {
 // Initial connection attempt
 connectWebSocket();
 
-// ... rest of your main.js (init, animate, etc.) 
+// ... rest of your main.js (init, animate, etc.)

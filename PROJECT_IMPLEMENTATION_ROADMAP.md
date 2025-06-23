@@ -7,7 +7,7 @@
 
 #### Week 1: Core Infrastructure
 - [ ] **Day 1-2**: Set up project structure and dependency management
-- [ ] **Day 3-4**: Install and configure Mesa-frames 
+- [ ] **Day 3-4**: Install and configure Mesa-frames
 - [ ] **Day 5-7**: Set up Atropos framework and basic LLM integration
 
 #### Week 2: Basic Agent Framework
@@ -114,4 +114,4 @@ sqlalchemy>=2.0.0
 - Progress against daily goals
 - Performance metrics review
 - Blocker identification and resolution
-- Next-day planning and resource allocation 
+- Next-day planning and resource allocation

@@ -36,7 +36,7 @@ fi
 
 REGION="us-central1"  # Specific region for Cloud Run and Artifact Registry
 # LOCATION_FOR_ARTIFACTS_AND_BQ="US" # Multi-region for BigQuery dataset, region for Artifact Registry
-SERVICE_NAME="spatial-research-pipeline" 
+SERVICE_NAME="spatial-research-pipeline"
 IMAGE_NAME="${SERVICE_NAME}-image"
 ARTIFACT_REGISTRY_REPO="${SERVICE_NAME}-repo"
 # SERVICE_URL for spatial-research-pipeline will be fetched after its deployment
@@ -141,7 +141,7 @@ echo "Phase 4: Granting IAM permissions to the service account..."
 "${GCLOUD_CMD}" projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
     --role="roles/secretmanager.secretAccessor" \
-    --condition=None > /dev/null 
+    --condition=None > /dev/null
 
 # Grant Cloud Run SA permission to write to the GCS buckets
 gsutil iam ch "serviceAccount:${SERVICE_ACCOUNT_EMAIL}:objectAdmin" "gs://${PAPER_GCS_BUCKET_NAME}/" >/dev/null
@@ -319,7 +319,7 @@ echo "Cloud Scheduler jobs setup complete via gcloud CLI."
 
 # --- Deployment Finished ---
 echo " "
-echo "🚀 Deployment of '${SERVICE_NAME}' service and scheduler setup complete!" 
+echo "🚀 Deployment of '${SERVICE_NAME}' service and scheduler setup complete!"
 echo "Service URL: ${DEPLOYED_SERVICE_URL}"
 echo "Remember: Access to this service is restricted."
 
@@ -328,10 +328,10 @@ echo "Remember: Access to this service is restricted."
 # echo "Consider setting up Cloud Scheduler to trigger your endpoints as needed using cloud_scheduler_setup.py."
 # export GCP_PROJECT_ID="${PROJECT_ID}"
 # export GCP_REGION="${REGION}"
-# export CLOUD_RUN_INVOKE_URL="${DEPLOYED_SERVICE_URL}" 
+# export CLOUD_RUN_INVOKE_URL="${DEPLOYED_SERVICE_URL}"
 # # Ensure this SCHEDULER_SERVICE_ACCOUNT_EMAIL is the one with invoker permissions and you have actAs on it if it's not your user ADC.
-# export SCHEDULER_SERVICE_ACCOUNT_EMAIL="custom-scheduler-sa@${PROJECT_ID}.iam.gserviceaccount.com" 
+# export SCHEDULER_SERVICE_ACCOUNT_EMAIL="custom-scheduler-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 # cd /Users/carlos/NOUS # Or your project path
 # source .venv_x86_64_py310_hackathon/bin/activate # Or your venv
 # pip install -r requirements.txt # Ensure google-cloud-scheduler is there
-# python cloud_scheduler_setup.py 
+# python cloud_scheduler_setup.py
