@@ -1,0 +1,22 @@
+env:
+  # Standard environment configuration
+  wandb_name: bleuberi
+  dataset_name: "allenai/tulu-3-sft-mixture"
+  reward_funcs:
+    - "bleu"
+  ref_models:
+    - "gold"
+  # Use a tokenizer that's compatible with OpenAI models
+  tokenizer_name: "gpt2"
+
+server:
+  timeout: 1200
+  num_max_requests_at_once: 8
+  num_requests_for_eval: 16
+  server_type: "openai"
+  model_name: "gpt-4.1-nano"  # Or your preferred model
+  base_url: "https://api.openai.com/v1"  # Or your custom server URL
+  api_key: "${OPENAI_API_KEY}"  # Will be loaded from environment variable
+  temperature: 0.7
+  max_tokens: 1024
+  top_p: 0.95
