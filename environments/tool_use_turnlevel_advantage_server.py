@@ -46,9 +46,11 @@ from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 # Easy-to-change constants for experimentation - modify these for quick testing
 WRONG_CALL_PENALTY = -0.2
-MAX_GEN_PER_TURN = 1024
-MAX_TOOL_CALL_TURNS = 3
-VALIDATE_THINK_BLOCKS = True
+MAX_GEN_PER_TURN = 512
+MAX_TOOL_CALL_TURNS = 2
+REQUIRE_SEQUENTIAL_TOOL_CALLS = False
+VALIDATE_THINK_BLOCKS = False
+USE_PARALLEL_REQUESTS = True
 TURN_LEVEL_ADVANTAGE_LAMBDA = 0.5  # Paper uses 1.0, experiment with 0.1, 0.5, 1.0
 
 
@@ -57,6 +59,10 @@ class MTGRPOEnvConfig(BaseEnvConfig):
     max_tool_call_turns: int = Field(
         default=2,
         description="Hard cap on how many tool-call turns we will actually roll out"
+    )
+    require_sequential_tool_calls: bool = Field(
+        default=False,
+        description="Only keep samples where tool calls are sequential (no human messages between tool calls)"
     )
     validate_think_blocks: bool = Field(
         default=True,
@@ -74,6 +80,10 @@ class MTGRPOEnvConfig(BaseEnvConfig):
         default=0.5,
         description="Turn-level advantage coefficient (λ in MT-GRPO paper). Paper implementation uses 1.0, but we can experiment with different values like 0.1, 0.5, 1.0"
     )
+    use_parallel_requests: bool = Field(
+        default=True,
+        description="Whether to use parallel requests instead of n parameter for batching (set True for providers that don't support n parameter like OpenRouter)"
+    )
 
 system_prompt = (
     "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the "
@@ -82,6 +92,41 @@ system_prompt = (
     "</think> tags, and then provide your solution or response to the problem."
 )
 
+def _normalize_tool_call_json(txt: str) -> str:
+    """
+    Normalize the entire response structure:
+    - Preserve <think> block
+    - Convert Python dict style tool calls to proper JSON format
+    """
+    # First extract the think block
+    think_match = re.match(r"^\s*(<think>[\s\S]*?</think>)\s*", txt)
+    if not think_match:
+        return txt
+    think_block = think_match.group(1)
+    
+    # Then normalize tool calls
+    def replace_tool_call(match):
+        content = match.group(1).strip()
+        try:
+            obj = ast.literal_eval(content)
+            return f"<tool_call>{json.dumps(obj)}</tool_call>"
+        except Exception:
+            pass
+            
+        try:
+            json_str = re.sub(r"'([^']*)':", r'"\1":', content)  # Handle dict keys
+            json_str = re.sub(r':\s*\'([^\']*)\'', r': "\1"', json_str)  # Handle string values
+            json.loads(json_str)  # Validate
+            return f"<tool_call>{json_str}</tool_call>"
+        except Exception:
+            print(f"Failed to normalize JSON: {content}")
+            return match.group(0)
+    
+    # Replace tool calls after the think block
+    rest_of_text = txt[len(think_match.group(0)):]
+    normalized_calls = re.sub(r"<tool_call>\s*(.*?)\s*</tool_call>", replace_tool_call, rest_of_text, flags=re.DOTALL)
+    
+    return think_block + normalized_calls
 
 def _validate_reply_and_extract(txt: str):
     """
@@ -91,6 +136,11 @@ def _validate_reply_and_extract(txt: str):
       - nothing else except whitespace/newlines
     Returns list of tool-call JSONs if valid, else None.
     """
+    print(f"\033[93mValidating text:\033[0m \033[94m{repr(txt)}\033[0m")
+    
+    # Normalize first - convert Python dict style to proper JSON
+    txt = _normalize_tool_call_json(txt)
+    
     _allowed_re = re.compile(
         r"""^\s*
              <think>[\s\S]*?</think>\s*
@@ -101,17 +151,20 @@ def _validate_reply_and_extract(txt: str):
         re.IGNORECASE | re.VERBOSE,
     )
     if not isinstance(txt, str) or not _allowed_re.match(txt):
+        print("Failed regex match!")
         return None
-    # Extract tool_call JSONs
+        
+    # Extract tool_call JSONs (now properly formatted)
     matches = re.findall(r"<tool_call>\s*(.*?)\s*</tool_call>", txt, re.DOTALL | re.IGNORECASE)
+    print(f"Found matches: {matches}")
     jsons = []
     for m in matches:
         try:
-            jsons.append(json.loads(m))
-        except Exception:
+            jsons.append(json.loads(m))  # Should work now since we normalized
+        except Exception as e:
+            print(f"Failed to parse JSON: {e}\nContent: {m}")
             pass
     return jsons
-
 
 def _json_objects_match(model_json, expected_json):
     """
@@ -131,6 +184,30 @@ def _json_objects_match(model_json, expected_json):
                 return False
     return True
 
+def _check_sequential_tools(conv: List[Dict[str, str]]) -> bool:
+    """
+    Check if tool calls are sequential (only tool responses between assistant tool calls).
+    Returns True if sequential, False otherwise.
+    """
+    tool_call_indices = []
+    
+    # Find indices of tool call messages
+    for i, msg in enumerate(conv):
+        if msg["from"] in ("gpt", "assistant") and "<tool_call>" in msg["value"].lower():
+            tool_call_indices.append(i)
+    
+    # Check messages between tool calls
+    for i in range(len(tool_call_indices) - 1):
+        start_idx = tool_call_indices[i]
+        end_idx = tool_call_indices[i + 1]
+        messages_between = conv[start_idx + 1:end_idx]
+        
+        # Only allow tool responses between tool calls
+        for msg in messages_between:
+            if msg["from"] != "tool":
+                return False
+                
+    return True
 
 class MultiTurnToolCallingTurnLevelAdvantageEnv(BaseEnv):
 
@@ -145,7 +222,9 @@ class MultiTurnToolCallingTurnLevelAdvantageEnv(BaseEnv):
     ):
         super().__init__(config, server_configs, slurm, testing)
         # Load dataset once and cache on this instance
-        self.ds = load_dataset("interstellarninja/salesforce_hermes_thinking", split="train")
+        #self.ds = load_dataset("interstellarninja/hermes_salesforce_apigen_tool_use", split="train")
+
+        self.ds = load_dataset("interstellarninja/hermes_salesforce_apigen_tool_use", split="train")
 
         self.percent_correct_buffer: List[float] = []
         self.raw_score_buffer: List[float] = []
@@ -180,7 +259,9 @@ class MultiTurnToolCallingTurnLevelAdvantageEnv(BaseEnv):
             wrong_call_penalty=WRONG_CALL_PENALTY,
             max_gen_per_turn=MAX_GEN_PER_TURN,
             max_tool_call_turns=MAX_TOOL_CALL_TURNS,
+            require_sequential_tool_calls=REQUIRE_SEQUENTIAL_TOOL_CALLS,
             validate_think_blocks=VALIDATE_THINK_BLOCKS,
+            use_parallel_requests=USE_PARALLEL_REQUESTS,
             turn_level_advantage_lambda=TURN_LEVEL_ADVANTAGE_LAMBDA,
         )
         server_cfgs = [
@@ -198,6 +279,7 @@ class MultiTurnToolCallingTurnLevelAdvantageEnv(BaseEnv):
         ds = self.ds.shuffle()
 
         counts = Counter()
+        sequential_counts = Counter()
         for row in ds:
             conv = row["conversations"]
             num_turns = 0
@@ -207,21 +289,20 @@ class MultiTurnToolCallingTurnLevelAdvantageEnv(BaseEnv):
                 ):
                     num_turns += 1
             counts[num_turns] += 1
+            
+            # Also count sequential tool calls
+            if num_turns > 0 and _check_sequential_tools(conv):
+                sequential_counts[num_turns] += 1
+                
         print("Tool-call distribution (tool_calls_per_convo → examples):")
         for k in sorted(counts):
-            print(f"  {k:2d} → {counts[k]}")
+            print(f"  {k:2d} → {counts[k]} total, {sequential_counts[k]} sequential")
 
         split = ds.train_test_split(0.02)
         split["train"] = split["train"].shuffle()
         split["test"] = split["test"].shuffle()
         self._prep_items(split["train"], is_train=True)
         self._prep_items(split["test"], is_train=False)
-
-        random.shuffle(self.train_items)
-        random.shuffle(self.test_items)
-
-        if not self.train_items:
-            raise ValueError("No training items prepared: check dataset formatting.")
 
     def _prep_items(self, dataset, *, is_train: bool):
         """
@@ -329,6 +410,11 @@ class MultiTurnToolCallingTurnLevelAdvantageEnv(BaseEnv):
             while len(inter_turns) < max(0, len(expected_calls_by_turn) - 1):
                 inter_turns.append([])
 
+            # Add the sequential tool calls check HERE, before the final if statement
+            if self.config.require_sequential_tool_calls and not _check_sequential_tools(conv):
+                continue
+
+            # The existing final check
             if tool_call_turns == self.config.max_tool_call_turns:
                 target.append((tuple(running_msgs), expected_calls_by_turn, inter_turns))
 
@@ -592,10 +678,12 @@ class MultiTurnToolCallingTurnLevelAdvantageEnv(BaseEnv):
                 prompt=prompt, n=1, max_tokens=self.config.max_token_length, temperature=0.0, split="eval"
             )
             reply = comp.choices[0].text
-            ctx.append({"role": "assistant", "content": reply})
+            reply = _normalize_tool_call_json(reply)
             tool_jsons = _validate_reply_and_extract(reply)
             if tool_jsons is None:
                 break
+            # Only append valid replies
+            ctx.append({"role": "assistant", "content": reply})
             preds.extend(tool_jsons)
             # Check if we've processed enough turns
             if turn_idx >= len(expected_calls_by_turn) - 1:
@@ -657,12 +745,15 @@ class MultiTurnToolCallingTurnLevelAdvantageEnv(BaseEnv):
 
     async def _execute_turn_inference(self, turn_idx: int, prompts: List[str], ridx_map: List[int]) -> List[str]:
         """Execute inference for a turn using optimal batching strategy."""
-        if turn_idx == 0:
-            # Turn 1: Use n parameter for identical prompts
-            return await self._batch_identical_prompts(prompts[0], len(ridx_map), turn_idx)
+        print(f"\n\033[95m=== Expected Tool Calls for Turn {turn_idx+1} ===\033[0m")
+        print(f"\033[95m{self.expected_calls_by_turn[turn_idx]}\033[0m\n")
+
+        if turn_idx == 0 and not self.config.use_parallel_requests:
+            choices = await self._batch_identical_prompts(prompts[0], len(ridx_map), turn_idx)
         else:
-            # Later turns: Use parallel requests for heterogeneous prompts
-            return await self._batch_heterogeneous_prompts(prompts, turn_idx)
+            choices = await self._batch_heterogeneous_prompts(prompts, turn_idx)
+
+        return choices
 
     async def _batch_identical_prompts(self, prompt: str, count: int, turn_idx: int) -> List[str]:
         """Handle identical prompts efficiently using n parameter."""
@@ -727,21 +818,16 @@ class MultiTurnToolCallingTurnLevelAdvantageEnv(BaseEnv):
                                     responses_by_turn: List[List[str]], active: List[bool], expected_calls_by_turn: List[List[str]]) -> None:
         """Process and validate responses for a single turn."""
         for txt, r in zip(choices, ridx_map):
+            print(f"\n\033[93m=== Processing Response {r} ===\033[0m")
             txt = txt or ""
+
             contexts[r].append({"role": "assistant", "content": txt})
-            
-            # Store response by turn for reward computation
-            while len(responses_by_turn[r]) <= turn_idx:
-                responses_by_turn[r].append("")
-            responses_by_turn[r][turn_idx] = txt
-            
             calls = _validate_reply_and_extract(txt)
-            
-            # Ensure preds_by_turn has enough turns
-            while len(preds_by_turn[r]) <= turn_idx:
-                preds_by_turn[r].append([])
+            print(f"Extracted calls: {calls}")
+            print(f"Expected calls: {expected_calls_by_turn[turn_idx]}")
             
             if calls is None:
+                print("Failed to extract calls")
                 preds_by_turn[r][turn_idx].append("__MISMATCH__")
                 active[r] = False
                 continue
@@ -751,6 +837,7 @@ class MultiTurnToolCallingTurnLevelAdvantageEnv(BaseEnv):
             
             # Check if number of calls matches
             if len(calls) != len(expected_turn_calls):
+                print(f"Number of calls mismatch: got {len(calls)}, expected {len(expected_turn_calls)}")
                 preds_by_turn[r][turn_idx].append("__MISMATCH__")
                 active[r] = False
                 continue
@@ -761,7 +848,9 @@ class MultiTurnToolCallingTurnLevelAdvantageEnv(BaseEnv):
                     exp_obj = json.loads(exp_raw)
                 except Exception:
                     exp_obj = ast.literal_eval(exp_raw)
+                print(f"Comparing:\nModel: {json.dumps(mdl, indent=2)}\nExpected: {json.dumps(exp_obj, indent=2)}")
                 if not _json_objects_match(mdl, exp_obj):
+                    print("Mismatch found!")
                     mismatch = True
                     break
                     
@@ -783,6 +872,7 @@ class MultiTurnToolCallingTurnLevelAdvantageEnv(BaseEnv):
         Roll-out multi-turn tool-calling with turn-level advantage computation.
         """
         messages_tuple, expected_calls_by_turn, inter_turns = item
+        self.expected_calls_by_turn = expected_calls_by_turn
         base_ctx = [dict(m) for m in messages_tuple]
 
         num_rollouts = self.config.group_size
