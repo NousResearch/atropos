@@ -219,7 +219,7 @@ def _validate_think_only(txt: str) -> bool:
     think_blocks = re.findall(r"<think>[\s\S]*?</think>", txt, flags=re.IGNORECASE)
     if len(think_blocks) != 1:
         return False
-        
+
     # Must be at the start
     if not re.match(r"^\s*<think>", txt, flags=re.IGNORECASE):
         return False
@@ -230,24 +230,27 @@ def _validate_think_only(txt: str) -> bool:
 
     return True
 
+
 def _validate_think_plus_calls(txt: str):
     """
     Validate a GPT reply that should contain exactly one <think> … </think> followed by
     one or more <tool_call> … </tool_call> blocks.
     """
     txt = _normalize_tool_call_json(txt)
-    
+
     # Check for exactly one think block
     think_blocks = re.findall(r"<think>[\s\S]*?</think>", txt, flags=re.IGNORECASE)
     if len(think_blocks) != 1:
         return None
-        
+
     # Must start with the think block
     if not re.match(r"^\s*<think>", txt, flags=re.IGNORECASE):
         return None
 
     # Must be followed by at least one tool call
-    tool_calls = re.findall(r"<tool_call>\s*([\s\S]*?)\s*</tool_call>", txt, flags=re.IGNORECASE)
+    tool_calls = re.findall(
+        r"<tool_call>\s*([\s\S]*?)\s*</tool_call>", txt, flags=re.IGNORECASE
+    )
     if not tool_calls:
         return None
 
