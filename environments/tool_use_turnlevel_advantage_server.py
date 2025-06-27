@@ -152,11 +152,11 @@ def _normalize_tool_call_json(txt: str) -> str:
     if not think_match:
         return txt
     think_block = think_match.group(1)
-    
+
     # Ensure think block ends with newline
     if not think_block.endswith('\n'):
         think_block += '\n'
-    
+
     # Then normalize tool calls
     def replace_tool_call(match):
         content = match.group(1).strip()
@@ -178,7 +178,7 @@ def _normalize_tool_call_json(txt: str) -> str:
     # Replace tool calls after the think block
     rest_of_text = txt[len(think_match.group(0)):]
     normalized_calls = re.sub(r"<tool_call>\s*(.*?)\s*</tool_call>", replace_tool_call, rest_of_text, flags=re.DOTALL)
-    
+
     # Clean up any multiple newlines
     result = think_block + normalized_calls
     result = re.sub(r'\n{3,}', '\n\n', result)
@@ -216,7 +216,7 @@ def _validate_think_plus_calls(txt: str):
     """
     Validate a GPT reply that should contain exactly one <think> … </think> followed by
     one or more <tool_call> … </tool_call> blocks.
-    
+
     Returns normalized JSON objects with proper double quotes.
     """
     txt = _normalize_tool_call_json(txt)
@@ -324,7 +324,7 @@ def _check_sequential_tools(conv: List[Dict[str, str]]) -> bool:
 def _detect_conversation_pattern(conv: List[Dict[str, str]]) -> Optional[str]:
     """
     Detect the conversation pattern and return the scenario category.
-    
+
     Returns:
     - "single": exactly one tool-calling turn
     - "multistep": ≥2 sequential tool-calling turns, no human interruption
@@ -336,23 +336,23 @@ def _detect_conversation_pattern(conv: List[Dict[str, str]]) -> Optional[str]:
         i for i, m in enumerate(conv)
         if m["from"] in ("gpt", "assistant") and "<tool_call>" in m["value"].lower()
     ]
-    
+
     if not tool_indices:
         return None
-        
+
     # Find first assistant message
     first_assistant_idx = next(
-        (i for i, m in enumerate(conv[2:], start=2) 
+        (i for i, m in enumerate(conv[2:], start=2)
         if m["from"] in ("gpt", "assistant")),
         None
     )
-    
+
     # Check for human messages after first tool call
     human_after_first_tool = any(
-        i > tool_indices[0] and m["from"] == "human" 
+        i > tool_indices[0] and m["from"] == "human"
         for i, m in enumerate(conv)
     )
-    
+
     # Determine pattern
     if len(tool_indices) == 1:
         return "single"
@@ -363,24 +363,24 @@ def _detect_conversation_pattern(conv: List[Dict[str, str]]) -> Optional[str]:
             return "multistep"
         elif human_after_first_tool:
             return "multiturn"
-            
+
     return None
 
 def _extract_inter_turn_context(
-    conv: List[Dict[str, str]], 
+    conv: List[Dict[str, str]],
     current_idx: int,
     next_idx: int,
     scenario: str
 ) -> List[Dict[str, str]]:
     """
     Extract the context messages between two tool-calling turns.
-    
+
     Args:
         conv: Full conversation
         current_idx: Index of current tool-calling turn
         next_idx: Index of next tool-calling turn (or None for last turn)
         scenario: The conversation scenario category
-        
+
     Returns:
         List of context messages to include between turns
     """
@@ -407,41 +407,41 @@ def _build_system_prompt(
 ) -> str:
     """
     Build the complete system prompt with appropriate components.
-    
+
     Args:
         base_system: Base system message
         tools_block: The tools definition block
         dynamic_example: Optional dynamic few-shot example
         scenario: The conversation scenario category
-        
+
     Returns:
         Complete system prompt
     """
     example = dynamic_example if dynamic_example else few_shot_example
     combined = f"{system_prompt}\n\n{base_system}\n\n{example}"
-    
+
     # Add sequential helper for multistep scenario
     #if scenario == "multistep":
     #    combined += f"\n\n{SEQ_TOOL_HELPER}"
-        
+
     return combined
 
 class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
 
     name = "multiturn_tool_use_turnlevel_advantage"
 
-    def __init__(self, config: MTGRPOEnvConfig, server_configs: List[APIServerConfig], 
+    def __init__(self, config: MTGRPOEnvConfig, server_configs: List[APIServerConfig],
                 slurm: bool = True, testing: bool = False):
         super().__init__(config, server_configs, slurm, testing)
         #self.ds = load_dataset("interstellarninja/toolace_hermes_sequential_tool_use", split="train")
         self.ds = load_dataset("interstellarninja/hermes_salesforce_apigen_tool_use", split="train")
-        
+
         # Existing buffers
         self.percent_correct_buffer: List[float] = []
         self.raw_score_buffer: List[float] = []
         self.eval_metrics: List[Tuple[str, float]] = []
         self.rollouts_for_wandb: List = []
-        
+
         # New: track dynamic examples
         self.dynamic_example: Optional[str] = None
 
@@ -501,7 +501,7 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
             "multistep": Counter(),
             "multiturn": Counter()
         }
-        
+
         for row in ds:
             conv = row["conversations"]
             num_turns = 0
@@ -511,7 +511,7 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
                 ):
                     num_turns += 1
             counts[num_turns] += 1
-            
+
             # Categorize by scenario
             pattern = _detect_conversation_pattern(conv)
             if pattern:
@@ -536,21 +536,21 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
 
         for row in dataset:
             conv = row["conversations"]
-            
+
             # Basic validation
             if len(conv) < 3 or conv[0]["from"] != "system" or conv[1]["from"] != "human":
                 continue
-                
+
             # Skip completed tasks
             if self.config.skip_completed and COMPLETED_TASKS:
                 if conv[1]["value"].strip() in COMPLETED_TASKS:
                     continue
-                    
+
             # Detect conversation pattern
             pattern = _detect_conversation_pattern(conv)
             if pattern != self.config.scenario_category:
                 continue
-                
+
             # Build system prompt
             running_msgs = []
             system_content = _build_system_prompt(
@@ -564,16 +564,16 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
             if pattern == "multistep":
                 user_content = f"{user_content}\n\n{SEQ_TOOL_HELPER}"
             running_msgs.append(frozenset({"role": "user", "content": user_content}.items()))
-            
+
             # Process tool-calling turns
             tool_indices = [
                 i for i, m in enumerate(conv)
                 if m["from"] in ("gpt", "assistant") and "<tool_call>" in m["value"].lower()
             ]
-            
+
             expected_calls_by_turn = []
             inter_turns = []
-            
+
             # Extract tool calls using direct regex like before
             for i, tool_idx in enumerate(tool_indices):
                 matches = re.findall(
@@ -581,7 +581,7 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
                     conv[tool_idx]["value"],
                     re.DOTALL | re.IGNORECASE
                 )
-                
+
                 # Don't skip on validation failure, try to parse what we can
                 turn_calls = []
                 for raw in matches:
@@ -591,21 +591,21 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
                     except Exception:
                         # If JSON parsing fails, use the raw string
                         turn_calls.append(raw)
-                
+
                 if turn_calls:  # Only add if we found any calls
                     expected_calls_by_turn.append(turn_calls)
-                    
+
                     # Build inter-turn context
                     if i < len(tool_indices) - 1:
                         inter_turn = _extract_inter_turn_context(
                             conv, tool_idx, tool_indices[i + 1], pattern
                         )
                         inter_turns.append(inter_turn)
-            
+
             # Handle final summary turn if needed
             if self.config.generate_all_gpt_turns:
                 last_response_idx = tool_indices[-1] + 1
-                if (last_response_idx + 1 < len(conv) 
+                if (last_response_idx + 1 < len(conv)
                     and conv[last_response_idx + 1]["from"] in ("gpt", "assistant")
                     and "<tool_call>" not in conv[last_response_idx + 1]["value"]):
                     expected_calls_by_turn.append([])
@@ -613,14 +613,14 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
                         "role": "tool",
                         "content": conv[last_response_idx]["value"]
                     }])
-                    
+
             # Apply turn cap
-            if (self.config.max_tool_call_turns_cap is not None 
+            if (self.config.max_tool_call_turns_cap is not None
                 and len(expected_calls_by_turn) > self.config.max_tool_call_turns_cap):
                 cut = self.config.max_tool_call_turns_cap
                 expected_calls_by_turn = expected_calls_by_turn[:cut]
                 inter_turns = inter_turns[:cut - 1]
-                
+
             # Only add if we have valid tool calls for a multistep scenario
             if pattern == "multistep" and len(expected_calls_by_turn) >= 2:
                 target.append((tuple(running_msgs), expected_calls_by_turn, inter_turns))
@@ -628,39 +628,39 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
         print(f"[prep_items] {'train' if is_train else 'test'}: added {len(target)-before_len} items.")
 
     def _compute_turn_and_outcome_rewards(
-        self, 
-        responses_by_turn: List[str], 
-        pred_calls_by_turn: List[List], 
+        self,
+        responses_by_turn: List[str],
+        pred_calls_by_turn: List[List],
         expected_calls_by_turn: List[List[str]]
     ) -> Tuple[List[float], float]:
         """
         Compute turn-level rewards (R_T) and outcome-level reward (R_O).
-        
+
         Turn-level rewards: Based on proper <think> blocks + <tool_call> blocks + tool call matches
-        Outcome reward: 
+        Outcome reward:
         - 1.0 if reached and validated final turn successfully
         - 0.5 if reached final turn but didn't validate perfectly
         - 0.0 if didn't reach final turn
         """
         turn_rewards = []
         completed_turns = 0
-        
+
         # Process each turn that was attempted
         for turn_idx, (response, pred_turn) in enumerate(zip(responses_by_turn, pred_calls_by_turn)):
             expected_turn = expected_calls_by_turn[turn_idx]
             turn_reward = 0.0
-            
+
             # Validate based on whether this turn expects tool calls
             if expected_turn:  # Tool-calling turn
                 validation_result = _validate_think_plus_calls(response)
                 has_valid_structure = validation_result is not None
-                
+
                 # Check tool call matches if structure is valid
                 tool_calls_match = False
                 if has_valid_structure and pred_turn:
                     # Handle early termination mismatch
                     actual_pred_turn = pred_turn[:-1] if pred_turn[-1] == "__MISMATCH__" else pred_turn
-                    
+
                     # Parse expected calls
                     exp_jsons = []
                     for raw in expected_turn:
@@ -668,37 +668,37 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
                             exp_jsons.append(json.loads(raw))
                         except json.JSONDecodeError:
                             exp_jsons.append(ast.literal_eval(raw))
-                    
+
                     # Check all tool calls match
                     if len(actual_pred_turn) == len(exp_jsons):
-                        correct = sum(1 for p, e in zip(actual_pred_turn, exp_jsons) 
+                        correct = sum(1 for p, e in zip(actual_pred_turn, exp_jsons)
                                     if _json_objects_match(p, e))
                         tool_calls_match = (correct == len(exp_jsons))
-                        
+
             else:  # Summary/narration turn
                 has_valid_structure = _validate_think_only(response)
                 tool_calls_match = True  # Not applicable for summary turns
-                
+
             # Compute turn reward
             if has_valid_structure:
                 turn_reward += 0.5  # Reward for proper structure
             if tool_calls_match:
                 turn_reward += 0.5  # Reward for correct tool calls
                 completed_turns += 1
-                
+
             # Apply mismatch penalty if needed
             if pred_turn and pred_turn[-1] == "__MISMATCH__":
                 turn_reward += self.config.wrong_call_penalty
-                
+
             turn_rewards.append(turn_reward)
-        
+
         # Fill in -1.0 rewards for turns that weren't attempted
         while len(turn_rewards) < len(expected_calls_by_turn):
             turn_rewards.append(-1.0)
-        
+
         # Outcome reward: binary signal for MT-GRPO advantage computation
         outcome_reward = 1.0 if completed_turns == len(expected_calls_by_turn) else 0.0
-        
+
         return turn_rewards, outcome_reward
 
     def _compute_mt_grpo_advantages(self, turn_rewards_batch: List[List[float]], outcome_rewards_batch: List[float]) -> List[List[float]]:
@@ -717,16 +717,16 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
         """
         if not turn_rewards_batch:
             return []
-            
+
         # Find the maximum number of turns across all rollouts
         max_turns = max(len(rewards) for rewards in turn_rewards_batch)
-        
+
         # Compute standardized turn advantages (A_T_i) for each turn
         turn_advantages_by_turn = []
         for turn_idx in range(max_turns):
             # Collect rewards for this turn across all rollouts
             turn_rewards = [
-                rewards[turn_idx] if turn_idx < len(rewards) else 0.0 
+                rewards[turn_idx] if turn_idx < len(rewards) else 0.0
                 for rewards in turn_rewards_batch
             ]
             # Standardize
@@ -735,30 +735,30 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
             if std_turn == 0:
                 std_turn = 1.0
             turn_advantages_by_turn.append((np.array(turn_rewards) - mean_turn) / std_turn)
-        
+
         # Compute standardized outcome advantages (A_O)
         mean_outcome = np.mean(outcome_rewards_batch)
         std_outcome = np.std(outcome_rewards_batch)
         if std_outcome == 0:
             std_outcome = 1.0
         outcome_advantages = (np.array(outcome_rewards_batch) - mean_outcome) / std_outcome
-        
+
         # Combine according to MT-GRPO formula
         mt_grpo_advantages = []
         for rollout_idx in range(len(turn_rewards_batch)):
             rollout_advantages = []
             actual_num_turns = len(turn_rewards_batch[rollout_idx])
-            
+
             for turn_idx in range(actual_num_turns):
                 if turn_idx < actual_num_turns - 1:  # Not the final turn
                     # A_T_i + λ * A_O for all non-final turns
-                    adv = (turn_advantages_by_turn[turn_idx][rollout_idx] + 
+                    adv = (turn_advantages_by_turn[turn_idx][rollout_idx] +
                         self.config.turn_level_advantage_lambda * outcome_advantages[rollout_idx])
                 else:  # Final turn
                     # A_O only for final turn
                     adv = outcome_advantages[rollout_idx]
                 rollout_advantages.append(adv)
-                
+
             mt_grpo_advantages.append(rollout_advantages)
         
         return mt_grpo_advantages
@@ -870,24 +870,24 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
         base_ctx = [dict(m) for m in messages_tuple]
         ctx = list(base_ctx)
         preds = []
-        
+
         # Iterate through turns
         for turn_idx, expected_turn_calls in enumerate(expected_calls_by_turn):
             if turn_idx > 0 and turn_idx - 1 < len(inter_turns):
                 ctx.extend(inter_turns[turn_idx - 1])
-                
+
             prompt = self.tokenizer.apply_chat_template(ctx, add_generation_prompt=True, tokenize=False)
             max_toks = max(1, self.config.max_token_length - len(prompt))
             comp = await self.server.completion(
-                prompt=prompt, 
-                n=1, 
+                prompt=prompt,
+                n=1,
                 max_tokens=max_toks,  # Use computed max_toks
-                temperature=0.0, 
+                temperature=0.0,
                 split="eval"
             )
             reply = comp.choices[0].text
             reply = _normalize_tool_call_json(reply)  # Important: normalize first
-            
+
             # Validate based on whether this turn expects tool calls
             if expected_turn_calls:  # Tool-calling turn
                 tool_jsons = _validate_think_plus_calls(reply)
@@ -897,10 +897,10 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
             else:  # Summary turn
                 if not _validate_think_only(reply):
                     break
-                    
+
             # Only append valid replies to context
             ctx.append({"role": "assistant", "content": reply})
-            
+
             # Check if we've processed enough turns
             if turn_idx >= len(expected_calls_by_turn) - 1:
                 break
@@ -908,7 +908,7 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
         # Flatten expected calls for scoring
         expected_calls_flat = [call for turn_calls in expected_calls_by_turn for call in turn_calls]
         score = self._score_episode(
-            preds, 
+            preds,
             expected_calls_flat,
             wrong_call_penalty=self.config.wrong_call_penalty
         )
@@ -969,9 +969,9 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
         return prompts, ridx_map
 
     async def _execute_turn_inference(
-        self, 
-        turn_idx: int, 
-        prompts: List[str], 
+        self,
+        turn_idx: int,
+        prompts: List[str],
         ridx_map: List[int],
         expected_calls_by_turn: List[List[str]]
     ) -> List[str]:
@@ -989,7 +989,7 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
     async def _batch_identical_prompts(self, prompt: str, count: int, turn_idx: int) -> List[str]:
         """Handle identical prompts efficiently using n parameter."""
         print(f"    \033[93m→ TURN {turn_idx+1} prompt full:\033[0m \033[92m{prompt}\033[0m")
-        
+
         gen_limit = self.config.max_gen_per_turn
         resp = await self.server.completion(
             prompt=prompt,
@@ -1045,7 +1045,7 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
             choices.append(raw)
         
         return choices
-    
+
     async def _process_turn_responses(
         self,
         turn_idx: int,
@@ -1062,10 +1062,10 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
             print(f"\n\033[93m=== Processing Response {r} ===\033[0m")
             raw_txt = txt or ""
             norm_txt = _normalize_tool_call_json(raw_txt)
-            
+
             # Store response for reward computation
             responses_by_turn[r].append(norm_txt)
-            
+
             expected_turn_calls = expected_calls_by_turn[turn_idx]
             is_valid = False
 
@@ -1148,25 +1148,25 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
 
         for turn_idx in range(max_turns):
             prompts, ridx_map = await self._build_turn_contexts(turn_idx, contexts, inter_turns, active)
-            
+
             # Only break if no prompts AND no active rollouts completed all turns
             if not prompts:
                 break
 
             # Execute inference for this turn
             choices = await self._execute_turn_inference(
-                turn_idx, 
-                prompts, 
+                turn_idx,
+                prompts,
                 ridx_map,
                 expected_calls_by_turn
             )
-            
+
             # Process and validate responses
             await self._process_turn_responses(
-                turn_idx, choices, ridx_map, contexts, preds_by_turn, 
+                turn_idx, choices, ridx_map, contexts, preds_by_turn,
                 responses_by_turn, active, expected_calls_by_turn
             )
-            
+
             if not any(active):
                 break
 
@@ -1178,12 +1178,12 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
             turn_rewards, outcome_reward = self._compute_turn_and_outcome_rewards(
                 responses_by_turn[r], preds_by_turn[r], expected_calls_by_turn
             )
-            
+
             # Compute MT-GRPO advantages
             mt_grpo_advantages = self._compute_mt_grpo_advantages(
                 [turn_rewards], [outcome_reward]
             )[0]  # Get advantages for this rollout
-            
+
             # Tokenize and store results
             out = tokenize_for_trainer(
                 tokenizer=self.tokenizer,
