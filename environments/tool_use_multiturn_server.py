@@ -198,17 +198,20 @@ def _validate_think_only(txt: str) -> bool:
     A narration / summary turn must:
     • start with exactly one <think> … </think> block
     • contain **no** <tool_call> tags anywhere
+    • contain no additional <think> blocks
     Anything after the </think> (user‑visible answer) is allowed.
     """
     txt = _normalize_tool_call_json(txt)
     if not isinstance(txt, str):
         return False
 
-    # Must begin with one think block
-    begins_with_think = re.match(
-        r"^\s*<think>[\s\S]*?</think>", txt, flags=re.IGNORECASE
-    )
-    if not begins_with_think:
+    # Must begin with exactly one think block and no more think blocks after
+    think_blocks = re.findall(r"<think>[\s\S]*?</think>", txt, flags=re.IGNORECASE)
+    if len(think_blocks) != 1:
+        return False
+        
+    # Must be at the start
+    if not re.match(r"^\s*<think>", txt, flags=re.IGNORECASE):
         return False
 
     # Must not contain any <tool_call>
@@ -217,29 +220,30 @@ def _validate_think_only(txt: str) -> bool:
 
     return True
 
-
 def _validate_think_plus_calls(txt: str):
     """
-    Validate a GPT reply that should contain <think> … </think> followed by
+    Validate a GPT reply that should contain exactly one <think> … </think> followed by
     one or more <tool_call> … </tool_call> blocks.
-
-    Returns:
-        list[dict]  – Parsed tool‑call JSONs  (≥1)   → valid
-        None        – Any structural / JSON error   → invalid
     """
-    # First normalise
     txt = _normalize_tool_call_json(txt)
-
-    pat = re.compile(
-        r"""^\s*<think>[\s\S]*?</think>\s*(?:<tool_call>[\s\S]*?</tool_call>\s*)+\s*$""",
-        flags=re.IGNORECASE | re.VERBOSE,
-    )
-    if not isinstance(txt, str) or not pat.match(txt):
+    
+    # Check for exactly one think block
+    think_blocks = re.findall(r"<think>[\s\S]*?</think>", txt, flags=re.IGNORECASE)
+    if len(think_blocks) != 1:
+        return None
+        
+    # Must start with the think block
+    if not re.match(r"^\s*<think>", txt, flags=re.IGNORECASE):
         return None
 
+    # Must be followed by at least one tool call
+    tool_calls = re.findall(r"<tool_call>\s*([\s\S]*?)\s*</tool_call>", txt, flags=re.IGNORECASE)
+    if not tool_calls:
+        return None
+
+    # Parse tool calls
     tool_jsons = []
-    for raw in re.findall(r"<tool_call>\s*([\s\S]*?)\s*</tool_call>", txt,
-                          flags=re.DOTALL | re.IGNORECASE):
+    for raw in tool_calls:
         try:
             tool_jsons.append(json.loads(raw))
         except Exception:
