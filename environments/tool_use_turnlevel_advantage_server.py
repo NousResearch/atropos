@@ -1,4 +1,3 @@
-
 """
 Multi-Turn Tool-Calling Environment with Turn-Level Advantages
 ==============================================================
@@ -7,10 +6,10 @@ Extends the multi-turn tool-calling environment to implement turn-level credit a
 following the MT-GRPO approach from "Turn-Level Credit Assignment for Multi-Turn LLM Agents".
 
 Key differences from the base multiturn environment:
-    • Computes both turn-level rewards (R_T) and outcome-level rewards (R_O)  
+    • Computes both turn-level rewards (R_T) and outcome-level rewards (R_O)
     • Implements MT-GRPO advantage computation:
       - Turn 1: A_T_1 + λ * A_O
-      - Turn 2: A_T_2 + λ * A_O  
+      - Turn 2: A_T_2 + λ * A_O
       - Turn 3: A_O (outcome only)
     • Populates per-token advantages in ScoredDataGroup instead of just scores
     • Enables fine-grained credit assignment across turns
@@ -20,19 +19,19 @@ Dataset columns expected
 * `conversations` – list[dict] with keys `from` and `value`
 """
 
+import ast
+import asyncio
 import json
 import random
 import re
-import asyncio
-import ast
-import numpy as np
-from typing import Dict, List, Optional, Tuple, Union
 from collections import Counter
+from typing import Dict, List, Optional, Tuple, Union
 
+import numpy as np
 import wandb
 from datasets import load_dataset
-from tqdm.asyncio import tqdm_asyncio
 from pydantic import Field
+from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
     APIServerConfig,
@@ -83,7 +82,7 @@ class MTGRPOEnvConfig(BaseEnvConfig):
     )
     max_gen_per_turn: int = Field(
         default=1024,
-        description="Hard cap on how many new tokens the model may generate in a single turn"
+        description="Hard cap on how many new tokens the model may generate in a single turn",
     )
     wrong_call_penalty: float = Field(
         default=-0.2,
@@ -109,6 +108,7 @@ class MTGRPOEnvConfig(BaseEnvConfig):
         default=0.5,
         description="Turn-level advantage coefficient (λ in MT-GRPO paper)"
     )
+
 
 system_prompt = (
     "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the "
@@ -165,16 +165,18 @@ def _normalize_tool_call_json(txt: str) -> str:
             return f"\n<tool_call>\n{json.dumps(obj, separators=(',', ':'))}\n</tool_call>\n"
         except Exception:
             pass
-            
+
         try:
             json_str = re.sub(r"'([^']*)':", r'"\1":', content)  # Handle dict keys
-            json_str = re.sub(r':\s*\'([^\']*)\'', r': "\1"', json_str)  # Handle string values
+            json_str = re.sub(
+                r":\s*\'([^\']*)\'", r': "\1"', json_str
+            )  # Handle string values
             json.loads(json_str)  # Validate
             return f"\n<tool_call>\n{json_str}\n</tool_call>\n"
         except Exception:
             print(f"Failed to normalize JSON: {content}")
             return match.group(0)
-    
+
     # Replace tool calls after the think block
     rest_of_text = txt[len(think_match.group(0)):]
     normalized_calls = re.sub(r"<tool_call>\s*(.*?)\s*</tool_call>", replace_tool_call, rest_of_text, flags=re.DOTALL)
@@ -259,6 +261,7 @@ def _validate_think_plus_calls(txt: str):
     return tool_jsons
 
 
+
 def _json_objects_match(model_json, expected_json):
     """
     True when every key/value in expected_json appears exactly in model_json.
@@ -276,6 +279,7 @@ def _json_objects_match(model_json, expected_json):
             if model_json[k] != v:
                 return False
     return True
+
 
 def _check_sequential_tools(conv: List[Dict[str, str]]) -> bool:
     """
@@ -625,7 +629,9 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
             if pattern == "multistep" and len(expected_calls_by_turn) >= 2:
                 target.append((tuple(running_msgs), expected_calls_by_turn, inter_turns))
 
-        print(f"[prep_items] {'train' if is_train else 'test'}: added {len(target)-before_len} items.")
+        print(
+            f"[prep_items] {'train' if is_train else 'test'}: added {len(target)-before_len} items."
+        )
 
     def _compute_turn_and_outcome_rewards(
         self, 
@@ -701,17 +707,19 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
         
         return turn_rewards, outcome_reward
 
-    def _compute_mt_grpo_advantages(self, turn_rewards_batch: List[List[float]], outcome_rewards_batch: List[float]) -> List[List[float]]:
+    def _compute_mt_grpo_advantages(
+        self, turn_rewards_batch: List[List[float]], outcome_rewards_batch: List[float]
+    ) -> List[List[float]]:
         """
         Compute MT-GRPO advantages following the paper:
         - Turn 1: A_T_1 + λ * A_O
-        - Turn 2: A_T_2 + λ * A_O  
+        - Turn 2: A_T_2 + λ * A_O
         - Turn 3: A_O (outcome only)
-        
+
         Args:
             turn_rewards_batch: List of turn rewards for each rollout [num_rollouts x num_turns]
             outcome_rewards_batch: List of outcome rewards for each rollout [num_rollouts]
-            
+
         Returns:
             List of advantages for each rollout [num_rollouts x num_turns]
         """
@@ -760,29 +768,35 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
                 rollout_advantages.append(adv)
                 
             mt_grpo_advantages.append(rollout_advantages)
-        
+
         return mt_grpo_advantages
 
-    def _assign_advantages_to_tokens(self, contexts: List[List[Dict[str, str]]], advantages_by_turn: List[List[float]]) -> List[List[float]]:
+    def _assign_advantages_to_tokens(
+        self,
+        contexts: List[List[Dict[str, str]]],
+        advantages_by_turn: List[List[float]],
+    ) -> List[List[float]]:
         """
         Assign turn-level advantages to tokens in a turn-based manner.
-        
+
         Our approach:
         - Each assistant message = one turn (tool call round)
         - Turn 1, 2, ..., N-1: A_T_i + λ * A_O (turn + outcome advantages)
         - Turn N (final): A_O only (outcome advantage)
         - Assign the turn's advantage to ALL tokens in that assistant message
-        
+
         Args:
             contexts: List of conversation contexts for each rollout
             advantages_by_turn: List of advantages for each turn for each rollout
-            
+
         Returns:
             List of per-token advantages for each rollout
         """
         per_token_advantages = []
-        
-        for rollout_idx, (context, turn_advantages) in enumerate(zip(contexts, advantages_by_turn)):
+
+        for rollout_idx, (context, turn_advantages) in enumerate(
+            zip(contexts, advantages_by_turn)
+        ):
             # Tokenize the full conversation to get tokens and masks
             out = tokenize_for_trainer(
                 tokenizer=self.tokenizer,
@@ -791,25 +805,25 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
             )
             tokens = out["tokens"]
             masks = out["masks"]
-            
+
             # Initialize advantages for all tokens
             token_advantages = [0.0] * len(tokens)
-            
+
             # Find assistant message boundaries and assign turn-specific advantages
             assistant_turn_idx = 0
             current_advantage = turn_advantages[0] if turn_advantages else 0.0
-            
+
             # Track if we're currently in an assistant message
             in_assistant_msg = False
             assistant_start_idx = -1
-            
+
             for i, (token_id, mask) in enumerate(zip(tokens, masks)):
                 if mask != -100:  # Non-padding token
                     # Decode a small window to detect message boundaries
                     start_idx = max(0, i - 10)
                     end_idx = min(len(tokens), i + 10)
                     token_window = self.tokenizer.decode(tokens[start_idx:end_idx])
-                    
+
                     # Detect start of new assistant message
                     if "assistant" in token_window.lower() and not in_assistant_msg:
                         in_assistant_msg = True
@@ -817,29 +831,31 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
                         # Use current turn advantage
                         if assistant_turn_idx < len(turn_advantages):
                             current_advantage = turn_advantages[assistant_turn_idx]
-                    
+
                     # Detect end of assistant message (start of next role)
-                    elif ("user" in token_window.lower() or "tool" in token_window.lower()) and in_assistant_msg:
+                    elif (
+                        "user" in token_window.lower() or "tool" in token_window.lower()
+                    ) and in_assistant_msg:
                         # Apply advantage to all tokens in the assistant message we just finished
                         for j in range(assistant_start_idx, i):
                             if masks[j] != -100:
                                 token_advantages[j] = current_advantage
-                        
+
                         in_assistant_msg = False
                         assistant_turn_idx += 1
-                    
+
                     # If we're in an assistant message, apply current advantage
                     elif in_assistant_msg:
                         token_advantages[i] = current_advantage
-            
+
             # Handle case where conversation ends with assistant message
             if in_assistant_msg and assistant_start_idx != -1:
                 for j in range(assistant_start_idx, len(tokens)):
                     if masks[j] != -100:
                         token_advantages[j] = current_advantage
-            
+
             per_token_advantages.append(token_advantages)
-        
+
         return per_token_advantages
 
     @staticmethod
@@ -904,7 +920,7 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
             # Check if we've processed enough turns
             if turn_idx >= len(expected_calls_by_turn) - 1:
                 break
-        
+
         # Flatten expected calls for scoring
         expected_calls_flat = [call for turn_calls in expected_calls_by_turn for call in turn_calls]
         score = self._score_episode(
@@ -916,7 +932,9 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
 
     async def evaluate(self, *_, **__):
         subset = self.test_items[: min(128, len(self.test_items))]
-        scores = await tqdm_asyncio.gather(*[self.rollout_and_score_eval(it) for it in subset])
+        scores = await tqdm_asyncio.gather(
+            *[self.rollout_and_score_eval(it) for it in subset]
+        )
         avg_reward = sum(scores) / len(scores)
         pct_exact = sum(1 for s in scores if s >= 1.0) / len(scores)
         self.eval_metrics.append(("eval/avg_reward", avg_reward))
@@ -945,6 +963,13 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
         inter_turns: List[List[Dict[str, str]]],
         active: List[bool],
     ) -> Tuple[List[str], List[int]]:
+    async def _build_turn_contexts(
+        self,
+        turn_idx: int,
+        contexts: List[List[Dict[str, str]]],
+        inter_turns: List[List[Dict[str, str]]],
+        active: List[bool],
+    ) -> Tuple[List[str], List[int]]:
         """Build prompts for the current turn from active rollout contexts."""
         # Add inter-turn context if not the first turn
         if turn_idx > 0 and turn_idx - 1 < len(inter_turns):
@@ -966,6 +991,7 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
             prompts.append(ptxt)
             ridx_map.append(r)
 
+
         return prompts, ridx_map
 
     async def _execute_turn_inference(
@@ -980,13 +1006,17 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
         print(f"\033[95m{expected_calls_by_turn[turn_idx]}\033[0m\n")
 
         if turn_idx == 0 and not self.config.use_parallel_requests:
-            choices = await self._batch_identical_prompts(prompts[0], len(ridx_map), turn_idx)
+            choices = await self._batch_identical_prompts(
+                prompts[0], len(ridx_map), turn_idx
+            )
         else:
             choices = await self._batch_heterogeneous_prompts(prompts, turn_idx)
 
         return choices
 
-    async def _batch_identical_prompts(self, prompt: str, count: int, turn_idx: int) -> List[str]:
+    async def _batch_identical_prompts(
+        self, prompt: str, count: int, turn_idx: int
+    ) -> List[str]:
         """Handle identical prompts efficiently using n parameter."""
         print(f"    \033[93m→ TURN {turn_idx+1} prompt full:\033[0m \033[92m{prompt}\033[0m")
         
@@ -998,25 +1028,31 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
             temperature=0.8,
         )
         choices = [c.text for c in resp.choices]
-        
+
         # Debug: print each rollout
         for i, raw in enumerate(choices):
-            print(f"    \033[93m· turn {turn_idx+1} rollout raw [{i}]:\033[0m \033[94m{raw}\033[0m")
+            print(
+                f"    \033[93m· turn {turn_idx+1} rollout raw [{i}]:\033[0m \033[94m{raw}\033[0m"
+            )
             if not raw.strip():
                 print(f"      → (empty or error string returned for rollout {i})")
-        print("    → All turn 1 rollouts printed; moving on.\n" + "-"*48)
-        
+        print("    → All turn 1 rollouts printed; moving on.\n" + "-" * 48)
+
         return choices
 
-    async def _batch_heterogeneous_prompts(self, prompts: List[str], turn_idx: int) -> List[str]:
+    async def _batch_heterogeneous_prompts(
+        self, prompts: List[str], turn_idx: int
+    ) -> List[str]:
         """Handle heterogeneous prompts using parallel requests."""
         if turn_idx == 1:
             print("=== DEBUG: Now parallelizing Turn 2 prompts ===")
         print(f"    → Parallelizing {len(prompts)} prompts at turn {turn_idx+1}")
-        
+
         # Print each prompt
         for idx_p, p_str in enumerate(prompts):
-            print(f"    \033[93m→ TURN-{turn_idx+1} prompt[{idx_p}] full:\033[0m \033[92m{p_str}\033[0m")
+            print(
+                f"    \033[93m→ TURN-{turn_idx+1} prompt[{idx_p}] full:\033[0m \033[92m{p_str}\033[0m"
+            )
 
         async def _call_single(prompt_str: str) -> str:
             try:
@@ -1039,11 +1075,14 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
         choices = []
         for i, rtext in enumerate(results):
             raw = rtext or ""
-            print(f"    \033[93m· rollout {i} (Turn {turn_idx+1}) full reply:\033[0m \033[94m{raw}\033[0m\n" + "-"*48)
+            print(
+                f"    \033[93m· rollout {i} (Turn {turn_idx+1}) full reply:\033[0m \033[94m{raw}\033[0m\n"
+                + "-" * 48
+            )
             if not raw:
                 print(f"    → Rollout {i} returned empty or error string")
             choices.append(raw)
-        
+
         return choices
     
     async def _process_turn_responses(
@@ -1260,8 +1299,8 @@ class MultiTurnToolUseTurnLevelAdvantageEnv(BaseEnv):
         metrics = await self.create_rollout_table(metrics)
         if self.raw_score_buffer:
             avg_reward = sum(self.raw_score_buffer) / len(self.raw_score_buffer)
-            pct_correct = (
-                sum(self.percent_correct_buffer) / len(self.percent_correct_buffer)
+            pct_correct = sum(self.percent_correct_buffer) / len(
+                self.percent_correct_buffer
             )
             metrics["train/avg_reward"] = avg_reward
             metrics["train/percent_correct"] = pct_correct
