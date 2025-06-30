@@ -122,10 +122,17 @@ class InternBootcampEnv(BaseEnv):
         ItemGroup = Dict[str, Union[str, List[RolloutDetail]]]
         self.rollouts_to_save_buffer: List[ItemGroup] = []
         self.processed_item_count = 0
-        # Creates .../atropos/environments/datadumps/ relative to this file
-        self.datadumps_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "datadumps"
-        )
+        # Use the configured data path directory for rollouts
+        if self.config.data_path_to_save_groups:
+            # Extract directory from the configured data path
+            self.datadumps_dir = os.path.dirname(
+                os.path.expanduser(self.config.data_path_to_save_groups)
+            )
+        else:
+            # Fallback to default directory if no path configured
+            self.datadumps_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "datadumps"
+            )
         self.save_file_batch_num = 0
 
         self.system_prompt = SYSTEM_PROMPT

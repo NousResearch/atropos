@@ -1,0 +1,60 @@
+---
+# Configuration for InternBootcamp data generation using serve mode
+# This runs with the Atropos API server to collect SFT data
+
+env:
+  # Task configuration - RandomTask selects from all available bootcamp tasks
+  task_name: "RandomTask"
+  task_params: {}
+  
+  # Reward configuration for scoring
+  correct_reward: 1.0
+  incorrect_reward: -0.5
+  format_bonus: 0.2
+  
+  # Generation parameters
+  group_size: 16  # Generate 16 responses per problem for rejection sampling
+  total_steps: 50000  # Number of problems to generate
+  
+  # Reasoning requirements
+  require_reasoning: true
+  min_reasoning_length: 50
+  
+  # Sampling parameters
+  temperature: 0.7
+  top_p: 0.9
+  max_token_length: 16384
+  
+  # Output configuration for serve mode
+  data_path_to_save_groups: "${HOME}/atropos/data/intern_bootcamp_serve_data.jsonl"
+  ensure_scores_are_not_same: false  # Allow rejection sampling
+  include_messages: true  # Save full conversations
+  
+  # Tokenizer (should match the model being used)
+  tokenizer_name: "deepseek-ai/DeepSeek-R1"
+  
+  # WandB tracking - disabled for data collection without trainer
+  use_wandb: false
+  wandb_name: "intern_bootcamp_serve_datagen"
+  
+  # Enable rollout dumping for SFT data collection
+  dump_rollouts: true
+  
+  # API server configuration
+  rollout_server_url: "http://localhost:8000"
+  batch_size: 256
+  max_num_workers: 32
+  
+  # Inference weight for data collection
+  inference_weight: 1.0
+
+# OpenAI-compatible API configuration pointing to local SGLang
+openai:
+  - model_name: "deepseek-ai/DeepSeek-R1"
+    base_url: "http://localhost:9000/v1"
+    api_key: "dummy"
+    num_requests_for_eval: 64
+
+# Disable SLURM for local serving
+slurm: false
+testing: false

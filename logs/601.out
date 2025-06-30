@@ -1,0 +1,23 @@
+Starting InternBootcamp data generation on node: d2dfac12-029.cloud.together.ai
+Job ID: 601
+Log directory: /home/maxpaperclips/atropos/logs/601
+Starting Atropos API server...
+API server started with PID: 447755
+Starting SGLang server with DP=4, TP=2...
+SGLang server started with PID: 447764
+Waiting for SGLang to initialize...
+Waiting for SGLang... (1/60)
+Waiting for SGLang... (2/60)
+Waiting for SGLang... (3/60)
+Waiting for SGLang... (4/60)
+Waiting for SGLang... (5/60)
+Waiting for SGLang... (6/60)
+Waiting for SGLang... (7/60)
+Waiting for SGLang... (8/60)
+Waiting for SGLang... (9/60)
+Waiting for SGLang... (10/60)
+Waiting for SGLang... (11/60)
+Waiting for SGLang... (12/60)
+Waiting for SGLang... (13/60)
+Waiting for SGLang... (14/60)
+Waiting for SGLang... (15/60)

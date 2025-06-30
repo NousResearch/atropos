@@ -5,7 +5,8 @@ from typing import Dict, List, Optional, Tuple
 from datasets import load_dataset
 from pydantic import Field
 
-from atroposlib.envs.base import BaseEnv, BaseEnvConfig, OpenaiConfig, ScoredDataGroup
+from atroposlib.envs.base import BaseEnv, BaseEnvConfig, ScoredDataGroup
+from atroposlib.envs.server_handling.server_baseline import APIServerConfig
 from atroposlib.type_definitions import Item
 
 
@@ -58,7 +59,7 @@ class SFTEnv(BaseEnv):
     def __init__(
         self,
         config: SFTConfig,
-        server_configs: List[OpenaiConfig],
+        server_configs: List[APIServerConfig],
         slurm=True,
         testing=False,
     ):
@@ -72,7 +73,7 @@ class SFTEnv(BaseEnv):
         self.last_step = -1
 
     @classmethod
-    def config_init(cls) -> Tuple[BaseEnvConfig, List[OpenaiConfig]]:
+    def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = SFTConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
             group_size=8,
@@ -91,7 +92,7 @@ class SFTEnv(BaseEnv):
             max_sft_per_step=8,
         )
         server_configs = [
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9001/v1",
                 api_key="x",
@@ -235,7 +236,7 @@ async def checkout_formatting():
             dataset_column_name="conversations",
         ),
         server_configs=[
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9001/v1",
                 api_key="x",

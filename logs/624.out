@@ -1,0 +1,41 @@
+Starting InternBootcamp data generation on node: d2dfac12-029.cloud.together.ai
+Job ID: 624
+Log directory: /home/maxpaperclips/atropos/logs/624
+Starting Atropos API server...
+API server started with PID: 589103
+Starting SGLang server with DP=4, TP=2...
+SGLang server started with PID: 589117
+Waiting for SGLang to initialize...
+Waiting for SGLang... (1/60)
+Waiting for SGLang... (2/60)
+Waiting for SGLang... (3/60)
+Waiting for SGLang... (4/60)
+Waiting for SGLang... (5/60)
+Waiting for SGLang... (6/60)
+Waiting for SGLang... (7/60)
+Waiting for SGLang... (8/60)
+Waiting for SGLang... (9/60)
+Waiting for SGLang... (10/60)
+Waiting for SGLang... (11/60)
+Waiting for SGLang... (12/60)
+Waiting for SGLang... (13/60)
+Waiting for SGLang... (14/60)
+Waiting for SGLang... (15/60)
+Waiting for SGLang... (16/60)
+Waiting for SGLang... (17/60)
+Waiting for SGLang... (18/60)
+Waiting for SGLang... (19/60)
+Waiting for SGLang... (20/60)
+Waiting for SGLang... (21/60)
+Waiting for SGLang... (22/60)
+Waiting for SGLang... (23/60)
+SGLang is ready!
+Starting InternBootcamp environment server...
+InternBootcamp environment started with PID: 594073
+All services started. Monitoring...
+Logs are in: /home/maxpaperclips/atropos/logs/624
+Data will be saved to: /home/maxpaperclips/atropos/data/
+InternBootcamp environment completed. Cleaning up...
+Data generation completed!
+Check logs in: /home/maxpaperclips/atropos/logs/624
+Data files in: /home/maxpaperclips/atropos/data/
