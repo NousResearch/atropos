@@ -26,7 +26,7 @@ env:
   max_token_length: 16384
   
   # Output configuration for serve mode
-  data_path_to_save_groups: "${HOME}/atropos/data/intern_bootcamp_serve_data.jsonl"
+  data_path_to_save_groups: "/home/maxpaperclips/atropos/data/intern_bootcamp_serve_data.jsonl"
   ensure_scores_are_not_same: false  # Allow rejection sampling
   include_messages: true  # Save full conversations
   

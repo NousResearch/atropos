@@ -110,27 +110,35 @@ Environment → collect_trajectories() → dump_rollouts → JSONL files → atr
 ## InternBootcamp Data Generation on BS200 Cluster
 
 ### Overview
-The InternBootcamp environment generates verifiable reasoning tasks for training LLMs. The new setup uses the `serve` mode with SFT data collection instead of the older `process` mode.
+The InternBootcamp environment generates verifiable reasoning tasks for training LLMs. The setup uses `serve` mode with SFT data collection and a fake trainer to enable data dumping without actual RL training.
 
 ### Key Files
 - **SLURM Script**: `intern_bootcamp_datagen.slurm`
 - **Serve Config**: `environments/intern_bootcamp/config_serve.yaml`
 - **Environment**: `environments/intern_bootcamp/intern_bootcamp_env.py`
-- **Output Data**: `~/atropos/data/intern_bootcamp_rollouts_*.jsonl`
+- **Fake Trainer**: `fake_trainer.py` - Required to fetch batches from API server
+- **Output Data**: `/home/maxpaperclips/atropos/data/intern_bootcamp_*.jsonl`
 
 ### Architecture
 1. **SGLang Server**: Runs on 8 B200 GPUs (180GB VRAM each)
-   - Data Parallelism (DP): 4 replicas
-   - Tensor Parallelism (TP): 2 GPUs per replica
-   - Single endpoint on port 9000
+   - Tensor Parallelism (TP): 8 GPUs
+   - Model: deepseek-ai/DeepSeek-R1 (high quality reasoning)
+   - Port: 9000
    
-2. **Atropos API Server**: Manages trajectory collection on CPUs
+2. **Atropos API Server**: Manages trajectory collection
    - Launched with `run-api` (non-blocking)
-   - Coordinates between environment and inference
+   - Requires a trainer to register and fetch batches
+   - Port: 8000
    
-3. **InternBootcamp Environment**: Generates problems and collects responses
-   - Runs in `serve` mode with SFT data dumping enabled
-   - Saves rollouts periodically to JSONL files
+3. **Fake Trainer**: Enables data collection without RL training
+   - Registers with API server as a trainer
+   - Continuously fetches batches to allow environment to proceed
+   - Required because API server blocks environments until trainer starts
+   
+4. **InternBootcamp Environment**: Generates problems and collects responses
+   - Runs in `serve` mode with `dump_rollouts: true`
+   - Generates 16 responses per problem for rejection sampling
+   - Saves data every 100 problems
 
 ### Running Data Generation
 ```bash
@@ -141,64 +149,87 @@ sbatch intern_bootcamp_datagen.slurm
 tail -f logs/$SLURM_JOB_ID/api.log
 tail -f logs/$SLURM_JOB_ID/sglang.log  
 tail -f logs/$SLURM_JOB_ID/intern_bootcamp.log
+tail -f logs/$SLURM_JOB_ID/fake_trainer.log
 
-# Check data generation
-ls -la ~/atropos/data/intern_bootcamp_rollouts_*.jsonl
+# Check data generation (note: may be in literal ${HOME} directory due to bug)
+ls -la ~/atropos/data/intern_bootcamp*.jsonl
+ls -la '${HOME}'/atropos/data/intern_bootcamp*.jsonl
 ```
 
 ### Configuration Details
-- **Model**: Configure in SLURM script (`MODEL_NAME` variable)
-- **Data Output**: `~/atropos/data/` (no shared `/data/` on BS200)
+- **Model**: deepseek-ai/DeepSeek-R1 (configured in SLURM script)
+- **Data Output**: `/home/maxpaperclips/atropos/data/`
+- **Total Steps**: 50,000 problems (800,000 total responses with group_size=16)
+- **Max Token Length**: 16,384 (appropriate for 8B model training)
+- **Temperature**: 0.7, Top-p: 0.9
 - **Logs**: `logs/$SLURM_JOB_ID/`
-- **Rollout Dumping**: Enabled via `dump_rollouts: true`
-- **Batch Size**: 16 responses per problem for rejection sampling
-- **Total Steps**: 1000 problems (16,000 total responses)
+
+### Critical Fixes Applied
+
+1. **Git Submodule**: InternBootcamp library must be initialized
+   ```bash
+   git submodule update --init --recursive
+   cd environments/intern_bootcamp/internbootcamp_lib
+   uv pip install -e .
+   ```
+
+2. **Disable WandB**: Add `--env.use_wandb false` to environment launch
+
+3. **Import Errors**: Fixed in `sft_loader_server.py`
+   - Changed `OpenaiConfig` to `APIServerConfig`
+   - Import from `atroposlib.envs.server_handling.server_baseline`
+
+4. **Fake Trainer Required**: API server requires active trainer
+   - Created `fake_trainer.py` that registers and fetches batches
+   - Without this, environment gets stuck "waiting for trainer to start"
+
+5. **Path Expansion Bug**: Config uses absolute paths
+   - Environment doesn't expand `${HOME}` variables
+   - Use absolute paths like `/home/maxpaperclips/atropos/data/`
 
 ### Post-Processing
 After data generation completes:
 ```bash
 # Convert rollouts to SFT format
 atropos-sft-gen ~/atropos/data/intern_bootcamp_rollouts_*.jsonl \
-    --tokenizer NousResearch/Hermes-3-Llama-3.1-8B \
+    --tokenizer deepseek-ai/DeepSeek-R1 \
+    --output ~/atropos/data/intern_bootcamp_sft.jsonl
+
+# If data is in ${HOME} directory:
+atropos-sft-gen '${HOME}'/atropos/data/intern_bootcamp_rollouts_*.jsonl \
+    --tokenizer deepseek-ai/DeepSeek-R1 \
     --output ~/atropos/data/intern_bootcamp_sft.jsonl
 
 # Filter high-quality responses (optional)
 jq 'select(.score > 0.5)' ~/atropos/data/intern_bootcamp_sft.jsonl > ~/atropos/data/intern_bootcamp_sft_filtered.jsonl
 ```
 
-### Monitoring and Debugging
-- WandB tracking enabled for real-time metrics
-- Check SGLang health: `curl http://localhost:9000/v1/models`
-- API server status: `curl http://localhost:8000/health`
-- Environment saves rollouts every 100 items to prevent data loss
+### Common Issues and Solutions
 
-### Common Issues
-1. **SGLang not starting**: Check VRAM usage and model size
-2. **API server connection failed**: Ensure run-api started successfully
-3. **No data output**: Check `dump_rollouts: true` in config
-4. **Out of memory**: Adjust `--mem-fraction-static` in SGLang or reduce DP/TP
-5. **SLURM job stuck in PD**: Check available nodes with `sinfo` and ensure sufficient GPU resources
+1. **ModuleNotFoundError: internbootcamp**
+   - Initialize git submodule and install with uv pip
 
-### Current Setup Status (2025-06-30)
-The SGLang server launch command has been updated to use the working configuration:
-```bash
-nohup python3 -m sglang.launch_server \
-    --model ${MODEL_NAME} \
-    --tp 8 \
-    --trust-remote-code \
-    --host 0.0.0.0 \
-    --port 9000 \
-    --disable-outlines-disk-cache \
-    --grammar-backend xgrammar \
-    --attention-backend triton
-```
+2. **Environment stuck "waiting for trainer"**
+   - Launch fake_trainer.py to register and fetch batches
+   - API server requires active trainer even for data collection
 
-**Next Steps**:
-1. Cancel pending job if needed: `scancel 624`
-2. Resubmit from head node: `sbatch intern_bootcamp_datagen.slurm`
-3. Monitor job startup: `squeue -u $USER`
-4. Once running, check logs: `tail -f logs/$SLURM_JOB_ID/*.log`
-5. Verify SGLang health: `curl http://localhost:9000/v1/models`
+3. **No data files appearing**
+   - Check literal `${HOME}` directory due to path expansion bug
+   - Environment saves every 100 problems, be patient
+
+4. **Import errors in sft_loader_server**
+   - Use APIServerConfig instead of OpenaiConfig
+   - Import from correct module path
+
+5. **SGLang launch failures**
+   - Use working command with TP=8, xgrammar backend, triton attention
+   - Ensure sufficient GPU memory (8x B200 GPUs)
+
+### Data Output Structure
+- **Main data file**: `intern_bootcamp_serve_data_N.jsonl` (increments if exists)
+- **Rollout files**: `intern_bootcamp_rollouts_UUID_NNNN.jsonl`
+- Each problem generates 16 responses for rejection sampling
+- Files include full conversations with reasoning traces
 
 ## Development Guidelines
 

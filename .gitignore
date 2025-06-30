@@ -195,3 +195,5 @@ environments/datadumps/
 .aider*
 
 data/*
+logs/*
+CLAUDE.md
