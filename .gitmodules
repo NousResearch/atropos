@@ -4,3 +4,9 @@
 [submodule "environments/reasoning_gym_environment/reasoning-gym"]
 	path = environments/reasoning_gym_environment/reasoning-gym
 	url = https://github.com/open-thought/reasoning-gym
+[submodule "environments/diplomacy_environment/AI_Diplomacy"]
+	path = environments/diplomacy_environment/AI_Diplomacy
+	url = https://github.com/EveryInc/AI_Diplomacy.git
+[submodule "pytest-multiple-versions-actions"]
+	path = pytest-multiple-versions-actions
+	url = https://github.com/pytest-dev/pytest-multiple-versions-actions.git

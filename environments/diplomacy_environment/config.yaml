@@ -1,0 +1,70 @@
+# Diplomacy Environment Configuration
+
+# Base environment settings
+group_size: 16  # Number of alternative actions per decision
+batch_size: 64  # For parallel processing
+max_num_workers: 8
+total_item_number: 1000  # Number of episodes to generate
+
+# Game configuration
+powers_per_episode: 7
+powers_controlled_by_model:
+  - ENGLAND
+  - FRANCE
+  - GERMANY
+game_variant: standard
+max_turns_per_phase: 5
+max_game_years: 10
+
+# Agent configuration
+agent_config:
+  temperature: 0.7
+  top_p: 0.9
+  max_thinking_tokens: 4096
+  max_message_tokens: 512
+  personality_traits:
+    aggressive: 0.5
+    trustworthy: 0.5
+    cooperative: 0.5
+    deceptive: 0.5
+  initial_strategy: balanced
+  use_memory: true
+  memory_top_k: 5
+
+# Integration configuration
+use_submodule: true
+diplomacy_engine_path: ./AI_Diplomacy
+diplomacy_api_url: http://localhost:8432
+
+# Scoring configuration
+enable_vrcli_scoring: true
+vrcli_weight: 0.3
+outcome_weight: 0.5
+negotiation_weight: 0.2
+
+# Memory configuration
+use_memory_system: true
+memory_top_k: 5
+max_memories_per_episode: 100
+
+# Scenario registry configuration
+use_scenario_registry: true
+scenario_distribution:
+  standard: 0.4
+  historical: 0.3
+  balanced: 0.2
+  random: 0.1
+
+# Server configuration (for model inference)
+server_config:
+  base_url: ${ANTHROPIC_API_BASE}
+  api_key: ${ANTHROPIC_API_KEY}
+  model: claude-3-sonnet-20240229
+  max_tokens: 8192
+  temperature: 0.7
+
+# Logging
+log_level: INFO
+use_wandb: false
+wandb_project: diplomacy-rl
+wandb_entity: ${WANDB_ENTITY}
