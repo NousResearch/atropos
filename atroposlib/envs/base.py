@@ -400,15 +400,26 @@ class BaseEnv(ABC):
                         data = await parse_http_response(resp, logger)
                         self.wandb_group = data["group"]
                         self.wandb_project = data["project"]
+
                 if self.wandb_project is None:
                     await asyncio.sleep(1)
-                else:
-                    wandb.init(
-                        project=self.wandb_project,
-                        group=self.wandb_group,
-                        config=self.config.model_dump(),
+                    continue
+
+                wandb_run_name = None
+                if self.config.wandb_name:
+                    random_id = "".join(random.choices(string.ascii_lowercase, k=6))
+                    current_date = datetime.now().strftime("%Y-%m-%d")
+                    wandb_run_name = (
+                        f"{self.config.wandb_name}-{current_date}-{random_id}"
                     )
-                    break
+
+                wandb.init(
+                    name=wandb_run_name,
+                    project=self.wandb_project,
+                    group=self.wandb_group,
+                    config=self.config.model_dump(),
+                )
+                break
 
     @retry(
         stop=stop_after_attempt(3),
