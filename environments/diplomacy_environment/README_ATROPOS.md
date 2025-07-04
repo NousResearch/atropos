@@ -57,21 +57,21 @@ powers_config = {
         "model": "training-policy",
         "is_training": True
     },
-    
+
     # Strong LLM opponent
     "ENGLAND": {
         "type": "llm",
         "model": "claude-3-5-sonnet-20241022",
         "is_training": False
     },
-    
+
     # Self-play (another instance of training policy)
     "GERMANY": {
         "type": "atropos",
         "model": "training-policy",
         "is_training": True
     },
-    
+
     # Human player (via web interface)
     "ITALY": {
         "type": "human",

@@ -24,6 +24,138 @@ AI_Diplomacy Game Engine
 Mixed Agents (RL Policies, LLMs, Humans)
 ```
 
+## Understanding the ServerManager System
+
+### Key Concept: ServerManager is NOT Just for "Atropos Servers"
+
+The **ServerManager** is a universal API gateway that works with ANY OpenAI-compatible API. This is a common misconception - despite the naming, it's designed to work with:
+
+- **OpenAI** (GPT-4, GPT-3.5-turbo, etc.)
+- **Anthropic Claude** (via OpenAI-compatible proxy)
+- **Local vLLM servers**
+- **Hugging Face Inference Endpoints**
+- **Any server implementing the OpenAI API format**
+
+### How ServerManager Works
+
+When you create an Atropos environment, it automatically creates a ServerManager:
+
+```python
+# In BaseEnv.__init__:
+self.server = ServerManager(
+    server_configs,  # List of APIServerConfig objects
+    slurm=slurm,
+    testing=testing,
+    server_class=self.server_cls
+)
+```
+
+The ServerManager:
+1. Takes a list of `APIServerConfig` objects
+2. Checks the `server_type` field (defaults to "openai")
+3. Creates appropriate server instances (`OpenAIServer` for OpenAI, `TrlVllmServer` for vLLM, etc.)
+4. Provides unified `completion()` and `chat_completion()` methods
+5. Handles load balancing across multiple servers
+
+### APIServerConfig Examples
+
+#### Using OpenAI Directly (Most Common)
+```python
+from atroposlib.envs.base import APIServerConfig
+
+# This connects directly to OpenAI's API
+server_configs = [
+    APIServerConfig(
+        model_name="gpt-4o-mini",  # Must be a valid OpenAI model
+        base_url="https://api.openai.com/v1",  # OpenAI's endpoint
+        api_key=os.getenv("OPENAI_API_KEY"),
+        server_type="openai"  # This is the default
+    )
+]
+```
+
+#### Using a Local vLLM Server
+```python
+server_configs = [
+    APIServerConfig(
+        model_name="meta-llama/Llama-2-7b-hf",  # Whatever model you loaded
+        base_url="http://localhost:8000/v1",  # vLLM implements OpenAI API
+        api_key="dummy",  # vLLM doesn't need a real key
+        server_type="openai"  # vLLM is OpenAI-compatible
+    )
+]
+```
+
+#### Using Multiple Servers (Load Balancing)
+```python
+server_configs = [
+    # Primary server
+    APIServerConfig(
+        model_name="gpt-4",
+        base_url="https://api.openai.com/v1",
+        api_key=os.getenv("OPENAI_API_KEY")
+    ),
+    # Backup server
+    APIServerConfig(
+        model_name="gpt-3.5-turbo",
+        base_url="https://api.openai.com/v1",
+        api_key=os.getenv("OPENAI_API_KEY")
+    )
+]
+# ServerManager will automatically load balance between them
+```
+
+### AtroposClient: The Adapter Pattern
+
+The `AtroposClient` implements AI_Diplomacy's `BaseModelClient` interface and forwards requests to whatever server you configure:
+
+```python
+# AtroposClient forwards to ANY OpenAI-compatible endpoint
+client = AtroposClient(
+    model_name="my-model",  # This gets sent in the API request
+    server_url="http://localhost:8000"  # Can be OpenAI, vLLM, etc.
+)
+
+# When AI_Diplomacy calls:
+response = await client.generate_response(prompt)
+# AtroposClient POSTs to: {server_url}/v1/completions with model=my-model
+```
+
+**CRITICAL**: The `model_name` in AtroposClient is what gets sent to the API, so it must be valid for your provider!
+
+### Common Pitfalls and Solutions
+
+#### Pitfall 1: "Model not found" errors
+**Problem**: `The model 'atropos-training-policy' does not exist`
+
+**Solution**: Use valid model names for your provider:
+```python
+# ❌ Wrong - OpenAI doesn't know this model
+APIServerConfig(model_name="training-policy", ...)
+
+# ✅ Correct - Valid OpenAI model
+APIServerConfig(model_name="gpt-4o-mini", ...)
+```
+
+#### Pitfall 2: Thinking AtroposClient only works with "Atropos servers"
+**Reality**: AtroposClient forwards to ANY server you configure. If you set `base_url="https://api.openai.com/v1"`, it talks directly to OpenAI.
+
+#### Pitfall 3: Intercepting clients calling parent methods
+**Problem**: In GRPO, calling `super().generate_response()` uses the wrong model name
+
+**Solution**: Always use the environment's ServerManager:
+```python
+# ❌ Wrong
+return await super().generate_response(prompt)  # Uses self.model_name
+
+# ✅ Correct
+completion = await self.env.server.completion(
+    prompt=prompt,
+    model=self.env.server_configs[0].model_name,  # Use real model
+    ...
+)
+```
+
 ## Quick Start
 
 ### 1. Install Dependencies
@@ -252,7 +384,7 @@ uv run python -m environments.diplomacy_environment.diplomacy_env_no_thinking se
 
 ```python
 from environments.diplomacy_environment.diplomacy_env_no_thinking import (
-    DiplomacyEnvNoThinking, 
+    DiplomacyEnvNoThinking,
     DiplomacyEnvNoThinkingConfig,
     PowerConfig
 )
@@ -352,6 +484,118 @@ When adding features:
 2. Ensure game JSON format compatibility
 3. Update visualization if adding new game elements
 4. Document any new configuration options
+
+## GRPO Training with LaTRo Rewards
+
+The Diplomacy environment now supports GRPO (Group Relative Policy Optimization) with LaTRo (Latent Reasoning Optimization) rewards based on https://arxiv.org/html/2411.04282v2.
+
+### Key Features
+
+1. **Best-of-N Selection**: Sample multiple candidate responses and select the best using LaTRo scores
+2. **Log Probability Scoring**: Uses model confidence (logprobs) to score responses
+3. **Unified AtroposClient**: Single client handles both normal play and GRPO training modes
+
+### Configuration
+
+```python
+from environments.diplomacy_environment.diplomacy_env_grpo import (
+    DiplomacyEnvGRPO,
+    DiplomacyEnvGRPOConfig
+)
+
+config = DiplomacyEnvGRPOConfig(
+    # GRPO settings
+    group_size=4,  # Sample 4 candidates per decision
+    use_latro_rewards=True,  # Enable LaTRo scoring
+    temperature=0.7,  # Sampling temperature
+
+    # Training configuration
+    training_power="FRANCE",  # Which power to train
+    tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+
+    # Opponent configuration (use strong models)
+    opponent_models={
+        "ENGLAND": "gpt-4o-mini",
+        "GERMANY": "gpt-4o-mini",
+        # ... other powers
+    }
+)
+```
+
+### Server Requirements
+
+LaTRo rewards require an API that returns log probabilities:
+
+```python
+# OpenAI (native support)
+server_configs = [
+    APIServerConfig(
+        model_name="gpt-4o-mini",
+        base_url="https://api.openai.com/v1",
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
+]
+
+# vLLM (full OpenAI compatibility)
+server_configs = [
+    APIServerConfig(
+        model_name="meta-llama/Llama-3-8B",
+        base_url="http://localhost:8000/v1",
+        api_key="dummy",
+    )
+]
+
+# llama.cpp (recent versions with PR #10783)
+server_configs = [
+    APIServerConfig(
+        model_name="llama-3-8b",
+        base_url="http://localhost:8080/v1",
+        api_key="dummy",
+    )
+]
+```
+
+**Note**: Ollama's current OpenAI compatibility doesn't include logprobs. Use vLLM or llama.cpp for local models.
+
+### Running GRPO Training
+
+```bash
+# Test the implementation
+cd environments/diplomacy_environment
+uv run python test_latro_rewards.py
+
+# Generate training data with GRPO
+uv run python -m environments.diplomacy_environment.diplomacy_env_grpo process \
+    --config config.yaml
+
+# Online training
+uv run python -m environments.diplomacy_environment.diplomacy_env_grpo serve \
+    --config config.yaml
+```
+
+### How It Works
+
+1. **Intercept LLM Calls**: AtroposClient intercepts all generate_response calls from AI_Diplomacy
+2. **Sample Candidates**: Generates N responses using the policy model
+3. **Score with LaTRo**: Computes r(z) = Σ log p(z_i|z_<i) for each candidate
+4. **Compute Advantages**: A_k = r(z_k) - mean(r(z_j))
+5. **Select Best**: Choose response with highest advantage
+6. **Store Trajectory**: Save all candidates with normalized scores for training
+
+### Monitoring
+
+Enable debug logging to see LaTRo scores:
+
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
+
+This will show:
+- Number of alternatives sampled
+- Raw log probability scores
+- Normalized advantages
+- Selected response index
 
 ## License
 

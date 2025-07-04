@@ -8,7 +8,7 @@ to prevent overfitting and encourage robust strategies.
 import json
 import random
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -16,14 +16,14 @@ import numpy as np
 class DiplomacyScenarioRegistry:
     """
     Registry of Diplomacy game scenarios.
-    
+
     Includes:
     - Standard starting positions
     - Historical scenarios
     - Balanced custom starts
     - Random configurations
     """
-    
+
     def __init__(
         self,
         scenarios_path: Optional[Path] = None,
@@ -37,11 +37,11 @@ class DiplomacyScenarioRegistry:
             "balanced": 0.2,
             "random": 0.1,
         }
-        
+
         if seed is not None:
             random.seed(seed)
             np.random.seed(seed)
-        
+
         # Load scenarios
         self.scenarios = {
             "standard": self._get_standard_scenarios(),
@@ -49,7 +49,7 @@ class DiplomacyScenarioRegistry:
             "balanced": self._get_balanced_scenarios(),
             "random": [],  # Generated on demand
         }
-    
+
     def get_scenario(self, scenario_type: Optional[str] = None) -> Dict[str, Any]:
         """Get a scenario configuration."""
         if scenario_type is None:
@@ -57,17 +57,17 @@ class DiplomacyScenarioRegistry:
             types = list(self.distribution.keys())
             weights = list(self.distribution.values())
             scenario_type = np.random.choice(types, p=weights)
-        
+
         if scenario_type == "random":
             return self._generate_random_scenario()
-        
+
         scenarios = self.scenarios.get(scenario_type, [])
         if not scenarios:
             # Fallback to standard
             scenarios = self.scenarios["standard"]
-        
+
         return random.choice(scenarios)
-    
+
     def _get_standard_scenarios(self) -> List[Dict[str, Any]]:
         """Get standard Diplomacy starting positions."""
         return [
@@ -114,7 +114,7 @@ class DiplomacyScenarioRegistry:
                 "tags": ["variant", "austria_focused"],
             },
         ]
-    
+
     def _get_historical_scenarios(self) -> List[Dict[str, Any]]:
         """Get historical scenario configurations."""
         return [
@@ -180,8 +180,22 @@ class DiplomacyScenarioRegistry:
                         # ... more territory assignments
                     },
                     "units": {
-                        "RUSSIA": ["A BUD", "F RUM", "A GAL", "A WAR", "F SEV", "F BAL"],
-                        "TURKEY": ["A VIE", "A SER", "F BUL", "A CON", "F BLA", "F AEG"],
+                        "RUSSIA": [
+                            "A BUD",
+                            "F RUM",
+                            "A GAL",
+                            "A WAR",
+                            "F SEV",
+                            "F BAL",
+                        ],
+                        "TURKEY": [
+                            "A VIE",
+                            "A SER",
+                            "F BUL",
+                            "A CON",
+                            "F BLA",
+                            "F AEG",
+                        ],
                         # ... more unit positions
                     },
                 },
@@ -190,7 +204,7 @@ class DiplomacyScenarioRegistry:
                 "tags": ["historical", "alliance", "juggernaut"],
             },
         ]
-    
+
     def _get_balanced_scenarios(self) -> List[Dict[str, Any]]:
         """Get balanced custom starting positions."""
         return [
@@ -244,23 +258,31 @@ class DiplomacyScenarioRegistry:
                 "tags": ["balanced", "diplomatic"],
             },
         ]
-    
+
     def _generate_random_scenario(self) -> Dict[str, Any]:
         """Generate a random scenario configuration."""
         # Random modifications to standard start
         modifications = {}
-        
+
         # Randomly swap some unit types
-        powers = ["ENGLAND", "FRANCE", "GERMANY", "ITALY", "AUSTRIA", "RUSSIA", "TURKEY"]
+        powers = [
+            "ENGLAND",
+            "FRANCE",
+            "GERMANY",
+            "ITALY",
+            "AUSTRIA",
+            "RUSSIA",
+            "TURKEY",
+        ]
         for power in powers:
             if random.random() < 0.3:  # 30% chance to modify
                 modifications[power] = self._generate_random_modification(power)
-        
+
         # Random year start (mostly 1901, sometimes later)
         year = 1901
         if random.random() < 0.1:  # 10% chance for later start
             year = random.choice([1902, 1903])
-        
+
         scenario = {
             "name": f"Random_{random.randint(1000, 9999)}",
             "variant": "standard",
@@ -272,14 +294,14 @@ class DiplomacyScenarioRegistry:
             "difficulty": "random",
             "tags": ["random", "generated"],
         }
-        
+
         return scenario
-    
+
     def _generate_random_modification(self, power: str) -> Dict[str, Any]:
         """Generate random modifications for a power."""
         mod_types = ["swap_unit_type", "different_position", "extra_build"]
         mod_type = random.choice(mod_types)
-        
+
         if mod_type == "swap_unit_type":
             # Swap an army for a fleet or vice versa
             return {
@@ -299,51 +321,52 @@ class DiplomacyScenarioRegistry:
             return {
                 "extra_unit": "random",
             }
-    
-    def add_custom_scenario(self, scenario: Dict[str, Any], category: str = "custom") -> None:
+
+    def add_custom_scenario(
+        self, scenario: Dict[str, Any], category: str = "custom"
+    ) -> None:
         """Add a custom scenario to the registry."""
         if category not in self.scenarios:
             self.scenarios[category] = []
-        
+
         self.scenarios[category].append(scenario)
-    
+
     def save_scenario(self, scenario: Dict[str, Any], filename: str) -> None:
         """Save a scenario to file."""
         filepath = self.scenarios_path / f"{filename}.json"
         filepath.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(filepath, 'w') as f:
+
+        with open(filepath, "w") as f:
             json.dump(scenario, f, indent=2)
-    
+
     def load_scenario(self, filename: str) -> Dict[str, Any]:
         """Load a scenario from file."""
         filepath = self.scenarios_path / f"{filename}.json"
-        
-        with open(filepath, 'r') as f:
+
+        with open(filepath, "r") as f:
             return json.load(f)
-    
+
     def get_scenario_by_tags(self, tags: List[str]) -> Optional[Dict[str, Any]]:
         """Get a scenario matching specific tags."""
         matching_scenarios = []
-        
+
         for category_scenarios in self.scenarios.values():
             for scenario in category_scenarios:
                 scenario_tags = scenario.get("tags", [])
                 if all(tag in scenario_tags for tag in tags):
                     matching_scenarios.append(scenario)
-        
+
         if matching_scenarios:
             return random.choice(matching_scenarios)
-        
+
         return None
-    
+
     def get_scenarios_for_curriculum(
-        self,
-        difficulty_progression: List[str]
+        self, difficulty_progression: List[str]
     ) -> List[Dict[str, Any]]:
         """Get scenarios following a difficulty progression."""
         curriculum = []
-        
+
         for difficulty in difficulty_progression:
             # Find scenarios matching difficulty
             matching = []
@@ -351,11 +374,11 @@ class DiplomacyScenarioRegistry:
                 for scenario in category_scenarios:
                     if scenario.get("difficulty") == difficulty:
                         matching.append(scenario)
-            
+
             if matching:
                 curriculum.append(random.choice(matching))
             else:
                 # Fallback to any scenario
                 curriculum.append(self.get_scenario())
-        
+
         return curriculum

@@ -1,7 +1,7 @@
 model,power,phase,response_type,raw_input,raw_response,success
 atropos-training-policy,FRANCE,S1901M,initial_state_setup,"You are the agent for FRANCE in a game of Diplomacy at the very start (Spring 1901). Analyze the initial board position and suggest 2-3 strategic high-level goals for the early game. Consider your power's strengths, weaknesses, and neighbors. Also, provide an initial assessment of relationships with other powers. IMPORTANT: For each relationship, you MUST use exactly one of the following labels: Enemy, Unfriendly, Neutral, Friendly, Ally. Format your response as a JSON object with two keys: 'initial_goals' (a list of strings) and 'initial_relationships' (a dictionary mapping power names to one of the allowed relationship strings).
 
-You are playing the board game Diplomacy. Your power is FRANCE. The S1901M phase. 
+You are playing the board game Diplomacy. Your power is FRANCE. The S1901M phase.
 Your primary goal is to control 18 supply centers.
 Use the information below to inform your approach.
 
@@ -980,7 +980,7 @@ END MESSAGES","{
 }",Success: Parsed but no data applied
 gpt-4o,RUSSIA,S1901M,initial_state_setup,"You are the agent for RUSSIA in a game of Diplomacy at the very start (Spring 1901). Analyze the initial board position and suggest 2-3 strategic high-level goals for the early game. Consider your power's strengths, weaknesses, and neighbors. Also, provide an initial assessment of relationships with other powers. IMPORTANT: For each relationship, you MUST use exactly one of the following labels: Enemy, Unfriendly, Neutral, Friendly, Ally. Format your response as a JSON object with two keys: 'initial_goals' (a list of strings) and 'initial_relationships' (a dictionary mapping power names to one of the allowed relationship strings).
 
-You are playing the board game Diplomacy. Your power is RUSSIA. The S1901M phase. 
+You are playing the board game Diplomacy. Your power is RUSSIA. The S1901M phase.
 Your primary goal is to control 18 supply centers.
 Use the information below to inform your approach.
 
@@ -1968,7 +1968,7 @@ END MESSAGES","```json
 ```",Success: Applied LLM data
 gpt-4o-mini,GERMANY,S1901M,initial_state_setup,"You are the agent for GERMANY in a game of Diplomacy at the very start (Spring 1901). Analyze the initial board position and suggest 2-3 strategic high-level goals for the early game. Consider your power's strengths, weaknesses, and neighbors. Also, provide an initial assessment of relationships with other powers. IMPORTANT: For each relationship, you MUST use exactly one of the following labels: Enemy, Unfriendly, Neutral, Friendly, Ally. Format your response as a JSON object with two keys: 'initial_goals' (a list of strings) and 'initial_relationships' (a dictionary mapping power names to one of the allowed relationship strings).
 
-You are playing the board game Diplomacy. Your power is GERMANY. The S1901M phase. 
+You are playing the board game Diplomacy. Your power is GERMANY. The S1901M phase.
 Your primary goal is to control 18 supply centers.
 Use the information below to inform your approach.
 
@@ -2958,7 +2958,7 @@ END MESSAGES","```json
 ```",Success: Applied LLM data
 gpt-4o-mini,TURKEY,S1901M,initial_state_setup,"You are the agent for TURKEY in a game of Diplomacy at the very start (Spring 1901). Analyze the initial board position and suggest 2-3 strategic high-level goals for the early game. Consider your power's strengths, weaknesses, and neighbors. Also, provide an initial assessment of relationships with other powers. IMPORTANT: For each relationship, you MUST use exactly one of the following labels: Enemy, Unfriendly, Neutral, Friendly, Ally. Format your response as a JSON object with two keys: 'initial_goals' (a list of strings) and 'initial_relationships' (a dictionary mapping power names to one of the allowed relationship strings).
 
-You are playing the board game Diplomacy. Your power is TURKEY. The S1901M phase. 
+You are playing the board game Diplomacy. Your power is TURKEY. The S1901M phase.
 Your primary goal is to control 18 supply centers.
 Use the information below to inform your approach.
 
@@ -3948,7 +3948,7 @@ END MESSAGES","```json
 ```",Success: Applied LLM data
 gpt-4o,ITALY,S1901M,initial_state_setup,"You are the agent for ITALY in a game of Diplomacy at the very start (Spring 1901). Analyze the initial board position and suggest 2-3 strategic high-level goals for the early game. Consider your power's strengths, weaknesses, and neighbors. Also, provide an initial assessment of relationships with other powers. IMPORTANT: For each relationship, you MUST use exactly one of the following labels: Enemy, Unfriendly, Neutral, Friendly, Ally. Format your response as a JSON object with two keys: 'initial_goals' (a list of strings) and 'initial_relationships' (a dictionary mapping power names to one of the allowed relationship strings).
 
-You are playing the board game Diplomacy. Your power is ITALY. The S1901M phase. 
+You are playing the board game Diplomacy. Your power is ITALY. The S1901M phase.
 Your primary goal is to control 18 supply centers.
 Use the information below to inform your approach.
 
@@ -4938,7 +4938,7 @@ END MESSAGES","```json
 ```",Success: Applied LLM data
 gpt-4o-mini,AUSTRIA,S1901M,initial_state_setup,"You are the agent for AUSTRIA in a game of Diplomacy at the very start (Spring 1901). Analyze the initial board position and suggest 2-3 strategic high-level goals for the early game. Consider your power's strengths, weaknesses, and neighbors. Also, provide an initial assessment of relationships with other powers. IMPORTANT: For each relationship, you MUST use exactly one of the following labels: Enemy, Unfriendly, Neutral, Friendly, Ally. Format your response as a JSON object with two keys: 'initial_goals' (a list of strings) and 'initial_relationships' (a dictionary mapping power names to one of the allowed relationship strings).
 
-You are playing the board game Diplomacy. Your power is AUSTRIA. The S1901M phase. 
+You are playing the board game Diplomacy. Your power is AUSTRIA. The S1901M phase.
 Your primary goal is to control 18 supply centers.
 Use the information below to inform your approach.
 
@@ -5928,7 +5928,7 @@ END MESSAGES","```json
 ```",Success: Applied LLM data
 gpt-4o,ENGLAND,S1901M,initial_state_setup,"You are the agent for ENGLAND in a game of Diplomacy at the very start (Spring 1901). Analyze the initial board position and suggest 2-3 strategic high-level goals for the early game. Consider your power's strengths, weaknesses, and neighbors. Also, provide an initial assessment of relationships with other powers. IMPORTANT: For each relationship, you MUST use exactly one of the following labels: Enemy, Unfriendly, Neutral, Friendly, Ally. Format your response as a JSON object with two keys: 'initial_goals' (a list of strings) and 'initial_relationships' (a dictionary mapping power names to one of the allowed relationship strings).
 
-You are playing the board game Diplomacy. Your power is ENGLAND. The S1901M phase. 
+You are playing the board game Diplomacy. Your power is ENGLAND. The S1901M phase.
 Your primary goal is to control 18 supply centers.
 Use the information below to inform your approach.
 
@@ -6920,7 +6920,7 @@ END MESSAGES","```json
 
 - **Initial Relationships:**
   - All relationships are marked as ""Neutral"" at the start, reflecting the lack of initial commitments or hostilities. This neutrality allows for flexibility in forming alliances or identifying threats based on early diplomatic exchanges.",Success: Applied LLM data
-atropos-training-policy,FRANCE,S1901M,negotiation_message,"You are playing the board game Diplomacy. Your power is FRANCE. The S1901M phase. 
+atropos-training-policy,FRANCE,S1901M,negotiation_message,"You are playing the board game Diplomacy. Your power is FRANCE. The S1901M phase.
 Your primary goal is to control 18 supply centers.
 Use the information below to inform your approach.
 

@@ -27,20 +27,20 @@ class AtroposClient(BaseModelClient):
     Proxy client that forwards LLM requests to Atropos policy server.
     Implements the AI_Diplomacy BaseModelClient interface.
     """
-    
+
     def __init__(self, model_name: str, server_config: Dict[str, Any]):
         super().__init__(model_name)
         self.server_url = server_config.get("url", "http://localhost:8000")
         self.episode_id = None
         self.power = None
         self.client = httpx.AsyncClient(timeout=30.0)
-    
+
     def set_context(self, episode_id: str, power: str):
         """Set the current game context for this client."""
         self.episode_id = episode_id
         self.power = power
-    
-    async def generate_response(self, prompt: str, temperature: float = 0.0, 
+
+    async def generate_response(self, prompt: str, temperature: float = 0.0,
                               inject_random_seed: bool = True) -> str:
         """
         Forward the prompt to Atropos server and return the response.
@@ -56,15 +56,15 @@ class AtroposClient(BaseModelClient):
                 "inject_random_seed": inject_random_seed
             }
         }
-        
+
         response = await self.client.post(
             f"{self.server_url}/v1/completions",
             json=request_data
         )
         response.raise_for_status()
-        
+
         return response.json()["text"]
-    
+
     def _infer_task_type(self, prompt: str) -> str:
         """Infer the type of task from the prompt."""
         if "orders for this turn" in prompt.lower():
@@ -92,11 +92,11 @@ class DiplomacyEnvironment:
     """
     Main environment class that orchestrates Diplomacy games for Atropos.
     """
-    
+
     def __init__(self, config: DiplomacyConfig):
         self.config = config
         self.clients = {}  # Map of model_name -> AtroposClient
-        
+
     async def run_episode(self, episode_id: str) -> Dict:
         """
         Run a single Diplomacy game episode.
@@ -107,7 +107,7 @@ class DiplomacyEnvironment:
             client = self._get_or_create_client(power.model)
             client.set_context(episode_id, power.name)
             power_clients[power.name] = client
-        
+
         # Run the game using AI_Diplomacy's infrastructure
         game_result = await play_llm_game(
             game_id=episode_id,
@@ -116,9 +116,9 @@ class DiplomacyEnvironment:
             deadline_seconds=self.config.deadline_seconds,
             # ... other game parameters
         )
-        
+
         return self._format_episode_result(game_result)
-    
+
     def _get_or_create_client(self, model_name: str) -> AtroposClient:
         """Get or create an AtroposClient for the given model."""
         if model_name not in self.clients:
@@ -127,7 +127,7 @@ class DiplomacyEnvironment:
                 server_config=self.config.server_config
             )
         return self.clients[model_name]
-    
+
     def _format_episode_result(self, game_result: Dict) -> Dict:
         """Format the game result for Atropos consumption."""
         # Extract relevant data for training
@@ -164,23 +164,23 @@ class DiplomacyPolicyHandler:
     Handles policy requests from AtroposClient instances.
     Integrates with Atropos's existing policy serving infrastructure.
     """
-    
+
     def __init__(self, policy_server):
         self.policy_server = policy_server
-    
+
     async def handle_completion(self, request: CompletionRequest) -> Dict[str, str]:
         """
         Process a completion request from a Diplomacy game.
         """
         # Convert Diplomacy prompt to Atropos format
         atropos_request = self._convert_to_atropos_format(request)
-        
+
         # Get response from policy server
         response = await self.policy_server.generate(atropos_request)
-        
+
         # Format response for Diplomacy
         return {"text": response["text"]}
-    
+
     def _convert_to_atropos_format(self, request: CompletionRequest) -> Dict:
         """Convert Diplomacy request to Atropos format."""
         return {
