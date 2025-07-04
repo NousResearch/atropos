@@ -154,41 +154,94 @@ class RandomTask:
         self.params = params
         self.current_bootcamp = None
         self.current_bootcamp_name = None
+        self.failed_bootcamps = set()  # Track permanently failed bootcamps
         logger.info(
             f"RandomTask initialized with {len(self.available_bootcamps)} available bootcamps"
         )
+    
+    def _ensure_bootcamp_instance(self, bootcamp_name: str) -> None:
+        """Ensure we have a valid bootcamp instance for the given name."""
+        if self.current_bootcamp and self.current_bootcamp_name == bootcamp_name:
+            return  # Already have the right instance
+        
+        try:
+            self.current_bootcamp_name = bootcamp_name
+            self.current_bootcamp = self.registry.create_bootcamp_instance(
+                bootcamp_name, **self.params
+            )
+        except Exception as e:
+            self.failed_bootcamps.add(bootcamp_name)
+            logger.error(
+                f"Failed to create bootcamp instance for {bootcamp_name}: {str(e)}"
+            )
+            raise RuntimeError(
+                f"Cannot create bootcamp instance for {bootcamp_name}. "
+                f"This bootcamp has failed initialization: {str(e)}"
+            )
 
     def case_generator(self) -> object:
         """Generate a case by randomly selecting a bootcamp."""
-        # Select a random bootcamp
-        self.current_bootcamp_name = random.choice(self.available_bootcamps)
-        self.current_bootcamp = self.registry.create_bootcamp_instance(
-            self.current_bootcamp_name, **self.params
+        max_attempts = 50  # Try up to 50 different bootcamps if needed
+        failed_bootcamps = set()
+        
+        for attempt in range(max_attempts):
+            # Select a random bootcamp that hasn't failed yet
+            available_choices = [
+                name for name in self.available_bootcamps 
+                if name not in failed_bootcamps
+            ]
+            
+            if not available_choices:
+                raise RuntimeError(
+                    f"All {len(self.available_bootcamps)} bootcamps have failed. "
+                    f"Failed bootcamps: {sorted(failed_bootcamps)}"
+                )
+            
+            self.current_bootcamp_name = random.choice(available_choices)
+            
+            try:
+                # Try to create bootcamp instance
+                self.current_bootcamp = self.registry.create_bootcamp_instance(
+                    self.current_bootcamp_name, **self.params
+                )
+
+                # Try to generate case from the selected bootcamp
+                case = self.current_bootcamp.case_generator()
+
+                # Add bootcamp name to the case for tracking
+                if isinstance(case, dict):
+                    case["_bootcamp_name"] = self.current_bootcamp_name
+                else:
+                    # If case is not a dict, wrap it
+                    case = {"data": case, "_bootcamp_name": self.current_bootcamp_name}
+
+                return case
+                
+            except Exception as e:
+                failed_bootcamps.add(self.current_bootcamp_name)
+                logger.warning(
+                    f"Failed to generate case from {self.current_bootcamp_name} "
+                    f"(attempt {attempt + 1}/{max_attempts}): {str(e)}"
+                )
+                if attempt == 0:
+                    logger.debug(f"Full error details: {e}", exc_info=True)
+                continue
+        
+        raise RuntimeError(
+            f"Failed to generate a case after {max_attempts} attempts. "
+            f"Failed bootcamps: {sorted(failed_bootcamps)}"
         )
-
-        # Generate case from the selected bootcamp
-        case = self.current_bootcamp.case_generator()
-
-        # Add bootcamp name to the case for tracking
-        if isinstance(case, dict):
-            case["_bootcamp_name"] = self.current_bootcamp_name
-        else:
-            # If case is not a dict, wrap it
-            case = {"data": case, "_bootcamp_name": self.current_bootcamp_name}
-
-        return case
 
     def prompt_func(self, identity) -> str:
         """Generate prompt using the current bootcamp."""
         # Extract the bootcamp name if stored
         bootcamp_name = identity.get("_bootcamp_name", self.current_bootcamp_name)
+        
+        if not bootcamp_name:
+            raise ValueError("No bootcamp name found in identity for prompt generation")
 
-        # If we need to recreate the bootcamp (e.g., during scoring)
-        if not self.current_bootcamp or self.current_bootcamp_name != bootcamp_name:
-            self.current_bootcamp_name = bootcamp_name
-            self.current_bootcamp = self.registry.create_bootcamp_instance(
-                bootcamp_name, **self.params
-            )
+        # Ensure we have the right bootcamp instance
+        self._ensure_bootcamp_instance(bootcamp_name)
 
         # Remove the bootcamp name before passing to prompt_func
         identity_copy = dict(identity)
@@ -224,13 +277,12 @@ class RandomTask:
         """Verify score using the appropriate bootcamp."""
         # Extract the bootcamp name
         bootcamp_name = identity.get("_bootcamp_name", self.current_bootcamp_name)
+        
+        if not bootcamp_name:
+            raise ValueError("No bootcamp name found in identity for scoring")
 
-        # If we need to recreate the bootcamp
-        if not self.current_bootcamp or self.current_bootcamp_name != bootcamp_name:
-            self.current_bootcamp_name = bootcamp_name
-            self.current_bootcamp = self.registry.create_bootcamp_instance(
-                bootcamp_name, **self.params
-            )
+        # Ensure we have the right bootcamp instance
+        self._ensure_bootcamp_instance(bootcamp_name)
 
         # Remove the bootcamp name before passing to verify_score
         identity_copy = dict(identity)

@@ -181,32 +181,62 @@ class InternBootcampEnv(BaseEnv):
 
     async def get_next_item(self) -> Tuple[Any, Dict]:
         """Get the next problem from the bootcamp."""
-        # Generate a new problem
-        identity = self.bootcamp_instance.case_generator()
-        prompt = self.bootcamp_instance.prompt_func(identity)
+        max_retries = 100  # Maximum number of retries for RandomTask (high to handle rare failures)
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                # Generate a new problem
+                identity = self.bootcamp_instance.case_generator()
+                prompt = self.bootcamp_instance.prompt_func(identity)
 
-        # Log which bootcamp is being used if RandomTask
-        if (
-            self.config.task_name == "RandomTask"
-            and isinstance(identity, dict)
-            and "_bootcamp_name" in identity
-        ):
-            logger.info(f"RandomTask selected: {identity['_bootcamp_name']}")
+                # Log which bootcamp is being used if RandomTask
+                if (
+                    self.config.task_name == "RandomTask"
+                    and isinstance(identity, dict)
+                    and "_bootcamp_name" in identity
+                ):
+                    logger.info(f"RandomTask selected: {identity['_bootcamp_name']}")
 
-        # Create the message format expected by Atropos
-        messages = [
-            {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": prompt},
-        ]
+                # Create the message format expected by Atropos
+                messages = [
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": prompt},
+                ]
 
-        # Return item with metadata
-        return (
-            messages,
-            {
-                "identity": identity,
-                "task_name": self.current_task_name,
-                "raw_prompt": prompt,
-            },
+                # Return item with metadata
+                return (
+                    messages,
+                    {
+                        "identity": identity,
+                        "task_name": self.current_task_name,
+                        "raw_prompt": prompt,
+                    },
+                )
+                
+            except Exception as e:
+                retry_count += 1
+                if self.config.task_name == "RandomTask":
+                    # For RandomTask, log the error and try again with a different task
+                    bootcamp_name = "unknown"
+                    if isinstance(identity, dict) and "_bootcamp_name" in identity:
+                        bootcamp_name = identity["_bootcamp_name"]
+                    logger.warning(
+                        f"Failed to generate problem from {bootcamp_name} "
+                        f"(attempt {retry_count}/{max_retries}): {str(e)}"
+                    )
+                    if retry_count < max_retries:
+                        logger.info("Retrying with a different random task...")
+                        continue
+                else:
+                    # For specific tasks, raise the error immediately
+                    logger.error(f"Failed to generate problem from {self.config.task_name}: {str(e)}")
+                    raise
+        
+        # If we've exhausted all retries, raise an error
+        raise RuntimeError(
+            f"Failed to generate a valid problem after {max_retries} attempts. "
+            "This may indicate issues with multiple bootcamp tasks."
         )
 
     async def collect_trajectories(self, item) -> Tuple[List, List]:

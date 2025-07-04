@@ -7,7 +7,7 @@
 #SBATCH --gpus-per-task=8
 #SBATCH --cpus-per-task=64
 #SBATCH --exclusive
-#SBATCH --time=12:00:00
+#SBATCH --requeue
 
 # Create logs directory if it doesn't exist
 mkdir -p logs/$SLURM_JOB_ID

@@ -142,10 +142,11 @@ The InternBootcamp environment generates verifiable reasoning tasks for training
 
 ### Running Data Generation
 ```bash
-# Submit the job
+# Submit the job (includes --requeue for automatic restart on error)
 sbatch intern_bootcamp_datagen.slurm
 
 # Monitor progress
+tail -f logs/$SLURM_JOB_ID.out  # Overall job output
 tail -f logs/$SLURM_JOB_ID/api.log
 tail -f logs/$SLURM_JOB_ID/sglang.log  
 tail -f logs/$SLURM_JOB_ID/intern_bootcamp.log
@@ -230,6 +231,12 @@ jq 'select(.score > 0.5)' ~/atropos/data/intern_bootcamp_sft.jsonl > ~/atropos/d
 - **Rollout files**: `intern_bootcamp_rollouts_UUID_NNNN.jsonl`
 - Each problem generates 16 responses for rejection sampling
 - Files include full conversations with reasoning traces
+
+### Recent Findings
+- **Partial Runs**: Job 630 generated 171/50,000 problems before API server shutdown
+- **Automatic Restart**: Added `--requeue` to SLURM script for resilience
+- **Data Accumulation**: Files auto-increment on restart, preventing data loss
+- **Runtime**: ~5 hours for 171 problems suggests full run needs multiple restarts
 
 ## Development Guidelines
 
