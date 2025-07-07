@@ -1,0 +1,75 @@
+Starting InternBootcamp data generation on node: d2dfac12-023.cloud.together.ai
+Job ID: 920
+Log directory: /home/maxpaperclips/atropos/logs/920
+Starting Atropos API server...
+API server started with PID: 610881
+Starting SGLang server with DP=4, TP=2...
+SGLang server started with PID: 610897
+Waiting for SGLang to initialize...
+Waiting for SGLang... (1/60)
+Waiting for SGLang... (2/60)
+Waiting for SGLang... (3/60)
+Waiting for SGLang... (4/60)
+Waiting for SGLang... (5/60)
+Waiting for SGLang... (6/60)
+Waiting for SGLang... (7/60)
+Waiting for SGLang... (8/60)
+Waiting for SGLang... (9/60)
+Waiting for SGLang... (10/60)
+Waiting for SGLang... (11/60)
+Waiting for SGLang... (12/60)
+Waiting for SGLang... (13/60)
+Waiting for SGLang... (14/60)
+Waiting for SGLang... (15/60)
+Waiting for SGLang... (16/60)
+Waiting for SGLang... (17/60)
+Waiting for SGLang... (18/60)
+Waiting for SGLang... (19/60)
+Waiting for SGLang... (20/60)
+Waiting for SGLang... (21/60)
+Waiting for SGLang... (22/60)
+Waiting for SGLang... (23/60)
+Waiting for SGLang... (24/60)
+Waiting for SGLang... (25/60)
+Waiting for SGLang... (26/60)
+Waiting for SGLang... (27/60)
+Waiting for SGLang... (28/60)
+Waiting for SGLang... (29/60)
+Waiting for SGLang... (30/60)
+Waiting for SGLang... (31/60)
+Waiting for SGLang... (32/60)
+Waiting for SGLang... (33/60)
+Waiting for SGLang... (34/60)
+Waiting for SGLang... (35/60)
+Waiting for SGLang... (36/60)
+Waiting for SGLang... (37/60)
+Waiting for SGLang... (38/60)
+Waiting for SGLang... (39/60)
+Waiting for SGLang... (40/60)
+Waiting for SGLang... (41/60)
+Waiting for SGLang... (42/60)
+Waiting for SGLang... (43/60)
+Waiting for SGLang... (44/60)
+Waiting for SGLang... (45/60)
+Waiting for SGLang... (46/60)
+Waiting for SGLang... (47/60)
+Waiting for SGLang... (48/60)
+Waiting for SGLang... (49/60)
+Waiting for SGLang... (50/60)
+Waiting for SGLang... (51/60)
+Waiting for SGLang... (52/60)
+Waiting for SGLang... (53/60)
+Waiting for SGLang... (54/60)
+Waiting for SGLang... (55/60)
+Waiting for SGLang... (56/60)
+Waiting for SGLang... (57/60)
+Waiting for SGLang... (58/60)
+Waiting for SGLang... (59/60)
+Waiting for SGLang... (60/60)
+Starting fake trainer...
+Fake trainer started with PID: 614056
+Starting InternBootcamp environment server...
+InternBootcamp environment started with PID: 614060
+All services started. Monitoring...
+Logs are in: /home/maxpaperclips/atropos/logs/920
+Data will be saved to: /home/maxpaperclips/atropos/data/

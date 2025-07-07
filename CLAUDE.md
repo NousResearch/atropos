@@ -2,6 +2,47 @@
 
 This document contains project-specific instructions and learnings for Claude assistants working on the Atropos RL training framework.
 
+## Current Work: Testing Diplomacy Environment with SGLang (July 7, 2025)
+
+### Status
+We were setting up and testing the Diplomacy RL training environment with the NousResearch/DeepHermes-3-Llama-3-8B-Preview model using SGLang server.
+
+### Completed
+1. Updated `/home/maxpaperclips/sglang/run_server.sh`:
+   - Changed model to `NousResearch/DeepHermes-3-Llama-3-8B-Preview`
+   - Set port to `8000` (matching diplomacy test expectations)
+   - Fixed Python path to use `/home/maxpaperclips/sglang/.venv/bin/python`
+
+2. Created `/home/maxpaperclips/atropos/environments/diplomacy_environment/test_sglang_setup.py`:
+   - Test script specifically for Diplomacy environment with SGLang
+   - Configured to use `http://localhost:8000/v1` endpoint
+   - Uses DeepHermes model for all Diplomacy powers
+
+### Issue Encountered
+SGLang server failed to start due to permission error:
+```
+PermissionError: [Errno 13] Permission denied: '/tmp/08f57d08a2eb8581873d780e0b93be175dfdd43949c43f516e06a5c02f60a254NousResearch-DeepHermes-3-Llama-3-8B-Preview.lock'
+```
+The lock file is owned by user `hjcpuro` and prevents model download.
+
+### Next Steps After Manual Fix
+Once the SGLang server is running:
+1. Run the test script:
+   ```bash
+   cd /home/maxpaperclips/atropos/environments/diplomacy_environment
+   uv run python test_sglang_setup.py
+   ```
+
+2. The test will:
+   - Initialize Diplomacy environment
+   - Test connection to SGLang server
+   - Run a quick game test with the DeepHermes model
+
+### Notes
+- The Diplomacy environment expects the inference server on port 8000
+- All test scripts use `uv run python` (not plain python)
+- The SGLang server needs the virtual environment at `/home/maxpaperclips/sglang/.venv`
+
 ## IMPORTANT: Always Use UV Run
 - **NEVER use `python` directly** - always use `uv run python`
 - This project uses UV for dependency management
