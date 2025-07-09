@@ -509,24 +509,30 @@ class PydanticSchemaFollowingEnv(BaseEnv):
         output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "atropos_train_test_data")
         os.makedirs(output_dir, exist_ok=True)
         
+        # Convert to list[dict]
+        train_samples = [dict(sample) for sample in self.train_items]
+        test_samples = [dict(sample) for sample in self.test_items]
+        
         # Save train samples to JSONL
         train_file = os.path.join(output_dir, "pydantic_schema_following_train_samples.jsonl")
         with open(train_file, 'w') as f:
-            for sample in self.train_items:
-                f.write(json.dumps(sample) + "\n")
+            for sample in train_samples:
+                json.dump(sample, f)
+                f.write("\n")
         
         # Save test samples to JSONL
         test_file = os.path.join(output_dir, "pydantic_schema_following_test_samples.jsonl")
         with open(test_file, 'w') as f:
-            for sample in self.test_items:
-                f.write(json.dumps(sample) + "\n")
+            for sample in test_samples:
+                json.dump(sample, f)
+                f.write("\n")
         
         if self.debug_logging:
-            self.logger.info(f"Saved train samples ({len(self.train_items)}) to {train_file}")
-            self.logger.info(f"Saved test samples ({len(self.test_items)}) to {test_file}")
+            self.logger.info(f"Saved train samples ({len(train_samples)}) to {train_file}")
+            self.logger.info(f"Saved test samples ({len(test_samples)}) to {test_file}")
         else:
-            print(f"Saved train samples ({len(self.train_items)}) to {train_file}")
-            print(f"Saved test samples ({len(self.test_items)}) to {test_file}")
+            print(f"Saved train samples ({len(train_samples)}) to {train_file}")
+            print(f"Saved test samples ({len(test_samples)}) to {test_file}")
 
     async def get_next_item(self) -> Tuple[Tuple[frozenset, ...], Dict[str, Any]]:
         """Get the next training item from the dataset."""

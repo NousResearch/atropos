@@ -135,20 +135,26 @@ class SingleToolCallingEnv(BaseEnv):
         output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "atropos_train_test_data")
         os.makedirs(output_dir, exist_ok=True)
         
+        # Convert HF datasets to list[dict]
+        train_samples = [dict(sample) for sample in split_dataset["train"]]
+        test_samples = [dict(sample) for sample in split_dataset["test"]]
+        
         # Save train samples to JSONL
         train_file = os.path.join(output_dir, "tool_calling_train_samples.jsonl")
         with open(train_file, 'w') as f:
-            for sample in split_dataset["train"]:
-                f.write(json.dumps(sample) + "\n")
+            for sample in train_samples:
+                json.dump(sample, f)
+                f.write("\n")
         
         # Save test samples to JSONL
         test_file = os.path.join(output_dir, "tool_calling_test_samples.jsonl")
         with open(test_file, 'w') as f:
-            for sample in split_dataset["test"]:
-                f.write(json.dumps(sample) + "\n")
+            for sample in test_samples:
+                json.dump(sample, f)
+                f.write("\n")
         
-        print(f"Saved train samples ({len(split_dataset['train'])}) to {train_file}")
-        print(f"Saved test samples ({len(split_dataset['test'])}) to {test_file}")
+        print(f"Saved train samples ({len(train_samples)}) to {train_file}")
+        print(f"Saved test samples ({len(test_samples)}) to {test_file}")
 
     async def rollout_and_score_eval(self, test_item):
         # Extract conversations from test item
