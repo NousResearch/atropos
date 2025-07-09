@@ -3404,8 +3404,8 @@ class AnswerFormatEnv(BaseEnv):
         self.train_items = self.dataset_items[:split_idx]
         self.test_items = self.dataset_items[split_idx:]
         
-        # Save train/test indices to files
-        self._save_train_test_indices(split_idx, len(self.dataset_items))
+        # Save train/test samples to files
+        self._save_train_test_samples()
 
         self.iter = 0
 
@@ -3439,32 +3439,29 @@ class AnswerFormatEnv(BaseEnv):
             type_counts[dataset_type] = type_counts.get(dataset_type, 0) + 1
         print(f"Dataset types: {type_counts}")
 
-    def _save_train_test_indices(self, split_idx: int, total_items: int):
-        """Save train and test indices to files."""
+    def _save_train_test_samples(self):
+        """Save train and test samples to JSONL files."""
         import os
+        import json
         
         # Create unified output directory - go up one level since we're in a subdirectory
         output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "atropos_train_test_data")
         os.makedirs(output_dir, exist_ok=True)
         
-        # Generate train and test indices
-        train_indices = list(range(split_idx))
-        test_indices = list(range(split_idx, total_items))
-        
-        # Save indices to files
-        train_file = os.path.join(output_dir, "answer_format_train_indices.txt")
-        test_file = os.path.join(output_dir, "answer_format_test_indices.txt")
-        
+        # Save train samples to JSONL
+        train_file = os.path.join(output_dir, "answer_format_train_samples.jsonl")
         with open(train_file, 'w') as f:
-            for idx in train_indices:
-                f.write(f"{idx}\n")
+            for sample in self.train_items:
+                f.write(json.dumps(sample) + "\n")
         
+        # Save test samples to JSONL
+        test_file = os.path.join(output_dir, "answer_format_test_samples.jsonl")
         with open(test_file, 'w') as f:
-            for idx in test_indices:
-                f.write(f"{idx}\n")
+            for sample in self.test_items:
+                f.write(json.dumps(sample) + "\n")
         
-        print(f"Saved train indices ({len(train_indices)}) to {train_file}")
-        print(f"Saved test indices ({len(test_indices)}) to {test_file}")
+        print(f"Saved train samples ({len(self.train_items)}) to {train_file}")
+        print(f"Saved test samples ({len(self.test_items)}) to {test_file}")
 
     async def get_next_item(self) -> Tuple[Tuple[frozenset, ...], Dict[str, Any]]:
         """Get the next training item with randomized format based on dataset type."""

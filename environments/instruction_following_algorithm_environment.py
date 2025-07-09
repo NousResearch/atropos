@@ -414,8 +414,8 @@ class InstructionFollowingEnv(BaseEnv):
             self.train = split_dataset["train"]
             self.test = split_dataset["test"]
             
-            # Save train/test indices to files
-            self._save_train_test_indices(split_dataset, num_items)
+            # Save train/test samples to files
+            self._save_train_test_samples(split_dataset)
             # Final check for empty train/test after split, should not happen with logic above if num_items > 0
             if len(self.train) == 0 and len(self.test) > 0:
                 print(
@@ -455,33 +455,29 @@ class InstructionFollowingEnv(BaseEnv):
             f"Adaptive curriculum initialized with {len(self.active_train_queue)} items in active queue"
         )
 
-    def _save_train_test_indices(self, split_dataset, total_items: int):
-        """Save train and test indices to files."""
+    def _save_train_test_samples(self, split_dataset):
+        """Save train and test samples to JSONL files."""
         import os
+        import json
         
         # Create unified output directory
         output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "atropos_train_test_data")
         os.makedirs(output_dir, exist_ok=True)
         
-        # Since the dataset is shuffled before splitting, we can't get original indices
-        # Instead, save the indices within the split datasets
-        train_indices = list(range(len(split_dataset["train"])))
-        test_indices = list(range(len(split_dataset["test"])))
-        
-        # Save indices to files
-        train_file = os.path.join(output_dir, "instruction_following_train_indices.txt")
-        test_file = os.path.join(output_dir, "instruction_following_test_indices.txt")
-        
+        # Save train samples to JSONL
+        train_file = os.path.join(output_dir, "instruction_following_train_samples.jsonl")
         with open(train_file, 'w') as f:
-            for idx in train_indices:
-                f.write(f"{idx}\n")
+            for sample in split_dataset["train"]:
+                f.write(json.dumps(sample) + "\n")
         
+        # Save test samples to JSONL
+        test_file = os.path.join(output_dir, "instruction_following_test_samples.jsonl")
         with open(test_file, 'w') as f:
-            for idx in test_indices:
-                f.write(f"{idx}\n")
+            for sample in split_dataset["test"]:
+                f.write(json.dumps(sample) + "\n")
         
-        print(f"Saved train indices ({len(train_indices)}) to {train_file}")
-        print(f"Saved test indices ({len(test_indices)}) to {test_file}")
+        print(f"Saved train samples ({len(split_dataset['train'])}) to {train_file}")
+        print(f"Saved test samples ({len(split_dataset['test'])}) to {test_file}")
 
     def _validate_config(self):
         """Validate configuration for potential conflicts and warn user."""
