@@ -43,6 +43,58 @@ Once the SGLang server is running:
 - All test scripts use `uv run python` (not plain python)
 - The SGLang server needs the virtual environment at `/home/maxpaperclips/sglang/.venv`
 
+## Current Work: Unsloth Integration for Single-Node RL Training (July 9, 2025)
+
+### Problem Discovered
+Simple-trainer (torchtitan) is designed for multi-node distributed training and has significant issues on single-node setups:
+- World size mismatches in SGLang distributed setup (expects 8 GPUs per node)
+- Complex distributed coordination that's overkill for single node
+- The distributed weight updater fails with timeout errors
+
+### Solution: Unsloth Integration
+Creating a new single-node RL trainer using Unsloth as the backend:
+- **Performance**: 2-5x faster training, 50-80% less VRAM usage
+- **Simplicity**: No distributed training complexity
+- **Flexibility**: Easy switching between LoRA and full fine-tuning
+- **Native vLLM support**: Built-in integration for inference
+
+### Architecture
+```
+Atropos Environment → vLLM Inference → Trajectories
+             ↓                           ↓
+      Trajectory API ← Best-of-N Selection (LaTRo rewards)
+             ↓
+      Unsloth GRPO Training (with built-in vLLM)
+             ↓
+      Automatic model updates (vLLM restart)
+```
+
+### Implementation Plan
+See `/home/maxpaperclips/unsloth_atropos_integration_plan.md` for full details.
+
+Key components:
+1. **unsloth_trainer/grpo_unsloth.py**: Main trainer pulling from Atropos API
+2. **vLLM management**: Built-in vLLM integration with periodic restarts
+3. **LaTRo rewards**: Using log probabilities for GRPO selection
+4. **Support for both LoRA and full fine-tuning**
+
+### Example Usage
+```python
+config = UnslothGRPOConfig(
+    model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+    use_lora=True,
+    lora_rank=128,
+    vllm_port=8001,
+    vllm_restart_interval=100,
+    use_latro_rewards=True,
+)
+trainer = UnslothGRPOTrainer(config)
+trainer.train()
+```
+
+### Key Insight: Simplified Architecture
+Since Unsloth has native vLLM support via `model.vllm_engine`, we can use vLLM directly instead of SGLang. This eliminates the distributed coordination complexity and makes the single-node setup much simpler.
+
 ## IMPORTANT: Always Use UV Run
 - **NEVER use `python` directly** - always use `uv run python`
 - This project uses UV for dependency management

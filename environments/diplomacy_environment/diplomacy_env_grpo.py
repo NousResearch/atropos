@@ -398,7 +398,7 @@ class DiplomacyEnvGRPO(BaseEnv):
     def config_init(cls) -> Tuple[DiplomacyEnvGRPOConfig, List[APIServerConfig]]:
         """Initialize default configuration."""
         env_config = DiplomacyEnvGRPOConfig(
-            tokenizer_name="meta-llama/Meta-Llama-3.1-8B-Instruct",
+            tokenizer_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
             group_size=4,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",

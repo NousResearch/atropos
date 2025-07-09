@@ -1,0 +1,57 @@
+# Diplomacy Environment Configuration for Hermes-4-Qwen3-14B GRPO Training
+
+# Environment configuration
+env:
+  # Training power (the one we're training)
+  training_power: "FRANCE"
+  
+  # Game settings
+  max_game_years: 5
+  negotiation_rounds: 1
+  
+  # Opponent models (using various models for diversity)
+  opponent_models:
+    AUSTRIA: "gpt-4o-mini"
+    ENGLAND: "gpt-4o-mini"  
+    GERMANY: "gpt-4o-mini"
+    ITALY: "gpt-4o-mini"
+    RUSSIA: "gpt-4o"
+    TURKEY: "gpt-4o"
+  
+  # Scoring weights
+  score_weights:
+    vr_cli: 0.3      # VR-CLI prediction quality
+    game_outcome: 0.5 # Game performance (supply centers, survival)
+    negotiation: 0.2  # Negotiation effectiveness
+  
+  # Output settings
+  game_log_dir: "/home/maxpaperclips/data_maxpaperclips/diplomacy_games"
+  
+  # GRPO specific settings
+  discount_factor: 0.99
+  use_latro_rewards: true
+  latro_beta: 0.05
+
+# OpenAI API configuration (for opponent models)
+openai:
+  model_name: "gpt-4o-mini"  # Default model
+  base_url: "https://api.openai.com/v1"
+  # API key should be set via OPENAI_API_KEY environment variable
+
+# Wandb configuration
+wandb_project: "hermes-qwen3-diplomacy-grpo"
+wandb_entity: null  # Will use default entity
+
+# Registry configuration (scenario variations)
+registry:
+  # Different starting scenarios
+  scenarios:
+    - name: "standard"
+      weight: 0.4
+      description: "Standard 1901 start"
+    - name: "random_alliances" 
+      weight: 0.3
+      description: "Pre-existing random alliances"
+    - name: "asymmetric_start"
+      weight: 0.3
+      description: "Some powers start with advantages"
