@@ -516,6 +516,9 @@ class LetterCountingEnv(BaseEnv):
             :split_point
         ]  # Reusing train_words for mixed items
         self.test_words = all_mixed_items[split_point:]
+        
+        # Save train/test indices to files
+        self._save_train_test_indices(split_point, len(all_mixed_items))
 
         # Calculate actual percentages
         actual_passage_percentage = (
@@ -643,6 +646,9 @@ class LetterCountingEnv(BaseEnv):
             :split_point
         ]  # Reusing train_words for passages
         self.test_words = all_passages[split_point:]
+        
+        # Save train/test indices to files
+        self._save_train_test_indices(split_point, len(all_passages))
 
         # Log dataset statistics
         self.logger.info(f"Training passages: {len(self.train_words)}")
@@ -734,6 +740,9 @@ class LetterCountingEnv(BaseEnv):
         split_point = int(self.config.train_test_split * len(all_strings))
         self.train_words = all_strings[:split_point]
         self.test_words = all_strings[split_point:]
+        
+        # Save train/test indices to files
+        self._save_train_test_indices(split_point, len(all_strings))
 
         # Log dataset statistics
         if self.config.random_string_percentage > 0.0:
@@ -792,6 +801,33 @@ class LetterCountingEnv(BaseEnv):
             )
 
         self.logger.info("Letter counting environment setup complete")
+
+    def _save_train_test_indices(self, split_point: int, total_items: int):
+        """Save train and test indices to files."""
+        import os
+        
+        # Create unified output directory
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "atropos_train_test_data")
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Generate train and test indices
+        train_indices = list(range(split_point))
+        test_indices = list(range(split_point, total_items))
+        
+        # Save indices to files
+        train_file = os.path.join(output_dir, "letter_counting_train_indices.txt")
+        test_file = os.path.join(output_dir, "letter_counting_test_indices.txt")
+        
+        with open(train_file, 'w') as f:
+            for idx in train_indices:
+                f.write(f"{idx}\n")
+        
+        with open(test_file, 'w') as f:
+            for idx in test_indices:
+                f.write(f"{idx}\n")
+        
+        self.logger.info(f"Saved train indices ({len(train_indices)}) to {train_file}")
+        self.logger.info(f"Saved test indices ({len(test_indices)}) to {test_file}")
 
     async def _save_rollouts_to_jsonl(self):
         """Saves the buffered rollouts to a JSONL file in the datadumps directory."""

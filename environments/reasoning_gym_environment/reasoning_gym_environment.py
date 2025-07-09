@@ -532,6 +532,11 @@ class ReasoningGymEnv(BaseEnv):
                     seed=self.config.eval_seed,
                 )
                 for item in dataset:
+                    # Add task name to the item for better tracking
+                    if isinstance(item, dict):
+                        item['task_name'] = task_name
+                    else:
+                        setattr(item, 'task_name', task_name)
                     self.test_items_with_scorers.append((item, dataset))
             except Exception as e:
                 self.logger.warning(
@@ -550,6 +555,9 @@ class ReasoningGymEnv(BaseEnv):
         # Initialize complexity mapping after task names are loaded
         self._initialize_complexity_mapping()
 
+        # Save test data to files
+        self._save_test_data()
+        
         self.logger.info(
             "ReasoningGym environment setup complete. Ready to start training!"
         )
@@ -1468,6 +1476,49 @@ class ReasoningGymEnv(BaseEnv):
                     self.logger.debug(
                         f"Could not initialize curriculum for {task_name}: {e}"
                     )
+
+    def _save_test_data(self):
+        """Save test data (full samples) to files for analysis."""
+        import os
+        import json
+        
+        # Create unified output directory - go up one level since we're in a subdirectory
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "atropos_train_test_data")
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Save test data
+        test_data = []
+        for item_tuple in self.test_items_with_scorers:
+            item, dataset = item_tuple
+            # Handle both dict and object formats
+            if isinstance(item, dict):
+                test_data.append({
+                    "question": item.get('question', item.get('input', 'unknown')),
+                    "answer": item.get('answer', item.get('output', 'unknown')),
+                    "task_name": item.get('task_name', 'unknown'),
+                    "dataset_info": str(type(dataset).__name__)
+                })
+            else:
+                test_data.append({
+                    "question": getattr(item, 'question', getattr(item, 'input', 'unknown')),
+                    "answer": getattr(item, 'answer', getattr(item, 'output', 'unknown')),
+                    "task_name": getattr(item, 'task_name', 'unknown'),
+                    "dataset_info": str(type(dataset).__name__)
+                })
+        
+        test_file = os.path.join(output_dir, "reasoning_gym_test_data.json")
+        with open(test_file, 'w') as f:
+            json.dump(test_data, f, indent=2)
+        
+        print(f"Saved test data ({len(test_data)} items) to {test_file}")
+        
+        # Also save a summary of task names used in the test set
+        task_names_file = os.path.join(output_dir, "reasoning_gym_test_task_names.txt")
+        with open(task_names_file, 'w') as f:
+            for task_name in set(item.get('task_name', 'unknown') for item in test_data):
+                f.write(f"{task_name}\n")
+        
+        print(f"Saved test task names to {task_names_file}")
 
     def _get_complexity_params_for_task(
         self, task_name: str, complexity_level: float
