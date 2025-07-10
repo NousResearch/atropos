@@ -13,11 +13,12 @@ import numpy as np
 import requests
 import torch
 import torch.nn.functional as F
-import wandb  # Added for logging
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential
 from torch.optim import AdamW
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+import wandb  # Added for logging
 
 # Global variable to keep track of the vLLM process
 vllm_process = None
@@ -535,7 +536,7 @@ if __name__ == "__main__":
     # Example: Create a config and run training
     # Replace "gpt2" with your desired model
     training_config = TrainingConfig(
-        model_name="Qwen/Qwen2.5-1.5B-Instruct",
+        model_name="meta-llama/Llama-3.1-8B-Instruct",
         training_steps=20,  # Use steps
         vllm_restart_interval=3,  # Example interval
         use_wandb=True,  # Set to True to enable logging

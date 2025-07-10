@@ -93,7 +93,7 @@ class ChessPuzzlesEnv(BaseEnv):
     @classmethod
     def config_init(self) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = BaseEnvConfig(
-            tokenizer_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
+            tokenizer_name="meta-llama/Llama-3.1-8B-Instruct",
             group_size=8,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
@@ -105,7 +105,7 @@ class ChessPuzzlesEnv(BaseEnv):
         )
         server_configs = [
             APIServerConfig(
-                model_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
+                model_name="meta-llama/Llama-3.1-8B-Instruct",
                 base_url="http://localhost:9001/v1",
                 api_key="x",
                 num_requests_for_eval=256,
