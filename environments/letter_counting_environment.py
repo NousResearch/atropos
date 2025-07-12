@@ -3,6 +3,7 @@ import logging
 import os
 import random
 import re
+import time
 import uuid
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -1911,7 +1912,6 @@ class LetterCountingEnv(BaseEnv):
             n=1,
             max_tokens=self.config.max_generation_tokens,
             temperature=self.config.eval_temperature,
-            split="eval",
         )
 
         # Extract the model's response from the completion
@@ -1942,7 +1942,22 @@ class LetterCountingEnv(BaseEnv):
                 else 0
             )
 
-        return score
+        # Create sample data
+        sample = {
+            "messages": messages + [{"role": "assistant", "content": model_response}],
+            "test_text": test_text,
+            "target_letters": target_letters,
+            "expected_counts": expected_counts,
+            "model_response": model_response,
+            "model_answer": model_answer,
+            "expected_format": expected_format,
+            "score": float(score),
+            "correct": bool(score > 0),
+            "finish_reason": completion.choices[0].finish_reason,
+            "is_text_passage": is_text_passage,
+        }
+
+        return {"score": score, "sample": sample}
 
     async def evaluate(self, *args, **kwargs):
         """
@@ -1953,6 +1968,8 @@ class LetterCountingEnv(BaseEnv):
             self.logger.warning("No test texts available for evaluation. Skipping.")
             self.eval_metrics.append(("eval/percent_correct", 0.0))
             return
+
+        start_time = time.time()
 
         eval_tasks = []
         # Sample a subset of test texts for evaluation to keep it manageable
@@ -1973,15 +1990,38 @@ class LetterCountingEnv(BaseEnv):
             eval_tasks.append(self.rollout_and_score_eval(test_text))
 
         # Run evaluation
-        scores = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
+        results = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
+
+        # Extract scores and samples
+        scores = [result["score"] for result in results]
+        samples = [result["sample"] for result in results]
 
         if not scores:
             percent_correct = 0.0
         else:
             percent_correct = sum(scores) / len(scores)
 
+        end_time = time.time()
+
+        # Add to existing metrics for wandb
         self.eval_metrics.append(("eval/percent_correct", percent_correct))
         self.logger.info(f"Evaluation finished. Percent correct: {percent_correct:.4f}")
+
+        # Log evaluation results
+        eval_metrics = {
+            "eval/percent_correct": percent_correct,
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "temperature": self.config.eval_temperature,
+                "max_tokens": self.config.max_generation_tokens,
+            },
+        )
 
     async def add_rollouts_for_wandb(
         self,

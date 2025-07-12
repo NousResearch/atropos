@@ -1,6 +1,7 @@
 import json
 import random
 import re
+import time
 from typing import Dict, List, Optional, Tuple, Union
 
 import wandb
@@ -139,7 +140,7 @@ class SingleToolCallingEnv(BaseEnv):
         )
 
         if not human_message or not expected_gpt_message:
-            return 0  # Skip invalid conversations
+            return {"score": 0, "sample": None}  # Skip invalid conversations
 
         # Create messages for model
         messages = []
@@ -158,12 +159,13 @@ class SingleToolCallingEnv(BaseEnv):
         )
 
         # Get model completion using completion() instead of chat_completion()
+        eval_temperature = 1.0
+        eval_max_tokens = 1024 * 15
         completion = await self.server.completion(
             prompt=prompt,
             n=1,
-            max_tokens=1024 * 15,
-            temperature=1.0,
-            split="eval",
+            max_tokens=eval_max_tokens,
+            temperature=eval_temperature,
         )
 
         # Extract the model's response from the completion
@@ -172,7 +174,18 @@ class SingleToolCallingEnv(BaseEnv):
 
         # Extract and compare tool calls
         score = self._compare_tool_calls(model_response, expected_response)
-        return score
+
+        # Create sample data
+        sample = {
+            "messages": messages + [{"role": "assistant", "content": model_response}],
+            "expected_tool_calls": expected_response,
+            "model_tool_calls": model_response,
+            "score": int(score),
+            "correct": bool(score),
+            "finish_reason": completion.choices[0].finish_reason,
+        }
+
+        return {"score": score, "sample": sample}
 
     def _extract_tool_call_jsons(self, text):
         """
@@ -272,11 +285,44 @@ class SingleToolCallingEnv(BaseEnv):
             return False
 
     async def evaluate(self, *args, **kwargs):
+        start_time = time.time()
+        eval_temperature = 1.0
+        eval_max_tokens = 1024 * 15
+
         eval_tasks = []
         for test_item in self.test:
             eval_tasks.append(self.rollout_and_score_eval(test_item))
-        scores = await tqdm_asyncio.gather(*eval_tasks)
-        self.eval_metrics.append(("eval/percent_correct", sum(scores) / len(scores)))
+        results = await tqdm_asyncio.gather(*eval_tasks)
+
+        # Extract scores and samples, filtering out invalid ones
+        scores = []
+        samples = []
+        for result in results:
+            if result["sample"] is not None:
+                scores.append(result["score"])
+                samples.append(result["sample"])
+
+        percent_correct = sum(scores) / len(scores) if scores else 0.0
+        end_time = time.time()
+
+        # Add to existing metrics for wandb
+        self.eval_metrics.append(("eval/percent_correct", percent_correct))
+
+        # Log evaluation results
+        eval_metrics = {
+            "eval/percent_correct": percent_correct,
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "temperature": eval_temperature,
+                "max_tokens": eval_max_tokens,
+            },
+        )
 
     async def collect_trajectories(self, item) -> Tuple[ScoredDataGroup, List]:
         # Extract messages from the item

@@ -67,6 +67,7 @@ import logging
 import os
 import random
 import re
+import time
 import uuid
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
@@ -3928,7 +3929,7 @@ class AnswerFormatEnv(BaseEnv):
                     f"An unexpected error occurred while saving failed rollouts to {file_path}: {e}"
                 )
 
-    async def rollout_and_score_eval(self, test_item: Dict[str, Any]) -> float:
+    async def rollout_and_score_eval(self, test_item: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate a single test item."""
         # Get appropriate formats for this dataset type
         dataset_type = test_item.get("dataset_type", "generic")
@@ -3953,12 +3954,12 @@ class AnswerFormatEnv(BaseEnv):
             messages, add_generation_prompt=True, tokenize=False
         )
 
+        eval_temperature = 0.1
         completion = await self.server.completion(
             prompt=prompt,
             n=1,
             max_tokens=self.config.max_token_length,
-            temperature=0.1,
-            split="eval",
+            temperature=eval_temperature,
         )
 
         model_response = completion.choices[0].text
@@ -3966,7 +3967,26 @@ class AnswerFormatEnv(BaseEnv):
             model_response, selected_format
         )
 
-        return 1.0 if extracted_content is not None else 0.0
+        score = 1.0 if extracted_content is not None else 0.0
+
+        # Create sample data
+        sample = {
+            "messages": messages + [{"role": "assistant", "content": model_response}],
+            "prompt": test_item["prompt"],
+            "selected_format": (
+                selected_format.value
+                if hasattr(selected_format, "value")
+                else str(selected_format)
+            ),
+            "dataset_type": dataset_type,
+            "model_response": model_response,
+            "extracted_content": extracted_content,
+            "score": float(score),
+            "correct": bool(score > 0),
+            "finish_reason": completion.choices[0].finish_reason,
+        }
+
+        return {"score": score, "sample": sample}
 
     async def evaluate(self, *args, **kwargs):
         """Run evaluation on the test set."""
@@ -3977,22 +3997,48 @@ class AnswerFormatEnv(BaseEnv):
             self.eval_metrics.append(("eval/percent_correct", 0.0))
             return
 
+        start_time = time.time()
+        eval_temperature = 0.1
+
         # Use subset for faster evaluation
         items_to_eval = self.test_items[: min(len(self.test_items), 50)]
 
-        eval_results = await tqdm_asyncio.gather(
+        results = await tqdm_asyncio.gather(
             *[self.rollout_and_score_eval(item) for item in items_to_eval]
         )
 
-        if eval_results:
-            avg_score = sum(eval_results) / len(eval_results)
+        # Extract scores and samples
+        scores = [result["score"] for result in results]
+        samples = [result["sample"] for result in results]
+
+        if scores:
+            avg_score = sum(scores) / len(scores)
         else:
             avg_score = 0.0
 
+        end_time = time.time()
+
+        # Add to existing metrics for wandb
         self.eval_metrics.append(("eval/percent_correct", avg_score))
 
         if self.debug_logging:
             self.logger.info(f"Evaluation complete: avg_score={avg_score:.3f}")
+
+        # Log evaluation results
+        eval_metrics = {
+            "eval/percent_correct": avg_score,
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "temperature": eval_temperature,
+                "max_tokens": self.config.max_token_length,
+            },
+        )
 
     async def add_rollouts_for_wandb(
         self,

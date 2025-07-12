@@ -2,6 +2,7 @@ import json
 import os
 import random
 import re
+import time
 import uuid
 from typing import Dict, List, Optional, Tuple
 
@@ -592,12 +593,12 @@ class InstructionFollowingEnv(BaseEnv):
             messages, add_generation_prompt=True, tokenize=False
         )
 
+        eval_temperature = 0.2  # Temperature for eval, can be 0 for deterministic
         completion = await self.server.completion(
             prompt=prompt_str,
             n=1,
             max_tokens=self.config.max_token_length,  # Use config for max_tokens
-            temperature=0.2,  # Temperature for eval, can be 0 for deterministic
-            split="eval",
+            temperature=eval_temperature,
         )
 
         model_response_text = completion.choices[0].text
@@ -605,9 +606,20 @@ class InstructionFollowingEnv(BaseEnv):
             model_response_text, func_name, args_for_verifier
         )
 
-        return (
-            score_value  # Returns 1.0 for correct, 0.0 for incorrect based on verifier
-        )
+        # Create sample data
+        sample = {
+            "messages": messages
+            + [{"role": "assistant", "content": model_response_text}],
+            "instruction_prompt": instruction_prompt_text,
+            "func_name": func_name,
+            "args_for_verifier": args_for_verifier,
+            "model_response": model_response_text,
+            "score": float(score_value),
+            "correct": bool(score_value > 0),
+            "finish_reason": completion.choices[0].finish_reason,
+        }
+
+        return {"score": score_value, "sample": sample}
 
     async def evaluate(self, *args, **kwargs):
         # Evaluates the model on the test set
@@ -616,20 +628,46 @@ class InstructionFollowingEnv(BaseEnv):
             self.eval_metrics.append(("eval/percent_correct", 0.0))
             return
 
+        start_time = time.time()
+        eval_temperature = 0.2
+
         print(f"Starting evaluation on {len(self.test)} items...")
         eval_tasks = []
         for test_item_dict in self.test:  # self.test contains dicts after setup
             eval_tasks.append(self.rollout_and_score_eval(test_item_dict))
 
-        scores = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
+        results = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
+
+        # Extract scores and samples
+        scores = [result["score"] for result in results]
+        samples = [result["sample"] for result in results]
 
         if not scores:  # If gather returns empty list
             percent_correct = 0.0
         else:
             percent_correct = sum(scores) / len(scores)
 
+        end_time = time.time()
+
+        # Add to existing metrics for wandb
         self.eval_metrics.append(("eval/percent_correct", percent_correct))
         print(f"Evaluation finished. Percent correct: {percent_correct:.4f}")
+
+        # Log evaluation results
+        eval_metrics = {
+            "eval/percent_correct": percent_correct,
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "temperature": eval_temperature,
+                "max_tokens": self.config.max_token_length,
+            },
+        )
 
     async def collect_trajectories(
         self, item: Item

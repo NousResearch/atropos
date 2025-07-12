@@ -5,6 +5,7 @@ import pkgutil
 import random
 import re
 import sys
+import time
 import uuid
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
@@ -1155,13 +1156,13 @@ class ReasoningGymEnv(BaseEnv):
 
     async def rollout_and_score_eval(
         self, test_data_tuple: Tuple[Dict[str, Any], Any]
-    ) -> float:
+    ) -> Dict[str, Any]:
         """
         Performs a rollout for a single evaluation item and scores it.
         Args:
             test_data_tuple: A tuple (rg_item, dataset_obj) from self.test_items_with_scorers.
         Returns:
-            Score (1.0 for correct, 0.0 for incorrect/error).
+            Dict with score and sample data.
         """
         rg_item, dataset_obj = test_data_tuple
         question_text = rg_item["question"]
@@ -1179,14 +1180,14 @@ class ReasoningGymEnv(BaseEnv):
         prompt_tokens = len(self.tokenizer.encode(prompt_str))
         max_tokens = (2 * self.config.max_token_length) - prompt_tokens
         if max_tokens < 0:
-            return 0.0
+            return {"score": 0.0, "sample": None}
 
+        eval_temperature = 0.1
         completion = await self.server.completion(
             prompt=prompt_str,
             n=1,
             max_tokens=max_tokens,
-            temperature=0.1,
-            split="eval",
+            temperature=eval_temperature,
         )
 
         model_full_response = completion.choices[0].text
@@ -1199,12 +1200,28 @@ class ReasoningGymEnv(BaseEnv):
                 self.logger.debug(
                     f"Eval - Task {task_name}: Giving 0 score due to failed answer extraction (didn't follow format)"
                 )
-            return 0.0
+            return {"score": 0.0, "sample": None}
 
         # Use our dual-format scoring method for evaluation as well
-        return self._score_answer_with_both_formats(
+        score = self._score_answer_with_both_formats(
             model_answer_to_score, rg_item, dataset_obj
         )
+
+        # Create sample data
+        sample = {
+            "messages": messages
+            + [{"role": "assistant", "content": model_full_response}],
+            "question": question_text,
+            "expected_answer": str(rg_item.get("answer", "")),
+            "model_answer": model_full_response,
+            "extracted_answer": model_answer_to_score,
+            "score": float(score),
+            "correct": bool(score > 0),
+            "finish_reason": completion.choices[0].finish_reason,
+            "task_name": rg_item.get("metadata", {}).get("source_dataset", "unknown"),
+        }
+
+        return {"score": score, "sample": sample}
 
     async def evaluate(self, *args, **kwargs):
         self.logger.info("Starting evaluation...")
@@ -1212,6 +1229,9 @@ class ReasoningGymEnv(BaseEnv):
             self.logger.warning("No test items available for evaluation. Skipping.")
             self.eval_metrics.append(("eval/percent_correct", 0.0))
             return
+
+        start_time = time.time()
+        eval_temperature = 0.1
 
         eval_tasks = [
             self.rollout_and_score_eval(item_tuple)
@@ -1221,15 +1241,42 @@ class ReasoningGymEnv(BaseEnv):
         self.logger.info(
             f"Starting evaluation on {len(self.test_items_with_scorers)} items..."
         )
-        scores = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
+        results = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
+
+        # Extract scores and samples, filtering out invalid ones
+        scores = []
+        samples = []
+        for result in results:
+            if result["sample"] is not None:
+                scores.append(result["score"])
+                samples.append(result["sample"])
 
         if not scores:
             percent_correct = 0.0
         else:
             percent_correct = sum(scores) / len(scores)
 
+        end_time = time.time()
+
+        # Add to existing metrics for wandb
         self.eval_metrics.append(("eval/percent_correct", percent_correct))
         self.logger.info(f"Evaluation finished. Percent correct: {percent_correct:.4f}")
+
+        # Log evaluation results
+        eval_metrics = {
+            "eval/percent_correct": percent_correct,
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "temperature": eval_temperature,
+                "max_tokens": 2 * self.config.max_token_length,
+            },
+        )
 
     async def add_rollouts_for_wandb(
         self,
