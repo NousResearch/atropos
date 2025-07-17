@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from atroposlib.envs.base import APIServerConfig
 
-from .agents.atropos_agent import AtroposAgentConfig
+from environments.shared_agents import AtroposAgentConfig
 from .textworld_env import TextWorldEnv, TextWorldEnvConfig
 
 load_dotenv()

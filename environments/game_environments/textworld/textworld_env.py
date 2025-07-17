@@ -43,10 +43,11 @@ from environments.game_environments.textworld.textworld_registry import (
 from textworld import EnvInfos, GameOptions
 from textworld.gym.envs import TextworldGymEnv
 
-from .agents.atropos_agent import AtroposAgent, AtroposAgentConfig
-from .agents.atropos_memory_manager import (
-    MEMORY_SYSTEM_PREREQUISITES_AVAILABLE,
+from environments.shared_agents import (
+    AtroposAgent,
+    AtroposAgentConfig,
     AtroposMemoryManager,
+    MEMORY_SYSTEM_PREREQUISITES_AVAILABLE,
 )
 
 logger = logging.getLogger(__name__)
