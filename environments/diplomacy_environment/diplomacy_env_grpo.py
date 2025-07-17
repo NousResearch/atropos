@@ -26,6 +26,8 @@ load_dotenv()
 sys.path.append(os.path.join(os.path.dirname(__file__), "AI_Diplomacy"))
 
 from atropos_client import AtroposClient, register_atropos_models
+from vrcli_scorer import VRCLIScorer
+from diplomacy_vrcli_integration import DiplomacyVRCLIIntegration
 
 from atroposlib.envs.base import (
     APIServerConfig,
@@ -91,6 +93,14 @@ class DiplomacyEnvGRPOConfig(BaseEnvConfig):
         default=0.05,
         description="KL penalty coefficient for LaTRo rewards (not currently used)",
     )
+    
+    # VR-CLI configuration
+    use_vrcli: bool = Field(
+        default=True, description="Use VR-CLI scoring for prediction quality"
+    )
+    vrcli_weight: float = Field(
+        default=0.3, description="Weight for VR-CLI scores in final reward (0-1)"
+    )
 
 
 class DiplomacyEnvGRPO(BaseEnv):
@@ -120,6 +130,12 @@ class DiplomacyEnvGRPO(BaseEnv):
 
         # Track active games
         self.active_games = {}
+        
+        # Initialize VR-CLI components if enabled
+        self.vrcli_integration = None
+        if self.config.use_vrcli:
+            logger.info("[DiplomacyEnvGRPO.__init__] Initializing VR-CLI integration")
+            # VR-CLI will be initialized in setup() after tokenizer is available
 
         # Register atropos models with GRPO support
         logger.info(
@@ -131,6 +147,14 @@ class DiplomacyEnvGRPO(BaseEnv):
     async def setup(self):
         """Initialize the environment."""
         logger.info("Setting up Diplomacy GRPO environment")
+        
+        # Initialize VR-CLI scorer if enabled
+        if self.config.use_vrcli and self.vrcli_integration is None:
+            vrcli_scorer = VRCLIScorer(self.server, self.tokenizer)
+            self.vrcli_integration = DiplomacyVRCLIIntegration(
+                vrcli_scorer, self.config.vrcli_weight
+            )
+            logger.info("VR-CLI integration initialized")
 
         # Note: We'll register intercepting models per-episode in collect_trajectories
         # since they need a reference to the env instance
@@ -274,6 +298,19 @@ class DiplomacyEnvGRPO(BaseEnv):
 
             # Get trajectory data from intercepting client
             trajectory_data = training_client.get_trajectory_data()
+            
+            # Store predictions for VR-CLI if enabled
+            if self.config.use_vrcli and self.vrcli_integration:
+                predictions_history = training_client.predictions_history
+                for pred_data in predictions_history:
+                    self.vrcli_integration.store_predictions(
+                        episode_id=game_id,
+                        power=training_power,
+                        phase=pred_data["phase"],
+                        decision_num=pred_data["decision"],
+                        predictions=pred_data["predictions"],
+                        prompt=pred_data["prompt"]
+                    )
 
             # Load game result from saved file
             output_path = os.path.join(self.config.game_log_dir, f"{game_id}.json")
@@ -287,6 +324,21 @@ class DiplomacyEnvGRPO(BaseEnv):
             logger.info(
                 f"Game {game_id} completed. Collected {len(trajectory_data)} decision points"
             )
+            
+            # Process game results to extract actual outcomes for VR-CLI
+            if self.config.use_vrcli and self.vrcli_integration:
+                await self._extract_and_store_outcomes(game_id, game_result)
+                
+                # Calculate VR-CLI scores
+                vrcli_scores_by_power = await self.vrcli_integration.calculate_scores_for_episode(
+                    game_id, [training_power]
+                )
+                vrcli_scores = vrcli_scores_by_power.get(training_power, [])
+                
+                # Apply VR-CLI scores to trajectory data
+                trajectory_data = await self._apply_vrcli_scores(
+                    trajectory_data, vrcli_scores
+                )
 
             # Apply credit assignment based on final game outcome
             final_score = self._compute_final_score(game_result, training_power)
@@ -387,6 +439,73 @@ class DiplomacyEnvGRPO(BaseEnv):
             # Discount return for next step
             cumulative_return *= discount_factor
 
+        return trajectory_data
+    
+    async def _extract_and_store_outcomes(self, episode_id: str, game_result: Dict):
+        """Extract actual outcomes from game results for VR-CLI scoring."""
+        if not self.vrcli_integration:
+            return
+            
+        # Extract phase-by-phase outcomes from game history
+        game_history = game_result.get("game_history", [])
+        
+        for phase_data in game_history:
+            phase = phase_data.get("phase", "")
+            
+            # Extract negotiation outcomes (messages sent)
+            messages = phase_data.get("messages", [])
+            negotiation_outcomes = self.vrcli_integration.extract_negotiation_outcomes(messages)
+            
+            # Extract board outcomes (territory and unit changes)
+            prev_state = phase_data.get("prev_state", {})
+            curr_state = phase_data.get("state", {})
+            board_outcomes = self.vrcli_integration.extract_board_outcomes(prev_state, curr_state)
+            
+            # Extract trust outcomes (relationship changes)
+            prev_trust = phase_data.get("prev_relationships", {})
+            curr_trust = phase_data.get("relationships", {})
+            trust_outcomes = self.vrcli_integration.extract_trust_outcomes(prev_trust, curr_trust)
+            
+            # Store combined outcomes
+            outcomes = {
+                "negotiation_responses": negotiation_outcomes,
+                "board_changes": board_outcomes,
+                "relationship_changes": trust_outcomes,
+            }
+            
+            self.vrcli_integration.store_actual_outcomes(episode_id, phase, outcomes)
+            
+    async def _apply_vrcli_scores(
+        self,
+        trajectory_data: List[ScoredDataGroup],
+        vrcli_scores: List[float]
+    ) -> List[ScoredDataGroup]:
+        """Apply VR-CLI scores to trajectory data."""
+        if len(vrcli_scores) != len(trajectory_data):
+            logger.warning(
+                f"VR-CLI score count mismatch: {len(vrcli_scores)} vs {len(trajectory_data)} trajectory steps"
+            )
+            # Pad or truncate as needed
+            if len(vrcli_scores) < len(trajectory_data):
+                vrcli_scores.extend([0.0] * (len(trajectory_data) - len(vrcli_scores)))
+            else:
+                vrcli_scores = vrcli_scores[:len(trajectory_data)]
+                
+        # Apply VR-CLI scores to each trajectory step
+        for i, (group, vrcli_score) in enumerate(zip(trajectory_data, vrcli_scores)):
+            # Combine existing scores with VR-CLI scores
+            step_scores = group.get("scores", [])
+            updated_scores = []
+            
+            for step_score in step_scores:
+                # Weighted combination of LaTRo and VR-CLI scores
+                combined_score = self.vrcli_integration.apply_vrcli_to_rewards(
+                    [step_score], [vrcli_score]
+                )[0]
+                updated_scores.append(combined_score)
+                
+            group["scores"] = updated_scores
+            
         return trajectory_data
 
     async def evaluate(self, *args, **kwargs):

@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 from atroposlib.envs.base import ScoredDataGroup
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+from diplomacy_response_parser import parse_diplomacy_response, extract_memory_content
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,9 @@ class AtroposClient(BaseModelClient):
         self.trajectory_data: List[ScoredDataGroup] = []
         self.canonical_history: List[Dict] = []  # Selected responses only
         self.decision_count = 0
+        
+        # Store predictions for VR-CLI scoring
+        self.predictions_history: List[Dict[str, Any]] = []
 
         logger.info(
             f"Initialized AtroposClient for model {model_name} at {server_url} (GRPO mode: {is_training})"
@@ -192,6 +196,19 @@ class AtroposClient(BaseModelClient):
                 f"[AtroposClient GRPO] LaTRo normalized scores: {[f'{s:.3f}' for s in scores]}"
             )
 
+        # Parse the selected response to extract predictions for VR-CLI scoring
+        ai_diplomacy_json, predictions = parse_diplomacy_response(selected_response)
+        
+        if predictions:
+            self.predictions_history.append({
+                "decision": self.decision_count,
+                "task_type": task_type,
+                "phase": self._extract_phase(prompt),
+                "predictions": predictions,
+                "prompt": prompt,
+            })
+            logger.info(f"[AtroposClient GRPO] Stored predictions for VR-CLI scoring")
+
         # Step 7: Update canonical history with selected response
         self.canonical_history.append(
             {
@@ -203,7 +220,8 @@ class AtroposClient(BaseModelClient):
             }
         )
 
-        return selected_response
+        # Return the AI_Diplomacy compatible JSON
+        return ai_diplomacy_json
 
     async def _normal_generate_response(
         self, prompt: str, temperature: float = 0.0, inject_random_seed: bool = True
@@ -231,10 +249,14 @@ class AtroposClient(BaseModelClient):
             response.raise_for_status()
 
             result = response.json()
+            raw_response = result.get("text", "")
             logger.debug(
-                f"Received response for {self.power}: {len(result.get('text', ''))} chars"
+                f"Received response for {self.power}: {len(raw_response)} chars"
             )
-            return result["text"]
+            
+            # Parse response to extract AI_Diplomacy compatible JSON
+            ai_diplomacy_json, _ = parse_diplomacy_response(raw_response)
+            return ai_diplomacy_json
 
         except httpx.ConnectError:
             logger.error(f"Failed to connect to Atropos server at {self.server_url}")

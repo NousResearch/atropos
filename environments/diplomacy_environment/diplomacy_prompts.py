@@ -5,7 +5,9 @@ This module contains prompt templates and generation logic for
 different phases and situations in Diplomacy.
 """
 
+import json
 from typing import Any, Dict
+from .diplomacy_tools import DIPLOMACY_TOOLS
 
 
 class DiplomacyPrompts:
@@ -19,35 +21,65 @@ class DiplomacyPrompts:
     ) -> str:
         """Get system prompt for negotiation phase."""
         personality_desc = DiplomacyPrompts._describe_personality(personality)
+        tools_json = json.dumps(DIPLOMACY_TOOLS, indent=2)
 
         return f"""You are playing as {power} in a game of Diplomacy. You are in the {phase} phase.
 
 Your personality traits: {personality_desc}
 
-You must generate diplomatic messages to other powers. Consider:
-1. Your current position and goals
-2. Potential alliances and threats
-3. Your commitments from previous negotiations
-4. The trustworthiness of other powers
+You are a deep thinking AI who uses extreme long chains of thought to carefully plan your diplomatic strategy and predict outcomes. Your goal is to advance your position through negotiation while accurately predicting how other powers will respond.
 
-Output format:
+Instructions:
+1. Analyze the current situation and your strategic goals
+2. Plan your diplomatic messages carefully
+3. Predict how other powers will respond to your messages
+4. Consider the trust implications of your actions
+
+<tools>
+{tools_json}
+</tools>
+
+For your function call, return a JSON object with function name and arguments within <tool_call> </tool_call> tags.
+
+EXAMPLE RESPONSE:
 <think>
-Analyze the current situation, your goals, and potential strategies.
-Consider what messages to send and to whom.
+Looking at the board, I see Germany is strong in the center. France seems amenable to cooperation based on their previous messages. I should propose a coordinated attack on Germany while being careful not to reveal my long-term plans. France will likely agree but may betray me later once Germany is weakened. I need to maintain some defensive units.
 </think>
 <memory>
-Record key decisions and insights about this negotiation round.
+Germany growing strong in center - poses threat. France open to cooperation but likely temporary. Need to balance offense with defense.
 </memory>
-<negotiation>
-<message to="POWER_NAME" type="proposal">
-Your message content here...
-</message>
-<message to="ANOTHER_POWER" type="negotiation">
-Another message...
-</message>
-</negotiation>
+<tool_call>
+{{
+  "name": "diplomacy_action",
+  "arguments": {{
+    "messages": [
+      {{
+        "message_type": "private",
+        "recipient": "FRANCE",
+        "content": "Germany's rapid expansion threatens us both. I propose we coordinate: I'll move my armies toward Munich while you pressure from the west. We can discuss the division of German territories once we've contained the threat."
+      }},
+      {{
+        "message_type": "private",
+        "recipient": "ITALY",
+        "content": "I notice you're building fleets. I have no naval ambitions in the Mediterranean. Perhaps we can find common ground against our mutual neighbors?"
+      }}
+    ],
+    "expected_outcomes": {{
+      "negotiation_responses": {{
+        "FRANCE": "Likely to agree to anti-German alliance but will position for eventual betrayal",
+        "ITALY": "May be suspicious but interested in non-aggression to focus elsewhere"
+      }},
+      "relationship_changes": {{
+        "FRANCE": "+0.3 trust short-term, will decline later",
+        "GERMANY": "-0.5 trust when they learn of alliance",
+        "ITALY": "+0.1 trust from non-aggression overture"
+      }}
+    }}
+  }}
+}}
+</tool_call>
 
-Message types: "proposal" (specific agreement), "negotiation" (general discussion), "commitment" (binding promise)"""
+Remember: Your entire response must be exactly three XML blocks: <think>...</think> followed by <memory>...</memory> followed by <tool_call>...</tool_call>"""
 
     @staticmethod
     def get_order_system_prompt(
@@ -57,33 +89,68 @@ Message types: "proposal" (specific agreement), "negotiation" (general discussio
     ) -> str:
         """Get system prompt for order phase."""
         personality_desc = DiplomacyPrompts._describe_personality(personality)
+        tools_json = json.dumps(DIPLOMACY_TOOLS, indent=2)
 
         return f"""You are playing as {power} in a game of Diplomacy. You are in the {phase} phase.
 
 Your personality traits: {personality_desc}
 
-You must generate orders for your units. Consider:
-1. Your negotiated agreements and commitments
-2. The current board position
-3. Your strategic goals
-4. Potential betrayals or defenses
+You are a deep thinking AI who uses extreme long chains of thought to carefully plan your moves and predict their outcomes. Your goal is to execute effective orders while accurately predicting how the board will change.
 
-Output format:
+Instructions:
+1. Analyze the current board position and recent negotiations
+2. Plan your unit orders considering agreements and strategic goals
+3. Predict what will happen when all orders are resolved
+4. Consider both offensive and defensive priorities
+
+<tools>
+{tools_json}
+</tools>
+
+For your function call, return a JSON object with function name and arguments within <tool_call> </tool_call> tags.
+
+EXAMPLE RESPONSE:
 <think>
-Analyze the situation and plan your moves.
-Consider agreements made and whether to honor them.
-Think about offensive and defensive priorities.
+Based on my negotiations with France, they should be supporting my move to Munich. However, I'm not entirely confident they'll follow through - they might try to take Belgium instead. I need to hedge my bets. My fleet in the North Sea can either support the army to Belgium or convoy to Norway. Given the risks, I'll go for Norway - it's less contested and gives me a stronger position regardless of France's actions.
 </think>
 <memory>
-Record your strategic decisions and any betrayals or key moves.
+Executed cautious northern strategy due to France trust concerns. Chose Norway over Belgium to avoid potential conflict. Army in Munich positioned defensively.
 </memory>
-<orders>
-<order unit="UNIT_LOCATION" type="move" target="TARGET_LOCATION"/>
-<order unit="UNIT_LOCATION" type="support" supporting="UNIT_LOCATION" target="TARGET_LOCATION"/>
-<order unit="UNIT_LOCATION" type="hold"/>
-</orders>
+<tool_call>
+{{
+  "name": "diplomacy_action", 
+  "arguments": {{
+    "orders": [
+      "A MUN H",
+      "F NTH C A LON-NWY",
+      "A LON-NWY VIA C",
+      "F EDI-NTH"
+    ],
+    "expected_outcomes": {{
+      "board_changes": {{
+        "territories": {{
+          "NWY": "Likely captured by England",
+          "MUN": "Remains with current owner",
+          "BEL": "France may take if they betray agreement"
+        }},
+        "unit_outcomes": {{
+          "A MUN": "Will hold successfully",
+          "F NTH": "Convoy will succeed",
+          "A LON": "Successfully convoyed to Norway",
+          "F EDI": "Bounce with possible German fleet"
+        }}
+      }},
+      "relationship_changes": {{
+        "FRANCE": "-0.2 trust if they see I didn't support their Belgium move",
+        "RUSSIA": "-0.3 trust due to Norway capture",
+        "GERMANY": "+0.1 trust from not attacking Munich"
+      }}
+    }}
+  }}
+}}
+</tool_call>
 
-Order types: "move", "support", "convoy", "hold", "build", "disband", "retreat"."""
+Remember: Your entire response must be exactly three XML blocks: <think>...</think> followed by <memory>...</memory> followed by <tool_call>...</tool_call>"""
 
     @staticmethod
     def get_build_system_prompt(power: str) -> str:
