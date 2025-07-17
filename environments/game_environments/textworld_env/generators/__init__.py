@@ -9,9 +9,4 @@ from .puzzle_generator import PuzzleGenerator
 from .navigation_generator import NavigationGenerator
 from .mixed_generator import MixedGenerator
 
-__all__ = [
-    "QuestGenerator",
-    "PuzzleGenerator", 
-    "NavigationGenerator",
-    "MixedGenerator"
-]
+__all__ = ["QuestGenerator", "PuzzleGenerator", "NavigationGenerator", "MixedGenerator"]

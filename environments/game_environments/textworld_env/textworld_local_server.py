@@ -6,8 +6,13 @@ from dotenv import load_dotenv
 
 from atroposlib.envs.base import APIServerConfig
 
-from .agents.atropos_agent import AtroposAgentConfig
-from .textworld_env import TextWorldEnv, TextWorldEnvConfig
+from environments.game_environments.textworld_env.agents.atropos_agent import (
+    AtroposAgentConfig,
+)
+from environments.game_environments.textworld_env.textworld_env import (
+    TextWorldEnv,
+    TextWorldEnvConfig,
+)
 
 load_dotenv()
 
@@ -23,7 +28,7 @@ async def main():
     logger.info("Starting TextWorld Environment Test")
 
     # Set debug logging for more info
-    logging.getLogger("environments.game_environments.textworld").setLevel(
+    logging.getLogger("environments.game_environments.textworld_env").setLevel(
         logging.DEBUG
     )
     logging.getLogger("atroposlib.utils.tool_call_parser").setLevel(logging.DEBUG)

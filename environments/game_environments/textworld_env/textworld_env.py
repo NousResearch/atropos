@@ -8,8 +8,6 @@ Uses VR-CLI (Verifiable Rewards via Completion Likelihood Improvement) to score
 predictions based on how well the model anticipates action outcomes.
 """
 
-import asyncio
-import copy
 import json
 import logging
 import math
@@ -34,17 +32,19 @@ from atroposlib.envs.base import (
 from atroposlib.type_definitions import Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 from atroposlib.utils.tool_call_parser import parse_tool_call
-from environments.game_environments.textworld.generation_utils import (
+from environments.game_environments.textworld_env.generation_utils import (
     generate_textworld_game,
 )
-from environments.game_environments.textworld.textworld_registry import (
+from environments.game_environments.textworld_env.textworld_registry import (
     create_textworld_registry,
 )
-from textworld import EnvInfos, GameOptions
 from textworld.gym.envs import TextworldGymEnv
 
-from .agents.atropos_agent import AtroposAgent, AtroposAgentConfig
-from .agents.atropos_memory_manager import (
+from environments.game_environments.textworld_env.agents.atropos_agent import (
+    AtroposAgent,
+    AtroposAgentConfig,
+)
+from environments.game_environments.textworld_env.agents.atropos_memory_manager import (
     MEMORY_SYSTEM_PREREQUISITES_AVAILABLE,
     AtroposMemoryManager,
 )
@@ -84,28 +84,44 @@ class TextWorldEnvConfig(BaseEnvConfig):
         default=0.99,
         description="Discount factor for credit assignment in sparse reward setting",
     )
-    
+
+    # Format reward configuration
+    format_reward_enabled: bool = Field(
+        default=True,
+        description="Apply format rewards for proper response structure (memory and thinking blocks)",
+    )
+    format_reward_weight: float = Field(
+        default=0.1,
+        description="Weight for format reward in combined scoring (0.1 = up to 10% adjustment)",
+    )
+    format_memory_reward: float = Field(
+        default=0.5, description="Reward for including a proper <memory> block"
+    )
+    format_thinking_reward: float = Field(
+        default=0.5, description="Reward for including a proper <thinking> block"
+    )
+
     # Token length penalty configuration
     token_length_penalty_enabled: bool = Field(
-        default=True,
-        description="Apply token length penalty/bonus to rewards"
+        default=True, description="Apply token length penalty/bonus to rewards"
     )
     token_length_penalty_weight: float = Field(
         default=0.1,
-        description="Weight for token length penalty (0.1 = up to 10% adjustment)"
+        description="Weight for token length penalty (0.1 = up to 10% adjustment)",
     )
     token_length_baseline: int = Field(
         default=500,
-        description="Baseline token count for neutral penalty (no bonus/penalty)"
+        description="Baseline token count for neutral penalty (no bonus/penalty)",
     )
     token_length_penalty_scale: float = Field(
         default=0.0002,
-        description="Scale factor for token length penalty (penalty per token over baseline)"
+        description="Scale factor for token length penalty (penalty per token over baseline)",
     )
-    
-    # LaTRo specific configurations
+
+    # LaTRo specific configurations (TODO: an ablation on this vs vrcli)
     latro_enabled: bool = Field(
-        default=False, description="Use LaTRo scoring for action quality (disabled for now)"
+        default=False,
+        description="Use LaTRo scoring for action quality (disabled for now)",
     )
     latro_weight: float = Field(
         default=0.0,
@@ -139,32 +155,28 @@ class TextWorldEnvConfig(BaseEnvConfig):
         }
     )
     game_file_path: Optional[str] = None
-    
+
     # Registry configuration
     use_registry: bool = Field(
-        default=True,
-        description="Whether to use the registry for game selection"
+        default=True, description="Whether to use the registry for game selection"
     )
     registry_mode: str = Field(
-        default="challenge",
-        description="Registry mode: random, generated, challenge"
+        default="challenge", description="Registry mode: random, generated, challenge"
     )
     registry_generation_ratio: float = Field(
-        default=0.0,
-        description="Ratio of generated games vs pre-built (0.0 to 1.0)"
+        default=0.0, description="Ratio of generated games vs pre-built (0.0 to 1.0)"
     )
     registry_difficulty: Optional[str] = Field(
-        default="random",
-        description="Difficulty: easy, medium, hard, expert, random"
+        default="random", description="Difficulty: easy, medium, hard, expert, random"
     )
     registry_game_type: Optional[str] = Field(
         default=None,
-        description="Game type: quest, puzzle, navigation, mixed (None for random)"
+        description="Game type: quest, puzzle, navigation, mixed (None for random)",
     )
 
     default_server_config: APIServerConfig = Field(
         default_factory=lambda: APIServerConfig(
-            api_server_type="openai", model_name="gpt-3.5-turbo"
+            server_type="openai", model_name="gpt-3.5-turbo"
         )
     )
     policy_agent_server_config: Optional[APIServerConfig] = None
@@ -248,7 +260,11 @@ class TextWorldEnv(BaseEnv):
                             },
                             "expected_outcome": {
                                 "type": "string",
-                                "description": "What you expect to observe after executing this command. Be specific about changes to the environment, your location, inventory, or game state.",
+                                "description": (
+                                    "What you expect to observe after executing this command. "
+                                    "Be specific about changes to the environment, your location, "
+                                    "inventory, or game state."
+                                ),
                             },
                         },
                         "required": ["command", "expected_outcome"],
@@ -261,14 +277,16 @@ class TextWorldEnv(BaseEnv):
         # Policy agent system prompt with outcome prediction
         constructed_system_prompt = (
             "You are an AI agent playing a text-based adventure game who uses extreme long chains of thought "
-            "to carefully plan your actions and predict their outcomes. Your goal is to follow the objective described "
-            "at the start of the game. You interact with the world by providing text commands and predicting their outcomes."
+            "to carefully plan your actions and predict their outcomes. Your goal is to follow the objective "
+            "described at the start of the game. You interact with the world by providing text commands and "
+            "predicting their outcomes."
             "\\n\\n"
             "You should:\\n"
-            "1. Enclose your thoughts and internal monologue inside <think> </think> tags. Use extremely long chains "
-            "of thought to carefully consider the game state, your objectives, and the likely outcomes of your actions.\\n"
-            "2. Generate a memory summary inside <memory> </memory> tags that captures key information from this turn. "
-            "Your memory should:\\n"
+            "1. Enclose your thoughts and internal monologue inside <think> </think> tags. Use extremely "
+            "long chains of thought to carefully consider the game state, your objectives, and the likely "
+            "outcomes of your actions.\\n"
+            "2. Generate a memory summary inside <memory> </memory> tags that captures key information from "
+            "this turn. Your memory should:\\n"
             "   - Build upon previous memories shown in 'Relevant Memories' if present\\n"
             "   - Note the outcome of your last action (did it match your prediction?)\\n"
             "   - Update your understanding of the game state, location, and inventory\\n"
@@ -279,7 +297,8 @@ class TextWorldEnv(BaseEnv):
             f"<tools>\\n{tools_json}\\n</tools>\\n\\n"
             "For your function call, return a JSON object with function name and arguments "
             "within <tool_call> </tool_call> tags with the following schema:\\n"
-            '<tool_call>\\n{"name": "execute_command", "arguments": {"command": "go north", "expected_outcome": "I move north to a new room"}}\\n</tool_call>\\n\\n'
+            '<tool_call>\\n{"name": "execute_command", "arguments": {"command": "go north", '
+            '"expected_outcome": "I move north to a new room"}}\\n</tool_call>\\n\\n'
             "EXAMPLE RESPONSE 1:\\n"
             "<think>\\n"
             "I'm in the kitchen. I see a stove and a fridge. The objective says to cook something. "
@@ -289,7 +308,9 @@ class TextWorldEnv(BaseEnv):
             "Kitchen has stove and fridge. Main objective is cooking. Need to find ingredients."
             "\\n</memory>\\n"
             "<tool_call>\\n"
-            """{"name": "execute_command", "arguments": {"command": "open fridge", "expected_outcome": "The fridge opens, revealing its contents. I expect to see various food items or ingredients inside that I can take and use for cooking."}}"""
+            '{"name": "execute_command", "arguments": {"command": "open fridge", '
+            '"expected_outcome": "The fridge opens, revealing its contents. I expect to see various '
+            'food items or ingredients inside that I can take and use for cooking."}}'
             "\\n</tool_call>\\n\\n"
             "EXAMPLE RESPONSE 2 (with previous memories):\\n"
             "<think>\\n"
@@ -303,21 +324,26 @@ class TextWorldEnv(BaseEnv):
             "Previous exploration of kitchen successful - have stove and ingredients located."
             "\\n</memory>\\n"
             "<tool_call>\\n"
-            """{"name": "execute_command", "arguments": {"command": "take eggs", "expected_outcome": "I take the eggs from the fridge and add them to my inventory"}}"""
+            '{"name": "execute_command", "arguments": {"command": "take eggs", '
+            '"expected_outcome": "I take the eggs from the fridge and add them to my inventory"}}'
             "\\n</tool_call>\\n\\n"
             "EXAMPLE RESPONSE 3:\\n"
             "<think>\\n"
-            "There's a locked door here and I have a key in my inventory. I should try using the key on the door."
+            "There's a locked door here and I have a key in my inventory. I should try using the key "
+            "on the door."
             "\\n</think>\\n"
             "<memory>\\n"
             "Found locked door in current room. Have key in inventory that might open it."
             "\\n</memory>\\n"
             "<tool_call>\\n"
-            """{"name": "execute_command", "arguments": {"command": "unlock door with key", "expected_outcome": "The key turns in the lock and the door unlocks. I should now be able to open the door and go through it."}}"""
+            '{"name": "execute_command", "arguments": {"command": "unlock door with key", '
+            '"expected_outcome": "The key turns in the lock and the door unlocks. I should now be '
+            'able to open the door and go through it."}}'
             "\\n</tool_call>\\n\\n"
-            "Remember: Your entire response must be exactly three XML blocks: <think>...</think> followed by <memory>...</memory> followed by <tool_call>...</tool_call>\\n\\n"
-            "FINAL REMINDER: After your <think> block and <memory> block, you MUST wrap your JSON function call in <tool_call> tags. "
-            "The JSON goes INSIDE the <tool_call> tags, not after them."
+            "Remember: Your entire response must be exactly three XML blocks: <think>...</think> "
+            "followed by <memory>...</memory> followed by <tool_call>...</tool_call>\\n\\n"
+            "FINAL REMINDER: After your <think> block and <memory> block, you MUST wrap your JSON "
+            "function call in <tool_call> tags. The JSON goes INSIDE the <tool_call> tags, not after them."
         )
         # Ensure AtroposAgentConfig is instantiated
         agent_cfg = (
@@ -339,13 +365,13 @@ class TextWorldEnv(BaseEnv):
 
         if self.config.debug_mode:
             logger.setLevel(logging.DEBUG)
-            
+
         # Initialize registry if enabled
         self.registry = None
         if self.config.use_registry:
             self.registry = create_textworld_registry(
                 generation_ratio=self.config.registry_generation_ratio,
-                seed=self.config.seed if hasattr(self.config, 'seed') else None
+                seed=self.config.seed if hasattr(self.config, "seed") else None,
             )
 
     def _create_agent_for_episode(self) -> AtroposAgent:
@@ -355,24 +381,25 @@ class TextWorldEnv(BaseEnv):
         if MEMORY_SYSTEM_PREREQUISITES_AVAILABLE:
             episode_memory_manager = AtroposMemoryManager(
                 embedding_dim_config_val=self.agent_config.embedding_dim,
-                player_id_for_logging=f"Agent_{uuid.uuid4().hex[:8]}"
+                player_id_for_logging=f"Agent_{uuid.uuid4().hex[:8]}",
             )
-            logger.info(f"Created new memory manager for episode agent")
-        
+            logger.info("Created new memory manager for episode agent")
+
         # Create new agent with its own memory manager
         agent = AtroposAgent(
             server_client=self.server,
             tokenizer=self.tokenizer,
             config=self.agent_config,
-            memory_manager=episode_memory_manager
+            memory_manager=episode_memory_manager,
         )
         return agent
 
     async def setup(self):
         """Ensure prerequisites are met for TextWorld."""
         try:
-            import textworld
-        except ImportError:
+            # textworld is already imported at the top, just verify it's available
+            textworld.__version__
+        except (ImportError, AttributeError):
             logger.error(
                 "TextWorld library not found. Please install it to use TextWorldEnv."
             )
@@ -410,21 +437,23 @@ class TextWorldEnv(BaseEnv):
                 game_file_path, game_config = self.registry.get_environment(
                     mode=self.config.registry_mode,
                     difficulty=self.config.registry_difficulty,
-                    game_type=self.config.registry_game_type
+                    game_type=self.config.registry_game_type,
                 )
-                
+
                 if not game_file_path or not os.path.exists(game_file_path):
-                    logger.error(f"Registry failed to generate game for episode {episode_id}")
+                    logger.error(
+                        f"Registry failed to generate game for episode {episode_id}"
+                    )
                     return None
-                    
+
                 logger.info(f"Generated game from registry: {game_config}")
-                
+
             except Exception as e:
                 logger.error(f"Error using registry for game generation: {e}")
                 return None
         else:
             # Use original generation logic
-            options = GameOptions()
+            options = textworld.GameOptions()
             options.seeds = current_game_seed
             options.nb_rooms = self.config.nb_rooms
             options.nb_objects = self.config.nb_objects
@@ -451,7 +480,9 @@ class TextWorldEnv(BaseEnv):
                 )
 
                 if not game_file_path or not os.path.exists(game_file_path):
-                    logger.error(f"Failed to generate game file for episode {episode_id}")
+                    logger.error(
+                        f"Failed to generate game file for episode {episode_id}"
+                    )
                     return None
 
             except Exception as e:
@@ -460,7 +491,7 @@ class TextWorldEnv(BaseEnv):
                 )
                 return None
 
-        requested_infos = EnvInfos(
+        requested_infos = textworld.EnvInfos(
             description=True,
             inventory=True,
             objective=True,
@@ -512,7 +543,7 @@ class TextWorldEnv(BaseEnv):
 
     async def get_next_item(self) -> Optional[Dict[str, Any]]:
         """Provide a new, initialized TextWorldEpisodeState for trajectory collection."""
-        logger.info(f"[DEBUG] get_next_item called, creating new episode...")
+        logger.info("[DEBUG] get_next_item called, creating new episode...")
         episode_state = await self._get_or_create_episode(
             episode_seed=self.config.game_seed
         )
@@ -578,10 +609,20 @@ class TextWorldEnv(BaseEnv):
             prefix_tokens = self.tokenizer.encode(prefix_text, add_special_tokens=False)
 
             # Extract logprobs for the last message (the completion we're evaluating)
+            if (
+                response.choices[0].logprobs is None
+                or response.choices[0].logprobs.token_logprobs is None
+            ):
+                return float("inf")
             all_logprobs = response.choices[0].logprobs.token_logprobs
             completion_logprobs = all_logprobs[len(prefix_tokens) :]
         else:
             # If there's only one message, evaluate the whole thing
+            if (
+                response.choices[0].logprobs is None
+                or response.choices[0].logprobs.token_logprobs is None
+            ):
+                return float("inf")
             completion_logprobs = response.choices[0].logprobs.token_logprobs
 
         # Calculate perplexity: exp(-mean(log_probs))
@@ -594,10 +635,10 @@ class TextWorldEnv(BaseEnv):
         self, current_obs: str, predicted_outcome: str, actual_outcome: str
     ) -> float:
         """Score prediction quality using perplexity improvement with discrete reward levels.
-        
+
         Following the VR-CLI paper, we calculate percentage improvement and map to discrete rewards:
         - 0.0: improvement < 0.05 (negligible)
-        - 0.5: 0.05 ≤ improvement < 1 (small improvement) 
+        - 0.5: 0.05 ≤ improvement < 1 (small improvement)
         - 0.9: 1 ≤ improvement < 2 (moderate improvement)
         - 1.0: improvement ≥ 2 (significant improvement)
         """
@@ -616,7 +657,10 @@ class TextWorldEnv(BaseEnv):
         prediction_messages = [
             {
                 "role": "user",
-                "content": f"Current state:\n{current_obs}\n\nPredicted outcome: {predicted_outcome}\n\nWhat actually happens?",
+                "content": (
+                    f"Current state:\n{current_obs}\n\nPredicted outcome: {predicted_outcome}\n\n"
+                    "What actually happens?"
+                ),
             },
             {"role": "assistant", "content": actual_outcome},
         ]
@@ -627,11 +671,11 @@ class TextWorldEnv(BaseEnv):
 
         # Calculate percentage improvement using VR-CLI formula
         # Improvement = [1 - PPL(y|x,a)/PPL(y|x)] × 100
-        if base_ppl == 0 or base_ppl == float('inf'):
+        if base_ppl == 0 or base_ppl == float("inf"):
             return 0.0
-            
+
         improvement = (1 - pred_ppl / base_ppl) * 100
-        
+
         # Map to discrete reward levels
         if improvement < 0.05:
             return 0.0  # Negligible improvement
@@ -645,15 +689,15 @@ class TextWorldEnv(BaseEnv):
     def _get_action_history_from_agent(self, agent: AtroposAgent) -> List[str]:
         """Extract the canonical action history from the agent."""
         action_history = []
-        
-        for turn_data in agent.game_log['turn']:
-            if turn_data['selected_alternative'] is not None:
-                selected_idx = turn_data['selected_alternative']
-                if 0 <= selected_idx < len(turn_data['alternatives']):
-                    choice = turn_data['alternatives'][selected_idx]
-                    if not choice['api_error'] and choice['action_text']:
+
+        for turn_data in agent.game_log["turn"]:
+            if turn_data["selected_alternative"] is not None:
+                selected_idx = turn_data["selected_alternative"]
+                if 0 <= selected_idx < len(turn_data["alternatives"]):
+                    choice = turn_data["alternatives"][selected_idx]
+                    if not choice["api_error"] and choice["action_text"]:
                         # Extract the actual command from the tool call
-                        action_text = choice['action_text']
+                        action_text = choice["action_text"]
                         tool_name, arguments, is_error = parse_tool_call(
                             response=action_text, preferred_tags=["tool_call"]
                         )
@@ -661,15 +705,53 @@ class TextWorldEnv(BaseEnv):
                             command = arguments.get("command")
                             if command:
                                 action_history.append(command.strip())
-        
+
         return action_history
-    
-    def _create_env_copy_with_replay(self, ep_state: TextWorldEpisodeState, agent: AtroposAgent) -> Optional[TextworldGymEnv]:
+
+    def _calculate_format_reward(self, response_text: str) -> float:
+        """Calculate format reward based on presence of required blocks.
+
+        Args:
+            response_text: The full response text from the agent
+
+        Returns:
+            Format reward score (0.0 to 1.0)
+        """
+        if not self.config.format_reward_enabled:
+            return 0.0
+
+        format_score = 0.0
+
+        # Check for <thinking> block
+        if "<think>" in response_text and "</think>" in response_text:
+            # Verify it's not empty
+            start_idx = response_text.find("<think>")
+            end_idx = response_text.find("</think>", start_idx)
+            if end_idx > start_idx:
+                thinking_content = response_text[start_idx + 7 : end_idx].strip()
+                if thinking_content:  # Non-empty thinking block
+                    format_score += self.config.format_thinking_reward
+
+        # Check for <memory> block
+        if "<memory>" in response_text and "</memory>" in response_text:
+            # Verify it's not empty
+            start_idx = response_text.find("<memory>")
+            end_idx = response_text.find("</memory>", start_idx)
+            if end_idx > start_idx:
+                memory_content = response_text[start_idx + 8 : end_idx].strip()
+                if memory_content:  # Non-empty memory block
+                    format_score += self.config.format_memory_reward
+
+        return format_score
+
+    def _create_env_copy_with_replay(
+        self, ep_state: TextWorldEpisodeState, agent: AtroposAgent
+    ) -> Optional[TextworldGymEnv]:
         """Create a new environment instance and replay actions to reach current state."""
         try:
             # Get the action history from the agent
             action_history = self._get_action_history_from_agent(agent)
-            
+
             # Register a new environment instance with the same game file
             requested_infos = textworld.EnvInfos(
                 objective=True,
@@ -684,36 +766,39 @@ class TextWorldEnv(BaseEnv):
                 moves=True,
                 admissible_commands=True,
             )
-            
+
             # Create a unique ID for this copy
             copy_env_id = f"{ep_state.episode_id}_copy_{random.randint(1000, 9999)}"
-            
+
             registered_env_id = textworld.gym.register_game(
                 ep_state.game_file,
                 requested_infos,
                 max_episode_steps=self.config.max_steps,
                 name=copy_env_id,
             )
-            
+
             # Create the environment
             env_copy = textworld.gym.make(registered_env_id)
-            
+
             # Reset the environment
             obs, infos = env_copy.reset()
-            
+
             # Replay all actions to reach the current state
             for past_action in action_history:
                 obs, reward, done, infos = env_copy.step(past_action)
                 if done:
                     break
-                    
+
             return env_copy
         except Exception as e:
             logger.error(f"Failed to create environment copy with replay: {e}")
             return None
 
     async def _evaluate_candidates(
-        self, ep_state: TextWorldEpisodeState, candidates: List[Tuple[str, str, str]], agent: AtroposAgent
+        self,
+        ep_state: TextWorldEpisodeState,
+        candidates: List[Tuple[Optional[str], Optional[str], str]],
+        agent: AtroposAgent,
     ) -> List[Dict[str, Any]]:
         """Evaluate each candidate by executing in copied environment."""
         evaluations = []
@@ -726,22 +811,25 @@ class TextWorldEnv(BaseEnv):
             env_copy = self._create_env_copy_with_replay(ep_state, agent)
             if env_copy is None:
                 logger.error(f"Failed to create environment copy for candidate {i}")
-                evaluations.append({
-                    "index": i,
-                    "action": action,
-                    "prediction": prediction,
-                    "vrcli_score": 0.0,
-                    "latro_score": 0.0,
-                    "env_reward": 0.0,
-                    "combined_score": 0.0,
-                    "response_text": response_text,
-                    "response_tokens": 0,
-                    "token_length_adjustment": 0.0,
-                    "actual_outcome": "",
-                    "done": False,
-                    "info": {},
-                    "error": True
-                })
+                evaluations.append(
+                    {
+                        "index": i,
+                        "action": action,
+                        "prediction": prediction,
+                        "vrcli_score": 0.0,
+                        "latro_score": 0.0,
+                        "format_score": 0.0,
+                        "env_reward": 0.0,
+                        "combined_score": 0.0,
+                        "response_text": response_text,
+                        "response_tokens": 0,
+                        "token_length_adjustment": 0.0,
+                        "actual_outcome": "",
+                        "done": False,
+                        "info": {},
+                        "error": True,
+                    }
+                )
                 continue
 
             try:
@@ -751,44 +839,63 @@ class TextWorldEnv(BaseEnv):
 
                 # Calculate VR-CLI score
                 vrcli_score = await self._vrcli_score(
-                    ep_state.last_formatted_obs, prediction, actual_outcome
+                    ep_state.last_formatted_obs, prediction or "", actual_outcome
                 )
 
                 # Calculate LaTRo score if enabled (currently disabled)
                 latro_score = 0.0
-                if self.config.latro_enabled and hasattr(self, '_calculate_latro_score'):
+                if self.config.latro_enabled and hasattr(
+                    self, "_calculate_latro_score"
+                ):
                     # LaTRo would calculate log P(action | state + reasoning)
                     # For now this is disabled
                     latro_score = 0.0
-                
+
+                # Calculate format reward
+                format_score = self._calculate_format_reward(response_text)
+
                 # Combine scores with proper weighting
-                # Environment reward gets remaining weight after VR-CLI and LaTRo
-                env_weight = 1.0 - self.config.vrcli_weight - self.config.latro_weight
+                # Environment reward gets remaining weight after VR-CLI, LaTRo, and format rewards
+                env_weight = (
+                    1.0
+                    - self.config.vrcli_weight
+                    - self.config.latro_weight
+                    - self.config.format_reward_weight
+                )
                 combined_score = (
                     self.config.vrcli_weight * vrcli_score
                     + self.config.latro_weight * latro_score
+                    + self.config.format_reward_weight * format_score
                     + env_weight * reward
                 )
-                
+
                 # Apply token length penalty/bonus if enabled
                 token_length_adjustment = 0.0
                 if self.config.token_length_penalty_enabled:
                     # Count tokens in the response (assistant's message only)
-                    response_tokens = len(self.tokenizer.encode(response_text, add_special_tokens=False))
-                    
+                    response_tokens = len(
+                        self.tokenizer.encode(response_text, add_special_tokens=False)
+                    )
+
                     # Calculate adjustment based on deviation from baseline
                     # Negative adjustment (penalty) for longer responses, positive (bonus) for shorter
-                    token_deviation = response_tokens - self.config.token_length_baseline
-                    token_length_adjustment = -token_deviation * self.config.token_length_penalty_scale
-                    
+                    token_deviation = (
+                        response_tokens - self.config.token_length_baseline
+                    )
+                    token_length_adjustment = (
+                        -token_deviation * self.config.token_length_penalty_scale
+                    )
+
                     # Cap the adjustment to the configured weight
                     max_adjustment = self.config.token_length_penalty_weight
-                    token_length_adjustment = max(-max_adjustment, min(max_adjustment, token_length_adjustment))
-                    
+                    token_length_adjustment = max(
+                        -max_adjustment, min(max_adjustment, token_length_adjustment)
+                    )
+
                     # Apply adjustment proportional to the base score
                     # If score is negative (bad outcome), longer responses get bigger penalty
                     # If score is positive (good outcome), shorter responses get bonus
-                    combined_score *= (1.0 + token_length_adjustment)
+                    combined_score *= 1.0 + token_length_adjustment
 
                 evaluations.append(
                     {
@@ -797,11 +904,20 @@ class TextWorldEnv(BaseEnv):
                         "prediction": prediction,
                         "vrcli_score": vrcli_score,
                         "latro_score": latro_score,
+                        "format_score": format_score,
                         "env_reward": reward,
                         "combined_score": combined_score,
                         "response_text": response_text,
-                        "response_tokens": response_tokens if self.config.token_length_penalty_enabled else 0,
-                        "token_length_adjustment": token_length_adjustment if self.config.token_length_penalty_enabled else 0.0,
+                        "response_tokens": (
+                            response_tokens
+                            if self.config.token_length_penalty_enabled
+                            else 0
+                        ),
+                        "token_length_adjustment": (
+                            token_length_adjustment
+                            if self.config.token_length_penalty_enabled
+                            else 0.0
+                        ),
                         "actual_outcome": actual_outcome,
                         "done": done,
                         "info": info,
@@ -816,6 +932,7 @@ class TextWorldEnv(BaseEnv):
                         "prediction": prediction,
                         "vrcli_score": 0.0,
                         "latro_score": 0.0,
+                        "format_score": 0.0,
                         "env_reward": 0.0,
                         "combined_score": 0.0,
                         "response_text": response_text,
@@ -833,10 +950,15 @@ class TextWorldEnv(BaseEnv):
         return evaluations
 
     async def _next_step(
-        self, ep_state: TextWorldEpisodeState, current_turn_num: int, agent: AtroposAgent
+        self,
+        ep_state: TextWorldEpisodeState,
+        current_turn_num: int,
+        agent: AtroposAgent,
     ) -> Tuple[Optional[ScoredDataGroup], bool]:
         """Execute one step of the TextWorld episode using VR-CLI evaluation."""
-        logger.info(f"[DEBUG] _next_step called for episode {ep_state.episode_id}, turn {current_turn_num}")
+        logger.info(
+            f"[DEBUG] _next_step called for episode {ep_state.episode_id}, turn {current_turn_num}"
+        )
 
         # 1. Get current observation
         if current_turn_num == 0:
@@ -852,19 +974,27 @@ class TextWorldEnv(BaseEnv):
             current_observation = self._format_observation(raw_obs, infos)
 
         ep_state.last_formatted_obs = current_observation
-        logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Observation length: {len(current_observation)}")
+        logger.info(
+            f"[DEBUG] Episode {ep_state.episode_id} - Observation length: {len(current_observation)}"
+        )
 
         # 2. Generate candidate actions with predictions
-        logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Calling agent.generate_action with n={self.config.group_size}")
+        logger.info(
+            f"[DEBUG] Episode {ep_state.episode_id} - Calling agent.generate_action with "
+            f"n={self.config.group_size}"
+        )
         try:
             group_actions = await agent.generate_action(
                 current_observation, n=self.config.group_size
             )
-            logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Received {len(group_actions) if group_actions else 0} actions from agent")
+            logger.info(
+                f"[DEBUG] Episode {ep_state.episode_id} - Received "
+                f"{len(group_actions) if group_actions else 0} actions from agent"
+            )
         except Exception as e:
             logger.error(
                 f"[Episode: {ep_state.episode_id}] Error getting actions from agent: {e}",
-                exc_info=True
+                exc_info=True,
             )
             return None, True
 
@@ -971,29 +1101,28 @@ class TextWorldEnv(BaseEnv):
             masks=sg_masks,
             scores=scores,
             messages=sg_messages,
-            metadata={
-                "turn_number": current_turn_num,
-                "chosen_alternative_index": best_idx,
-                "episode_id": ep_state.episode_id,
-                "type": "policy_training_data",
-                "vrcli_scores": [e["vrcli_score"] for e in evaluations],
-                "latro_scores": [e["latro_score"] for e in evaluations],
-                "env_rewards": [e["env_reward"] for e in evaluations],
-                "response_tokens": [e["response_tokens"] for e in evaluations],
-                "token_length_adjustments": [e["token_length_adjustment"] for e in evaluations],
-            },
+            advantages=None,
+            ref_logprobs=None,
+            group_overrides=None,
+            overrides=None,
+            images=None,
         )
 
         ep_state.policy_step_data.append(scored_data_group)
 
         return scored_data_group, ep_state.done
 
-    async def collect_trajectories(
-        self, item: Dict[str, Any]
-    ) -> Tuple[List[ScoredDataGroup], List[Dict[str, Any]]]:
+    async def collect_trajectories(self, item: Dict[str, Any]) -> Tuple[
+        Union[
+            Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]], List[Any | None]
+        ],
+        List[Any],
+    ]:
         """Run a full TextWorld episode collecting data for each step."""
-        logger.info(f"[DEBUG] collect_trajectories called with item: {item.get('episode_id', 'unknown')}")
-        
+        logger.info(
+            f"[DEBUG] collect_trajectories called with item: {item.get('episode_id', 'unknown')}"
+        )
+
         if not item or "episode_state" not in item:
             logger.error("Invalid item received - missing 'episode_state'")
             return [], []
@@ -1003,21 +1132,29 @@ class TextWorldEnv(BaseEnv):
             logger.error("Episode state is None")
             return [], []
 
-        logger.info(f"[DEBUG] Starting episode {ep_state.episode_id} with max_turns={ep_state.max_turns}")
-        policy_sdgs_for_episode: List[ScoredDataGroup] = []
-        
+        logger.info(
+            f"[DEBUG] Starting episode {ep_state.episode_id} with max_turns={ep_state.max_turns}"
+        )
+        policy_sdgs_for_episode: List[Optional[ScoredDataGroup]] = []
+
         # Create a new agent for this episode with its own memory
         agent = self._create_agent_for_episode()
         agent.new_game()
-        logger.info(f"[Episode: {ep_state.episode_id}] Created new agent with isolated memory")
+        logger.info(
+            f"[Episode: {ep_state.episode_id}] Created new agent with isolated memory"
+        )
 
         try:
             # Execute episode turns
             for current_turn_num in range(ep_state.max_turns):
-                logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Starting turn {current_turn_num + 1}/{ep_state.max_turns}")
-                
+                logger.info(
+                    f"[DEBUG] Episode {ep_state.episode_id} - Starting turn {current_turn_num + 1}/{ep_state.max_turns}"
+                )
+
                 if ep_state.done:
-                    logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Episode done, breaking")
+                    logger.info(
+                        f"[DEBUG] Episode {ep_state.episode_id} - Episode done, breaking"
+                    )
                     break
 
                 scored_data_group_for_turn, episode_is_done_after_step = (
@@ -1026,10 +1163,15 @@ class TextWorldEnv(BaseEnv):
 
                 if scored_data_group_for_turn:
                     policy_sdgs_for_episode.append(scored_data_group_for_turn)
-                    logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Turn {current_turn_num + 1} completed with {len(scored_data_group_for_turn['scores'])} scores")
+                    logger.info(
+                        f"[DEBUG] Episode {ep_state.episode_id} - Turn {current_turn_num + 1} completed "
+                        f"with {len(scored_data_group_for_turn['scores'])} scores"
+                    )
 
                 if episode_is_done_after_step:
-                    logger.info(f"[DEBUG] Episode {ep_state.episode_id} - Episode done after step, breaking")
+                    logger.info(
+                        f"[DEBUG] Episode {ep_state.episode_id} - Episode done after step, breaking"
+                    )
                     break
 
                 if current_turn_num == ep_state.max_turns - 1 and not ep_state.done:
@@ -1037,18 +1179,18 @@ class TextWorldEnv(BaseEnv):
 
         except Exception as e:
             logger.error(
-                f"[Episode: {ep_state.episode_id}] Error during trajectory collection: {e}", 
-                exc_info=True
+                f"[Episode: {ep_state.episode_id}] Error during trajectory collection: {e}",
+                exc_info=True,
             )
             ep_state.done = True
         finally:
-            # Apply credit assignment for sparse rewards
             self._apply_credit_assignment(ep_state, policy_sdgs_for_episode)
             # Clean up episode resources
             await self._cleanup_episode_resources(ep_state)
 
         logger.info(
-            f"[Episode: {ep_state.episode_id}] Episode complete. Score: {ep_state.last_score}, Won: {ep_state.won}, Lost: {ep_state.lost}, Turns: {len(policy_sdgs_for_episode)}"
+            f"[Episode: {ep_state.episode_id}] Episode complete. Score: {ep_state.last_score}, "
+            f"Won: {ep_state.won}, Lost: {ep_state.lost}, Turns: {len(policy_sdgs_for_episode)}"
         )
 
         return policy_sdgs_for_episode, []
@@ -1056,10 +1198,10 @@ class TextWorldEnv(BaseEnv):
     def _apply_credit_assignment(
         self,
         ep_state: TextWorldEpisodeState,
-        policy_sdgs_for_episode: List[ScoredDataGroup],
+        policy_sdgs_for_episode: List[Optional[ScoredDataGroup]],
     ) -> None:
         """Apply credit assignment for sparse rewards using discounted returns.
-        
+
         Also assigns credit to unselected alternatives that produced the same action
         as the selected candidate, as they would have led to the same outcome.
         """
@@ -1083,60 +1225,65 @@ class TextWorldEnv(BaseEnv):
         # Calculate discounted returns backwards (Monte Carlo returns)
         discounted_return = final_outcome_reward
         for t in range(num_steps - 1, -1, -1):
-            # Get immediate reward from this step
             immediate_reward = ep_state.canonical_rewards[t]
 
-            # Update discounted return
             discounted_return = (
                 immediate_reward + self.config.vrcli_discount_factor * discounted_return
             )
 
-            # Update scores for the chosen action and alternatives with same action
             sdg = policy_sdgs_for_episode[t]
+            if sdg is None:
+                continue
             chosen_idx = ep_state.canonical_chosen_alternative_indices[t]
 
             if 0 <= chosen_idx < len(sdg["scores"]):
-                # Extract the chosen action from messages
                 chosen_action = None
-                if "messages" in sdg and chosen_idx < len(sdg["messages"]):
+                if (
+                    "messages" in sdg
+                    and sdg["messages"] is not None
+                    and chosen_idx < len(sdg["messages"])
+                ):
                     chosen_messages = sdg["messages"][chosen_idx]
                     if chosen_messages and chosen_messages[-1]["role"] == "assistant":
-                        # Parse the action from the chosen alternative's response
                         response_text = chosen_messages[-1]["content"]
-                        action, _ = self._parse_action_with_prediction(response_text)
-                        chosen_action = action
+                        if isinstance(response_text, str):
+                            action, _ = self._parse_action_with_prediction(
+                                response_text
+                            )
+                            chosen_action = action
 
-                # The scores already contain VR-CLI + immediate reward combination
-                # Now we add the future discounted return
                 new_scores = list(sdg["scores"])
-                # Add the future return (not including immediate reward to avoid double counting)
                 future_return = self.config.vrcli_discount_factor * (
                     discounted_return - immediate_reward
                 )
-                
-                # Update score for chosen alternative
+
                 new_scores[chosen_idx] += future_return
-                
-                # Also update scores for unselected alternatives with the same action
-                if chosen_action is not None and "messages" in sdg:
+
+                if (
+                    chosen_action is not None
+                    and "messages" in sdg
+                    and sdg["messages"] is not None
+                ):
                     for alt_idx in range(len(sdg["messages"])):
                         if alt_idx != chosen_idx and alt_idx < len(new_scores):
                             alt_messages = sdg["messages"][alt_idx]
                             if alt_messages and alt_messages[-1]["role"] == "assistant":
                                 alt_response = alt_messages[-1]["content"]
-                                alt_action, _ = self._parse_action_with_prediction(alt_response)
-                                if alt_action == chosen_action:
-                                    # This alternative would have led to the same outcome
-                                    new_scores[alt_idx] += future_return
-                                    logger.debug(
-                                        f"[Episode: {ep_state.episode_id}] Turn {t}: "
-                                        f"Alternative {alt_idx} also gets future return "
-                                        f"for same action '{chosen_action}'"
+                                if isinstance(alt_response, str):
+                                    alt_action, _ = self._parse_action_with_prediction(
+                                        alt_response
                                     )
-                
+                                    if alt_action == chosen_action:
+                                        # This alternative would have led to the same outcome
+                                        new_scores[alt_idx] += future_return
+                                        logger.debug(
+                                            f"[Episode: {ep_state.episode_id}] Turn {t}: "
+                                            f"Alternative {alt_idx} also gets future return "
+                                            f"for same action '{chosen_action}'"
+                                        )
+
                 sdg["scores"] = new_scores
 
-                # Log credit assignment info
                 logger.debug(
                     f"[Episode: {ep_state.episode_id}] Turn {t}: "
                     f"immediate_reward={immediate_reward:.3f}, "
@@ -1163,7 +1310,7 @@ class TextWorldEnv(BaseEnv):
                 try:
                     os.remove(ep_state.game_file)
                     # Also remove JSON file if it exists
-                    json_file = ep_state.game_file.replace('.z8', '.json')
+                    json_file = ep_state.game_file.replace(".z8", ".json")
                     if os.path.exists(json_file):
                         os.remove(json_file)
                 except OSError as e:
@@ -1182,57 +1329,25 @@ class TextWorldEnv(BaseEnv):
         if not isinstance(trajectories, list):
             trajectories = [trajectories] if trajectories is not None else []
 
-        # Find episode state for cache
-        episode_state = None
-        episode_id = None
-        for sdg in trajectories:
-            if sdg and sdg.get("metadata", {}).get("episode_id"):
-                episode_id = sdg["metadata"]["episode_id"]
-                if episode_id in self.episodes:
-                    episode_state = self.episodes[episode_id]
-                    break
-
-        thinking_block_cache = (
-            episode_state.thinking_block_cache if episode_state else {}
-        )
+        # Since we removed metadata, we'll use a simple cache for thinking blocks
+        thinking_block_cache: Dict[int, str] = {}
 
         # Process each ScoredDataGroup
-        processed_trajectories = []
+        processed_trajectories: List[Optional[ScoredDataGroup]] = []
         for sdg_idx, sdg in enumerate(trajectories):
             if sdg is None:
                 processed_trajectories.append(None)
                 continue
 
-            # Only process policy training data with thinking summarization
-            # RM training data is already processed with thinking stripped
-            if sdg.get("metadata", {}).get("type") == "policy_training_data":
-                try:
-                    processed_policy_sdg = await self._process_policy_training_data(
-                        sdg, thinking_block_cache
-                    )
-                    processed_trajectories.append(processed_policy_sdg)
-                except Exception as e:
-                    logger.error(
-                        f"Error processing policy ScoredDataGroup {sdg_idx}: {e}"
-                    )
-                    processed_trajectories.append(sdg)
-            else:
-                # Pass through RM training data unchanged
+            # Process all trajectories with thinking summarization if enabled
+            try:
+                processed_policy_sdg = await self._process_policy_training_data(
+                    sdg, thinking_block_cache
+                )
+                processed_trajectories.append(processed_policy_sdg)
+            except Exception as e:
+                logger.error(f"Error processing ScoredDataGroup {sdg_idx}: {e}")
                 processed_trajectories.append(sdg)
-
-        # Log cache efficiency
-        if thinking_block_cache:
-            total_messages = sum(
-                len(sdg.get("messages", [])) for sdg in trajectories if sdg
-            )
-            logger.info(
-                f"Episode-level thinking block summarization: {len(thinking_block_cache)} unique blocks "
-                f"processed across {len(trajectories)} turns with {total_messages} total alternatives"
-            )
-
-        # Clean up episode state
-        if episode_id and episode_id in self.episodes:
-            del self.episodes[episode_id]
 
         return processed_trajectories
 
@@ -1246,6 +1361,10 @@ class TextWorldEnv(BaseEnv):
         processed_messages = []
         processed_tokens = []
         processed_masks = []
+
+        if sdg["messages"] is None:
+            # If no messages, return the original sdg
+            return sdg
 
         for alt_idx, alt_messages in enumerate(sdg["messages"]):
             if not alt_messages:
@@ -1269,31 +1388,27 @@ class TextWorldEnv(BaseEnv):
                 ):
                     # Check cache for thinking block summarization
                     original_content = msg["content"]
+                    if not isinstance(original_content, str):
+                        # Skip non-string content
+                        alt_processed_messages.append(msg.copy())
+                        continue
+
                     cache_key = hash(original_content)
 
                     if cache_key in thinking_block_cache:
                         processed_content = thinking_block_cache[cache_key]
                     else:
-                        # Summarize thinking blocks
+                        # Strip thinking blocks since summarize doesn't exist
                         try:
-                            from atroposlib.utils.message_history_utils import (
-                                summarize_thinking_block,
-                            )
-
-                            processed_content = await summarize_thinking_block(
-                                original_content,
-                                self.server,
-                                self.tokenizer,
-                                self.config.max_policy_thinking_summary_tokens,
-                            )
-                            thinking_block_cache[cache_key] = processed_content
-                        except Exception as e:
-                            logger.warning(f"Failed to summarize thinking block: {e}")
                             from atroposlib.utils.message_history_utils import (
                                 strip_thinking,
                             )
 
                             processed_content = strip_thinking(original_content)
+                            thinking_block_cache[cache_key] = processed_content
+                        except Exception as e:
+                            logger.warning(f"Failed to process thinking block: {e}")
+                            processed_content = original_content
                             thinking_block_cache[cache_key] = processed_content
 
                     processed_msg = msg.copy()
@@ -1327,7 +1442,11 @@ class TextWorldEnv(BaseEnv):
             masks=processed_masks,
             scores=sdg["scores"],
             messages=processed_messages,
-            metadata=sdg["metadata"],
+            advantages=sdg.get("advantages"),
+            ref_logprobs=sdg.get("ref_logprobs"),
+            group_overrides=sdg.get("group_overrides"),
+            overrides=sdg.get("overrides"),
+            images=sdg.get("images"),
         )
 
     async def evaluate(self, *args, **kwargs):
@@ -1339,7 +1458,7 @@ class TextWorldEnv(BaseEnv):
         # Clean up any remaining registry files
         if self.registry:
             self.registry.cleanup_all()
-            
+
         if (
             hasattr(self, "_temp_dir")
             and self._temp_dir
@@ -1355,8 +1474,6 @@ class TextWorldEnv(BaseEnv):
     def __del__(self):
         """Ensure cleanup runs even if explicit cleanup isn't called."""
         try:
-            import asyncio
-
             if (
                 hasattr(self, "_temp_dir")
                 and self._temp_dir

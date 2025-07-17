@@ -10,6 +10,7 @@ try:
     import torch
     from sentence_transformers import SentenceTransformer
     import faiss
+
     MEMORY_SYSTEM_PREREQUISITES_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"Memory system prerequisites not available: {e}")
@@ -20,6 +21,7 @@ except ImportError as e:
 
 class SentenceEmbeddingHelper:
     """Singleton helper class for sentence embeddings using SentenceTransformer."""
+
     _instance = None
     _model = None
     _device = None
@@ -33,9 +35,9 @@ class SentenceEmbeddingHelper:
             cls._instance = super(SentenceEmbeddingHelper, cls).__new__(cls)
             try:
                 cls._device = "cpu"
-                model_name = 'sentence-transformers/all-MiniLM-L6-v2'
+                model_name = "sentence-transformers/all-MiniLM-L6-v2"
                 cls._model = SentenceTransformer(model_name, device=cls._device)
-                
+
                 # Determine actual embedding dimension
                 dummy_embedding = cls._model.encode(["test"], device=cls._device)
                 actual_dim = dummy_embedding.shape[1]
@@ -52,9 +54,14 @@ class SentenceEmbeddingHelper:
         if self._model is None or not MEMORY_SYSTEM_PREREQUISITES_AVAILABLE:
             return None
         if not texts:
-            return np.array([]).reshape(0, self._embedding_dim) 
+            return np.array([]).reshape(0, self._embedding_dim)
         try:
-            embeddings = self._model.encode(texts, convert_to_numpy=True, device=self.device, show_progress_bar=False)
+            embeddings = self._model.encode(
+                texts,
+                convert_to_numpy=True,
+                device=self.device,
+                show_progress_bar=False,
+            )
             return embeddings.astype(np.float32)
         except Exception as e:
             logger.error(f"Error encoding texts: {e}")
@@ -71,8 +78,12 @@ class SentenceEmbeddingHelper:
 
 class AtroposMemoryManager:
     """Manages memory for a game-playing agent using sentence embeddings and FAISS."""
-    
-    def __init__(self, embedding_dim_config_val: int = 384, player_id_for_logging: str = "MemoryManager"):
+
+    def __init__(
+        self,
+        embedding_dim_config_val: int = 384,
+        player_id_for_logging: str = "MemoryManager",
+    ):
         self.player_id_for_logging = player_id_for_logging
         self.embedding_helper = None
         self.faiss_index = None
@@ -99,7 +110,7 @@ class AtroposMemoryManager:
         """Get a single embedding for a text string."""
         if not self.is_active or not text:
             return None
-        
+
         embeddings_batch = self.embedding_helper.get_embeddings([text])
         if embeddings_batch is not None and embeddings_batch.shape[0] == 1:
             return embeddings_batch[0].reshape(1, -1)
@@ -122,9 +133,16 @@ class AtroposMemoryManager:
             logger.error(f"Error adding memory to FAISS index: {e}")
             return False
 
-    async def retrieve_relevant_memories(self, query_text: str, k: int = 3) -> List[str]:
+    async def retrieve_relevant_memories(
+        self, query_text: str, k: int = 3
+    ) -> List[str]:
         """Retrieve the top-k most relevant memories for a given query text."""
-        if not self.is_active or k <= 0 or self.faiss_index.ntotal == 0 or not query_text:
+        if (
+            not self.is_active
+            or k <= 0
+            or self.faiss_index.ntotal == 0
+            or not query_text
+        ):
             return []
 
         query_embedding = await self.get_embedding_for_text(query_text)
@@ -134,7 +152,7 @@ class AtroposMemoryManager:
         try:
             k_actual = min(k, self.faiss_index.ntotal)
             distances, indices = self.faiss_index.search(query_embedding, k_actual)
-            
+
             relevant_memories = []
             for idx in indices[0]:
                 if 0 <= idx < len(self.memory_texts):
@@ -144,7 +162,9 @@ class AtroposMemoryManager:
             logger.error(f"Error retrieving memories: {e}")
             return []
 
-    async def generate_memory_summary(self, observation: str, action: str, outcome: str) -> str:
+    async def generate_memory_summary(
+        self, observation: str, action: str, outcome: str
+    ) -> str:
         """Generate a concise memory summary for storage."""
         summary = f"{observation.strip()[:200]}... -> {action.strip()} -> {outcome.strip()[:100]}"
         return summary
@@ -153,7 +173,7 @@ class AtroposMemoryManager:
         """Reset the memory system by clearing all stored memories."""
         if not self.is_active:
             return
-        
+
         try:
             self.memory_texts.clear()
             self.faiss_index.reset()
@@ -164,4 +184,4 @@ class AtroposMemoryManager:
         """Get current memory state for debugging."""
         if not self.is_active:
             return [], 0
-        return self.memory_texts.copy(), self.faiss_index.ntotal 
+        return self.memory_texts.copy(), self.faiss_index.ntotal
