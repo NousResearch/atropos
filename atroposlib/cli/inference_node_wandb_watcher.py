@@ -30,7 +30,7 @@ def run(api_addr, tp, node_num):
             break
     curr_step = 0
     health_statuses = {
-        f"server/server_heath_{node_num}_{i}": 0.0 for i in range(8 // tp)
+        f"server/server_health_{node_num}_{i}": 0.0 for i in range(8 // tp)
     }
     while True:
         data = requests.get(f"{api_addr}/status").json()
@@ -45,11 +45,11 @@ def run(api_addr, tp, node_num):
                 health_status = requests.get(
                     f"http://localhost:{9000 + i}/health_generate"
                 ).status_code
-                health_statuses[f"server/server_heath_{node_num}_{i}"] = (
+                health_statuses[f"server/server_health_{node_num}_{i}"] = (
                     1 if health_status == 200 else 0
                 )
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-                health_statuses[f"server/server_heath_{node_num}_{i}"] = 0
+                health_statuses[f"server/server_health_{node_num}_{i}"] = 0
 
 
 def main():

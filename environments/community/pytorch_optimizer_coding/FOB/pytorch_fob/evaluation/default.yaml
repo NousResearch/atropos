@@ -23,7 +23,7 @@ evaluation:
     std: True                    # show std over aggregated values
     aggfunc: std                 # for example {std, var, sem} which function to use to aggregate over the seeds; will only be used when 'std' is set to true
     # format:
-    #  string, how many digits to display, expects two values seperated by a dot (e.g. "2.3")
+    #  string, how many digits to display, expects two values separated by a dot (e.g. "2.3")
     #  to make accuracy -> percent use a '2' in front of the dot
     #  to display 3 digits after the decimal point, write a '3' behind the dot
     format: null                 # for example {"2.0", "2.1", "2.3", "0.2", ...}

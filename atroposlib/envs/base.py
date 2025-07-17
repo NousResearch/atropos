@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import os
 import random
 import string
@@ -128,7 +129,7 @@ class BaseEnvConfig(BaseModel):
     )
     tokenizer_name: str = Field(
         default="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
-        description="Hugging Face tokenzer to use.",
+        description="Hugging Face tokenizer to use.",
     )
     use_wandb: bool = Field(default=True, description="Whether to use wandb")
     rollout_server_url: str = Field(
@@ -154,6 +155,10 @@ class BaseEnvConfig(BaseModel):
         default=None,
         description="Path to save the groups, if set, will write groups to this jsonl",
     )
+    data_dir_to_save_evals: Optional[str] = Field(
+        default=None,
+        description="Directory to save evaluation results",
+    )
     min_items_sent_before_logging: int = Field(
         default=2,
         description="Minimum number of items sent before logging, if 0 or less, logs every time",
@@ -162,10 +167,17 @@ class BaseEnvConfig(BaseModel):
         default=False,
         description="Whether to include messages in the output transmitted to the trainer",
     )
+    min_batch_allocation: Optional[float] = Field(
+        default=None,
+        description="Minimum proportion of a batch this environment should be allocated (0.0-1.0)",
+    )
+    worker_timeout: float = Field(
+        default=600,
+        description="Timeout for a a task, in seconds, if -1, no timeout",
+    )
 
 
 class BaseEnv(ABC):
-
     name: Optional[str] = None
     env_config_cls: BaseEnvConfig = BaseEnvConfig
     server_cls: APIServer = APIServer
@@ -211,7 +223,6 @@ class BaseEnv(ABC):
         self.checkpoint_dir = ""
         self.checkpoint_interval = -1
         if self.config.data_path_to_save_groups is not None:
-
             Path(self.config.data_path_to_save_groups).parent.mkdir(
                 parents=True, exist_ok=True
             )
@@ -236,6 +247,26 @@ class BaseEnv(ABC):
             )  # type: jsonlines.Writer
         else:
             self.jsonl_writer = None
+
+    @property
+    def derived_batch_size(self):
+        """Calculate the effective batch size for this environment based on minimum allocations."""
+        # If batch_size is not set or no status yet, return the config batch_size
+        if not hasattr(self, "status_dict") or self.config.batch_size == -1:
+            return self.config.batch_size
+
+        # Get unallocated fraction from status
+        unallocated_fraction = self.status_dict.get("unallocated_fraction", 1.0)
+
+        # If this env has a minimum allocation, add it to the unallocated portion
+        if self.config.min_batch_allocation is not None:
+            effective_fraction = unallocated_fraction + self.config.min_batch_allocation
+        else:
+            # This env competes for the unallocated portion based on its weight
+            effective_fraction = unallocated_fraction
+
+        # Calculate derived batch size
+        return int(self.config.batch_size * effective_fraction)
 
     @classmethod
     def config_init(
@@ -400,15 +431,26 @@ class BaseEnv(ABC):
                         data = await parse_http_response(resp, logger)
                         self.wandb_group = data["group"]
                         self.wandb_project = data["project"]
+
                 if self.wandb_project is None:
                     await asyncio.sleep(1)
-                else:
-                    wandb.init(
-                        project=self.wandb_project,
-                        group=self.wandb_group,
-                        config=self.config.model_dump(),
+                    continue
+
+                wandb_run_name = None
+                if self.config.wandb_name:
+                    random_id = "".join(random.choices(string.ascii_lowercase, k=6))
+                    current_date = datetime.now().strftime("%Y-%m-%d")
+                    wandb_run_name = (
+                        f"{self.config.wandb_name}-{current_date}-{random_id}"
                     )
-                    break
+
+                wandb.init(
+                    name=wandb_run_name,
+                    project=self.wandb_project,
+                    group=self.wandb_group,
+                    config=self.config.model_dump(),
+                )
+                break
 
     @retry(
         stop=stop_after_attempt(3),
@@ -423,6 +465,8 @@ class BaseEnv(ABC):
                         "max_token_length": self.config.max_token_length,
                         "desired_name": self.config.wandb_name,
                         "weight": self.config.inference_weight,
+                        "min_batch_allocation": self.config.min_batch_allocation,
+                        "group_size": self.config.group_size,
                     },
                 ) as resp:
                     data = await parse_http_response(resp, logger)
@@ -595,6 +639,110 @@ class BaseEnv(ABC):
             wandb_metrics.update(server_wandb_metrics)
             wandb.log(wandb_metrics, step=self.curr_step)
 
+    async def evaluate_log(
+        self,
+        metrics: Dict,
+        task_name: Optional[str] = None,
+        model_name: Optional[str] = None,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None,
+        generation_parameters: Optional[Dict] = None,
+        samples: Optional[List[Dict]] = None,
+        verbose: bool = True,
+    ):
+        """
+        Log evaluation results to a JSON file in the format expected by nous-evals.
+
+        Args:
+            metrics: Dictionary of metrics to log (same format as wandb_log)
+            task_name: Name of the evaluation task (defaults to env name)
+            model_name: Name of the model being evaluated
+            start_time: Start time of evaluation (unix timestamp)
+            end_time: End time of evaluation (unix timestamp)
+            generation_parameters: Dictionary of generation parameters used
+            samples: List of sample dictionaries to save to samples.jsonl
+            verbose: If True, print a markdown table of the metrics
+        """
+        if self.config.data_dir_to_save_evals is None:
+            logger.warning(
+                "data_dir_to_save_evals is not set, skipping evaluation logging"
+            )
+            return
+        # Create directory if it doesn't exist
+        os.makedirs(self.config.data_dir_to_save_evals, exist_ok=True)
+
+        # Generate filename
+        filename = "metrics.json"
+        filepath = os.path.join(self.config.data_dir_to_save_evals, filename)
+
+        # Default values
+        if task_name is None:
+            if self.name:
+                task_name = f"{self.name}_eval"
+            else:
+                task_name = f"{self.__class__.__name__}_eval"
+        if model_name is None:
+            # Try to get model name from config first, then from server configs
+            model_name = getattr(self.config, "model_name", None)
+            if model_name is None and hasattr(self, "server") and self.server.servers:
+                # Get model name from first server config
+                first_server = self.server.servers[0]
+                if hasattr(first_server, "config") and hasattr(
+                    first_server.config, "model_name"
+                ):
+                    model_name = first_server.config.model_name
+        if start_time is None:
+            start_time = time.time()
+        if end_time is None:
+            end_time = time.time()
+        if generation_parameters is None:
+            generation_parameters = {}
+
+        # Try to get generation parameters from config if not provided
+        config_gen_params = {}
+        if hasattr(self.config, "max_token_length"):
+            config_gen_params["max_new_tokens"] = self.config.max_token_length
+
+        # Merge config params with passed params (passed params take precedence)
+        merged_gen_params = {**config_gen_params, **generation_parameters}
+
+        # Print metrics table if verbose
+        if verbose:
+            from atroposlib.utils.display import display_metrics_table
+
+            display_metrics_table(task_name, metrics, start_time, end_time)
+
+        # Build evaluation result structure - skeleton of lighteval's
+        task_key = f"atropos|{task_name}|0"
+
+        eval_result = {
+            "config_general": {
+                "model_name": model_name,
+                "total_evaluation_time_secondes": str(end_time - start_time),
+                "generation_parameters": merged_gen_params,
+            },
+            "results": {
+                task_key: metrics,
+                "all": metrics,
+            },
+        }
+
+        # Write main results to JSON file
+        with open(filepath, "w") as f:
+            json.dump(eval_result, f, indent=2)
+
+        print(f"Evaluation results saved to {filepath}")
+
+        # Write samples to JSONL file if provided
+        if samples:
+            samples_filepath = os.path.join(
+                self.config.data_dir_to_save_evals, "samples.jsonl"
+            )
+            with jsonlines.open(samples_filepath, "w") as writer:
+                for sample in samples:
+                    writer.write(sample)
+            print(f"Evaluation samples saved to {samples_filepath}")
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_random_exponential(multiplier=1, max=10),
@@ -603,6 +751,13 @@ class BaseEnv(ABC):
         """
         Send scored data to the API with retry logic for timeouts and server errors.
         """
+        # Add env_id to the data
+        if isinstance(scored_data, list):
+            for item in scored_data:
+                item["env_id"] = getattr(self, "env_id", None)
+        else:
+            scored_data["env_id"] = getattr(self, "env_id", None)
+
         url = (
             f"{self.config.rollout_server_url}/scored_data_list"
             if isinstance(scored_data, list)
@@ -673,9 +828,14 @@ class BaseEnv(ABC):
             group.setdefault("group_overrides", None)
 
             for mask in group["masks"]:
-                self.completion_lengths.append(len(mask))
+                self.completion_lengths.append(sum(m != -100 for m in mask))
 
-            if abort_on_any_max_length_exceeded and any(
+            if self.max_token_len <= 0:
+                warnings.warn(
+                    f"Trainer requested to ignore max length by setting max_token_len to {self.max_token_len}, "
+                    "ensure your trainer handles this appropriately."
+                )
+            elif abort_on_any_max_length_exceeded and any(
                 [len(x) >= self.max_token_len for x in group["tokens"]]
             ):
                 logger.warning("Token length is too long in a group, skipping...")
@@ -720,7 +880,7 @@ class BaseEnv(ABC):
         """
         Handle the rollout of an item
         """
-        item = self.running_items.get(item_uuid)
+        item = self.running_items.get(item_uuid)["item"]
         if item is None:
             print(f"item {item_uuid} not found... returning")
             return None
@@ -797,7 +957,9 @@ class BaseEnv(ABC):
                         self.eval_runner = eval_task
                         if self.config.eval_handling == EvalHandlingEnum.STOP_TRAIN:
                             # Stop training if eval is running
-                            self.backlog.extend(self.running_items.values())
+                            self.backlog.extend(
+                                [x["item"] for x in self.running_items.values()]
+                            )
                             for worker in self.workers:
                                 worker.cancel()
                             self.workers = set()
@@ -836,16 +998,72 @@ class BaseEnv(ABC):
             max_num_workers,
             (
                 self.config.max_batches_offpolicy
-                * self.config.batch_size
+                * self.derived_batch_size
                 // self.config.group_size
             )
             - (self.status_dict["queue_size"]),
+        )
+        # Now if we have a minimum batch allocation, we need to add workers to fill the self queue, in case of
+        # overruns by other environments
+        if self.config.min_batch_allocation is not None:
+            min_workers_to_fill_self_queue = max(
+                0,
+                math.ceil(
+                    (
+                        (
+                            (
+                                math.ceil(
+                                    self.config.min_batch_allocation
+                                    * self.config.batch_size
+                                    * self.config.max_batches_offpolicy
+                                    / self.status_dict["max_group_size"]
+                                )
+                                + (
+                                    self.status_dict["max_group_size"]
+                                    // self.config.group_size
+                                )
+                            )
+                            * self.status_dict["max_group_size"]
+                        )
+                        - (
+                            (
+                                self.status_dict["max_group_size"]
+                                * self.status_dict["self_queue_size"]
+                                // (
+                                    self.status_dict["max_group_size"]
+                                    / self.config.group_size
+                                )
+                            )
+                        )
+                    )
+                    / self.config.group_size
+                ),
+            )
+            max_num_workers = max(max_num_workers, min_workers_to_fill_self_queue)
+        print(
+            f"max_num_workers: {max_num_workers}, queue size: {self.status_dict['queue_size']}, "
+            f"workers: {len(self.workers)}, self_queue_size: {self.status_dict['self_queue_size']}",
+            flush=True,
         )
         if (self.curr_step == 0) and (len(self.workers) == 0):
             # We are starting up, so we should just skip the append to the list
             pass
         else:
             self.workers_added_list.append(max_num_workers - len(self.workers))
+        if len(self.workers) > max_num_workers:
+            print(
+                f"len(self.workers) > max_num_workers: {len(self.workers)} > {max_num_workers}, "
+                "sending workers to backlog",
+                flush=True,
+            )
+            num_to_reduce = len(self.workers) - max_num_workers
+            running_items_to_remove = list(self.running_items.keys())[:num_to_reduce]
+            for item_uuid in running_items_to_remove:
+                self.backlog.append(self.running_items[item_uuid]["item"])
+                self.running_items[item_uuid]["worker"].cancel()
+                self.workers.discard(self.running_items[item_uuid]["worker"])
+                self.running_items.pop(item_uuid)
+
         while len(self.workers) < max_num_workers:
             # Generate a UUID for tracking this item
             item_uuid = str(uuid.uuid4())
@@ -855,8 +1073,12 @@ class BaseEnv(ABC):
                 item = await self.get_next_item()
             if item is None:
                 break
-            self.running_items[item_uuid] = item
             worker = asyncio.create_task(self.handle_env(item_uuid))
+            self.running_items[item_uuid] = {
+                "item": item,
+                "worker": worker,
+                "start_time": time.time(),
+            }
             self.workers.add(worker)
             worker.add_done_callback(
                 lambda fut, i=item: (
@@ -910,9 +1132,32 @@ class BaseEnv(ABC):
                     >= self.config.max_batches_offpolicy * self.config.batch_size
                 )
                 and (self.config.max_batches_offpolicy > 0)
-            ) or (self.config.batch_size == -1):
+                and (
+                    (self.config.min_batch_allocation is None)
+                    or (
+                        (
+                            (
+                                (
+                                    math.ceil(
+                                        self.config.min_batch_allocation
+                                        * self.config.batch_size
+                                        * self.config.max_batches_offpolicy
+                                        / self.status_dict["max_group_size"]
+                                    )
+                                    * (
+                                        self.status_dict["max_group_size"]
+                                        // self.config.group_size
+                                    )
+                                )
+                            )
+                            - (self.status_dict["self_queue_size"])
+                        )
+                        <= 0
+                    )
+                )
+            ) or (self.derived_batch_size == -1):
                 # We have too many, lets cleanup the tasks and wait a bit
-                self.backlog.extend(self.running_items.values())
+                self.backlog.extend([x["item"] for x in self.running_items.values()])
                 for worker in self.workers:
                     worker.cancel()
                 self.running_items = dict()
@@ -921,6 +1166,18 @@ class BaseEnv(ABC):
                 pass
             else:
                 await self.add_train_workers()
+            # cleanup workers that have timed out
+            if self.config.worker_timeout > 0:
+                for item_uuid, item in list(self.running_items.items()):
+                    if time.time() - item["start_time"] > self.config.worker_timeout:
+                        logger.warning(
+                            f"Worker {item_uuid} has timed out after {time.time() - item['start_time']} seconds"
+                        )
+                        item["worker"].cancel()
+                        self.workers.discard(item["worker"])
+                        self.running_items.pop(item_uuid)
+                        # Do we want to retry? probably not...
+                        # self.backlog.append(item["item"])
             await asyncio.sleep(0.1)
 
     async def process_manager(self):
@@ -991,17 +1248,25 @@ class BaseEnv(ABC):
 
         generate_html(self.config.data_path_to_save_groups)
 
+    async def _run_evaluate(self):
+        """
+        Internal method to run evaluation with proper setup.
+        """
+        await self.setup()
+        await self.evaluate()
+
     @classmethod
     def cli(cls):
         """
         Command-line interface entry point for the environment.
-        This method handles the CLI commands for serve and process.
+        This method handles the CLI commands for serve, process, and evaluate.
         """
 
         # Create subcommands dictionary
         subcommands = {
             "serve": cls.get_cli_serve_config_cls(),
             "process": cls.get_cli_process_config_cls(),
+            "evaluate": cls.get_cli_evaluate_config_cls(),
         }
 
         # Custom exception handler for cleaner error output
@@ -1194,9 +1459,10 @@ class BaseEnv(ABC):
         """
 
         # Get the default configurations from the specific environment class via config_init
-        default_env_config_from_init, default_server_configs_from_init = (
-            cls.config_init()
-        )
+        (
+            default_env_config_from_init,
+            default_server_configs_from_init,
+        ) = cls.config_init()
 
         # Define namespace prefixes
         env_full_prefix = f"{ENV_NAMESPACE}{NAMESPACE_SEP}"
@@ -1452,3 +1718,252 @@ class BaseEnv(ABC):
                     asyncio.run(env.process_manager())
 
         return CliProcessConfig
+
+    @classmethod
+    def get_cli_evaluate_config_cls(cls) -> type:
+        """
+        Returns the CLI configuration class for evaluate commands.
+
+        Returns:
+            type: The CliEvaluateConfig class for evaluate commands.
+        """
+        # Get the default configurations from the specific environment class via config_init
+        (
+            default_env_config_from_init,
+            default_server_configs_from_init,
+        ) = cls.config_init()
+
+        # Define namespace prefixes
+        env_full_prefix = f"{ENV_NAMESPACE}{NAMESPACE_SEP}"
+        openai_full_prefix = f"{OPENAI_NAMESPACE}{NAMESPACE_SEP}"
+
+        # Create Pydantic model classes based on the types from config_init.
+        # The defaults from config_init will be the primary source of defaults.
+        env_config_cls_from_init = type(default_env_config_from_init)
+
+        # Handle server_configs_from_init appropriately for creating a default CLI model
+        # If it's a list (multiple servers), we'll take the first one as a template for CLI args,
+        # or use APIServerConfig if the list is empty or contains ServerBaseline.
+        # If it's a single APIServerConfig, we use its type.
+        # If it's ServerBaseline, we use APIServerConfig type for CLI args to allow overrides.
+        if isinstance(default_server_configs_from_init, list):
+            if default_server_configs_from_init and isinstance(
+                default_server_configs_from_init[0], APIServerConfig
+            ):
+                openai_config_cls_for_cli = type(default_server_configs_from_init[0])
+                # Use the actual instance for default values later if it's a single config
+                default_openai_config_instance_for_cli = (
+                    default_server_configs_from_init[0]
+                    if len(default_server_configs_from_init) == 1
+                    else openai_config_cls_for_cli()
+                )
+            else:
+                openai_config_cls_for_cli = (
+                    APIServerConfig  # Default to APIServerConfig for CLI definition
+                )
+                default_openai_config_instance_for_cli = APIServerConfig()
+        elif isinstance(default_server_configs_from_init, APIServerConfig):
+            openai_config_cls_for_cli = type(default_server_configs_from_init)
+            default_openai_config_instance_for_cli = default_server_configs_from_init
+        else:  # ServerBaseline or other
+            openai_config_cls_for_cli = APIServerConfig
+            default_openai_config_instance_for_cli = APIServerConfig()
+
+        class CliEvaluateConfig(
+            get_prefixed_pydantic_model(env_config_cls_from_init, env_full_prefix),
+            get_prefixed_pydantic_model(openai_config_cls_for_cli, openai_full_prefix),
+            ServerManagerConfig,  # ServerManagerConfig defaults are fine as is.
+            Cmd,
+        ):
+            """
+            Configuration for the evaluate command.
+            Supports overrides via YAML config file and CLI arguments.
+            Order of precedence: CLI > YAML > `config_init` defaults.
+            """
+
+            config: str | None = Field(
+                default=None,
+                description="Path to .yaml config file. CLI args override this.",
+            )
+
+            def run(self) -> None:
+                """The logic to execute for the 'evaluate' command."""
+                # Set default wandb name if not provided and class has a name
+                wandb_name_attr = f"{ENV_NAMESPACE}{NAMESPACE_SEP}wandb_name"
+                if (
+                    getattr(self, wandb_name_attr, None) is None
+                    and cls.name is not None
+                ):
+                    setattr(self, wandb_name_attr, cls.name)
+
+                # Load configuration from YAML file if specified
+                if self.config is not None:
+                    with open(self.config, "r") as f:
+                        yaml_config = yaml.safe_load(f)
+                    print(f"Loaded config from {self.config}")
+                else:
+                    yaml_config = {}
+
+                # Get CLI flags passed with double dashes
+                cli_passed_flags = get_double_dash_flags()
+
+                # --- Configuration Merging ---
+                # Priority: CLI > YAML > `config_init` defaults
+
+                # 1. Environment Configuration
+                # Start with defaults from config_init
+                env_config_dict_base = default_env_config_from_init.model_dump()
+                # Apply specific overrides for evaluate mode that are generally useful
+                env_config_dict_base["use_wandb"] = True
+
+                env_config_dict = merge_dicts(
+                    env_config_dict_base,  # `config_init` defaults with evaluate adjustments
+                    yaml_config.get(ENV_NAMESPACE, {}),  # YAML config
+                    extract_namespace(cli_passed_flags, env_full_prefix),  # CLI args
+                )
+
+                # 2. OpenAI Configuration
+                oai_cli_passed_args = extract_namespace(
+                    cli_passed_flags, openai_full_prefix
+                )  # CLI args
+                yaml_oai_config = yaml_config.get(OPENAI_NAMESPACE, {})
+
+                # Determine the base OpenAI config from config_init for merging
+                # This uses the instance we determined earlier for CLI definition defaults
+                openai_config_dict_base = (
+                    default_openai_config_instance_for_cli.model_dump()
+                )
+
+                if isinstance(default_server_configs_from_init, ServerBaseline) and (
+                    oai_cli_passed_args or yaml_oai_config
+                ):
+                    # If config_init provided ServerBaseline, but CLI/YAML provides OpenAI specifics,
+                    # it implies an override intent for a single server.
+                    # We use the default_openai_config_instance_for_cli (which would be a default APIServerConfig)
+                    # as the base for merging, allowing it to be fully specified by YAML/CLI.
+                    pass  # Base is already set correctly for this case
+
+                if isinstance(yaml_oai_config, list) and len(yaml_oai_config) == 1:
+                    # If YAML specifies a single server config for OpenAI namespace
+                    yaml_oai_single_server_config = yaml_oai_config[0]
+                elif isinstance(yaml_oai_config, dict):
+                    yaml_oai_single_server_config = yaml_oai_config
+                else:
+                    yaml_oai_single_server_config = {}
+
+                openai_config_dict = merge_dicts(
+                    openai_config_dict_base,  # Default from config_init (or default APIServerConfig)
+                    yaml_oai_single_server_config,  # YAML config for a single server
+                    oai_cli_passed_args,  # CLI args
+                )
+
+                # 3. Server Manager Configuration
+                server_manager_cli_passed_flags = {}
+                if "slurm" in cli_passed_flags:
+                    server_manager_cli_passed_flags["slurm"] = cli_passed_flags["slurm"]
+                if "testing" in cli_passed_flags:
+                    server_manager_cli_passed_flags["testing"] = cli_passed_flags[
+                        "testing"
+                    ]
+
+                server_manager_yaml_dict = {}
+                if "slurm" in yaml_config:
+                    server_manager_yaml_dict["slurm"] = yaml_config["slurm"]
+                if "testing" in yaml_config:
+                    server_manager_yaml_dict["testing"] = yaml_config["testing"]
+
+                # Start with ServerManagerConfig defaults, then apply YAML, then CLI
+                # For evaluate mode, slurm and testing are typically False unless specified.
+                server_manager_config_dict_base = ServerManagerConfig(
+                    slurm=False, testing=False
+                ).model_dump()
+
+                server_manager_config_dict = merge_dicts(
+                    server_manager_config_dict_base,
+                    server_manager_yaml_dict,
+                    server_manager_cli_passed_flags,
+                )
+
+                # --- Instantiate Final Config Objects ---
+                # Use the original class types from config_init (or APIServerConfig for OpenAI CLI)
+
+                env_config = env_config_cls_from_init(**env_config_dict)
+                server_manager_config = ServerManagerConfig(
+                    **server_manager_config_dict
+                )
+
+                # Determine the final server_configs.
+                # For 'evaluate', we typically expect a single server configuration for the OAI part.
+                # The resolve_openai_configs will handle complex cases, but for 'evaluate',
+                # the openai_config_dict we built should represent the single intended server.
+
+                # If default_server_configs_from_init was ServerBaseline, and we have openai_config_dict,
+                # it means we are overriding to use a specific APIServerConfig.
+                # If default_server_configs_from_init was a list or single APIServerConfig,
+                # resolve_openai_configs will merge appropriately.
+
+                final_openai_configs = resolve_openai_configs(
+                    default_server_configs=default_server_configs_from_init,  # Pass the original structure
+                    openai_config_dict=openai_config_dict,  # This is the merged single server config for CLI/YAML
+                    yaml_config=yaml_config,  # Pass full YAML for resolve_openai_configs logic
+                    cli_passed_flags=cli_passed_flags,  # Pass full CLI for resolve_openai_configs
+                    logger=logger,
+                )
+
+                # Add warning for localhost or 0.0.0.0
+                if isinstance(final_openai_configs, list):
+                    for cfg in final_openai_configs:
+                        if (
+                            isinstance(cfg, APIServerConfig)
+                            and cfg.base_url
+                            and (
+                                "localhost" in cfg.base_url
+                                or "0.0.0.0" in cfg.base_url
+                                or "127.0.0.1" in cfg.base_url
+                            )
+                        ):
+                            warnings.warn(
+                                "You are using a local Base URL for an OpenAI compatible server in 'evaluate' mode. "
+                                "Ensure you have a server running at this address or results may not be generated.",
+                                UserWarning,
+                            )
+                            break  # Warn once
+                elif (
+                    isinstance(final_openai_configs, APIServerConfig)
+                    and final_openai_configs.base_url
+                    and (
+                        "localhost" in final_openai_configs.base_url
+                        or "0.0.0.0" in final_openai_configs.base_url
+                        or "127.0.0.1" in final_openai_configs.base_url
+                    )
+                ):
+                    warnings.warn(
+                        "You are using a local Base URL for an OpenAI compatible server in 'evaluate' mode. "
+                        "Ensure you have a server running at this address or results may not be generated.",
+                        UserWarning,
+                    )
+
+                rprint(env_config)
+                rprint(final_openai_configs)
+
+                # --- Create and Run Environment ---
+                # Create the environment instance
+                env = cls(
+                    config=env_config,
+                    server_configs=final_openai_configs,
+                    slurm=server_manager_config.slurm,
+                    testing=server_manager_config.testing,
+                )
+
+                print("Running evaluation...")
+                # Handle the case where we might already be in an event loop
+                try:
+                    loop = asyncio.get_running_loop()
+                    task = loop.create_task(env._run_evaluate())
+                    loop.run_until_complete(task)
+                except RuntimeError:
+                    asyncio.run(env._run_evaluate())
+
+                print("Evaluation completed.")
+
+        return CliEvaluateConfig

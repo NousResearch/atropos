@@ -30,6 +30,8 @@ Basic environment configuration settings.
 | `ensure_scores_are_not_same`     | `bool`                   | `True`                                          | Ensure that scores within a group are not identical (usually `True`).                                      |
 | `data_path_to_save_groups`       | `str | None`             | `None`                                          | Path to save generated groups as a JSONL file. If set, groups will be written here.                         |
 | `min_items_sent_before_logging`  | `int`                    | `2`                                             | Minimum number of items sent to the API before logging metrics. `0` or less logs every time.             |
+| `include_messages`               | `bool`                   | `False`                                         | Whether to include messages in the output transmitted to the trainer.                                      |
+| `min_batch_allocation`           | `float | None`           | `None`                                          | Minimum proportion of a batch this environment should be allocated (0.0-1.0). Ensures this env contributes at least this fraction to each training batch. |
 
 ## Server Manager Configuration (`atroposlib.envs.server_handling.server_manager.ServerManagerConfig`)
 

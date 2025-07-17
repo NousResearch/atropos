@@ -116,7 +116,7 @@ class MathCurriculum:
             56,  # Fibonacci Series
             59,  # Mean,Standard Deviation,Variance
             62,  # nth Fibonacci number
-            64,  # Binary to Hexidecimal
+            64,  # Binary to Hexadecimal
             73,  # Binary 2's Complement
             79,  # Decimal to Hexadecimal
             84,  # Converts decimal to octal
@@ -133,7 +133,7 @@ class MathCurriculum:
             66,  # Geometric Progression
             67,  # Geometric Mean of N Numbers
             68,  # Harmonic Mean of N Numbers
-            69,  # Euclidian norm or L2 norm of a vector
+            69,  # Euclidean norm or L2 norm of a vector
             74,  # Inverse of a Matrix
             85,  # Converts decimal to Roman Numerals
             92,  # Complex To Polar Form

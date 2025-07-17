@@ -151,7 +151,7 @@ bibtex
   title={Quantum-Classical Hybrid Language Model Environment for Atropos},
   author={QuaintanceAI Research Team},
   year={2025},
-  url={https://github.com/anthropics/atropos/tree/main/environments/hack0/env_quant},
+  url={https://github.com/NousResearch/atropos/tree/main/environments/community/quantum_hybrid},
   note={Atropos Hackathon 2025 Submission}
 }
 License

@@ -297,6 +297,17 @@ Always refer to the specific environment script's help for all available options
 python environments/your_environment_script.py process --help
 ```
 
+### Environment Evaluation with `evaluate`
+
+For running evaluation on environments, Atropos provides an `evaluate` subcommand that calls the environment's `evaluate` method:
+
+```sh
+python gsm8k_server.py evaluate \
+  --openai.base_url https://openrouter.ai/api/v1 \
+  --openai.api_key $OPENROUTER_API_KEY \
+  --openai.model_name qwen/qwen3-14b
+```
+
 ### Offline Data Generation Quick Start
 
 Run the below in separate terminals:

@@ -6,6 +6,122 @@ This directory contains various environments for training and evaluating languag
 
 ---
 
+### 🏆 Pairwise Judgment Environment (`pairwise_judgement_environment.py`) - **BENCHMARK**
+
+**⚠️ PRIMARY USE CASE: EVALUATION BENCHMARK** - This environment implements the official RewardBench-2 evaluation suite for measuring how well models can judge the quality of AI assistant responses. Use this to benchmark your models against state-of-the-art judgment capabilities.
+
+A comprehensive benchmark environment based on the official RewardBench-2 dataset that evaluates models' ability to judge AI assistant responses through two evaluation modes:
+- **Choice Mode**: Compare 4 responses (A/B/C/D) and select the best one
+- **Ties Mode**: Rate individual responses on a 1-10 scale to identify winners
+
+**Benchmark Categories:**
+- **Factuality**: Factual accuracy and correctness
+- **Focus**: Staying on topic and following instructions
+- **Math**: Mathematical reasoning and problem-solving
+- **Precise IF**: Precise instruction following
+- **Safety**: Harmful content detection and safety
+- **Ties**: Multiple correct responses requiring nuanced judgment
+
+**Input Format:**
+- **Choice Mode**: Question + 4 AI responses (A, B, C, D) → Select best response
+- **Ties Mode**: Question + individual response → Rate 1-10 scale
+- Each item contains:
+  - `prompt`: The user question
+  - `chosen`: List of high-quality responses
+  - `rejected`: List of lower-quality responses
+  - `subset`: Category (Factuality, Math, Safety, etc.)
+
+**System Prompt (Thinking Mode):**
+```
+You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution prior to answering. You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem.
+You are allowed to monologue in freeform at times, but the majority of your reasoning must be done using markdown, with point, bolding and italics used appropriately to structure your reasoning.
+```
+
+**Evaluation Methodology:**
+- **Choice Mode**: Score 1.0 if model selects the correct response (A/B/C/D format: `[[A]]`)
+- **Ties Mode**: Rate all responses → Find maximum rating → Score 1.0 if any max-rated response is correct
+- **Format Compliance**: Must use exact format (`[[A]]` for choice, trailing number for rating)
+- **Robust to Parsing Errors**: Partial failures don't invalidate entire samples
+
+**Key Features:**
+- **Dual Evaluation Modes**: Automatic detection of choice vs. ties samples
+- **Category Filtering**: Evaluate specific RewardBench categories
+- **Thinking Mode Support**: Full `<think></think>` tag parsing and evaluation
+- **Chat Completions**: Uses modern chat completion API endpoints
+- **Comprehensive Metrics**: A-bias detection, compliance rates, rating distributions
+- **Original RewardBench Compliance**: Matches official methodology exactly
+
+**Configuration Options:**
+- `thinking_mode`: Enable `<think></think>` reasoning mode (default: True)
+- `num_choices`: Number of response choices (2-26, default: 4)
+- `eval_categories`: Filter to specific categories (default: all)
+- `max_ties_responses`: Limit ties responses for cost control (default: 100)
+- `eval_temperature`: Temperature for evaluation (default: 0.6)
+- `eval_max_tokens`: Max tokens for evaluation (default: 16384)
+
+**Benchmark Usage (Primary Use Case):**
+```bash
+# Evaluate OpenAI models
+python pairwise_judgement_environment.py evaluate \
+    --openai.base_url https://api.openai.com/v1 \
+    --openai.api_key sk-YOURAPIKEY \
+    --openai.model_name gpt-4o \
+    --env.data_dir_to_save_evals ./evals/rewardbench-gpt-4o
+
+# Evaluate specific categories only
+python pairwise_judgement_environment.py evaluate \
+    --openai.model_name gpt-4o-mini \
+    --env.eval_categories='["MATH", "SAFETY"]' \
+    --env.data_dir_to_save_evals ./evals/math-safety-only
+
+# Evaluate with custom settings
+python pairwise_judgement_environment.py evaluate \
+    --openai.model_name gpt-4o \
+    --env.thinking_mode=False \
+    --env.eval_temperature=0.0 \
+    --env.max_ties_responses=50 \
+    --env.data_dir_to_save_evals ./evals/deterministic-eval
+```
+
+**Training Usage - Will Require Your Own Custom Dataset(Secondary Use Case):**
+```bash
+# Train with synthetic judgment data
+python pairwise_judgement_environment.py serve \
+    --env.thinking_mode=True \
+    --env.num_choices=4 \
+    --env.rollout_temperature=0.8
+```
+
+**Benchmark Metrics:**
+- `eval/percent_correct`: Overall accuracy across all categories
+- `eval/percent_correct_{category}`: Per-category accuracy scores
+- `eval/choice_format_compliance_rate`: Format compliance for choice mode
+- `eval/ties_format_compliance_rate`: Format compliance for ties mode
+- `eval/ties_error_rate`: Proportion of unparseable rating attempts
+- `eval/wrong_answer_a_bias_rate`: A-bias detection in incorrect responses
+- `eval/avg_ties_rating`: Average rating in ties mode
+- `eval/ties_rating_freq_{1-10}`: Distribution of ratings 1-10
+
+**Dependencies:**
+- `datasets` (for RewardBench-2 dataset)
+- `wandb` (for metrics tracking)
+- `tqdm` (for progress bars)
+
+**Citation:**
+```bibtex
+@misc{lambert2024rewardbenchevaluatingrewardmodels,
+      title={RewardBench: Evaluating Reward Models for Language Modeling},
+      author={Nathan Lambert and Valentina Pyatkin and Jacob Morrison and LJ Miranda and Bill Yuchen Lin and Khyathi Chandu and Nouha Dziri and Sachin Kumar and Tom Zick and Yejin Choi and Noah A. Smith and Hannaneh Hajishirzi},
+      year={2024},
+      eprint={2403.13787},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2403.13787},
+}
+```
+
+---
+
 ### Letter Counting Environment (`letter_counting_environment.py`)
 
 A comprehensive environment for training models to count letters in words, sentences, and text passages with configurable difficulty and data modes.
@@ -544,241 +660,4 @@ Wrap each *SEARCH/REPLACE* edit in a code block as shown in the example above. I
 **Unique Configuration and Features:**
 - **Dataset Handling:** Loads training and test data from Hugging Face datasets, specifically tailored for SWE-bench like formats.
 - **Patch Parsing:** Implements robust parsing for a specific SEARCH/REPLACE patch format.
-- **Thinking Tag Processing:** Extracts content after `<think> </think>` tags for patch generation, and scores based on presence and well-formedness of these tags.
-- **Wandb Logging:** Logs detailed training and evaluation metrics, including rollout tables with problem statements, full interaction text, oracle patches, and scores.
-
-## Common Features
-
-All environments share these common features:
-
-1. **Training/Test Split:**
-   - 98% training, 2% test split
-   - Random shuffling with fixed seed (42)
-
-2. **Metrics Tracking:**
-   - Percent correct buffer
-   - Completion lengths
-   - Wandb integration for visualization
-   - Rollout tracking
-
-3. **Token Management:**
-   - Maximum token length limits
-   - Token length statistics tracking
-   - Length penalty for excessive responses
-
-4. **Evaluation:**
-   - Separate evaluation on test set
-   - Comprehensive metrics logging
-   - Support for multiple model completions per prompt
-
-5. **Detailed Documentation:**
-   - Many environments, especially those with more complexity, include detailed `README.md` files within their respective subdirectories to provide specific context and usage instructions.
-
-6. **Additional Libraries:**
-   - If an environment requires specific libraries not covered by the main project dependencies, its subdirectory may include a `requirements.txt` file for easy installation via `pip`, or provide installation instructions in its `README.md`.
-
-## Usage
-
-Each environment can be initialized with:
-- `config`: BaseEnvConfig object
-- `server_configs`: List of OpenAI API configurations
-- `slurm`: Boolean for distributed training
-- `testing`: Boolean for testing mode
-
-The environments follow a common interface with methods for:
-- `setup()`: Loading and preparing datasets
-- `get_next_item()`: Retrieving next training item
-- `collect_trajectories()`: Generating model responses
-- `score()`: Computing rewards
-- `evaluate()`: Running evaluation on test set
-- `wandb_log()`: Logging metrics to Weights & Biases
-
-## 31. Cybersecurity Sigma Rule Generation Environment
-
-**Location:** `environments/community/cybersecurity_sigma/`
-**Contributor:** [Subrahmanyam2305](https://github.com/Subrahmanyam2305)
-**PR:** [#74](https://github.com/NousResearch/atropos/pull/74)
-
-### Core Features
-- **Dual Reward Systems**: Jaccard similarity scoring and LLM-as-a-judge evaluation
-- **Structured Output Generation**: Enforces YAML format with LaTeX `\boxed{}` wrapper
-- **Cybersecurity Domain**: Trains models to generate Sigma detection rules from threat prompts
-- **Dataset Integration**: Uses `mmaisel1/nous-rl-hackathon-sigma` from Hugging Face
-
-### Technical Implementation
-- **Environment Names**: `sigmarule` (Jaccard) and `llm_judge_sigmarule` (LLM judge)
-- **Output Format**: `<think>...</think>` reasoning tags + YAML in `\boxed{}`
-- **Reward Mechanisms**: Token-based Jaccard similarity vs. semantic LLM evaluation
-- **Model Configuration**: DeepHermes-3-Llama-3-3B-Preview with 2048 token limit
-
-### Research Applications
-- **Cybersecurity Training**: Automated threat detection rule generation
-- **Structured Generation**: Constrained output format research with YAML validation
-- **Evaluation Methodology**: Comparison of token-based vs. semantic reward functions
-- **Domain Expertise**: Training models on specialized cybersecurity knowledge
-
-### Setup and Usage
-```bash
-# Environment variables
-export OPENAI_API_KEY="your-key"  # For LLM judge (optional)
-export NOUS_API_KEY="your-key"    # For model inference
-
-# Run environments
-python environments/community/cybersecurity_sigma/jaccard_reward_env.py
-python environments/community/cybersecurity_sigma/llm_judge_env.py
-```
-
-### Performance Characteristics
-- **Jaccard Rewards**: 0.1-0.3 range, fast but structurally sensitive
-- **LLM Judge Rewards**: Binary 0.0/1.0, semantic understanding but API latency
-- **W&B Integration**: Comprehensive experiment tracking and visualization
-- **Length Penalties**: Applied for overly verbose rule generation
-
-## 32. Wikipedia Article Research Environment
-
-**Location:** `environments/community/wikipedia_research/`
-**Contributor:** [aniemerg](https://github.com/aniemerg)
-**PR:** [#72](https://github.com/NousResearch/atropos/pull/72)
-
-### Core Features
-- **Multi-Step Research Process**: Web search and content extraction with Tavily API integration
-- **Factual Accuracy Evaluation**: OpenAI-powered line-by-line fact-checking against reference articles
-- **Wikipedia Blocking**: Prevents direct Wikipedia access to encourage diverse source usage
-- **Quality Assessment Framework**: Structure, comprehensiveness, and fact usage scoring
-
-### Technical Implementation
-- **Environment Name**: `WikipediaArticleCreator`
-- **Research Tools**: `web_search` and `visit_page` with error handling and filtering
-- **Evaluation System**: Dual scoring combining structural quality with factual accuracy
-- **Episode Management**: Tracks complete research sessions with conversation history
-
-### Research Applications
-- **Information Synthesis**: Training models to combine multiple sources into coherent articles
-- **Research Methodology**: Multi-step information gathering and fact verification
-- **Quality Assessment**: Comprehensive article evaluation across multiple dimensions
-- **Tool Usage Training**: Effective utilization of search and extraction capabilities
-
-### Setup and Usage
-```bash
-# Environment variables
-export TAVILY_API_KEY="your-tavily-key"    # Required for web research
-export OPENAI_API_KEY="your-openai-key"    # Required for LLM and evaluation
-
-# Direct usage
-cd environments/community/wikipedia_research
-python run_with_openai.py --topic "Climate change in Antarctica" --model "gpt-4o"
-
-# Training mode
-python -m atroposlib.cli.dpo \
-    --env-module "environments.community.wikipedia_research.wikipedia_article_creator"
-```
-
-### Performance Characteristics
-- **Research Efficiency**: 10-50 tool calls per article depending on complexity
-- **Quality Metrics**: Structure (0-1), comprehensiveness (0-1), fact usage (0-1)
-- **Accuracy Evaluation**: CORRECT/INCORRECT/UNKNOWN statement categorization
-- **Combined Scoring**: Overall article score in [-1, 1] range balancing quality and accuracy
-- **W&B Integration**: Complete research session tracking with tool usage analytics
-
-## 33. Goofy Math Environment
-
-**Location:** `environments/community/goofy_math/`
-**Contributor:** [chinguun101](https://github.com/chinguun101)
-**PR:** [#91](https://github.com/NousResearch/atropos/pull/91)
-
-### Core Features
-- **Dual Reward System**: Mathematical correctness verification + goofiness scoring
-- **RLAIF-Based Judging**: AI feedback system for ranking entertaining vs. standard solutions
-- **GSM8K Integration**: Uses standard math dataset with humor enhancement overlay
-- **Position Bias Elimination**: Forward/reverse judgment pairs to ensure fair evaluation
-
-### Technical Implementation
-- **Environment Name**: `goofy_math`
-- **Correctness Verification**: Uses `math_verify` and `latex2sympy2_extended` for objective scoring
-- **Goofiness Assessment**: LLM judge evaluates entertainment value of mathematically correct solutions
-- **Reward Formula**: `score = correctness_score + (goofiness_bonus * 0.5)`
-- **Output Format**: `<think>...</think>` reasoning + `\boxed{answer}` format
-
-### Research Applications
-- **Educational AI**: Training math tutors that are both accurate and engaging
-- **Personality Injection**: Adding entertainment value while maintaining technical correctness
-- **Multi-Objective Optimization**: Balancing objective accuracy with subjective entertainment
-- **Humor in AI**: Systematic approach to training models for appropriate comedic timing
-
-### Setup and Usage
-```bash
-# Install requirements
-pip install -r environments/community/goofy_math/requirements.txt
-
-# Environment variables
-export OPENAI_API_KEY="your-key"
-
-# Process mode for examples
-python environments/community/goofy_math/goofy_math_server.py process \
-  --env.data_path_to_save_groups goofy_math_demo.jsonl \
-  --env.total_steps 3
-
-# Training mode
-python -m atroposlib.cli.dpo \
-    --env-module "environments.community.goofy_math.goofy_math_server"
-```
-
-### Performance Characteristics
-- **Correctness Requirement**: Solutions must pass mathematical verification to receive any reward
-- **Goofiness Scoring**: 0-1 range based on humor, sound effects, and creative explanations
-- **Reward Distribution**: Base 1.0 for correctness + up to 0.5 bonus for entertainment value
-- **Anti-Reward Hacking**: Goofiness only evaluated after correctness verification
-- **W&B Integration**: Tracks goofiness histograms, judgment tables, and accuracy metrics
-
-### Demo and Results
-- **Video Demo**: [1-minute demonstration](https://www.loom.com/share/8704f63e2d2e4b4db23eab673d7990a2)
-- **WandB Run**: [Experiment tracking](https://wandb.ai/goofymath/goofy_math/runs/z92gd2j4)
-- **Unique Metrics**: `train/avg_goofiness_score`, `train/goofiness_histogram`, `train/judgement_table`
-
-## 34. Options Implied Volatility Prediction Environment
-
-**Location:** `environments/community/options_iv_prediction/`
-**Contributor:** [michaelwaves](https://github.com/michaelwaves)
-**PR:** [#78](https://github.com/NousResearch/atropos/pull/78)
-
-### Core Features
-- **Real Market Data Integration**: Live options data fetching via Yahoo Finance API (`yahooquery`)
-- **Financial Analysis Training**: Teaches models options pricing relationships and implied volatility prediction
-- **Thinking Process Framework**: Encourages step-by-step reasoning with `<think>` tags for complex financial analysis
-- **Dual Scoring System**: Magnitude accuracy and binary correctness evaluation
-
-### Technical Implementation
-- **Environment Name**: `OptionsIVPrediction`
-- **Data Source**: Real-time UNH (UnitedHealth Group) options chain data
-- **Input Parameters**: Option price, stock price, strike price, time to expiry, risk-free rate
-- **Output Format**: Structured prediction with exact format requirement: "The implied volatility will be: {percentage}%"
-
-### Research Applications
-- **Financial AI Development**: Training models to understand complex options pricing mechanisms
-- **Quantitative Analysis**: Automated volatility prediction for trading and risk management
-- **Educational Applications**: Teaching AI systems fundamental financial concepts
-- **Real-World Integration**: Direct application to live market data and trading scenarios
-
-### Setup and Usage
-```bash
-# Dependencies
-pip install pandas wandb datasets tqdm yahooquery atroposlib
-
-# Training mode
-python environments/community/options_iv_prediction/options_iv_prediction.py serve \
-    --env.total_steps 2000 --env.batch_size 1024
-
-# Process mode (data generation)
-python environments/community/options_iv_prediction/options_iv_prediction.py process \
-    --env.data_path_to_save_groups ./outputs/options_rollouts.jsonl \
-    --openai.api_key YOUR_KEY
-```
-
-### Performance Characteristics
-- **Memory Usage**: ~2-4 GB RAM for typical configurations with live data processing
-- **Data Processing**: Automatic filtering of invalid options (negative prices, expired contracts)
-- **Scoring Metrics**: Magnitude accuracy (0-1 scale) and binary correctness (within 10% threshold)
-- **Combined Reward**: Weighted combination (70% magnitude + 30% binary) for balanced learning
-- **Market Integration**: Real-time data fetching with robust error handling for market anomalies
-
----
+- **Thinking Tag Processing:** Extracts content after `<think> </think>`

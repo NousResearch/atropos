@@ -46,15 +46,17 @@ class SingleToolCallingEnv(BaseEnv):
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
             group_size=16,
             use_wandb=True,
+            max_num_workers_per_node=16,
             rollout_server_url="http://localhost:8000",
             total_steps=2000,
             batch_size=1024,
-            steps_per_eval=20,
+            steps_per_eval=25,
             max_token_length=1024 * 16,
             inference_weight=1.0,
             wandb_name="toolcall_think",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
+            min_batch_allocation=0.1,
         )
         server_configs = [
             APIServerConfig(
@@ -113,7 +115,7 @@ class SingleToolCallingEnv(BaseEnv):
         full_dataset = full_dataset.shuffle(seed=42)
 
         # Create train/test split on the fly (e.g., 95% train, 5% test)
-        split_dataset = full_dataset.train_test_split(test_size=0.02, seed=42)
+        split_dataset = full_dataset.train_test_split(test_size=100, seed=42)
 
         # Keep the splits as is - no need to reformat
         self.train = split_dataset["train"]

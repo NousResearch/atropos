@@ -34,7 +34,8 @@ if _SUBMODULE_DIR not in sys.path:
 try:
     import reasoning_gym
     from reasoning_gym.utils import extract_answer
-except ImportError:
+except ImportError as e:
+    print(e)
     reasoning_gym = None
     extract_answer = None
 
@@ -73,6 +74,10 @@ class ReasoningGymEnvConfig(BaseEnvConfig):
     suppress_base_env_logs: bool = Field(
         default=True,
         description="Suppress verbose base environment logs (like status dict updates).",
+    )
+    mask_too_long_completions: bool = Field(
+        default=True,
+        description="Whether to mask too long completions.",
     )
     rollout_save_score_threshold: float = Field(
         default=0.7,
@@ -149,7 +154,6 @@ class ReasoningGymEnv(BaseEnv):
             base_logger.setLevel(logging.WARNING)
 
         # Set max_token_len for base class compatibility
-        self.max_token_len = self.config.max_token_length
 
         self.percent_correct_buffer = list()
         self.eval_metrics = list()
@@ -193,17 +197,17 @@ class ReasoningGymEnv(BaseEnv):
     def config_init(cls) -> Tuple[ReasoningGymEnvConfig, List[APIServerConfig]]:
         env_config = ReasoningGymEnvConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
-            group_size=16,
+            group_size=8,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
             total_steps=250,
             seed=1918,
             batch_size=1024,
             steps_per_eval=25,
-            max_token_length=1024 * 16,
-            inference_weight=1.0,
+            max_token_length=1024 * 8,
+            inference_weight=4.0,
             wandb_name="reasoning_gym_think",  # Specific name for reasoning gym
-            eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
+            eval_handling=EvalHandlingEnum.NONE,
             eval_limit_ratio=0.1,
             num_rollouts_per_group_for_logging=4,
             num_rollouts_to_keep=50,
@@ -216,13 +220,14 @@ class ReasoningGymEnv(BaseEnv):
             eval_seed=123,
             complexity_mode="random",  # Options: None, "curriculum", "random"
             curriculum_target_accuracy=0.7,
+            min_batch_allocation=0.1,
         )
         server_configs = [
             APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9004/v1",
                 api_key="x",
-                num_max_requests_at_once=32,
+                num_max_requests_at_once=128,
                 num_requests_for_eval=256,
             ),
         ]
@@ -735,6 +740,7 @@ class ReasoningGymEnv(BaseEnv):
         scores_container["tokens"] = list()
         scores_container["masks"] = list()
         scores_container["scores"] = list()
+        scores_container["overrides"] = list()
 
         if not rollout_group_data:
             return None
@@ -745,7 +751,7 @@ class ReasoningGymEnv(BaseEnv):
         # Shuffle to avoid bias in selection
         random.shuffle(rollout_group_data)
 
-        for trajectory_messages, _, _ in rollout_group_data:
+        for trajectory_messages, _, _, finish_reason in rollout_group_data:
             model_full_response = trajectory_messages[-1]["content"]
 
             # Extract the part of the response that should be the answer
@@ -779,6 +785,10 @@ class ReasoningGymEnv(BaseEnv):
             scores_container["tokens"].append(tokens)
             scores_container["masks"].append(masks)
             scores_container["scores"].append(reward_0_to_1)
+            scores_container["overrides"].append(dict())
+            if finish_reason == "length":
+                if self.config.mask_too_long_completions:
+                    scores_container["overrides"][-1]["set_advantage_to_zero"] = True
 
             if len(scores_container["tokens"]) >= self.config.group_size:
                 break
@@ -968,13 +978,16 @@ class ReasoningGymEnv(BaseEnv):
 
         # Calculate max_tokens like tool_calling_server
         prompt_tokens = len(self.tokenizer.encode(prompt_str))
-        max_tokens = min(1024 * 15, self.config.max_token_length - prompt_tokens)
+        max_tokens = self.config.max_token_length - prompt_tokens
+        if max_tokens <= 0:
+            return None, []
 
         completions = await self.server.completion(
             prompt=prompt_str,
             n=self.config.group_size,
             max_tokens=max_tokens,
-            temperature=0.8,
+            temperature=1.0,
+            top_p=0.95,
         )
 
         to_score_list = []
@@ -988,7 +1001,12 @@ class ReasoningGymEnv(BaseEnv):
             )
 
             to_score_list.append(
-                (tuple(current_trajectory_messages), rg_item, dataset_obj)
+                (
+                    tuple(current_trajectory_messages),
+                    rg_item,
+                    dataset_obj,
+                    choice.finish_reason,
+                )
             )
 
         scored_data_group = await self.score(to_score_list)
@@ -1159,7 +1177,9 @@ class ReasoningGymEnv(BaseEnv):
 
         # Calculate max_tokens like tool_calling_server
         prompt_tokens = len(self.tokenizer.encode(prompt_str))
-        max_tokens = min(1024 * 15, self.config.max_token_length - prompt_tokens)
+        max_tokens = (2 * self.config.max_token_length) - prompt_tokens
+        if max_tokens < 0:
+            return 0.0
 
         completion = await self.server.completion(
             prompt=prompt_str,
@@ -2061,7 +2081,7 @@ class ReasoningGymEnv(BaseEnv):
             if new_complexity != current_complexity:
                 self.task_complexity_levels[task_name] = new_complexity
                 self.logger.info(
-                    f"↑ {task_name}: complexity {current_complexity:.2f} -> {new_complexity:.2f} "
+                    f"â†‘ {task_name}: complexity {current_complexity:.2f} -> {new_complexity:.2f} "
                     f"(accuracy: {recent_accuracy:.2f}, stability: {stability_factor:.2f}, groups: {group_count})"
                 )
 
@@ -2073,7 +2093,7 @@ class ReasoningGymEnv(BaseEnv):
             if new_complexity != current_complexity:
                 self.task_complexity_levels[task_name] = new_complexity
                 self.logger.info(
-                    f"↓ {task_name}: complexity {current_complexity:.2f} -> {new_complexity:.2f} "
+                    f"â†“ {task_name}: complexity {current_complexity:.2f} -> {new_complexity:.2f} "
                     f"(accuracy: {recent_accuracy:.2f}, stability: {stability_factor:.2f}, groups: {group_count})"
                 )
 
@@ -2089,7 +2109,7 @@ class ReasoningGymEnv(BaseEnv):
             if new_complexity != current_complexity:
                 self.task_complexity_levels[task_name] = new_complexity
                 self.logger.info(
-                    f"⚡ {task_name}: fast complexity jump {current_complexity:.2f} -> {new_complexity:.2f} "
+                    f"âš¡ {task_name}: fast complexity jump {current_complexity:.2f} -> {new_complexity:.2f} "
                     f"(high accuracy: {recent_accuracy:.2f}, stable performance)"
                 )
 
@@ -2105,7 +2125,7 @@ class ReasoningGymEnv(BaseEnv):
             if new_complexity != current_complexity:
                 self.task_complexity_levels[task_name] = new_complexity
                 self.logger.info(
-                    f"🔻 {task_name}: fast complexity drop {current_complexity:.2f} -> {new_complexity:.2f} "
+                    f"ðŸ”» {task_name}: fast complexity drop {current_complexity:.2f} -> {new_complexity:.2f} "
                     f"(low accuracy: {recent_accuracy:.2f}, stable performance)"
                 )
 
@@ -2116,7 +2136,7 @@ class ReasoningGymEnv(BaseEnv):
         ):
             if group_count % 10 == 0:  # Log every 10 groups when stable
                 self.logger.debug(
-                    f"🎯 {task_name}: stable at complexity {current_complexity:.2f} "
+                    f"ðŸŽ¯ {task_name}: stable at complexity {current_complexity:.2f} "
                     f"(accuracy: {recent_accuracy:.2f}, target: {target_accuracy:.2f})"
                 )
 

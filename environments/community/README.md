@@ -293,7 +293,7 @@ A unique environment for training LLMs to express needs and desires through auth
 **Author**: [JakeBoggs](https://github.com/JakeBoggs)
 **Purpose**: Train LLMs to generate humorous punchlines using Verifiable Rewards via Completion Likelihood Improvement (VR-CLI)
 
-A specialized environment for training LLMs to understand humor by generating joke punchlines through a novel RL technique from the paper "Learning to Reason for Long-Form Story Generation" (Gurning & Lapata, 2025). The environment teaches models to first generate reasoning that leads to good punchlines, with rewards based on how much the reasoning improves the likelihood of the actual punchline.
+A specialized environment for training LLMs to understand humor by generating joke punchlines through a novel RL technique from the paper "Learning to Reason for Long-Form Story Generation" (Gurung & Lapata, 2025). The environment teaches models to first generate reasoning that leads to good punchlines, with rewards based on how much the reasoning improves the likelihood of the actual punchline.
 
 **Features**:
 - **VR-CLI Methodology**: Uses Verifiable Rewards via Completion Likelihood Improvement for reduced overfitting
@@ -1769,7 +1769,7 @@ python -m atroposlib.envs.dynastai_env serve --slurm False
 Access the game at `http://localhost:3000` when running the server.
 
 **Demo Resources**:
-- **Live Demo Video**: [DynastAI Gameplay & API Overview](https://github.com/Slyracoon23/atropos/pull/81)
+- **Live Demo Video**: [DynastAI Gameplay & API Overview](https://github.com/NousResearch/atropos/pull/81)
 - **Screenshots**: Medieval-themed interface with character portraits and metric displays
 - **API Documentation**: Comprehensive endpoint documentation in README
 

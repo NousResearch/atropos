@@ -141,32 +141,37 @@ class ServerManager:
         for server in self.servers:
             await server.update_weight(weight)
 
-    async def wait_for_sem(self, is_training):
+    async def wait_for_sem(self, is_training: bool):
         """
         Wait for a server to be available. This is used to prevent the client from
         overwhelming the server with requests.
         """
-        if is_training:
-            eval_vals = [
-                (
+
+        def get_available_slots():
+            if is_training:
+                eval_vals = [
+                    (
+                        max(0, server.eval_sem._value - server.eval_sem.min_val())
+                        if server.eval_sem._value != server.eval_sem.max_val
+                        else 0
+                    )
+                    for server in self.servers
+                ]
+                return [
+                    max(0, (server.sem._value - server.sem.min_val()) - eval_val)
+                    for server, eval_val in zip(self.servers, eval_vals)
+                ]
+            else:
+                return [
                     max(0, server.eval_sem._value - server.eval_sem.min_val())
-                    if server.eval_sem._value != server.eval_sem.max_val
-                    else 0
-                )
-                for server in self.servers
-            ]
-            sem_vals = [
-                max(0, (server.sem._value - server.sem.min_val()) - eval_val)
-                for server, eval_val in zip(self.servers, eval_vals)
-            ]
-        else:
-            sem_vals = [
-                max(0, server.eval_sem._value - server.eval_sem.min_val())
-                for server in self.servers
-            ]
-        while all([sem_val <= 0 for sem_val in sem_vals]):
+                    for server in self.servers
+                ]
+
+        sem_vals = get_available_slots()
+        while all(sem_val <= 0 for sem_val in sem_vals):
             # None available... wait
             await asyncio.sleep(1)
+            sem_vals = get_available_slots()
 
     async def chat_completion(self, **kwargs) -> ChatCompletion:
         n = kwargs.get("n", 1)

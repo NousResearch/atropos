@@ -102,7 +102,7 @@ This runs all tasks with all optimizers and hyperparameter specified inside `exp
 You can either supply one value or a list of values for each entry. Grid-search combines each possible combination.
 For example: you specified 3 task, 2 optimizer, 2 different learning rates and 4 seeds then you need a total 3 x 2 x 2 x 4 = 48 runs
 
-You can additionally set values trough the command line (this overrides existing values). For example you can set the `data_dir` where datasets are stored using either:
+You can additionally set values through the command line (this overrides existing values). For example you can set the `data_dir` where datasets are stored using either:
 ```bash
 python -m script experiment.yaml "engine.data_dir=<path>"
 ```
