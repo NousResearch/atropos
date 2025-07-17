@@ -18,11 +18,12 @@ import tempfile
 import uuid
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from pydantic import Field
-
 import textworld
 import textworld.challenges
 import textworld.gym
+from pydantic import Field
+from textworld.gym.envs import TextworldGymEnv
+
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
@@ -32,14 +33,6 @@ from atroposlib.envs.base import (
 from atroposlib.type_definitions import Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 from atroposlib.utils.tool_call_parser import parse_tool_call
-from environments.game_environments.textworld_env.generation_utils import (
-    generate_textworld_game,
-)
-from environments.game_environments.textworld_env.textworld_registry import (
-    create_textworld_registry,
-)
-from textworld.gym.envs import TextworldGymEnv
-
 from environments.game_environments.textworld_env.agents.atropos_agent import (
     AtroposAgent,
     AtroposAgentConfig,
@@ -47,6 +40,12 @@ from environments.game_environments.textworld_env.agents.atropos_agent import (
 from environments.game_environments.textworld_env.agents.atropos_memory_manager import (
     MEMORY_SYSTEM_PREREQUISITES_AVAILABLE,
     AtroposMemoryManager,
+)
+from environments.game_environments.textworld_env.generation_utils import (
+    generate_textworld_game,
+)
+from environments.game_environments.textworld_env.textworld_registry import (
+    create_textworld_registry,
 )
 
 logger = logging.getLogger(__name__)
@@ -99,6 +98,18 @@ class TextWorldEnvConfig(BaseEnvConfig):
     )
     format_thinking_reward: float = Field(
         default=0.5, description="Reward for including a proper <thinking> block"
+    )
+    format_strict_structure: bool = Field(
+        default=True,
+        description="Enforce strict structure: exactly 1 think, 1 memory, 1 tool_call in order",
+    )
+    format_wrong_order_penalty: float = Field(
+        default=0.5,
+        description="Penalty multiplier for blocks in wrong order (0.5 = 50% penalty)",
+    )
+    format_extra_blocks_penalty: float = Field(
+        default=0.2,
+        description="Penalty for each extra block beyond the expected count",
     )
 
     # Token length penalty configuration
@@ -709,7 +720,12 @@ class TextWorldEnv(BaseEnv):
         return action_history
 
     def _calculate_format_reward(self, response_text: str) -> float:
-        """Calculate format reward based on presence of required blocks.
+        """Calculate format reward based on strict adherence to required structure.
+
+        Expected structure (in exact order):
+        1. Exactly one <think>...</think> block with content
+        2. Exactly one <memory>...</memory> block with content
+        3. Exactly one <tool_call>...</tool_call> block with valid JSON
 
         Args:
             response_text: The full response text from the agent
@@ -720,29 +736,103 @@ class TextWorldEnv(BaseEnv):
         if not self.config.format_reward_enabled:
             return 0.0
 
-        format_score = 0.0
+        # Parse the response into structured components
+        structure_valid, structure_score = self._validate_response_structure(
+            response_text
+        )
 
-        # Check for <thinking> block
-        if "<think>" in response_text and "</think>" in response_text:
-            # Verify it's not empty
-            start_idx = response_text.find("<think>")
-            end_idx = response_text.find("</think>", start_idx)
-            if end_idx > start_idx:
-                thinking_content = response_text[start_idx + 7 : end_idx].strip()
-                if thinking_content:  # Non-empty thinking block
-                    format_score += self.config.format_thinking_reward
+        if not structure_valid:
+            return 0.0  # Completely malformed structure gets no reward
 
-        # Check for <memory> block
-        if "<memory>" in response_text and "</memory>" in response_text:
-            # Verify it's not empty
-            start_idx = response_text.find("<memory>")
-            end_idx = response_text.find("</memory>", start_idx)
-            if end_idx > start_idx:
-                memory_content = response_text[start_idx + 8 : end_idx].strip()
-                if memory_content:  # Non-empty memory block
-                    format_score += self.config.format_memory_reward
+        return structure_score
 
-        return format_score
+    def _validate_response_structure(self, response_text: str) -> Tuple[bool, float]:
+        """Validate the exact structure of the response.
+
+        Returns:
+            Tuple of (is_valid, partial_score)
+        """
+        import re
+
+        # Find all think blocks
+        think_pattern = r"<think>(.*?)</think>"
+        think_matches = re.findall(think_pattern, response_text, re.DOTALL)
+
+        # Find all memory blocks
+        memory_pattern = r"<memory>(.*?)</memory>"
+        memory_matches = re.findall(memory_pattern, response_text, re.DOTALL)
+
+        # Find all tool_call blocks
+        tool_call_pattern = r"<tool_call>(.*?)</tool_call>"
+        tool_call_matches = re.findall(tool_call_pattern, response_text, re.DOTALL)
+
+        # Check exact counts
+        has_exactly_one_think = len(think_matches) == 1 and think_matches[0].strip()
+        has_exactly_one_memory = len(memory_matches) == 1 and memory_matches[0].strip()
+        has_exactly_one_tool_call = (
+            len(tool_call_matches) == 1 and tool_call_matches[0].strip()
+        )
+
+        # Check ordering by finding positions
+        think_pos = response_text.find("<think>")
+        memory_pos = response_text.find("<memory>")
+        tool_call_pos = response_text.find("<tool_call>")
+
+        # All blocks must be present
+        blocks_present = think_pos != -1 and memory_pos != -1 and tool_call_pos != -1
+        correct_order = blocks_present and think_pos < memory_pos < tool_call_pos
+
+        # Calculate partial score based on what's correct
+        score = 0.0
+        max_score = (
+            self.config.format_thinking_reward + self.config.format_memory_reward
+        )
+
+        # Award points for each correctly structured block
+        if has_exactly_one_think:
+            score += self.config.format_thinking_reward
+
+        if has_exactly_one_memory:
+            score += self.config.format_memory_reward
+
+        # Apply strict structure enforcement if enabled
+        if self.config.format_strict_structure:
+            # Bonus for correct ordering (only if all blocks present)
+            if (
+                correct_order
+                and has_exactly_one_think
+                and has_exactly_one_memory
+                and has_exactly_one_tool_call
+            ):
+                score = max_score  # Full score for perfect structure
+            elif not correct_order and score > 0:
+                score *= (
+                    self.config.format_wrong_order_penalty
+                )  # Configurable penalty for wrong order
+
+            # Check for extra blocks (penalty)
+            extra_blocks_penalty = 0.0
+            if len(think_matches) > 1:
+                extra_blocks_penalty += self.config.format_extra_blocks_penalty
+            if len(memory_matches) > 1:
+                extra_blocks_penalty += self.config.format_extra_blocks_penalty
+            if len(tool_call_matches) > 1:
+                extra_blocks_penalty += self.config.format_extra_blocks_penalty
+
+            score = max(0.0, score - extra_blocks_penalty)
+        else:
+            # Legacy behavior: just check for presence of blocks (less strict)
+            pass  # Score already calculated above
+
+        # Consider response valid if it has the basic structure, even if not perfect
+        is_valid = (
+            blocks_present
+            and len(think_matches) >= 1
+            and len(memory_matches) >= 1
+            and len(tool_call_matches) >= 1
+        )
+
+        return is_valid, score
 
     def _create_env_copy_with_replay(
         self, ep_state: TextWorldEpisodeState, agent: AtroposAgent
@@ -960,6 +1050,13 @@ class TextWorldEnv(BaseEnv):
             f"[DEBUG] _next_step called for episode {ep_state.episode_id}, turn {current_turn_num}"
         )
 
+        # Early termination check: if episode is already done, don't process
+        if ep_state.done:
+            logger.info(
+                f"[DEBUG] Episode {ep_state.episode_id} - Episode already marked as done, skipping step"
+            )
+            return None, True
+
         # 1. Get current observation
         if current_turn_num == 0:
             current_observation = ep_state.initial_formatted_obs
@@ -1011,6 +1108,25 @@ class TextWorldEnv(BaseEnv):
             print(f"\n=== Alternative {i} Full Response ===")
             print(response_text)
             print("=== End Response ===\n")
+
+            # Validate structure before parsing
+            structure_valid, structure_score = self._validate_response_structure(
+                response_text
+            )
+            if not structure_valid:
+                logger.warning(
+                    f"[Episode: {ep_state.episode_id}] Alternative {i} has invalid structure. "
+                    f"Structure score: {structure_score:.3f}"
+                )
+
+            # Check for multiple tool calls specifically
+            tool_call_count = response_text.count("<tool_call>")
+            if tool_call_count > 1:
+                logger.warning(
+                    f"[Episode: {ep_state.episode_id}] Alternative {i} has {tool_call_count} tool calls! "
+                    f"This violates the expected structure of exactly 1 tool call."
+                )
+
             action, prediction = self._parse_action_with_prediction(response_text)
             candidates.append((action, prediction, response_text))
 
@@ -1062,6 +1178,21 @@ class TextWorldEnv(BaseEnv):
         if done:
             ep_state.won = info.get("won", False)
             ep_state.lost = info.get("lost", False)
+            logger.info(
+                f"[Episode: {ep_state.episode_id}] Game completed on turn {current_turn_num + 1}. "
+                f"Won: {ep_state.won}, Lost: {ep_state.lost}, Score: {ep_state.last_score}"
+            )
+
+        # Additional check: if the best evaluation shows done, we should also be done
+        # This handles cases where the TextWorld environment might not properly report done=True
+        if best_eval.get("done", False) and not ep_state.done:
+            logger.info(
+                f"[Episode: {ep_state.episode_id}] Evaluation environment indicates done=True, "
+                f"but main environment doesn't. Forcing episode termination."
+            )
+            ep_state.done = True
+            ep_state.won = best_eval.get("info", {}).get("won", False)
+            ep_state.lost = best_eval.get("info", {}).get("lost", False)
 
         # 9. Prepare training data
         sg_tokens = []
