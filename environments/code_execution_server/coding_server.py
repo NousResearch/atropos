@@ -57,7 +57,7 @@ FORMATTING_WITHOUT_STARTER_CODE = (
 
 lock = asyncio.Lock()
 lock2 = asyncio.Lock()
-async_semaphore = asyncio.Semaphore(100)
+async_semaphore = asyncio.Semaphore(50)
 limiter = AsyncLimiter(1000, 5)
 
 """
@@ -381,85 +381,121 @@ class CodingEnv(BaseEnv):
 
         return scored_data, []
 
-    async def evaluate(self, *args, **kwargs):
-        """
-        Evaluate the environment, this is called every steps_per_eval steps
+    async def rollout_and_score_eval(self, test_item):
+        """Rollout and score evaluation with detailed sample data collection."""
+        scored_data, _ = await self.collect_trajectories(test_item)
 
-        Included here is an example on how to use eval workers to run a task.
+        scores = scored_data["scores"]
+        num_correct = sum(1 for x in scores if math.isclose(x, 1.0))
+        total_attempts = len(scores)
 
-        You may however do whatever you want in this method.
-
-        :param args:
-        :param kwargs:
-        :return: None.
-        """
-        print("EVALUATION")
-        test_data = self.test  # RANDOMLY GENERATE SOME TEST DATA
-
-        sema = asyncio.Semaphore(self.config.max_eval_workers)
-
-        all_total, all_correct = [], []
-        easy_total, easy_correct = [], []
-        medium_total, medium_correct = [], []
-        hard_total, hard_correct = [], []
-
-        temp_completion_lengths = []
-
-        async def process_func(curr_step):
-            async with sema:
-                item = test_data[curr_step]
-                scored_data, _ = await self.collect_trajectories(item)
-
-                scores = scored_data["scores"]
-                num_correct = sum(1 for x in scores if math.isclose(x, 1.0))
-
-                async with self.lock2:
-                    temp_completion_lengths.append(
-                        sum([len(x) for x in scored_data["tokens"]])
-                        / len(scored_data["tokens"])
-                    )
-                    all_total.append(len(scores))
-                    all_correct.append(num_correct)
-                    if item["difficulty"] == "easy":
-                        easy_total.append(len(scores))
-                        easy_correct.append(num_correct)
-                    elif item["difficulty"] == "medium":
-                        medium_total.append(len(scores))
-                        medium_correct.append(num_correct)
-                    elif item["difficulty"] == "hard":
-                        hard_total.append(len(scores))
-                        hard_correct.append(num_correct)
-
-        tasks = [asyncio.create_task(process_func(i)) for i in range(len(test_data))]
-        await asyncio.gather(*tasks)
-
+        # Calculate pass@1 estimate for this single item
         def estimator(n: int, c: int, k: int) -> float:
             """Calculates 1 - comb(n - c, k) / comb(n, k)."""
             if n - c < k:
                 return 1.0
             return 1.0 - np.prod(1.0 - k / np.arange(n - c + 1, n + 1))
 
-        all_pass_1 = sum(
-            [estimator(n, c, 1) for n, c in zip(all_total, all_correct)]
-        ) / len(all_total)
-        easy_pass_1 = sum(
-            [estimator(n, c, 1) for n, c in zip(easy_total, easy_correct)]
-        ) / (len(easy_total) + 1e-6)
-        medium_pass_1 = sum(
-            [estimator(n, c, 1) for n, c in zip(medium_total, medium_correct)]
-        ) / (len(medium_total) + 1e-6)
-        hard_pass_1 = sum(
-            [estimator(n, c, 1) for n, c in zip(hard_total, hard_correct)]
-        ) / (len(hard_total) + 1e-6)
+        pass_at_1 = estimator(total_attempts, num_correct, 1)
 
-        avg_comp_len = sum(temp_completion_lengths) / len(temp_completion_lengths)
+        # Create sample data
+        sample = {
+            "problem_description": test_item.get("problem_description", ""),
+            "difficulty": test_item.get("difficulty", "unknown"),
+            "total_attempts": total_attempts,
+            "correct_attempts": num_correct,
+            "pass_at_1": pass_at_1,
+            "scores": scores,
+            "avg_completion_length": (
+                sum([len(x) for x in scored_data["tokens"]])
+                / len(scored_data["tokens"])
+                if scored_data["tokens"]
+                else 0
+            ),
+        }
 
+        return {"score": pass_at_1, "sample": sample}
+
+    async def evaluate(self, *args, **kwargs):
+        """
+        Evaluate the environment, this is called every steps_per_eval steps
+        """
+        print("EVALUATION")
+        start_time = time.time()
+        test_data = self.test
+
+        # Use rollout_and_score_eval for each test item with semaphore
+        async def eval_with_semaphore(item):
+            async with async_semaphore:
+                return await self.rollout_and_score_eval(item)
+
+        eval_tasks = []
+        for item in test_data:
+            eval_tasks.append(eval_with_semaphore(item))
+
+        results = await asyncio.gather(*eval_tasks)
+
+        # Extract scores and samples
+        samples = [result["sample"] for result in results]
+
+        # Aggregate metrics by difficulty
+        all_scores, easy_scores, medium_scores, hard_scores = [], [], [], []
+        for result in results:
+            sample = result["sample"]
+            score = result["score"]
+            all_scores.append(score)
+
+            difficulty = sample["difficulty"]
+            if difficulty == "easy":
+                easy_scores.append(score)
+            elif difficulty == "medium":
+                medium_scores.append(score)
+            elif difficulty == "hard":
+                hard_scores.append(score)
+
+        # Calculate average pass@1 for each difficulty
+        all_pass_1 = sum(all_scores) / len(all_scores) if all_scores else 0.0
+        easy_pass_1 = sum(easy_scores) / len(easy_scores) if easy_scores else 0.0
+        medium_pass_1 = (
+            sum(medium_scores) / len(medium_scores) if medium_scores else 0.0
+        )
+        hard_pass_1 = sum(hard_scores) / len(hard_scores) if hard_scores else 0.0
+
+        # Calculate average completion length
+        avg_comp_len = (
+            sum(sample["avg_completion_length"] for sample in samples) / len(samples)
+            if samples
+            else 0.0
+        )
+
+        end_time = time.time()
+
+        # Add to existing metrics for wandb
         self.eval_metrics.append(("eval/pass_1", all_pass_1))
         self.eval_metrics.append(("eval/easy_pass_1", easy_pass_1))
         self.eval_metrics.append(("eval/medium_pass_1", medium_pass_1))
         self.eval_metrics.append(("eval/hard_pass_1", hard_pass_1))
         self.eval_metrics.append(("eval/completion_length", avg_comp_len))
         print("STATS", self.eval_metrics)
+
+        # Log evaluation results
+        eval_metrics = {
+            "eval/pass_1": all_pass_1,
+            "eval/easy_pass_1": easy_pass_1,
+            "eval/medium_pass_1": medium_pass_1,
+            "eval/hard_pass_1": hard_pass_1,
+            "eval/completion_length": avg_comp_len,
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "max_tokens": self.config.max_token_length,
+            },
+        )
 
         return
 
