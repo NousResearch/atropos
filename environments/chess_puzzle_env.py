@@ -352,6 +352,7 @@ class ChessPuzzlesEnv(BaseEnv):
 
         # Return None if all scores are the same (no learning signal)
         if all(scores["scores"][0] == score for score in scores["scores"]):
+            print("no learning signal")
             return None
 
         return scores
