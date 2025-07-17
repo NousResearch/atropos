@@ -1,0 +1,78 @@
+# Configuration for TextWorld rejection sampling data generation
+env_name: "TextWorld"
+task_name: "textworld_reasoning"
+
+# Process mode settings
+do_send_to_api: false
+ensure_scores_are_not_same: false
+include_messages: true
+data_path_to_save_groups: "data/textworld_deephermes8b_dataset.jsonl"
+
+# Parallel processing settings
+use_parallel_processing: true
+max_num_workers: 4
+
+# Generation settings
+total_steps: 10000
+group_size: 16  # Number of alternative responses per game state
+num_rollouts_per_group_for_logging: 16
+wandb_name: "textworld-datagen"
+
+# TextWorld specific settings
+max_steps: 50  # Max steps per episode
+max_trajectory_tokens: 24576
+
+# Game generation settings
+use_registry: true
+registry_mode: "challenge"  # Use only pre-built challenges
+registry_generation_ratio: 0.0  # 0% generated, 100% pre-built challenges
+registry_difficulty: "random"  # Will vary between easy, medium, hard, expert
+
+# VR-CLI settings for outcome prediction scoring
+vrcli_enabled: true
+vrcli_weight: 0.3  # Weight for VR-CLI score (prediction accuracy)
+vrcli_discount_factor: 0.99  # For credit assignment in sparse rewards
+
+# LaTRo settings for action quality scoring (disabled for now)
+latro_enabled: false
+latro_weight: 0.0  # Weight for LaTRo score (action confidence)
+
+# Environment reward weight (implicit: 1 - vrcli_weight - latro_weight = 0.7)
+
+# Token length penalty settings
+token_length_penalty_enabled: true
+token_length_penalty_weight: 0.1  # Up to 10% adjustment
+token_length_baseline: 500  # Baseline token count (no penalty/bonus)
+token_length_penalty_scale: 0.0002  # Penalty per token over baseline
+
+# Memory system settings
+atropos_agent_config:
+  enable_memory: true
+  memory_top_k: 3
+  max_tokens_for_memory_summary: 150
+  temperature: 0.7
+  max_tokens_per_completion: 1024
+
+# Thinking block summarization (for managing long responses)
+enable_policy_thinking_summarization: true
+max_policy_thinking_summary_tokens: 128
+
+# Model configuration (will be overridden by SLURM script)
+default_server_config:
+  api_server_type: "openai"
+  model_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+  base_url: "http://localhost:30000/v1"
+  api_key: "dummy"
+
+# Use the same model for policy agent
+policy_agent_server_config:
+  api_server_type: "openai"
+  model_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+  base_url: "http://localhost:30000/v1"
+  api_key: "dummy"
+
+# Debug settings
+debug_mode: true
+
+# Logging
+use_wandb: false  # For data generation, we don't need WandB
