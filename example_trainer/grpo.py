@@ -536,7 +536,7 @@ if __name__ == "__main__":
     # Example: Create a config and run training
     # Replace "gpt2" with your desired model
     training_config = TrainingConfig(
-        model_name="meta-llama/Llama-3.1-8B-Instruct",
+        model_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
         training_steps=20,  # Use steps
         vllm_restart_interval=3,  # Example interval
         use_wandb=True,  # Set to True to enable logging
