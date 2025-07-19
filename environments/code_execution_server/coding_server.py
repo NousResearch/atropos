@@ -471,11 +471,9 @@ class CodingEnv(BaseEnv):
                 "passed": passed,
                 "error_trace": error_trace,
                 "execution_output": execution_output,
-                "metadata": {
-                    "finish_reason": chat_completion.choices[0].finish_reason,
-                    "problem_type": test_item["problem_type"],
-                    "difficulty": test_item.get("difficulty", "unknown"),
-                },
+                "finish_reason": chat_completion.choices[0].finish_reason,
+                "problem_type": test_item["problem_type"],
+                "difficulty": test_item.get("difficulty", "unknown"),
             }
             sample_data.append(sample_entry)
 
@@ -512,10 +510,8 @@ class CodingEnv(BaseEnv):
                     else 0
                 ),
             },
-            "metadata": {
-                "starter_code": test_item.get("starter_code", ""),
-                "tests": self._subset_test_cases_for_logging(test_item["tests"]),
-            },
+            "starter_code": test_item.get("starter_code", ""),
+            "tests": self._subset_test_cases_for_logging(test_item["tests"]),
         }
 
         return {"score": pass_at_1, "group": group_entry, "samples": sample_data}
@@ -655,7 +651,6 @@ class CodingEnv(BaseEnv):
                 self.deq.append(i)
 
         rprint("NUM FILTERED EXAMPLES:", len(self.good_indices))
-        await self.evaluate()
 
     async def get_next_item(self) -> Item:
         """
