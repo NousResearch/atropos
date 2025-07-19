@@ -650,6 +650,7 @@ class BaseEnv(ABC):
         end_time: Optional[float] = None,
         generation_parameters: Optional[Dict] = None,
         samples: Optional[List[Dict]] = None,
+        groups: Optional[List[Dict]] = None,
         verbose: bool = True,
     ):
         """
@@ -663,6 +664,7 @@ class BaseEnv(ABC):
             end_time: End time of evaluation (unix timestamp)
             generation_parameters: Dictionary of generation parameters used
             samples: List of sample dictionaries to save to samples.jsonl
+            groups: List of group dictionaries to save to group.jsonl (for pass@k metrics)
             verbose: If True, print a markdown table of the metrics
         """
         if self.config.data_dir_to_save_evals is None:
@@ -744,6 +746,16 @@ class BaseEnv(ABC):
                 for sample in samples:
                     writer.write(sample)
             print(f"Evaluation samples saved to {samples_filepath}")
+
+        # Write groups to JSONL file if provided
+        if groups:
+            groups_filepath = os.path.join(
+                self.config.data_dir_to_save_evals, "group.jsonl"
+            )
+            with jsonlines.open(groups_filepath, "w") as writer:
+                for group in groups:
+                    writer.write(group)
+            print(f"Evaluation groups saved to {groups_filepath}")
 
     @retry(
         stop=stop_after_attempt(3),

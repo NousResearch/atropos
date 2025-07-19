@@ -26,23 +26,7 @@ from atroposlib.envs.base import (
 from atroposlib.type_definitions import GameHistory, Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
-system_prompt = (
-    "You are a deep thinking AI, you may use extremely long chains of thought "
-    "to deeply consider the problem and deliberate with yourself via systematic "
-    "reasoning processes to help come to a correct solution prior to answering. "
-    "You should enclose your thoughts and internal monologue inside <think> </think> "
-    "tags, and then provide your solution or response to the problem.\n\n"
-)
-system_prompt = ""
-
-# system_prompt += """You are allocated a maximum of 16000 tokens, please strive to use less. You must submit \
-# all code outputs in python, enclosed in triple backticks and specifying the language, like: \
-# ```python\nYOUR CODE HERE\n```."""
-
-system_prompt += (
-    "You are an expert Python programmer. You will be given a question (problem specification) "
-    "and will generate a correct Python program that matches the specification and passes all tests."
-)
+# Old system prompt definitions removed - now handled via --system_prompt parameter
 
 FORMATTING_MESSAGE_WITH_STARTER_CODE = (
     "You will use the following starter code to write the solution to the "
@@ -149,21 +133,32 @@ class CodeConfig(BaseEnvConfig):
     dataset_name: str = Field(
         "normal", description="dataset name, should be normal or deepmind"
     )
+    max_test_cases_to_log: Optional[int] = Field(
+        None,
+        description="Maximum number of test cases to include in logged output "
+        "(for storage). All test cases are still evaluated.",
+    )
+    system_prompt: Optional[str] = Field(
+        None,
+        description="Custom system prompt. If None, no system message is used.",
+    )
 
 
 class CodingEnv(BaseEnv):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         self.id = 0
         self.complete = []
         self.total = []
         self.complement = []
         self.eval_metrics = []
-
         self.blacklist = []
         self.deq = deque()
         self.next_heap = []
+
+    def get_system_prompt(self) -> Optional[str]:
+        """Get the custom system prompt or None if no system message should be used."""
+        return self.config.system_prompt
 
     @classmethod
     def config_init(cls) -> Tuple[CodeConfig, List[APIServerConfig]]:
@@ -183,6 +178,7 @@ class CodingEnv(BaseEnv):
             min_items_sent_before_logging=1,
             wandb_name="coding_rl",
             dataset_name="normal",
+            max_test_cases_to_log=5,
         )
         server_configs = [
             APIServerConfig(
@@ -201,19 +197,23 @@ class CodingEnv(BaseEnv):
     ) -> Tuple[GameHistory | None, List[Item]]:
         print("COLLECTING TRAJECTORIES")
         train_or_valid = item["split"]
-        system_msg = {"role": "system", "content": system_prompt}
         user_msg = {
             "role": "user",
             "content": get_prompt(
                 item["problem"], item["problem_type"], item["starter_code"]
             ),
         }
-        # print(system_msg)
-        # print(user_msg)
 
-        prompt_tokens = tokenize_for_trainer(
-            self.tokenizer, chat=[system_msg, user_msg]
-        )
+        # Build chat messages, only include system message if provided
+        chat_messages = []
+        system_prompt_content = self.get_system_prompt()
+        if system_prompt_content is not None:
+            chat_messages.append({"role": "system", "content": system_prompt_content})
+        chat_messages.append(user_msg)
+
+        # print(chat_messages)
+
+        prompt_tokens = tokenize_for_trainer(self.tokenizer, chat=chat_messages)
         buffer = 32
 
         async def generate_and_score(index: int) -> Tuple[List[int], List[int], float]:
@@ -224,7 +224,7 @@ class CodingEnv(BaseEnv):
             )
 
             chat_completion = await self.server.chat_completion(
-                messages=[system_msg, user_msg],
+                messages=chat_messages,
                 n=1,  # CHANGE
                 max_tokens=max_tokens,
             )
@@ -266,7 +266,7 @@ class CodingEnv(BaseEnv):
                 first_tests["fn_name"] = fn_name
 
             # Step 2: Prepare messages and score input
-            messages = [system_msg, user_msg, assistant_msg]
+            messages = chat_messages + [assistant_msg]
             score_input = [
                 (
                     messages,
@@ -381,15 +381,155 @@ class CodingEnv(BaseEnv):
 
         return scored_data, []
 
+    def _subset_test_cases_for_logging(self, test_cases):
+        """Subset test cases for logging to reduce storage size, selecting shortest cases."""
+        if self.config.max_test_cases_to_log is None:
+            return test_cases
+
+        if (
+            isinstance(test_cases, dict)
+            and "input" in test_cases
+            and "output" in test_cases
+        ):
+            # Handle the case where test_cases has input/output lists
+            if isinstance(test_cases["input"], list) and isinstance(
+                test_cases["output"], list
+            ):
+                max_cases = min(
+                    self.config.max_test_cases_to_log, len(test_cases["input"])
+                )
+
+                # Create pairs of (input, output) with their combined length
+                case_pairs = list(zip(test_cases["input"], test_cases["output"]))
+
+                # Sort by combined string length (input + output) to get shortest cases
+                case_pairs_with_length = [
+                    (inp, out, len(str(inp)) + len(str(out))) for inp, out in case_pairs
+                ]
+                case_pairs_with_length.sort(
+                    key=lambda x: x[2]
+                )  # Sort by combined length
+
+                # Take the shortest cases
+                shortest_cases = case_pairs_with_length[:max_cases]
+
+                return {
+                    "input": [inp for inp, _, _ in shortest_cases],
+                    "output": [out for _, out, _ in shortest_cases],
+                    "fn_name": test_cases.get("fn_name", "none"),
+                    "_original_count": len(test_cases["input"]),
+                    "_logged_count": max_cases,
+                    "_selection_method": "shortest_by_length",
+                }
+
+        return test_cases
+
+    def _truncate_text_for_logging(self, text, max_length=1000):
+        """Truncate long text fields to reduce storage size."""
+        if isinstance(text, str) and len(text) > max_length:
+            return text[:max_length] + "...[TRUNCATED]"
+        return text
+
     async def rollout_and_score_eval(self, test_item):
-        """Rollout and score evaluation with detailed sample data collection."""
-        scored_data, _ = await self.collect_trajectories(test_item)
+        """Rollout and score evaluation with detailed sample and group data collection."""
+        # Store original collect_trajectories method to capture detailed sample data
+        user_msg = {
+            "role": "user",
+            "content": get_prompt(
+                test_item["problem"],
+                test_item["problem_type"],
+                test_item["starter_code"],
+            ),
+        }
 
-        scores = scored_data["scores"]
-        num_correct = sum(1 for x in scores if math.isclose(x, 1.0))
-        total_attempts = len(scores)
+        # Build chat messages, only include system message if provided
+        chat_messages = []
+        system_prompt_content = self.get_system_prompt()
+        if system_prompt_content is not None:
+            chat_messages.append({"role": "system", "content": system_prompt_content})
+        chat_messages.append(user_msg)
 
-        # Calculate pass@1 estimate for this single item
+        # Generate multiple samples for evaluation
+        num_samples = 16  # Same as in collect_trajectories for eval
+        sample_data = []
+        response_texts = []
+
+        from tqdm import tqdm
+
+        for i in tqdm(
+            range(num_samples),
+            desc=f"Generating samples for problem {test_item['idx']}",
+            leave=False,
+        ):
+            # Generate completion
+            max_tokens = self.config.max_token_length - 1000  # Buffer
+            chat_completion = await self.server.chat_completion(
+                messages=chat_messages,
+                n=1,
+                max_tokens=max_tokens,
+            )
+            content = chat_completion.choices[0].message.content
+            assistant_msg = {"role": "assistant", "content": content}
+            messages = chat_messages + [assistant_msg]
+
+            # Extract code and test
+            code = self.extract_python_code_blocks(content)
+            code_text = code[-1] if code else None
+            response_texts.append(content)
+
+            # Score the sample
+            if code_text is None:
+                passed = False
+                error_trace = {"error_message": "No code found in response"}
+                execution_output = ""
+            else:
+                try:
+                    # Use the same test setup as collect_trajectories
+                    if "fn_name" not in test_item:
+                        fn_name = "none"
+                    else:
+                        fn_name = test_item["fn_name"]
+
+                    test_cases = {
+                        "tests": {
+                            "input": test_item["tests"]["input"],
+                            "output": test_item["tests"]["output"],
+                            "fn_name": fn_name,
+                        }
+                    }
+
+                    res, metadata = await run_test.remote.aio(test_cases, code_text)
+                    passed = set(res) == {True}
+                    error_trace = metadata
+                    execution_output = str(res)
+
+                except Exception as e:
+                    passed = False
+                    error_trace = {"error": str(e)}
+                    execution_output = ""
+
+            # Create detailed sample entry
+            sample_entry = {
+                "problem_id": test_item["idx"],
+                "messages": messages,
+                "response_text": content,
+                "code_text": code_text,
+                "passed": passed,
+                "error_trace": error_trace,
+                "execution_output": execution_output,
+                "metadata": {
+                    "finish_reason": chat_completion.choices[0].finish_reason,
+                    "problem_type": test_item["problem_type"],
+                    "difficulty": test_item.get("difficulty", "unknown"),
+                },
+            }
+            sample_data.append(sample_entry)
+
+        # Calculate metrics
+        num_correct = sum(1 for s in sample_data if s["passed"])
+        total_attempts = len(sample_data)
+
+        # Calculate pass@1 estimate
         def estimator(n: int, c: int, k: int) -> float:
             """Calculates 1 - comb(n - c, k) / comb(n, k)."""
             if n - c < k:
@@ -398,23 +538,33 @@ class CodingEnv(BaseEnv):
 
         pass_at_1 = estimator(total_attempts, num_correct, 1)
 
-        # Create sample data
-        sample = {
-            "problem_description": test_item.get("problem_description", ""),
+        # Create group data entry
+        group_entry = {
+            "problem_id": test_item["idx"],
+            "problem": test_item["problem"],
             "difficulty": test_item.get("difficulty", "unknown"),
-            "total_attempts": total_attempts,
-            "correct_attempts": num_correct,
-            "pass_at_1": pass_at_1,
-            "scores": scores,
-            "avg_completion_length": (
-                sum([len(x) for x in scored_data["tokens"]])
-                / len(scored_data["tokens"])
-                if scored_data["tokens"]
-                else 0
-            ),
+            "problem_type": test_item["problem_type"],
+            "response_texts": response_texts,
+            "scores": [
+                1 if s["passed"] else 0 for s in sample_data
+            ],  # Parallel list of 0/1 scores
+            "metrics": {
+                "pass_at_1": pass_at_1,
+                "total_samples": total_attempts,
+                "correct_samples": num_correct,
+                "avg_completion_length": (
+                    sum(len(s["response_text"]) for s in sample_data) / len(sample_data)
+                    if sample_data
+                    else 0
+                ),
+            },
+            "metadata": {
+                "starter_code": test_item.get("starter_code", ""),
+                "tests": self._subset_test_cases_for_logging(test_item["tests"]),
+            },
         }
 
-        return {"score": pass_at_1, "sample": sample}
+        return {"score": pass_at_1, "group": group_entry, "samples": sample_data}
 
     async def evaluate(self, *args, **kwargs):
         """
@@ -433,19 +583,23 @@ class CodingEnv(BaseEnv):
         for item in test_data:
             eval_tasks.append(eval_with_semaphore(item))
 
-        results = await asyncio.gather(*eval_tasks)
+        from tqdm.asyncio import tqdm_asyncio
 
-        # Extract scores and samples
-        samples = [result["sample"] for result in results]
+        results = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating test cases")
+
+        # Extract groups and samples
+        groups = [result["group"] for result in results]
+        samples = []
+        for result in results:
+            samples.extend(result["samples"])
 
         # Aggregate metrics by difficulty
         all_scores, easy_scores, medium_scores, hard_scores = [], [], [], []
         for result in results:
-            sample = result["sample"]
             score = result["score"]
             all_scores.append(score)
 
-            difficulty = sample["difficulty"]
+            difficulty = result["group"]["difficulty"]
             if difficulty == "easy":
                 easy_scores.append(score)
             elif difficulty == "medium":
@@ -463,8 +617,9 @@ class CodingEnv(BaseEnv):
 
         # Calculate average completion length
         avg_comp_len = (
-            sum(sample["avg_completion_length"] for sample in samples) / len(samples)
-            if samples
+            sum(group["metrics"]["avg_completion_length"] for group in groups)
+            / len(groups)
+            if groups
             else 0.0
         )
 
@@ -490,6 +645,7 @@ class CodingEnv(BaseEnv):
         await self.evaluate_log(
             metrics=eval_metrics,
             samples=samples,
+            groups=groups,
             start_time=start_time,
             end_time=end_time,
             generation_parameters={
@@ -519,6 +675,8 @@ class CodingEnv(BaseEnv):
             )  # CHANGE
         test = load_dataset("NousResearch/lcb_test", split="test")
         self.test = []
+
+        # Load all test cases for evaluation (no sampling)
         for problem in test:
             self.test.append(problem)
             self.test[-1]["idx"] = len(self.test) - 1
@@ -834,5 +992,4 @@ class CodingEnv(BaseEnv):
 
 
 if __name__ == "__main__":
-    print(system_prompt)
     CodingEnv.cli()
