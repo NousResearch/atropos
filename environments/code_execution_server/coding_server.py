@@ -44,20 +44,8 @@ lock2 = asyncio.Lock()
 async_semaphore = asyncio.Semaphore(50)
 limiter = AsyncLimiter(1000, 5)
 
-"""
-def get_prompt(question, problem_type):
-    prompt = f"### Question:\n{question}\n\n"
-    if problem_type == "stdin_stdout":
-        prompt += f"### Format: {FORMATTING_WITHOUT_STARTER_CODE}\n"
-        prompt += "```python\n# YOUR CODE HERE\n```\n\n"
-    prompt += "### Answer: (use the provided format with backticks)\n\n"
-    return prompt
-"""
-
 
 def get_prompt(question, problem_type, starter_code=None):
-    # prompt = ("You will be given a question (problem specification) and will generate a correct Python program "
-    #          "that matches the specification and passes all tests.\n\n")
     prompt = ""
     prompt += f"Question: {question}\n\n"
     if problem_type == "func":
@@ -75,16 +63,10 @@ code_exec = modal.Function.from_name("code_exec", "execute_code")
 run_test = modal.Function.from_name("test-lcb-code", "run_test")
 
 
-# system_prompt = """You must submit all code outputs in python, enclosed in triple backticks and \
-# specifying the language, like: ```python\nYOUR CODE HERE\n```"""
 async def submit_code(code, test_input, language="python"):
     payload = {"code": code, "input": test_input}
-    # payload = Item(**payload)
     async with async_semaphore, limiter:
-        # async with client.post(url, json=payload) as response:
-        # response = await client.post(url, json=payload)
         response_json = await code_exec.remote.aio(payload)
-        # response_json = response.json()
         return (
             response_json["output"],
             response_json["error"],
@@ -105,13 +87,9 @@ aio_timeout = aiohttp.ClientTimeout(
 
 
 async def get_results(code, answer):
-    # async with httpx.AsyncClient(timeout=httpx_timeout, limits=httpx_limits) as client:
-    # async with aiohttp.ClientSession(timeout=aio_timeout) as client:
-    tasks = []
     task_args = []
     for i in range(len(answer)):
         task_args.append({"code": code, "input": answer[i]})
-        tasks.append(submit_code(code, answer[i]))
 
     results = []
     async for response_json in code_exec.map.aio(task_args):
@@ -124,9 +102,6 @@ async def get_results(code, answer):
         )
 
     return results
-
-    results = await asyncio.gather(*tasks)
-    return [result for result in results]
 
 
 class CodeConfig(BaseEnvConfig):
@@ -211,8 +186,6 @@ class CodingEnv(BaseEnv):
             chat_messages.append({"role": "system", "content": system_prompt_content})
         chat_messages.append(user_msg)
 
-        # print(chat_messages)
-
         prompt_tokens = tokenize_for_trainer(self.tokenizer, chat=chat_messages)
         buffer = 32
 
@@ -225,7 +198,7 @@ class CodingEnv(BaseEnv):
 
             chat_completion = await self.server.chat_completion(
                 messages=chat_messages,
-                n=1,  # CHANGE
+                n=1,
                 max_tokens=max_tokens,
             )
             content = chat_completion.choices[0].message.content
@@ -325,7 +298,6 @@ class CodingEnv(BaseEnv):
             tasks = [generate_and_score(i) for i in range(self.config.group_size)]
         else:
             tasks = [generate_and_score(i) for i in range(16)]
-        # tasks = [generate_and_score(i) for i in range(1)] ### CHANGE
         results = await asyncio.gather(*tasks)
         end_time = time.time()
 
@@ -346,10 +318,6 @@ class CodingEnv(BaseEnv):
         print("GEN LENGTHS: ", lengths)
         print("SCORES ", scored_data["scores"])
         print("MISSING ", self.complement)
-        # for error, code in zip(errors, codes):
-        #    print("ERROR:", error)
-        # if 'output' in error and error['output'] == '':
-        #    print(code)
         print(f"Elapsed time: {dt:.2f} seconds")
 
         async with self.lock_heap:
@@ -364,20 +332,6 @@ class CodingEnv(BaseEnv):
             with open("data_dump.txt", "a") as f:
                 mp = {"cur_id": cur_id, "num_correct": heap_sum}
                 f.write(json.dumps(mp) + "\n")
-
-        """
-        async with self.lock2:
-            if all([scored_data["scores"][0] == score for score in scored_data["scores"]]):
-                if round(scored_data["scores"][0]) == 1:
-                    with open("solved_2.txt", "a") as f:
-                        f.write(f"{cur_id}\n")
-                elif round(scored_data["scores"][0]) == -1:
-                    with open("unsolved_2.txt", "a") as f: ### CHANGE
-                        f.write(f"{cur_id}\n")
-            else:
-                with open("mixed_2.txt", "a") as f: ### CHANGE
-                    f.write(f"{cur_id}\n")
-        """
 
         return scored_data, []
 
@@ -668,11 +622,9 @@ class CodingEnv(BaseEnv):
     async def setup(self):
         """Setup the environment"""
         if self.config.dataset_name == "deepmind":
-            self.train = load_dataset("deepmind/code_contests", split="train")  # CHANGE
+            self.train = load_dataset("deepmind/code_contests", split="train")
         else:
-            self.train = load_dataset(
-                "NousResearch/RL_Agentica_STDIN", split="train"
-            )  # CHANGE
+            self.train = load_dataset("NousResearch/RL_Agentica_STDIN", split="train")
         test = load_dataset("NousResearch/lcb_test", split="test")
         self.test = []
 
@@ -681,7 +633,7 @@ class CodingEnv(BaseEnv):
             self.test.append(problem)
             self.test[-1]["idx"] = len(self.test) - 1
             self.test[-1]["split"] = "test"
-        self.iter = 0  # CHANGE
+        self.iter = 0
         self.lock = asyncio.Lock()
         self.lock2 = asyncio.Lock()
         self.lock_heap = asyncio.Lock()
@@ -703,7 +655,7 @@ class CodingEnv(BaseEnv):
                 self.deq.append(i)
 
         rprint("NUM FILTERED EXAMPLES:", len(self.good_indices))
-        await self.evaluate()  # CHANGE
+        await self.evaluate()
 
     async def get_next_item(self) -> Item:
         """
@@ -715,8 +667,6 @@ class CodingEnv(BaseEnv):
                     self.deq.append(heapq.heappop(self.next_heap)[1])
             cur_idx = self.deq.popleft()
             next_item = self.train[cur_idx]
-            # next_item = self.train[(self.good_indices[self.iter]) % len(self.train)]
-            # self.iter += 1
         next_item["idx"] = cur_idx
         next_item["split"] = "train"
         if self.config.dataset_name == "deepmind":
@@ -749,7 +699,6 @@ class CodingEnv(BaseEnv):
         scores["scores"] = list()
         scores["overrides"] = list()
 
-        results = []
         codes = []
         lengths = []
         errors = []
@@ -787,31 +736,6 @@ class CodingEnv(BaseEnv):
             else:
                 try:
                     res, metadata = await run_test.remote.aio(test_cases, code)
-                    """
-                    fn_name = test_cases["tests"]["fn_name"]
-                    inputs = test_cases["tests"]["input"]
-                    outputs = test_cases["tests"]["output"]
-                    starmap_entries = [
-                        ({"tests": {"input": [inp], "output": [out], "fn_name": fn_name}}, code)
-                        for inp, out in zip(inputs, outputs)
-                    ]
-                    #tasks = [run_test.remote.aio(entry) for entry in starmap_entries]
-                    #res = await asyncio.gather(*tasks)
-
-                    res = []
-                    metadata = []
-                    try:
-                        async for x, y in run_test.starmap.aio(starmap_entries, return_exceptions=True):
-                            res.extend(x)
-                            metadata.append(y)
-                    except Exception as e:
-                        metadata.append(e)
-                        print(e)
-                        print(code)
-                        print("segfault", cur_id)
-                    """
-                    # print(res)
-                    # print(metadata)
 
                 except modal.exception.RemoteError:
                     res = [False]
@@ -829,8 +753,6 @@ class CodingEnv(BaseEnv):
                     metadata = {"error": "segmentation fault"}
                     rprint("NON SEGFAULT")
                     rprint("FAULT", f)
-                # print(res)
-                # print(metadata)
                 for x in res:
                     if not isinstance(x, (int, bool)):
                         print("WARNING")
@@ -843,152 +765,6 @@ class CodingEnv(BaseEnv):
                 errors.append(metadata)
 
         return scores, (codes[0], errors[0], lengths[0])
-        old_error = errors[0]
-        # print(old_error)
-        # print(type(old_error))
-        # print(errors[0])
-        old_score = scores
-        true_score = scores["scores"][0]
-
-        """
-        STOP _-------------
-        """
-        # print("Rollout group data", rollout_group_data)
-        assert len(rollout_group_data) == 1
-        cur_id = rollout_group_data[0][2]
-
-        scores = ScoredDataGroup()
-        scores["tokens"] = list()
-        scores["masks"] = list()
-        scores["scores"] = list()
-        scores["overrides"] = list()
-        # random.shuffle(rollout_group_data)
-        results = []
-        codes = []
-        lengths = []
-        errors = []
-        printing = []
-        for item in rollout_group_data:
-            scores["overrides"].append(dict())
-            scores["overrides"][-1]["set_advantage_to_zero"] = False
-            if item[3] == "length":
-                scores["overrides"][-1]["set_advantage_to_zero"] = True
-            else:
-                assert item[3] == "stop"
-            out_dict = tokenize_for_trainer(self.tokenizer, item[0], item[3])
-            tokens = out_dict["tokens"]
-            masks = out_dict["masks"]
-            lengths.append(len(tokens))
-            """
-            CALCULATE REWARD NOW
-            """
-            code = self.extract_python_code_blocks(item[0][-1]["content"])
-            if len(code) > 0:
-                code = code[-1]
-            else:
-                code = None
-            test_cases = item[1]["input"]
-            x = get_results(code, test_cases)
-            results.append(x)
-            codes.append(code)
-
-            # if len([1 for i in masks if i != -100]) < 10:
-            #    continue
-
-            scores["tokens"].append(tokens)
-            scores["masks"].append(masks)
-
-        results = await asyncio.gather(*results)
-        for x, item, code in zip(results, rollout_group_data, codes):
-            # output_cases = list(item[1][1]) + list(item[1][3])
-            output_cases = item[1]["output"]
-
-            """x = np.asarray(x)
-            ret_codes = x[:,2]
-            err = x[:,1]
-            x = x[:,0]"""
-            err = [x[i][1] for i in range(len(x))]
-            x = [x[i][0] for i in range(len(x))]
-
-            """
-            print("CODE:\n")
-            print(code)
-            for k in range(len(x)):
-                print("CASE")
-                print("INPUT", item[1]["input"][k])
-                print("Expected output\n", x[k])
-                print("output\n", output_cases[k])
-            """
-
-            """
-            for k in range(len(x)):
-                if ret_codes[k] == -8:
-                    print(code)
-                    print("INPUT: ", item[1]["input"][k])
-                    print("OUTPUT: ", x[k])
-                    sys.exit(0)
-            """
-            # if err[0]:
-            #    print("ERROR:", err[0])
-            errors.append(err[0])
-            assert len(x) == len(output_cases)
-            reward = True
-            for k in range(len(x)):
-                if x[k].strip() != output_cases[k].strip():
-                    reward = False
-                    break
-            # print("CODE ", cur_id, "\n", code, "\nREWARD\n", reward, "\n")
-            printing.append("CODE " + str(cur_id))
-            printing.append(code)
-            printing.append("REWARD ")
-            printing.append(reward)
-
-            scores["scores"].append(1.0 if reward else -1.0)
-
-        """async with lock2:
-            if all([scores["scores"][0] == score for score in scores["scores"]]):
-                if round(scores["scores"][0]) == 1:
-                    with open("solved.txt", "a") as f:
-                        f.write(f"{cur_id}\n")
-                elif round(scores["scores"][1]) == -1:
-                    with open("unsolved.txt", "a") as f:
-                        f.write(f"{cur_id}\n")
-            else:
-                with open("mixed.txt", "a") as f:
-                    f.write(f"{cur_id}\n")"""
-        assert len(codes) == 1 and len(errors) == 1 and len(lengths) == 1
-
-        if (
-            (true_score != scores["scores"][0])
-            and item[1]["fn_name"] == "none"
-            and code is not None
-        ):
-            print("INDEX", cur_id)
-            print("NOT WORK", true_score, scores["scores"][0])
-            # print("CODE:\n", codes[0])
-            # print("INPUTS:\n", item[1]["input"])
-            print("ERROR:\n", errors[0])
-            print("LCB ERROR:\n", old_error)
-        elif true_score == -1.0 and item[1]["fn_name"] == "none" and code is not None:
-            if not (
-                "error_code" in old_error
-                and old_error["error_code"] == -2
-                and not errors[0]
-            ) and not (
-                "error_code" in old_error
-                and old_error["error_code"] == -3
-                and "Time" in errors[0]
-            ):
-                print("INDEX", cur_id)
-                print("NOT WORK", true_score, scores["scores"][0])
-                # print("CODE:\n", codes[0])
-                # print("INPUTS:\n", item[1]["input"])
-                print("ERROR:\n", errors[0])
-                print("LCB ERROR:\n", old_error)
-            # print("OUTPUTS:\n")
-            # print(x, item[1]["output"])
-        assert true_score >= scores["scores"][0]
-        return old_score, (codes[0], errors[0], lengths[0])
 
 
 if __name__ == "__main__":
