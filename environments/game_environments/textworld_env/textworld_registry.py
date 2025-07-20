@@ -167,7 +167,7 @@ class TextWorldGenerator:
         self,
         game_type: str = "quest",
         difficulty: str = "medium",
-        output_folder: str = "environments/game_environments/textworld/tw_generated_games",
+        output_folder: str = "environments/game_environments/textworld_env/tw_generated_games",
     ) -> Tuple[Optional[str], Dict[str, Any]]:
         """Generate a game of specified type and difficulty.
 

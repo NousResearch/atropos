@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_FOLDER = "environments/game_environments/textworld/tw_generated_games"
+DEFAULT_OUTPUT_FOLDER = "environments/game_environments/textworld_env/tw_generated_games"
 
 
 def compile_game_with_retry(game, options, max_retries=5, cleanup_on_error=True):
