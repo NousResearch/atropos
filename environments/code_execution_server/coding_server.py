@@ -43,6 +43,7 @@ lock = asyncio.Lock()
 lock2 = asyncio.Lock()
 async_semaphore = asyncio.Semaphore(50)
 limiter = AsyncLimiter(1000, 5)
+eval_semaphore = None  # Will be initialized in setup()
 
 
 def get_prompt(question, problem_type, starter_code=None):
@@ -117,6 +118,10 @@ class CodeConfig(BaseEnvConfig):
         None,
         description="Custom system prompt. If None, no system message is used.",
     )
+    eval_max_samples: Optional[int] = Field(
+        None,
+        description="Maximum number of test problems to evaluate. If None, evaluates all test problems.",
+    )
 
 
 class CodingEnv(BaseEnv):
@@ -146,7 +151,7 @@ class CodingEnv(BaseEnv):
             batch_size=-1,
             steps_per_eval=10,
             max_batches_offpolicy=3,
-            max_eval_workers=12,
+            max_eval_workers=32,
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.25,
             max_token_length=32768,
@@ -522,11 +527,15 @@ class CodingEnv(BaseEnv):
         """
         print("EVALUATION")
         start_time = time.time()
-        test_data = self.test
+        test_data = (
+            self.test
+            if self.config.eval_max_samples is None
+            else self.test[: self.config.eval_max_samples]
+        )
 
         # Use rollout_and_score_eval for each test item with semaphore
         async def eval_with_semaphore(item):
-            async with async_semaphore:
+            async with eval_semaphore:
                 return await self.rollout_and_score_eval(item)
 
         eval_tasks = []
@@ -617,6 +626,9 @@ class CodingEnv(BaseEnv):
 
     async def setup(self):
         """Setup the environment"""
+        global eval_semaphore
+        eval_semaphore = asyncio.Semaphore(self.config.max_eval_workers)
+
         if self.config.dataset_name == "deepmind":
             self.train = load_dataset("deepmind/code_contests", split="train")
         else:
