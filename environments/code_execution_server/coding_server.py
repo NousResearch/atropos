@@ -26,8 +26,6 @@ from atroposlib.envs.base import (
 from atroposlib.type_definitions import GameHistory, Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
-# Old system prompt definitions removed - now handled via --system_prompt parameter
-
 FORMATTING_MESSAGE_WITH_STARTER_CODE = (
     "You will use the following starter code to write the solution to the "
     "problem and enclose your code within delimiters."
@@ -39,11 +37,7 @@ FORMATTING_WITHOUT_STARTER_CODE = (
     "algorithm and writes output to STDOUT."
 )
 
-lock = asyncio.Lock()
-lock2 = asyncio.Lock()
-containers_semaphore = None  # Will be initialized in setup()
 limiter = AsyncLimiter(1000, 5)
-eval_semaphore = None  # Will be initialized in setup()
 
 
 def get_prompt(question, problem_type, starter_code=None):
@@ -125,6 +119,10 @@ class CodeConfig(BaseEnvConfig):
     max_running_containers: int = Field(
         50,
         description="Maximum number of concurrent container executions for code testing.",
+    )
+    eval_group_size: int = Field(
+        16,
+        description="Number of samples to generate for each problem during evaluation.",
     )
 
 
@@ -306,7 +304,7 @@ class CodingEnv(BaseEnv):
         if train_or_valid == "train":
             tasks = [generate_and_score(i) for i in range(self.config.group_size)]
         else:
-            tasks = [generate_and_score(i) for i in range(16)]
+            tasks = [generate_and_score(i) for i in range(self.config.eval_group_size)]
         results = await asyncio.gather(*tasks)
         end_time = time.time()
 
@@ -329,7 +327,7 @@ class CodingEnv(BaseEnv):
         print("MISSING ", self.complement)
         print(f"Elapsed time: {dt:.2f} seconds")
 
-        async with self.lock_heap:
+        async with self.heap_lock:
             heap_sum = 0
             for x in scored_data["scores"]:
                 if math.isclose(1.0, x):
@@ -413,7 +411,7 @@ class CodingEnv(BaseEnv):
         chat_messages.append(user_msg)
 
         # Generate multiple samples for evaluation
-        num_samples = 16  # Same as in collect_trajectories for eval
+        num_samples = self.config.eval_group_size
         sample_data = []
         response_texts = []
 
@@ -647,9 +645,8 @@ class CodingEnv(BaseEnv):
             self.test[-1]["idx"] = len(self.test) - 1
             self.test[-1]["split"] = "test"
         self.iter = 0
-        self.lock = asyncio.Lock()
-        self.lock2 = asyncio.Lock()
-        self.lock_heap = asyncio.Lock()
+        self.queue_lock = asyncio.Lock()
+        self.heap_lock = asyncio.Lock()
 
         self.good_indices = []
         if self.config.dataset_name != "deepmind":
@@ -673,7 +670,7 @@ class CodingEnv(BaseEnv):
         """
         Get the next items to be rolled out
         """
-        async with self.lock:
+        async with self.queue_lock:
             if not self.deq:
                 while len(self.next_heap) > 0:
                     self.deq.append(heapq.heappop(self.next_heap)[1])
