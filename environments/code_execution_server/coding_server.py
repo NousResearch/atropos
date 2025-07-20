@@ -41,7 +41,7 @@ FORMATTING_WITHOUT_STARTER_CODE = (
 
 lock = asyncio.Lock()
 lock2 = asyncio.Lock()
-async_semaphore = asyncio.Semaphore(50)
+containers_semaphore = None  # Will be initialized in setup()
 limiter = AsyncLimiter(1000, 5)
 eval_semaphore = None  # Will be initialized in setup()
 
@@ -66,7 +66,7 @@ run_test = modal.Function.from_name("test-lcb-code", "run_test")
 
 async def submit_code(code, test_input, language="python"):
     payload = {"code": code, "input": test_input}
-    async with async_semaphore, limiter:
+    async with containers_semaphore, limiter:
         response_json = await code_exec.remote.aio(payload)
         return (
             response_json["output"],
@@ -121,6 +121,10 @@ class CodeConfig(BaseEnvConfig):
     eval_max_samples: Optional[int] = Field(
         None,
         description="Maximum number of test problems to evaluate. If None, evaluates all test problems.",
+    )
+    max_running_containers: int = Field(
+        50,
+        description="Maximum number of concurrent container executions for code testing.",
     )
 
 
@@ -626,8 +630,9 @@ class CodingEnv(BaseEnv):
 
     async def setup(self):
         """Setup the environment"""
-        global eval_semaphore
+        global eval_semaphore, containers_semaphore
         eval_semaphore = asyncio.Semaphore(self.config.max_eval_workers)
+        containers_semaphore = asyncio.Semaphore(self.config.max_running_containers)
 
         if self.config.dataset_name == "deepmind":
             self.train = load_dataset("deepmind/code_contests", split="train")
