@@ -5,11 +5,12 @@ from pydantic import BaseModel, Field
 from transformers import PreTrainedTokenizer
 
 from atroposlib.envs.base import ServerManager
-from atroposlib.type_definitions import (
+from atroposlib.type_definitions import Message
+
+from .agent_types import (
     AtroposAgentAction,
     AtroposAgentActionLog,
     AtroposAgentTurn,
-    Message,
 )
 
 from ..utils.memory_parser import extract_memory_block, validate_memory_content

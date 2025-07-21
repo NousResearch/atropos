@@ -421,16 +421,26 @@ class BaseEnv(ABC):
         raise NotImplementedError("Setup method must be implemented in subclass")
 
     async def setup_wandb(self):
+        logger.debug("setup_wandb() called")
+        print("BaseEnv.setup_wandb() called", flush=True)
         if self.config.use_wandb:
+            logger.debug(f"use_wandb=True, rollout_server_url={self.config.rollout_server_url}")
+            print(f"Fetching wandb info from {self.config.rollout_server_url}/wandb_info", flush=True)
             # Setup wandb getting the group and project via the server
             while self.wandb_project is None:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        f"{self.config.rollout_server_url}/wandb_info"
-                    ) as resp:
-                        data = await parse_http_response(resp, logger)
-                        self.wandb_group = data["group"]
-                        self.wandb_project = data["project"]
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(
+                            f"{self.config.rollout_server_url}/wandb_info"
+                        ) as resp:
+                            data = await parse_http_response(resp, logger)
+                            self.wandb_group = data["group"]
+                            self.wandb_project = data["project"]
+                            logger.debug(f"Got wandb info: group={self.wandb_group}, project={self.wandb_project}")
+                            print(f"Got wandb info: group={self.wandb_group}, project={self.wandb_project}", flush=True)
+                except Exception as e:
+                    logger.error(f"Error fetching wandb info: {e}")
+                    print(f"Error fetching wandb info: {type(e).__name__}: {e}", flush=True)
 
                 if self.wandb_project is None:
                     await asyncio.sleep(1)
@@ -1099,10 +1109,25 @@ class BaseEnv(ABC):
         """
         Rollout manager
         """
-        await self.setup()
-        await self.setup_wandb()
-        await self.register_env()
-        await self.get_server_info()
+        logger.info("env_manager() started")
+        print("BaseEnv.env_manager() started", flush=True)
+        try:
+            await self.setup()
+            logger.info("setup() completed, calling setup_wandb()")
+            print("setup() completed, calling setup_wandb()", flush=True)
+            await self.setup_wandb()
+            logger.info("setup_wandb() completed, calling register_env()")
+            print("setup_wandb() completed, calling register_env()", flush=True)
+            await self.register_env()
+            logger.info("register_env() completed, calling get_server_info()")
+            print("register_env() completed, calling get_server_info()", flush=True)
+            await self.get_server_info()
+        except Exception as e:
+            logger.error(f"Error in env_manager initialization: {e}", exc_info=True)
+            print(f"Error in env_manager initialization: {type(e).__name__}: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            raise
         # Wait for other instances to get setup :)
         await asyncio.sleep(5)
         while True:
@@ -1438,13 +1463,18 @@ class BaseEnv(ABC):
                 )
                 rprint(env_config)
                 rprint(openai_configs)
+                
+                print("About to start env_manager()", flush=True)
+                logger.info("About to start env_manager()")
 
                 # Handle the case where we might already be in an event loop
                 try:
                     loop = asyncio.get_running_loop()
+                    print("Using existing event loop", flush=True)
                     task = loop.create_task(env.env_manager())
                     loop.run_until_complete(task)
-                except RuntimeError:
+                except RuntimeError as e:
+                    print(f"No existing event loop ({e}), creating new one", flush=True)
                     asyncio.run(env.env_manager())
 
         return CliServeConfig

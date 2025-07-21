@@ -13,8 +13,9 @@ import logging
 import math
 import os
 import random
-import shutil
+# import shutil  # Not needed anymore without temp directories
 import tempfile
+import time
 import uuid
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -49,12 +50,14 @@ from environments.game_environments.textworld_env.textworld_registry import (
 )
 
 logger = logging.getLogger(__name__)
+print(f"TextWorld module imported, logger name: {__name__}", flush=True)
 
 
 class TextWorldEnvConfig(BaseEnvConfig):
     """Configuration for the TextWorld environment trainer with VR-CLI."""
 
     env_name: str = "TextWorld"
+    wandb_name: str = "textworld-trainer"  # Override default None
     max_steps: int = 50
     challenge_name: str = "tw-simple"
     challenge_rewards: str = "sparse"  # Changed to sparse for VR-CLI
@@ -240,6 +243,8 @@ class TextWorldEpisodeState:
 
 class TextWorldEnv(BaseEnv):
     """Trainer environment for TextWorld using VR-CLI for action outcome prediction."""
+    
+    name = "TextWorld"  # Default name for wandb
 
     def __init__(
         self,
@@ -248,10 +253,32 @@ class TextWorldEnv(BaseEnv):
         slurm: bool = True,
         testing: bool = False,
     ):
-        super().__init__(config, server_configs, slurm, testing)
+        print(f"TextWorldEnv.__init__ called with slurm={slurm}, testing={testing}", flush=True)
+        logger.info("Initializing TextWorldEnv with configuration:")
+        logger.info(f"  - max_steps: {config.max_steps}")
+        logger.info(f"  - group_size: {config.group_size}")
+        logger.info(f"  - tokenizer: {config.tokenizer_name}")
+        logger.info(f"  - rollout_server_url: {config.rollout_server_url}")
+        logger.info(f"  - num_servers: {len(server_configs)}")
+        logger.info(f"  - slurm: {slurm}")
+        
+        print(f"Calling super().__init__", flush=True)
+        print(f"Config type: {type(config)}", flush=True)
+        print(f"Server configs: {len(server_configs)} configs", flush=True)
+        print(f"First server config: {server_configs[0] if server_configs else 'None'}", flush=True)
+        try:
+            super().__init__(config, server_configs, slurm, testing)
+            print(f"super().__init__ completed successfully", flush=True)
+        except Exception as e:
+            print(f"Exception in super().__init__: {type(e).__name__}: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            raise
         self.config: TextWorldEnvConfig = config
         self.episodes: Dict[str, TextWorldEpisodeState] = {}
-        self._temp_dir = tempfile.mkdtemp(prefix="textworld_env_")
+        # No longer using temp dir - using tw_generated_games instead
+        logger.info("TextWorldEnv initialized, using tw_generated_games directory")
+        print("TextWorldEnv initialized, using tw_generated_games directory", flush=True)
 
         # Memory manager will be created per-agent in _create_agent_for_episode()
 
@@ -384,6 +411,9 @@ class TextWorldEnv(BaseEnv):
                 generation_ratio=self.config.registry_generation_ratio,
                 seed=self.config.seed if hasattr(self.config, "seed") else None,
             )
+        
+        print(f"TextWorldEnv.__init__ completed fully", flush=True)
+        print(f"Server manager created with {len(self.server.servers)} servers", flush=True)
 
     def _create_agent_for_episode(self) -> AtroposAgent:
         """Create a new agent instance for an episode with its own memory manager."""
@@ -407,13 +437,59 @@ class TextWorldEnv(BaseEnv):
 
     async def setup(self):
         """Ensure prerequisites are met for TextWorld."""
+        print(f"TextWorldEnv.setup() called", flush=True)
+        logger.info("Setting up TextWorldEnv...")
         try:
             # textworld is already imported at the top, just verify it's available
             textworld.__version__
+            logger.info(f"TextWorld version {textworld.__version__} is available")
         except (ImportError, AttributeError):
             logger.error(
                 "TextWorld library not found. Please install it to use TextWorldEnv."
             )
+            raise
+        
+        # Log registry status
+        if self.registry:
+            logger.info(f"TextWorld registry initialized with generation_ratio={self.config.registry_generation_ratio}")
+        else:
+            logger.info("TextWorld registry disabled (use_registry=False)")
+        
+        logger.info("TextWorldEnv setup complete")
+        print(f"TextWorldEnv.setup() completed", flush=True)
+        print(f"Server manager has {len(self.server.servers)} servers configured", flush=True)
+        for i, server in enumerate(self.server.servers):
+            # Server objects have config attribute with base_url
+            if hasattr(server, 'config'):
+                print(f"  Server {i}: {server.config.base_url} (api_key={'set' if server.config.api_key else 'empty'})", flush=True)
+            else:
+                print(f"  Server {i}: {type(server).__name__}", flush=True)
+
+    async def register_env(self):
+        """Register environment with rollout server."""
+        print(f"TextWorldEnv.register_env() called", flush=True)
+        logger.info(f"Registering TextWorldEnv with rollout server at {self.config.rollout_server_url}")
+        try:
+            await super().register_env()
+            logger.info("Successfully registered with rollout server")
+            print(f"TextWorldEnv.register_env() completed successfully", flush=True)
+        except Exception as e:
+            logger.error(f"Failed to register with rollout server: {e}", exc_info=True)
+            print(f"TextWorldEnv.register_env() failed: {e}", flush=True)
+            raise
+
+    async def get_server_info(self):
+        """Get server information after registration."""
+        print(f"TextWorldEnv.get_server_info() called", flush=True)
+        logger.info("Getting server information...")
+        try:
+            await super().get_server_info()
+            logger.info("Server information retrieved successfully")
+            logger.info(f"TextWorldEnv is ready to receive requests on {self.config.rollout_server_url}")
+            print(f"TextWorldEnv.get_server_info() completed successfully", flush=True)
+        except Exception as e:
+            logger.error(f"Failed to get server info: {e}", exc_info=True)
+            print(f"TextWorldEnv.get_server_info() failed: {e}", flush=True)
             raise
 
     def _format_observation(self, obs: str, infos: Dict[str, Any]) -> str:
@@ -482,11 +558,15 @@ class TextWorldEnv(BaseEnv):
             }
 
             try:
+                # Use the tw_generated_games directory instead of temp dir
+                output_folder = "environments/game_environments/textworld_env/tw_generated_games"
+                os.makedirs(output_folder, exist_ok=True)
+                
                 game_file_path, game_object = generate_textworld_game(
                     challenge_name=self.config.challenge_name,
                     settings=challenge_settings,
                     options=options,
-                    output_folder=self._temp_dir,
+                    output_folder=output_folder,
                     filename_prefix=f"{self.config.challenge_name}_ep{current_game_seed}",
                 )
 
@@ -1454,12 +1534,18 @@ class TextWorldEnv(BaseEnv):
         trajectories: Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]],
     ) -> Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]:
         """Post-process policy agent trajectories with thinking block summarization."""
+        start_time = time.time()
+        logger.info("Starting postprocess_histories...")
+        
         if not trajectories:
+            logger.info("No trajectories to process")
             return trajectories
 
         if not isinstance(trajectories, list):
             trajectories = [trajectories] if trajectories is not None else []
 
+        logger.info(f"Processing {len(trajectories)} trajectories")
+        
         # Since we removed metadata, we'll use a simple cache for thinking blocks
         thinking_block_cache: Dict[int, str] = {}
 
@@ -1472,14 +1558,19 @@ class TextWorldEnv(BaseEnv):
 
             # Process all trajectories with thinking summarization if enabled
             try:
+                logger.debug(f"Processing ScoredDataGroup {sdg_idx}")
                 processed_policy_sdg = await self._process_policy_training_data(
                     sdg, thinking_block_cache
                 )
                 processed_trajectories.append(processed_policy_sdg)
             except Exception as e:
-                logger.error(f"Error processing ScoredDataGroup {sdg_idx}: {e}")
+                logger.error(f"Error processing ScoredDataGroup {sdg_idx}: {e}", exc_info=True)
                 processed_trajectories.append(sdg)
 
+        elapsed_time = time.time() - start_time
+        logger.info(f"Completed postprocess_histories in {elapsed_time:.2f} seconds")
+        logger.info(f"Cache size: {len(thinking_block_cache)} entries")
+        
         return processed_trajectories
 
     async def _process_policy_training_data(
@@ -1590,37 +1681,35 @@ class TextWorldEnv(BaseEnv):
         if self.registry:
             self.registry.cleanup_all()
 
-        if (
-            hasattr(self, "_temp_dir")
-            and self._temp_dir
-            and os.path.exists(self._temp_dir)
-        ):
-            try:
-                shutil.rmtree(self._temp_dir)
-            except Exception as e:
-                logger.warning(
-                    f"Error cleaning up temporary directory {self._temp_dir}: {e}"
-                )
+        # No temp dir to clean up anymore
 
     def __del__(self):
         """Ensure cleanup runs even if explicit cleanup isn't called."""
-        try:
-            if (
-                hasattr(self, "_temp_dir")
-                and self._temp_dir
-                and os.path.exists(self._temp_dir)
-            ):
-                shutil.rmtree(self._temp_dir)
-        except Exception:
-            pass
+        # No temp dir to clean up anymore
+        pass
 
     @classmethod
     def config_init(cls) -> Tuple[TextWorldEnvConfig, List[APIServerConfig]]:
         """Initialize default configuration for TextWorldEnv."""
         config = TextWorldEnvConfig()
-        server_configs = [config.default_server_config]
+        # When running with SLURM, configure to use SGLang servers on ports 9004-9007
+        server_configs = [
+            APIServerConfig(
+                api_key="NOT_USED",  # SGLang doesn't require API key
+                base_url=f"http://localhost:{port}",
+                model_name="sglang",  # Model is already loaded by SGLang
+                server_type="openai",  # SGLang is OpenAI API compatible
+                timeout=1200,
+                num_max_requests_at_once=512,
+                num_requests_for_eval=64,
+                health_check=True,
+            )
+            for port in [9004, 9005, 9006, 9007]
+        ]
         return config, server_configs
 
 
 if __name__ == "__main__":
+    import sys
+    print(f"TextWorld module started with args: {sys.argv}", flush=True)
     TextWorldEnv.cli()
