@@ -48,6 +48,11 @@ from environments.game_environments.textworld_env.generation_utils import (
 from environments.game_environments.textworld_env.textworld_registry import (
     create_textworld_registry,
 )
+from environments.game_environments.textworld_env.scoring.entropy_calculator import (
+    confidence_score,
+    calculate_sequence_entropy,
+    calculate_varentropy,
+)
 
 logger = logging.getLogger(__name__)
 print(f"TextWorld module imported, logger name: {__name__}", flush=True)
@@ -58,7 +63,7 @@ class TextWorldEnvConfig(BaseEnvConfig):
 
     env_name: str = "TextWorld"
     wandb_name: str = "textworld-trainer"  # Override default None
-    max_steps: int = 50
+    max_steps: int = 100
     challenge_name: str = "tw-simple"
     challenge_rewards: str = "sparse"  # Changed to sparse for VR-CLI
     challenge_goal: str = "detailed"
@@ -97,10 +102,10 @@ class TextWorldEnvConfig(BaseEnvConfig):
         description="Weight for format reward in combined scoring (0.1 = up to 10% adjustment)",
     )
     format_memory_reward: float = Field(
-        default=0.5, description="Reward for including a proper <memory> block"
+        default=0.05, description="Reward for including a proper <memory> block"
     )
     format_thinking_reward: float = Field(
-        default=0.5, description="Reward for including a proper <thinking> block"
+        default=0.05, description="Reward for including a proper <thinking> block"
     )
     format_strict_structure: bool = Field(
         default=True,
@@ -517,6 +522,7 @@ class TextWorldEnv(BaseEnv):
         current_game_seed = (
             episode_seed if episode_seed is not None else random.randint(0, 0xFFFFFFFF)
         )
+        logger.info(f"[Episode: {episode_id}] Using game seed: {current_game_seed} (passed seed: {episode_seed})")
 
         # Generate or select game using registry if enabled
         if self.config.use_registry and self.registry:
@@ -559,7 +565,7 @@ class TextWorldEnv(BaseEnv):
 
             try:
                 # Use the tw_generated_games directory instead of temp dir
-                output_folder = "environments/game_environments/textworld_env/tw_generated_games"
+                output_folder = "/home/maxpaperclips/atropos/environments/game_environments/textworld_env/tw_generated_games"
                 os.makedirs(output_folder, exist_ok=True)
                 
                 game_file_path, game_object = generate_textworld_game(
@@ -722,6 +728,54 @@ class TextWorldEnv(BaseEnv):
             return math.exp(-mean_logprob)
         return float("inf")
 
+    async def _get_assistant_logprobs_from_server(
+        self, messages: List[Dict[str, str]], assistant_response: str
+    ) -> List[float]:
+        """Get logprobs for assistant response using echo mode from the inference server."""
+        try:
+            # Create the full conversation including the assistant response
+            full_messages = messages + [{"role": "assistant", "content": assistant_response}]
+            
+            # Apply chat template to get the full formatted text
+            full_text = self.tokenizer.apply_chat_template(
+                full_messages, tokenize=False, add_generation_prompt=False
+            )
+            
+            # Use completion mode to get logprobs for the entire sequence
+            response = await self.server.completion(
+                prompt=full_text,
+                max_tokens=0,  # We're not generating, just getting logprobs
+                echo=True,  # Return logprobs for the input
+                logprobs=1,  # Return log probability of the selected tokens (must be > 0 for SGLang)
+                temperature=0.0,
+            )
+            
+            # Find where the assistant message starts in the tokenized sequence
+            # Tokenize the messages without the assistant response to find the boundary
+            prefix_text = self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            prefix_tokens = self.tokenizer.encode(prefix_text, add_special_tokens=False)
+            
+            # Extract logprobs for the assistant message (the completion we're evaluating)
+            if (
+                response.choices[0].logprobs is None
+                or response.choices[0].logprobs.token_logprobs is None
+            ):
+                return []
+            
+            all_logprobs = response.choices[0].logprobs.token_logprobs
+            assistant_logprobs = all_logprobs[len(prefix_tokens):]
+            
+            return assistant_logprobs
+            
+        except Exception as e:
+            logger.error(
+                f"Error getting logprobs for assistant response: {e}",
+                exc_info=True,
+            )
+            return []
+
     async def _vrcli_score(
         self, current_obs: str, predicted_outcome: str, actual_outcome: str
     ) -> float:
@@ -777,30 +831,9 @@ class TextWorldEnv(BaseEnv):
         else:
             return 1.0  # Significant improvement
 
-    def _get_action_history_from_agent(self, agent: AtroposAgent) -> List[str]:
-        """Extract the canonical action history from the agent."""
-        action_history = []
-
-        for turn_data in agent.game_log["turn"]:
-            if turn_data["selected_alternative"] is not None:
-                selected_idx = turn_data["selected_alternative"]
-                if 0 <= selected_idx < len(turn_data["alternatives"]):
-                    choice = turn_data["alternatives"][selected_idx]
-                    if not choice["api_error"] and choice["action_text"]:
-                        # Extract the actual command from the tool call
-                        action_text = choice["action_text"]
-                        tool_name, arguments, is_error = parse_tool_call(
-                            response=action_text, preferred_tags=["tool_call"]
-                        )
-                        if not is_error and tool_name == "execute_command":
-                            command = arguments.get("command")
-                            if command:
-                                action_history.append(command.strip())
-
-        return action_history
 
     def _calculate_format_reward(self, response_text: str) -> float:
-        """Calculate format reward based on strict adherence to required structure.
+        """Calculate format reward based on adherence to required structure.
 
         Expected structure (in exact order):
         1. Exactly one <think>...</think> block with content
@@ -811,19 +844,18 @@ class TextWorldEnv(BaseEnv):
             response_text: The full response text from the agent
 
         Returns:
-            Format reward score (0.0 to 1.0)
+            Format reward score (0.0 to 0.1) - gives partial credit for good blocks
         """
         if not self.config.format_reward_enabled:
             return 0.0
 
-        # Parse the response into structured components
+        # Parse the response into structured components and always return partial score
         structure_valid, structure_score = self._validate_response_structure(
             response_text
         )
 
-        if not structure_valid:
-            return 0.0  # Completely malformed structure gets no reward
-
+        # Return partial score even if structure is considered "invalid"
+        # This gives credit for good memory/thinking blocks even if tool_call is malformed
         return structure_score
 
     def _validate_response_structure(self, response_text: str) -> Tuple[bool, float]:
@@ -914,208 +946,210 @@ class TextWorldEnv(BaseEnv):
 
         return is_valid, score
 
-    def _create_env_copy_with_replay(
-        self, ep_state: TextWorldEpisodeState, agent: AtroposAgent
-    ) -> Optional[TextworldGymEnv]:
-        """Create a new environment instance and replay actions to reach current state."""
-        try:
-            # Get the action history from the agent
-            action_history = self._get_action_history_from_agent(agent)
 
-            # Register a new environment instance with the same game file
-            requested_infos = textworld.EnvInfos(
-                objective=True,
-                inventory=True,
-                description=True,
-                score=True,
-                won=True,
-                lost=True,
-                facts=True,
-                last_action=True,
-                feedback=True,
-                moves=True,
-                admissible_commands=True,
-            )
-
-            # Create a unique ID for this copy
-            copy_env_id = f"{ep_state.episode_id}_copy_{random.randint(1000, 9999)}"
-
-            registered_env_id = textworld.gym.register_game(
-                ep_state.game_file,
-                requested_infos,
-                max_episode_steps=self.config.max_steps,
-                name=copy_env_id,
-            )
-
-            # Create the environment
-            env_copy = textworld.gym.make(registered_env_id)
-
-            # Reset the environment
-            obs, infos = env_copy.reset()
-
-            # Replay all actions to reach the current state
-            for past_action in action_history:
-                obs, reward, done, infos = env_copy.step(past_action)
-                if done:
-                    break
-
-            return env_copy
-        except Exception as e:
-            logger.error(f"Failed to create environment copy with replay: {e}")
-            return None
-
-    async def _evaluate_candidates(
+    async def _score_alternatives_hybrid(
         self,
         ep_state: TextWorldEpisodeState,
-        candidates: List[Tuple[Optional[str], Optional[str], str]],
+        candidates: List[Tuple[Optional[str], Optional[str], str, Optional[List[Dict[str, Any]]]]],
         agent: AtroposAgent,
+        conversation_history: List[Dict[str, str]],
     ) -> List[Dict[str, Any]]:
-        """Evaluate each candidate by executing in copied environment."""
+        """
+        Hybrid scoring system:
+        1. Use entropy/varentropy to select best alternative for execution
+        2. Execute selected alternative in real environment
+        3. Score selected alternative + same-action alternatives with VR-CLI
+        4. Score rejected alternatives with entropy confidence scores
+        """
         evaluations = []
-
-        for i, (action, prediction, response_text) in enumerate(candidates):
+        
+        # Step 1: Calculate confidence scores for all alternatives
+        confidence_scores = []
+        for i, (action, prediction, response_text, logprobs_data) in enumerate(candidates):
             if action is None:
                 action = "look"  # Default action
-
-            # Create environment copy with replay
-            env_copy = self._create_env_copy_with_replay(ep_state, agent)
-            if env_copy is None:
-                logger.error(f"Failed to create environment copy for candidate {i}")
-                evaluations.append(
-                    {
-                        "index": i,
-                        "action": action,
-                        "prediction": prediction,
-                        "vrcli_score": 0.0,
-                        "latro_score": 0.0,
-                        "format_score": 0.0,
-                        "env_reward": 0.0,
-                        "combined_score": 0.0,
-                        "response_text": response_text,
-                        "response_tokens": 0,
-                        "token_length_adjustment": 0.0,
-                        "actual_outcome": "",
-                        "done": False,
-                        "info": {},
-                        "error": True,
-                    }
-                )
-                continue
-
+            
+            # Get logprobs for this alternative using the new method
             try:
-                # Execute action
-                obs, reward, done, info = env_copy.step(action)
-                actual_outcome = self._format_observation(obs, info)
-
-                # Calculate VR-CLI score
-                vrcli_score = await self._vrcli_score(
-                    ep_state.last_formatted_obs, prediction or "", actual_outcome
+                assistant_logprobs = await self._get_assistant_logprobs_from_server(
+                    conversation_history, response_text
                 )
+                
+                # Convert to format expected by entropy calculator
+                if assistant_logprobs:
+                    # Create legacy format for compatibility with existing entropy calculator
+                    legacy_logprobs_data = []
+                    for logprob in assistant_logprobs:
+                        legacy_logprobs_data.append({
+                            "token": "",
+                            "logprob": logprob,
+                            "top_logprobs": [{"token": "", "logprob": logprob}]
+                        })
+                    entropy_confidence = confidence_score(legacy_logprobs_data)
+                else:
+                    entropy_confidence = 0.0  # No logprobs available
+                    
+                logger.debug(
+                    f"[Episode: {ep_state.episode_id}] Alternative {i}: action='{action}', "
+                    f"entropy_confidence={entropy_confidence:.3f}, logprobs_count={len(assistant_logprobs)}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[Episode: {ep_state.episode_id}] Failed to get logprobs for alternative {i}: {e}"
+                )
+                entropy_confidence = 0.0
+            
+            confidence_scores.append(entropy_confidence)
 
-                # Calculate LaTRo score if enabled (currently disabled)
-                latro_score = 0.0
-                if self.config.latro_enabled and hasattr(
-                    self, "_calculate_latro_score"
-                ):
-                    # LaTRo would calculate log P(action | state + reasoning)
-                    # For now this is disabled
-                    latro_score = 0.0
+        # Step 2: Select best alternative (highest confidence)
+        if confidence_scores:
+            selected_idx = max(range(len(confidence_scores)), key=lambda i: confidence_scores[i])
+        else:
+            selected_idx = 0
+            
+        selected_action = candidates[selected_idx][0]
+        if selected_action is None:
+            selected_action = "look"
 
-                # Calculate format reward
-                format_score = self._calculate_format_reward(response_text)
+        logger.info(
+            f"[Episode: {ep_state.episode_id}] Selected alternative {selected_idx} with action '{selected_action}' "
+            f"(confidence: {confidence_scores[selected_idx]:.3f})"
+        )
 
+        # Step 3: Execute selected action in main environment
+        # Save previous observation for VR-CLI scoring
+        previous_obs = ep_state.last_formatted_obs
+        
+        try:
+            obs, reward, done, info = ep_state.textworld_env.step(selected_action)
+            actual_outcome = self._format_observation(obs, info)
+            
+            # Update episode state
+            ep_state.last_env_raw_observation = obs
+            ep_state.last_env_infos = info
+            ep_state.last_formatted_obs = actual_outcome
+            ep_state.won = info.get("won", False)
+            ep_state.lost = info.get("lost", False)
+            ep_state.done = done
+            
+            logger.info(
+                f"[Episode: {ep_state.episode_id}] Executed action '{selected_action}', "
+                f"reward={reward}, done={done}"
+            )
+            
+        except Exception as e:
+            logger.error(f"[Episode: {ep_state.episode_id}] Error executing selected action: {e}")
+            actual_outcome = f"Error executing action: {e}"
+            reward = -1.0
+            done = True
+            info = {"error": True}
+
+        # Step 4: Group alternatives by action to identify same-action alternatives
+        action_groups = {}
+        for i, (action, prediction, response_text, logprobs_data) in enumerate(candidates):
+            if action is None:
+                action = "look"
+            if action not in action_groups:
+                action_groups[action] = []
+            action_groups[action].append(i)
+
+        # Step 5: Score all alternatives
+        for i, (action, prediction, response_text, logprobs_data) in enumerate(candidates):
+            if action is None:
+                action = "look"
+
+            # Calculate format reward
+            format_score = self._calculate_format_reward(response_text)
+            
+            # Apply token length penalty/bonus if enabled
+            response_tokens = 0
+            token_length_adjustment = 0.0
+            if self.config.token_length_penalty_enabled:
+                response_tokens = len(
+                    self.tokenizer.encode(response_text, add_special_tokens=False)
+                )
+                token_deviation = response_tokens - self.config.token_length_baseline
+                token_length_adjustment = -token_deviation * self.config.token_length_penalty_scale
+                max_adjustment = self.config.token_length_penalty_weight
+                token_length_adjustment = max(-max_adjustment, min(max_adjustment, token_length_adjustment))
+
+            if action == selected_action:
+                # Use VR-CLI for selected action and same-action alternatives
+                try:
+                    # Use the observation from before the step for VR-CLI scoring
+                    vrcli_score = await self._vrcli_score(
+                        previous_obs, prediction or "", actual_outcome
+                    )
+                except Exception as e:
+                    logger.error(f"Error calculating VR-CLI score for alternative {i}: {e}")
+                    vrcli_score = 0.0
+                
                 # Combine scores with proper weighting
-                # Environment reward gets remaining weight after VR-CLI, LaTRo, and format rewards
                 env_weight = (
-                    1.0
-                    - self.config.vrcli_weight
-                    - self.config.latro_weight
-                    - self.config.format_reward_weight
+                    1.0 - self.config.vrcli_weight - self.config.format_reward_weight
                 )
                 combined_score = (
                     self.config.vrcli_weight * vrcli_score
-                    + self.config.latro_weight * latro_score
                     + self.config.format_reward_weight * format_score
                     + env_weight * reward
                 )
-
-                # Apply token length penalty/bonus if enabled
-                token_length_adjustment = 0.0
+                
+                # Apply token length adjustment
                 if self.config.token_length_penalty_enabled:
-                    # Count tokens in the response (assistant's message only)
-                    response_tokens = len(
-                        self.tokenizer.encode(response_text, add_special_tokens=False)
-                    )
-
-                    # Calculate adjustment based on deviation from baseline
-                    # Negative adjustment (penalty) for longer responses, positive (bonus) for shorter
-                    token_deviation = (
-                        response_tokens - self.config.token_length_baseline
-                    )
-                    token_length_adjustment = (
-                        -token_deviation * self.config.token_length_penalty_scale
-                    )
-
-                    # Cap the adjustment to the configured weight
-                    max_adjustment = self.config.token_length_penalty_weight
-                    token_length_adjustment = max(
-                        -max_adjustment, min(max_adjustment, token_length_adjustment)
-                    )
-
-                    # Apply adjustment proportional to the base score
-                    # If score is negative (bad outcome), longer responses get bigger penalty
-                    # If score is positive (good outcome), shorter responses get bonus
                     combined_score *= 1.0 + token_length_adjustment
 
-                evaluations.append(
-                    {
-                        "index": i,
-                        "action": action,
-                        "prediction": prediction,
-                        "vrcli_score": vrcli_score,
-                        "latro_score": latro_score,
-                        "format_score": format_score,
-                        "env_reward": reward,
-                        "combined_score": combined_score,
-                        "response_text": response_text,
-                        "response_tokens": (
-                            response_tokens
-                            if self.config.token_length_penalty_enabled
-                            else 0
-                        ),
-                        "token_length_adjustment": (
-                            token_length_adjustment
-                            if self.config.token_length_penalty_enabled
-                            else 0.0
-                        ),
-                        "actual_outcome": actual_outcome,
-                        "done": done,
-                        "info": info,
-                    }
+                evaluations.append({
+                    "index": i,
+                    "action": action,
+                    "prediction": prediction,
+                    "vrcli_score": vrcli_score,
+                    "entropy_score": confidence_scores[i],
+                    "latro_score": 0.0,
+                    "format_score": format_score,
+                    "env_reward": reward,
+                    "combined_score": combined_score,
+                    "response_text": response_text,
+                    "response_tokens": response_tokens,
+                    "token_length_adjustment": token_length_adjustment,
+                    "actual_outcome": actual_outcome,
+                    "done": done,
+                    "info": info,
+                    "selected": i == selected_idx,
+                    "scoring_method": "vrcli",
+                })
+            else:
+                # Use entropy confidence for rejected alternatives
+                entropy_confidence = confidence_scores[i]
+                
+                # Use entropy score as primary score for rejected alternatives
+                combined_score = (
+                    0.7 * entropy_confidence +  # Entropy confidence as main score
+                    0.3 * format_score         # Format reward for structure
                 )
-            except Exception as e:
-                logger.error(f"Error evaluating candidate {i}: {e}")
-                evaluations.append(
-                    {
-                        "index": i,
-                        "action": action,
-                        "prediction": prediction,
-                        "vrcli_score": 0.0,
-                        "latro_score": 0.0,
-                        "format_score": 0.0,
-                        "env_reward": 0.0,
-                        "combined_score": 0.0,
-                        "response_text": response_text,
-                        "response_tokens": 0,
-                        "token_length_adjustment": 0.0,
-                        "actual_outcome": "",
-                        "done": False,
-                        "info": {},
-                    }
-                )
-            finally:
-                # Clean up copied environment
-                env_copy.close()
+                
+                # Apply token length adjustment
+                if self.config.token_length_penalty_enabled:
+                    combined_score *= 1.0 + token_length_adjustment
+
+                evaluations.append({
+                    "index": i,
+                    "action": action,
+                    "prediction": prediction,
+                    "vrcli_score": 0.0,  # Not calculated for rejected alternatives
+                    "entropy_score": entropy_confidence,
+                    "latro_score": 0.0,
+                    "format_score": format_score,
+                    "env_reward": 0.0,  # Not applicable
+                    "combined_score": combined_score,
+                    "response_text": response_text,
+                    "response_tokens": response_tokens,
+                    "token_length_adjustment": token_length_adjustment,
+                    "actual_outcome": "",  # Not executed
+                    "done": False,
+                    "info": {},
+                    "selected": False,
+                    "scoring_method": "entropy",
+                })
 
         return evaluations
 
@@ -1185,6 +1219,7 @@ class TextWorldEnv(BaseEnv):
         candidates = []
         for i, action_response in enumerate(group_actions):
             response_text = action_response["action_text"]
+            logprobs_data = action_response.get("logprobs")
             print(f"\n=== Alternative {i} Full Response ===")
             print(response_text)
             print("=== End Response ===\n")
@@ -1208,14 +1243,26 @@ class TextWorldEnv(BaseEnv):
                 )
 
             action, prediction = self._parse_action_with_prediction(response_text)
-            candidates.append((action, prediction, response_text))
+            candidates.append((action, prediction, response_text, logprobs_data))
 
         if not candidates:
             logger.error(f"[Episode: {ep_state.episode_id}] No valid actions parsed")
             return None, True
 
-        # 4. Evaluate candidates using VR-CLI
-        evaluations = await self._evaluate_candidates(ep_state, candidates, agent)
+        # 4. Get conversation history for entropy calculation (reconstruct same as agent)
+        from environments.game_environments.textworld_env.agents.atropos_agent import _convert_messages_for_api
+        current_history_atropos = agent._reconstruct_canonical_history()
+        
+        # Add the current observation (same as agent does)
+        from atroposlib.type_definitions import Message
+        observation_message = Message(
+            role="user", content=current_observation, reward=None
+        )
+        current_history_atropos.append(observation_message)
+        conversation_history = _convert_messages_for_api(current_history_atropos)
+        
+        # 4. Score alternatives using hybrid entropy + VR-CLI system
+        evaluations = await self._score_alternatives_hybrid(ep_state, candidates, agent, conversation_history)
 
         if not evaluations:
             logger.error(f"[Episode: {ep_state.episode_id}] No evaluations returned")
@@ -1397,7 +1444,8 @@ class TextWorldEnv(BaseEnv):
         finally:
             self._apply_credit_assignment(ep_state, policy_sdgs_for_episode)
             # Clean up episode resources
-            await self._cleanup_episode_resources(ep_state)
+            # TEMPORARILY DISABLED: Cleanup happening too early, before candidate evaluation completes
+            # await self._cleanup_episode_resources(ep_state)
 
         logger.info(
             f"[Episode: {ep_state.episode_id}] Episode complete. Score: {ep_state.last_score}, "
@@ -1691,13 +1739,16 @@ class TextWorldEnv(BaseEnv):
     @classmethod
     def config_init(cls) -> Tuple[TextWorldEnvConfig, List[APIServerConfig]]:
         """Initialize default configuration for TextWorldEnv."""
-        config = TextWorldEnvConfig()
+        config = TextWorldEnvConfig(
+            tokenizer_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+            wandb_name="textworld-qwen3-14b",
+        )
         # When running with SLURM, configure to use SGLang servers on ports 9004-9007
         server_configs = [
             APIServerConfig(
-                api_key="NOT_USED",  # SGLang doesn't require API key
-                base_url=f"http://localhost:{port}",
-                model_name="sglang",  # Model is already loaded by SGLang
+                api_key="x",  # SGLang requires non-empty API key
+                base_url=f"http://localhost:{port}/v1",  # Add /v1 for OpenAI API compatibility
+                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
                 server_type="openai",  # SGLang is OpenAI API compatible
                 timeout=1200,
                 num_max_requests_at_once=512,

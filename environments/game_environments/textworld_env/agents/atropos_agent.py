@@ -303,6 +303,9 @@ class AtroposAgent:
                 max_tokens=self.config.max_tokens_per_completion,
                 temperature=self.config.temperature,
                 top_p=0.9,
+                # TODO: Re-enable logprobs once SGLang TypeError is fixed
+                # logprobs=True,
+                # top_logprobs=20,
             )
 
             if completions and completions.choices:
@@ -313,6 +316,7 @@ class AtroposAgent:
                                 action_text=choice.text.strip(),
                                 api_error=False,
                                 score=0.0,
+                                logprobs=None,
                             )
                         )
                     else:
@@ -321,7 +325,7 @@ class AtroposAgent:
                         )
                         llm_generated_actions.append(
                             AtroposAgentAction(
-                                action_text="", api_error=True, score=0.0
+                                action_text="", api_error=True, score=0.0, logprobs=None
                             )
                         )
                 if hasattr(completions, "usage") and completions.usage:
@@ -346,6 +350,7 @@ class AtroposAgent:
                         action_text="<ERROR_GENERATING_ACTION>",
                         api_error=True,
                         score=-1.0,
+                        logprobs=None,
                     )
                 )
 
@@ -355,7 +360,7 @@ class AtroposAgent:
             )
             llm_generated_actions.append(
                 AtroposAgentAction(
-                    action_text="<MISSING_ACTION_FROM_LLM>", api_error=True, score=-1.0
+                    action_text="<MISSING_ACTION_FROM_LLM>", api_error=True, score=-1.0, logprobs=None
                 )
             )
 

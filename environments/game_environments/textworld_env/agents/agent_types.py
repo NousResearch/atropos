@@ -4,7 +4,7 @@ These types were originally in atroposlib.type_definitions but were removed.
 Defined locally here to avoid conflicts with main library updates.
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from typing_extensions import TypedDict
 
 from atroposlib.type_definitions import Message
@@ -15,6 +15,7 @@ class AtroposAgentAction(TypedDict):
     action_text: str
     api_error: bool
     score: float
+    logprobs: Optional[List[Dict[str, Any]]]  # Token-level logprobs data
 
 
 class AtroposAgentTurn(TypedDict):
