@@ -331,7 +331,7 @@ with "masturbating" to create a pun. "Masturbating" could become
 "stroking" and combine with "beef"...
 </think>
 
-Beef strokin off!
+Beef stroking off!
 ```
 
 **Requirements**: vllm>=0.8.5, torch, transformers, datasets, wandb, tenacity, pydantic
