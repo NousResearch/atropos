@@ -48,6 +48,7 @@ from environments.game_environments.textworld_env.generation_utils import (
 from environments.game_environments.textworld_env.textworld_registry import (
     create_textworld_registry,
 )
+from .utils.qwen_fixed_tokenizer import QwenFixedTokenizer
 from environments.game_environments.textworld_env.scoring.entropy_calculator import (
     confidence_score,
     calculate_sequence_entropy,
@@ -281,6 +282,11 @@ class TextWorldEnv(BaseEnv):
             raise
         self.config: TextWorldEnvConfig = config
         self.episodes: Dict[str, TextWorldEpisodeState] = {}
+        
+        # Override tokenizer for Qwen models with our fixed tokenizer
+        if "qwen" in config.tokenizer_name.lower():
+            logger.info(f"Detected Qwen model, using QwenFixedTokenizer for {config.tokenizer_name}")
+            self.tokenizer = QwenFixedTokenizer(config.tokenizer_name)
         # No longer using temp dir - using tw_generated_games instead
         logger.info("TextWorldEnv initialized, using tw_generated_games directory")
         print("TextWorldEnv initialized, using tw_generated_games directory", flush=True)
@@ -1044,9 +1050,10 @@ class TextWorldEnv(BaseEnv):
         if selected_action is None:
             selected_action = "look"
 
+        confidence_value = confidence_scores[selected_idx] if confidence_scores else 0.0
         logger.info(
             f"[Episode: {ep_state.episode_id}] Selected alternative {selected_idx} with action '{selected_action}' "
-            f"(confidence: {confidence_scores[selected_idx]:.3f if confidence_scores else 0.0})"
+            f"(confidence: {confidence_value:.3f})"
         )
 
         # Step 3: Execute selected action in main environment
