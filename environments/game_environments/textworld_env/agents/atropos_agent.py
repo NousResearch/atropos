@@ -47,6 +47,12 @@ class AtroposAgentConfig(BaseModel):
         default="You are a helpful AI assistant playing a text adventure game. Think step-by-step and then call the required tool.",
         description="A general system prompt for the agent.",
     )
+    
+    # Context Management
+    max_history_tokens: int = Field(
+        default=20000,
+        description="Maximum tokens to keep in conversation history (sliding window).",
+    )
 
     # Memory System Configuration (related to how agent *uses* memory)
     enable_memory: bool = Field(
@@ -341,6 +347,31 @@ class AtroposAgent:
                 tokenize=False
             )
             
+            # Count tokens and warn if approaching limits
+            try:
+                prompt_tokens = len(self.tokenizer.encode(prompt))
+                total_expected_tokens = prompt_tokens + self.config.max_tokens_per_completion
+                
+                logger.info(f"Token usage: {prompt_tokens} input tokens + {self.config.max_tokens_per_completion} max completion = {total_expected_tokens} total")
+                
+                if total_expected_tokens > 40960:  # Model's context limit
+                    logger.error(
+                        f"Total tokens ({total_expected_tokens}) exceeds model context limit (40,960)! "
+                        f"Consider reducing max_history_tokens (currently {self.config.max_history_tokens})"
+                    )
+                elif prompt_tokens > self.config.max_history_tokens:
+                    logger.warning(
+                        f"Input tokens ({prompt_tokens}) exceeds max_history_tokens ({self.config.max_history_tokens}). "
+                        f"Sliding window may not be working correctly."
+                    )
+                elif prompt_tokens > self.config.max_history_tokens * 0.9:
+                    logger.warning(
+                        f"Input tokens ({prompt_tokens}) approaching max_history_tokens limit ({self.config.max_history_tokens}). "
+                        f"Context window will start dropping old messages soon."
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to count prompt tokens: {e}")
+            
             # DEBUG: Log the full prompt being sent
             logger.debug(f"[DEBUG] Full prompt being sent to completion endpoint:")
             logger.debug(f"[DEBUG] Prompt length: {len(prompt)} chars")
@@ -506,24 +537,62 @@ class AtroposAgent:
                 f"AtroposAgent[{self.config.player_id_for_logging}] Memory enabled but manager not active. Skipping memory storage for turn {last_turn_data['turn_number']}."
             )
 
+    def _count_tokens_in_messages(self, messages: List[Message]) -> int:
+        """Count tokens in a list of messages by converting to chat format."""
+        try:
+            # Convert messages to the format expected by apply_chat_template
+            formatted_messages = _convert_messages_for_api(messages)
+            
+            # Apply chat template to get the full formatted text
+            prompt = self.tokenizer.apply_chat_template(
+                formatted_messages,
+                tools=self.TOOLS,
+                add_generation_prompt=True,
+                tokenize=False
+            )
+            
+            # Count tokens in the prompt
+            tokens = self.tokenizer.encode(prompt)
+            return len(tokens)
+        except Exception as e:
+            logger.warning(f"Failed to count tokens accurately: {e}. Using rough estimate.")
+            # Rough estimate: 4 characters per token
+            char_count = sum(len(msg.content or "") for msg in messages)
+            return char_count // 4
+
     def _reconstruct_canonical_history(self) -> List[Message]:
+        """Reconstruct conversation history with sliding window to manage context length."""
         history: List[Message] = []
+        
+        # Always include system prompt
         if self.system_prompt_content:
             history.append(
                 Message(role="system", content=self.system_prompt_content, reward=None)
             )
-
+        
+        # Get all turns
+        all_turns = []
         for turn_data in self.game_log["turn"]:
-            history.append(turn_data["observation_message"])
+            turn_messages = [turn_data["observation_message"]]
             if turn_data["selected_alternative"] is not None:
                 selected_idx = turn_data["selected_alternative"]
                 if 0 <= selected_idx < len(turn_data["alternatives"]):
                     choice = turn_data["alternatives"][selected_idx]
                     if not choice["api_error"] and choice["action_text"]:
-                        history.append(
+                        # Strip thinking blocks from assistant messages to save tokens
+                        action_text = choice["action_text"]
+                        # Remove content between <thinking> tags if present
+                        import re
+                        action_text_stripped = re.sub(
+                            r'<thinking>.*?</thinking>', 
+                            '', 
+                            action_text, 
+                            flags=re.DOTALL
+                        ).strip()
+                        turn_messages.append(
                             Message(
                                 role="assistant",
-                                content=choice["action_text"],
+                                content=action_text_stripped,
                                 reward=None,
                             )
                         )
@@ -532,6 +601,50 @@ class AtroposAgent:
                         f"AtroposAgent[{self.config.player_id_for_logging}] Invalid selected_alternative index {selected_idx} "
                         f"in turn {turn_data['turn_number']} during history reconstruction."
                     )
+            all_turns.append(turn_messages)
+        
+        # Apply sliding window: keep most recent turns that fit within token budget
+        if all_turns:
+            # Start with just system prompt
+            current_tokens = self._count_tokens_in_messages(history)
+            logger.debug(f"System prompt uses {current_tokens} tokens")
+            
+            # We'll build the history from most recent turns backwards
+            included_turn_indices = []
+            
+            # Check turns from most recent to oldest
+            for i in range(len(all_turns) - 1, -1, -1):
+                turn_messages = all_turns[i]
+                # Test if adding this turn would exceed limit
+                test_history = history.copy()
+                # Insert turns in chronological order
+                for j in sorted(included_turn_indices + [i]):
+                    test_history.extend(all_turns[j])
+                
+                test_tokens = self._count_tokens_in_messages(test_history)
+                
+                if test_tokens > self.config.max_history_tokens:
+                    # We've hit the limit
+                    logger.warning(
+                        f"Context limit reached: {test_tokens} tokens exceeds max_history_tokens={self.config.max_history_tokens}. "
+                        f"Keeping {len(included_turn_indices)} most recent turns out of {len(all_turns)} total turns."
+                    )
+                    break
+                
+                # This turn fits, include it
+                included_turn_indices.append(i)
+                current_tokens = test_tokens
+            
+            # Now add the included turns in chronological order
+            for i in sorted(included_turn_indices):
+                history.extend(all_turns[i])
+            
+            logger.info(
+                f"Conversation history: {current_tokens} tokens, {len(history)} messages, "
+                f"{len(included_turn_indices)} turns included "
+                f"(max allowed: {self.config.max_history_tokens} tokens)"
+            )
+        
         return history
 
     def get_last_token_usage(self) -> Tuple[Optional[int], Optional[int]]:

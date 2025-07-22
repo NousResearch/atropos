@@ -51,7 +51,7 @@ def parse_tool_call(
     tool_call_content = extract_tool_call(response, preferred_tags)
 
     if not tool_call_content:
-        logger.warning(f"No tool call found in response: {response}...")
+        logger.debug(f"No tool call found in response: {response[:100]}...")
         return "-ERROR-", {}, True
 
     # Parse JSON
@@ -78,9 +78,14 @@ def parse_tool_call(
             if not tool_name or tool_name not in valid_tool_names:
                 return "-ERROR-", arguments, True
 
-        logger.warning(f"Parsed tool call: {tool_name}, {arguments}")
+        logger.debug(f"Parsed tool call: {tool_name}, {arguments}")
         return tool_name, arguments, False
 
-    except (json.JSONDecodeError, Exception) as json_error:
-        logger.error(f"Failed to parse tool call: {json_error}", exc_info=True)
+    except json.JSONDecodeError as json_error:
+        # This is expected during training - log at debug level with the malformed content
+        logger.debug(f"Failed to parse tool call JSON: {json_error}. Content: {tool_call_content[:200]}...")
+        return "-ERROR-", {}, True
+    except Exception as e:
+        # Other exceptions are more serious
+        logger.warning(f"Unexpected error parsing tool call: {e}", exc_info=True)
         return "-ERROR-", {}, True

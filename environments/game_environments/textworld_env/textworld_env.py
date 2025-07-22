@@ -48,7 +48,7 @@ from environments.game_environments.textworld_env.generation_utils import (
 from environments.game_environments.textworld_env.textworld_registry import (
     create_textworld_registry,
 )
-from .utils.qwen_fixed_tokenizer import QwenFixedTokenizer
+from environments.game_environments.textworld_env.utils.qwen_fixed_tokenizer import QwenFixedTokenizer
 from environments.game_environments.textworld_env.scoring.entropy_calculator import (
     confidence_score,
     calculate_sequence_entropy,
@@ -56,7 +56,8 @@ from environments.game_environments.textworld_env.scoring.entropy_calculator imp
 )
 
 logger = logging.getLogger(__name__)
-print(f"TextWorld module imported, logger name: {__name__}", flush=True)
+logger.setLevel(logging.INFO)  # Ensure INFO level logging
+print(f"TextWorld module imported, logger name: {__name__}, level: {logger.level}", flush=True)
 
 
 class TextWorldEnvConfig(BaseEnvConfig):
@@ -64,6 +65,7 @@ class TextWorldEnvConfig(BaseEnvConfig):
 
     env_name: str = "TextWorld"
     wandb_name: str = "textworld-trainer"  # Override default None
+    group_size: int = 16  # Override default 4 to match successful test (more alternatives = better)
     max_steps: int = 100
     challenge_name: str = "tw-simple"
     challenge_rewards: str = "sparse"  # Changed to sparse for VR-CLI
@@ -78,7 +80,7 @@ class TextWorldEnvConfig(BaseEnvConfig):
     grammar_include_adj: bool = True
     game_seed: Optional[int] = None
     max_token_length: int = 16384
-    max_trajectory_tokens: int = 24576
+    max_trajectory_tokens: int = 40960
 
     # VR-CLI specific configurations
     vrcli_enabled: bool = Field(
@@ -479,7 +481,9 @@ class TextWorldEnv(BaseEnv):
         logger.info(f"Registering TextWorldEnv with rollout server at {self.config.rollout_server_url}")
         try:
             await super().register_env()
-            logger.info("Successfully registered with rollout server")
+            # Override max token length to allow full trajectories
+            self.max_token_len = 40960
+            logger.info(f"Successfully registered with rollout server, max_token_len set to {self.max_token_len}")
             print(f"TextWorldEnv.register_env() completed successfully", flush=True)
         except Exception as e:
             logger.error(f"Failed to register with rollout server: {e}", exc_info=True)
@@ -686,7 +690,7 @@ class TextWorldEnv(BaseEnv):
     ) -> float:
         """Calculate perplexity using logprobs from the inference server."""
         # Import AtroposAgent to access TOOLS constant
-        from .agents.atropos_agent import AtroposAgent
+        from environments.game_environments.textworld_env.agents.atropos_agent import AtroposAgent
         
         # Apply chat template to get the full formatted text with tools
         full_text = self.tokenizer.apply_chat_template(
@@ -745,7 +749,7 @@ class TextWorldEnv(BaseEnv):
     ) -> List[float]:
         """Get logprobs for assistant response using echo mode from the inference server."""
         # Import AtroposAgent to access TOOLS constant
-        from .agents.atropos_agent import AtroposAgent
+        from environments.game_environments.textworld_env.agents.atropos_agent import AtroposAgent
         
         try:
             # Create the full conversation including the assistant response
@@ -1401,6 +1405,10 @@ class TextWorldEnv(BaseEnv):
                 scores.append(0.0)
 
         # Create scored data group
+        logger.info(
+            f"[Episode: {ep_state.episode_id}] Creating ScoredDataGroup with {len(evaluations)} alternatives "
+            f"(all {self.config.group_size} generated alternatives included, including any with parsing errors)"
+        )
         scored_data_group = ScoredDataGroup(
             tokens=sg_tokens,
             masks=sg_masks,
@@ -1424,6 +1432,9 @@ class TextWorldEnv(BaseEnv):
         List[Any],
     ]:
         """Run a full TextWorld episode collecting data for each step."""
+        # Ensure logger is at INFO level for debugging
+        logger.setLevel(logging.INFO)
+        
         logger.info(
             f"[DEBUG] collect_trajectories called with item: {item.get('episode_id', 'unknown')}"
         )
@@ -1438,7 +1449,9 @@ class TextWorldEnv(BaseEnv):
             return [], []
 
         logger.info(
-            f"[DEBUG] Starting episode {ep_state.episode_id} with max_turns={ep_state.max_turns}"
+            f"[Episode: {ep_state.episode_id}] Starting trajectory collection - "
+            f"max_turns={ep_state.max_turns}, group_size={self.config.group_size}, "
+            f"objective: {ep_state.initial_infos.get('objective', 'N/A')}"
         )
         policy_sdgs_for_episode: List[Optional[ScoredDataGroup]] = []
 
@@ -1480,6 +1493,10 @@ class TextWorldEnv(BaseEnv):
                     break
 
                 if current_turn_num == ep_state.max_turns - 1 and not ep_state.done:
+                    logger.info(
+                        f"[Episode: {ep_state.episode_id}] Reached max turns ({ep_state.max_turns}), "
+                        f"forcing episode termination"
+                    )
                     ep_state.done = True
 
         except Exception as e:
@@ -1495,8 +1512,10 @@ class TextWorldEnv(BaseEnv):
             # await self._cleanup_episode_resources(ep_state)
 
         logger.info(
-            f"[Episode: {ep_state.episode_id}] Episode complete. Score: {ep_state.last_score}, "
-            f"Won: {ep_state.won}, Lost: {ep_state.lost}, Turns: {len(policy_sdgs_for_episode)}"
+            f"[Episode: {ep_state.episode_id}] Episode complete! Final status: "
+            f"done={ep_state.done}, won={ep_state.won}, lost={ep_state.lost}, "
+            f"score={ep_state.last_score}, turns_taken={len(policy_sdgs_for_episode)}/{ep_state.max_turns}, "
+            f"cumulative_reward={ep_state.cumulative_reward:.3f}"
         )
 
         return policy_sdgs_for_episode, []
