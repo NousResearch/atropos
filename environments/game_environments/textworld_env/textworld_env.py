@@ -315,8 +315,6 @@ class TextWorldEnv(BaseEnv):
                 },
             }
         ]
-        tools_json = json.dumps(self.textworld_tools, indent=2)
-
         # Policy agent system prompt with outcome prediction
         constructed_system_prompt = (
             "You are an AI agent playing a text-based adventure game who uses extreme long chains of thought "
@@ -337,7 +335,6 @@ class TextWorldEnv(BaseEnv):
             "   - Be concise but comprehensive (1-3 sentences)\\n"
             "3. Provide your action using the execute_command function call."
             "\\n\\n"
-            f"<tools>\\n{tools_json}\\n</tools>\\n\\n"
             "For your function call, return a JSON object with function name and arguments "
             "within <tool_call> </tool_call> tags with the following schema:\\n"
             '<tool_call>\\n{"name": "execute_command", "arguments": {"command": "go north", '
@@ -682,9 +679,15 @@ class TextWorldEnv(BaseEnv):
         self, messages: List[Dict[str, str]]
     ) -> float:
         """Calculate perplexity using logprobs from the inference server."""
-        # Apply chat template to get the full formatted text
+        # Import AtroposAgent to access TOOLS constant
+        from .agents.atropos_agent import AtroposAgent
+        
+        # Apply chat template to get the full formatted text with tools
         full_text = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=False
+            messages, 
+            tools=AtroposAgent.TOOLS,
+            tokenize=False, 
+            add_generation_prompt=False
         )
 
         # Use completion mode to get logprobs for the entire sequence
@@ -701,7 +704,10 @@ class TextWorldEnv(BaseEnv):
         if len(messages) > 1:
             prefix_messages = messages[:-1]
             prefix_text = self.tokenizer.apply_chat_template(
-                prefix_messages, tokenize=False, add_generation_prompt=True
+                prefix_messages, 
+                tools=AtroposAgent.TOOLS,
+                tokenize=False, 
+                add_generation_prompt=True
             )
             prefix_tokens = self.tokenizer.encode(prefix_text, add_special_tokens=False)
 
@@ -732,13 +738,19 @@ class TextWorldEnv(BaseEnv):
         self, messages: List[Dict[str, str]], assistant_response: str
     ) -> List[float]:
         """Get logprobs for assistant response using echo mode from the inference server."""
+        # Import AtroposAgent to access TOOLS constant
+        from .agents.atropos_agent import AtroposAgent
+        
         try:
             # Create the full conversation including the assistant response
             full_messages = messages + [{"role": "assistant", "content": assistant_response}]
             
-            # Apply chat template to get the full formatted text
+            # Apply chat template to get the full formatted text with tools
             full_text = self.tokenizer.apply_chat_template(
-                full_messages, tokenize=False, add_generation_prompt=False
+                full_messages, 
+                tools=AtroposAgent.TOOLS,
+                tokenize=False, 
+                add_generation_prompt=False
             )
             
             # Use completion mode to get logprobs for the entire sequence
@@ -753,7 +765,10 @@ class TextWorldEnv(BaseEnv):
             # Find where the assistant message starts in the tokenized sequence
             # Tokenize the messages without the assistant response to find the boundary
             prefix_text = self.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
+                messages, 
+                tools=AtroposAgent.TOOLS,
+                tokenize=False, 
+                add_generation_prompt=True
             )
             prefix_tokens = self.tokenizer.encode(prefix_text, add_special_tokens=False)
             
@@ -813,23 +828,35 @@ class TextWorldEnv(BaseEnv):
         # Calculate perplexities using server
         base_ppl = await self._calculate_perplexity_from_server(base_messages)
         pred_ppl = await self._calculate_perplexity_from_server(prediction_messages)
+        
+        logger.debug(
+            f"VR-CLI perplexity calculation: base_ppl={base_ppl:.3f}, pred_ppl={pred_ppl:.3f}"
+        )
 
         # Calculate percentage improvement using VR-CLI formula
         # Improvement = [1 - PPL(y|x,a)/PPL(y|x)] × 100
         if base_ppl == 0 or base_ppl == float("inf"):
+            logger.debug("VR-CLI: Base perplexity is invalid, returning 0.0")
             return 0.0
 
         improvement = (1 - pred_ppl / base_ppl) * 100
+        
+        logger.debug(
+            f"VR-CLI improvement: {improvement:.2f}% (ratio: {pred_ppl/base_ppl:.3f})"
+        )
 
         # Map to discrete reward levels
         if improvement < 0.05:
-            return 0.0  # Negligible improvement
+            reward = 0.0  # Negligible improvement
         elif improvement < 1.0:
-            return 0.5  # Small improvement
+            reward = 0.5  # Small improvement
         elif improvement < 2.0:
-            return 0.9  # Moderate improvement
+            reward = 0.9  # Moderate improvement
         else:
-            return 1.0  # Significant improvement
+            reward = 1.0  # Significant improvement
+            
+        logger.debug(f"VR-CLI final reward: {reward} (improvement: {improvement:.2f}%)")
+        return reward
 
 
     def _calculate_format_reward(self, response_text: str) -> float:
@@ -1003,8 +1030,14 @@ class TextWorldEnv(BaseEnv):
 
         # Step 2: Select best alternative (highest confidence)
         if confidence_scores:
+            # Log all confidence scores before selection
+            logger.debug(
+                f"[Episode: {ep_state.episode_id}] Confidence scores for all alternatives: "
+                f"{[f'alt{i}={score:.3f}' for i, score in enumerate(confidence_scores)]}"
+            )
             selected_idx = max(range(len(confidence_scores)), key=lambda i: confidence_scores[i])
         else:
+            logger.warning(f"[Episode: {ep_state.episode_id}] No confidence scores available, defaulting to alternative 0")
             selected_idx = 0
             
         selected_action = candidates[selected_idx][0]
@@ -1013,7 +1046,7 @@ class TextWorldEnv(BaseEnv):
 
         logger.info(
             f"[Episode: {ep_state.episode_id}] Selected alternative {selected_idx} with action '{selected_action}' "
-            f"(confidence: {confidence_scores[selected_idx]:.3f})"
+            f"(confidence: {confidence_scores[selected_idx]:.3f if confidence_scores else 0.0})"
         )
 
         # Step 3: Execute selected action in main environment
@@ -1077,8 +1110,15 @@ class TextWorldEnv(BaseEnv):
                 # Use VR-CLI for selected action and same-action alternatives
                 try:
                     # Use the observation from before the step for VR-CLI scoring
+                    logger.debug(
+                        f"[Episode: {ep_state.episode_id}] Calculating VR-CLI score for alt {i}: "
+                        f"action='{action}', prediction='{prediction[:50] if prediction else 'None'}...'"
+                    )
                     vrcli_score = await self._vrcli_score(
                         previous_obs, prediction or "", actual_outcome
+                    )
+                    logger.debug(
+                        f"[Episode: {ep_state.episode_id}] VR-CLI score for alt {i}: {vrcli_score:.3f}"
                     )
                 except Exception as e:
                     logger.error(f"Error calculating VR-CLI score for alternative {i}: {e}")

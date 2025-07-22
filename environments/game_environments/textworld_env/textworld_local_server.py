@@ -54,8 +54,8 @@ async def main():
         max_steps=20,  # Reduced for quicker testing
         # Use the new registry system for game selection
         use_registry=True,
-        registry_mode="random",  # Randomly select between challenges and generated games
-        registry_generation_ratio=0.7,  # 70% generated, 30% pre-built challenges
+        registry_mode="challenge",  # Only use pre-built challenges
+        registry_generation_ratio=0.0,  # No generated games, only challenges
         registry_difficulty="random",  # Random difficulty
         # Old challenge system - will be ignored when use_registry=True
         challenge_name="tw-simple",

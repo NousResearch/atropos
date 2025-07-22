@@ -102,6 +102,29 @@ class AtroposAgent:
     An agent that interacts with an LLM for game playing, managing its own dialogue history
     and using a memory system.
     """
+    
+    # Define tools for tokenizers that require them (e.g., Qwen)
+    TOOLS = [{
+        "type": "function",
+        "function": {
+            "name": "execute_command",
+            "description": "Execute a command in the game",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The command to execute"
+                    },
+                    "expected_outcome": {
+                        "type": "string", 
+                        "description": "Expected result of the command"
+                    }
+                },
+                "required": ["command", "expected_outcome"]
+            }
+        }
+    }]
 
     def __init__(
         self,
@@ -199,9 +222,14 @@ class AtroposAgent:
         )
 
         try:
-            # Convert messages to prompt for completion endpoint
-            prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-
+            # Apply chat template with tools
+            prompt = self.tokenizer.apply_chat_template(
+                messages, 
+                tools=self.TOOLS,
+                add_generation_prompt=True,
+                tokenize=False
+            )
+            
             # Update api_kwargs for completion endpoint
             api_kwargs.pop("model", None)  # model is not used in completion endpoint
             raw_response = await self.server_client.completion(
@@ -278,6 +306,13 @@ class AtroposAgent:
 
         history_for_llm_call = _convert_messages_for_api(current_history_atropos)
 
+        # DEBUG: Log the full history being passed to chat template
+        logger.debug(f"[DEBUG] history_for_llm_call has {len(history_for_llm_call)} messages")
+        for i, msg in enumerate(history_for_llm_call):
+            logger.debug(f"[DEBUG] Message {i}: role='{msg.get('role', 'NONE')}', content_length={len(msg.get('content', '')) if msg.get('content') is not None else 'None'}, content_preview={repr(msg.get('content', '')[:100]) if msg.get('content') else 'None'}")
+            if msg.get('content') is None:
+                logger.warning(f"[DEBUG] Message {i} has None content!")
+
         log_prompt_snippet = (
             history_for_llm_call[-1]["content"][:200]
             if history_for_llm_call
@@ -293,8 +328,17 @@ class AtroposAgent:
 
         try:
             # Convert messages to prompt for completion endpoint to avoid tool call parsing
+            logger.debug(f"[DEBUG] About to call apply_chat_template with tokenizer type: {type(self.tokenizer).__name__}")
+            logger.debug(f"[DEBUG] Tokenizer has chat_template: {hasattr(self.tokenizer, 'chat_template')}")
+            if hasattr(self.tokenizer, 'chat_template'):
+                logger.debug(f"[DEBUG] Chat template type: {type(self.tokenizer.chat_template)}")
+            
+            # Apply chat template with tools
             prompt = self.tokenizer.apply_chat_template(
-                history_for_llm_call, tokenize=False, add_generation_prompt=True
+                history_for_llm_call,
+                tools=self.TOOLS,
+                add_generation_prompt=True,
+                tokenize=False
             )
             
             # DEBUG: Log the full prompt being sent
@@ -315,7 +359,7 @@ class AtroposAgent:
                 max_tokens=self.config.max_tokens_per_completion,
                 temperature=self.config.temperature,
                 top_p=0.9,
-                stop=["</tool_call>", "<|eot_id|>", "<|end_of_text|>"],
+                stop=["</tool_call>", "<|im_end|>", "<|endoftext|>"],
                 # TODO: Re-enable logprobs once SGLang TypeError is fixed
                 # logprobs=True,
                 # top_logprobs=20,
