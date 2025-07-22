@@ -21,7 +21,7 @@ First, I need to connect "herd" with "masturbating." A herd of cows is a group, 
 "Masturbating" is a term that's not typically used for animals, but maybe there's a word that combines the two.........
 </think>
 
-Beef strokin off!
+Beef stroking off!
 ```
 
 ## Impact
