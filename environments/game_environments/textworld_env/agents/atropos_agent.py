@@ -200,7 +200,7 @@ class AtroposAgent:
 
         try:
             # Convert messages to prompt for completion endpoint
-            prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
+            prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
             # Update api_kwargs for completion endpoint
             api_kwargs.pop("model", None)  # model is not used in completion endpoint
@@ -294,8 +294,20 @@ class AtroposAgent:
         try:
             # Convert messages to prompt for completion endpoint to avoid tool call parsing
             prompt = self.tokenizer.apply_chat_template(
-                history_for_llm_call, tokenize=False
+                history_for_llm_call, tokenize=False, add_generation_prompt=True
             )
+            
+            # DEBUG: Log the full prompt being sent
+            logger.debug(f"[DEBUG] Full prompt being sent to completion endpoint:")
+            logger.debug(f"[DEBUG] Prompt length: {len(prompt)} chars")
+            logger.debug(f"[DEBUG] Prompt preview (first 500 chars): {prompt[:500]}...")
+            logger.debug(f"[DEBUG] Prompt preview (last 500 chars): ...{prompt[-500:]}")
+            
+            # Check if tokenizer adds generation prompt
+            if hasattr(self.tokenizer, 'add_generation_prompt'):
+                logger.debug(f"[DEBUG] Tokenizer has add_generation_prompt attribute")
+            else:
+                logger.debug(f"[DEBUG] Tokenizer does NOT have add_generation_prompt attribute")
 
             completions = await self.server_client.completion(
                 prompt=prompt,
@@ -303,6 +315,7 @@ class AtroposAgent:
                 max_tokens=self.config.max_tokens_per_completion,
                 temperature=self.config.temperature,
                 top_p=0.9,
+                stop=["</tool_call>", "<|eot_id|>", "<|end_of_text|>"],
                 # TODO: Re-enable logprobs once SGLang TypeError is fixed
                 # logprobs=True,
                 # top_logprobs=20,
@@ -311,9 +324,27 @@ class AtroposAgent:
             if completions and completions.choices:
                 for choice_idx, choice in enumerate(completions.choices):
                     if hasattr(choice, "text") and choice.text is not None:
+                        # DEBUG: Log raw response
+                        raw_text = choice.text
+                        logger.debug(f"[DEBUG] Raw response {choice_idx}:")
+                        logger.debug(f"[DEBUG] Length: {len(raw_text)} chars")
+                        logger.debug(f"[DEBUG] Starts with '<think>': {raw_text.strip().startswith('<think>')}")
+                        logger.debug(f"[DEBUG] Starts with '</think>': {raw_text.strip().startswith('</think>')}")
+                        # Log the FULL response
+                        logger.debug(f"[DEBUG] FULL RESPONSE {choice_idx}:\n{raw_text}\n[END OF RESPONSE {choice_idx}]")
+                        
+                        # Append </tool_call> if there's an unclosed tool_call block
+                        action_text = choice.text.strip()
+                        tool_call_open_count = action_text.count("<tool_call>")
+                        tool_call_close_count = action_text.count("</tool_call>")
+                        
+                        # Only append closing tag if we have more opens than closes
+                        if tool_call_open_count > tool_call_close_count:
+                            action_text += "</tool_call>"
+                        
                         llm_generated_actions.append(
                             AtroposAgentAction(
-                                action_text=choice.text.strip(),
+                                action_text=action_text,
                                 api_error=False,
                                 score=0.0,
                                 logprobs=None,

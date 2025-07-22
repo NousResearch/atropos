@@ -33,17 +33,23 @@ async def main():
     )
     logging.getLogger("atroposlib.utils.tool_call_parser").setLevel(logging.DEBUG)
 
-    # Using local SGLang server with DeepHermes-3-Llama-3-8B
-    server_config = APIServerConfig(
-        model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
-        base_url="http://localhost:30000/v1",
-        api_key="dummy",  # SGLang doesn't need a real API key
-        num_requests_for_eval=0,
-        server_type="openai",  # SGLang is OpenAI-compatible
-    )
+    # Using local SGLang servers with Hermes-4-Qwen3-14B on ports 9004-9007
+    server_configs = [
+        APIServerConfig(
+            model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+            base_url=f"http://localhost:{port}/v1",
+            api_key="x",  # SGLang requires non-empty API key
+            num_requests_for_eval=0,
+            server_type="openai",  # SGLang is OpenAI-compatible
+            timeout=1200,
+            num_max_requests_at_once=512,
+            health_check=True,
+        )
+        for port in [9004, 9005, 9006, 9007]
+    ]
 
     env_config = TextWorldEnvConfig(
-        tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+        tokenizer_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
         max_token_length=16384,  # Increased for long thinking
         max_steps=20,  # Reduced for quicker testing
         # Use the new registry system for game selection
@@ -55,9 +61,9 @@ async def main():
         challenge_name="tw-simple",
         challenge_rewards="sparse",  # Using sparse rewards with VR-CLI
         debug_mode=True,
-        default_server_config=server_config,
+        default_server_config=server_configs[0],  # Use first server as default
         atropos_agent_config=AtroposAgentConfig(enable_memory=True),
-        group_size=3,  # Test with 3 alternatives
+        group_size=16,  # Increased from 3 to 16 for better chance of successful responses
         vrcli_enabled=True,
         vrcli_weight=0.7,  # 70% VR-CLI, 30% environment reward
         vrcli_discount_factor=0.99,
@@ -67,7 +73,7 @@ async def main():
 
     try:
         env = TextWorldEnv(
-            config=env_config, server_configs=[server_config], slurm=False
+            config=env_config, server_configs=server_configs, slurm=False
         )
     except Exception as e:
         logger.error(f"Failed to initialize TextWorldEnv: {e}")
