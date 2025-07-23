@@ -1,0 +1,91 @@
+# ============================================================================
+# Refusal Benchmark Environment - TRIAL CONFIGURATION
+# ============================================================================
+# This is a trial configuration optimized for quick testing and debugging.
+# Key differences from main config:
+# - Smaller sample size (100 vs 4000) for faster evaluation
+# - Lower concurrent requests to avoid rate limits
+# - Shorter timeouts for quicker feedback
+# - Separate results directory for trial runs
+
+# ============================================================================
+# Core Environment Settings
+# ============================================================================
+
+tokenizer_name: "gpt2"                         # HuggingFace tokenizer
+group_size: 16                                 # Responses per training item
+use_wandb: true                                # Enable experiment tracking
+max_num_workers_per_node: 16                   # Parallel processing workers
+rollout_server_url: "http://localhost:8000"    # Atropos server (training mode)
+total_steps: 500                               # Training steps / eval items
+batch_size: 512                                # Training batch size
+steps_per_eval: 25                             # Evaluation frequency
+max_token_length: 1024                         # Max sequence length
+inference_weight: 1.0                          # Training inference weight
+wandb_name: "refusal_benchmark_trial"          # WandB experiment name
+eval_limit_ratio: 0.2                          # Worker limit during eval
+min_batch_allocation: 0.1                      # Minimum batch allocation
+
+# ============================================================================
+# Dataset Configuration - TRIAL SETTINGS
+# ============================================================================
+
+data_file: "processed_test_label1.jsonl"       # Test dataset path
+max_eval_samples: 100                          # SMALL sample for quick testing
+classifier_type: "openai"                      # Refusal classifier type
+
+# ============================================================================
+# Generation Parameters
+# ============================================================================
+
+eval_temperature: 0.7                          # Response randomness (evaluation)
+train_temperature: 0.8                         # Response randomness (training)
+eval_max_tokens: 1024                          # Max response length (eval)
+train_max_tokens: 1024                         # Max response length (train)
+
+# ============================================================================
+# Training & Output Configuration
+# ============================================================================
+
+use_label_0_for_training: true                 # Use non-refusal examples for training
+data_dir_to_save_evals: "results/refusal_benchmark_trial"  # Trial results directory
+testing: false                                 # Not in testing mode
+
+# ============================================================================
+# Server Configuration - TRIAL SETTINGS
+# ============================================================================
+# Conservative settings to avoid rate limits and reduce costs during testing
+
+server_configs:
+  # Main model server (model being evaluated)
+  - model_name: "gpt-4o-mini"                  # Cost-effective model for trials
+    base_url: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"               # Use environment variable
+    num_max_requests_at_once: 1               # CONSERVATIVE: 1 request at a time
+    num_requests_for_eval: 32                  # Evaluation request pool
+    server_type: "openai"
+    timeout: 120                               # Standard timeout
+  
+  # Classifier server (refusal detection)
+  - model_name: "gpt-4o-mini"                  # Same model for consistency
+    base_url: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"
+    num_max_requests_at_once: 1               # CONSERVATIVE: 1 request at a time
+    num_requests_for_eval: 16                  # Smaller pool for classifier
+    server_type: "openai"
+    timeout: 30                                # FASTER timeout for quick feedback
+
+# ============================================================================
+# Trial Usage Notes
+# ============================================================================
+# This configuration is designed for:
+# ✓ Quick testing of setup and configuration
+# ✓ Debugging evaluation pipeline
+# ✓ Validating dataset format and classifier
+# ✓ Testing API connectivity and authentication
+# 
+# For production runs, use configs/refusal_benchmark.yaml with:
+# - Higher max_eval_samples (1000-4000)
+# - More concurrent requests (4-8)
+# - Longer timeouts for reliability
+# - Different models for main vs classifier if needed 
