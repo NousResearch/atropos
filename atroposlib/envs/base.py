@@ -819,18 +819,14 @@ class BaseEnv(ABC):
                 logger.warning(f"  Group keys: {list(group.keys())}")
         
         for group in data_to_process:
-            if group is None:
-                logger.warning("Received None group in data_to_process, skipping")
-                continue
-            
-            # Check if group is a dict-like object
-            if not hasattr(group, 'get'):
-                logger.warning(f"Group is not a dict-like object: {type(group)}, skipping")
-                continue
-            
             # Check for None first
             if group is None:
                 logger.warning(f"[CRITICAL] Found None group in data_to_process - this should have been filtered earlier!")
+                continue
+                
+            # Check if group is a dict-like object
+            if not hasattr(group, 'get'):
+                logger.warning(f"Group is not a dict-like object: {type(group)}, skipping")
                 continue
                 
             # Additional safety check
@@ -838,9 +834,13 @@ class BaseEnv(ABC):
                 logger.warning(f"Group is not a dict, it's {type(group)}: {group}, skipping")
                 continue
 
-            group_size = group.get("group_overrides", {}).get(
-                "group_size", self.config.group_size
-            )
+            try:
+                group_size = group.get("group_overrides", {}).get(
+                    "group_size", self.config.group_size
+                )
+            except AttributeError as e:
+                logger.error(f"[CRITICAL] AttributeError accessing group: group type={type(group)}, group={group}")
+                raise
 
             if not (
                 (None not in group) and (len(group.get("tokens", [])) == group_size)
