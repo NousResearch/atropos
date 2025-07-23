@@ -1026,7 +1026,7 @@ class RefusalBenchmarkEnv(BaseEnv):
             )
 
             # Print human-readable results
-            print(f"\nEvaluation Results:")
+            print("\nEvaluation Results:")
             print(f"Refusal rate: {refusal_rate:.3f}")
             print(f"Average confidence: {avg_confidence:.3f}")
             print(f"Refused samples: {len(refused_samples)}")
@@ -1135,7 +1135,7 @@ class RefusalBenchmarkEnv(BaseEnv):
             with open(summary_file, "w") as f:
                 json.dump(evaluation_summary, f, indent=2)
 
-            print(f"Detailed evaluation results saved:")
+            print("Detailed evaluation results saved:")
             print(f"  - Samples: {samples_file}")
             print(f"  - Summary: {summary_file}")
 
