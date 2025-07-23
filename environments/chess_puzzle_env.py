@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from datasets import load_dataset
 from tqdm.asyncio import tqdm_asyncio
+import random
 
 import wandb
 from atroposlib.envs.base import (
@@ -17,6 +18,8 @@ from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 system_prompt = (
     "You are a deep-thinking chess AI trained to solve chess puzzles step by step.\n"
+    "You are allocated a maximum of 2048 tokens, please strive to use less."
+    "Make sure to append a [STOP] token when you are finished."
     "Your task is to analyze a chess position (given as an 8x8 unicode board), output the best sequence of moves, "
     "and explain your reasoning.\n\n"
     "The input will be in this format:\n"
@@ -26,7 +29,7 @@ system_prompt = (
     "black can/can't castle kingside, and black can/can't castle queenside\n"
     "Board:\n"
     "8x8 unicode board separated by commas,"
-    "where each piece is represented by its corresponding unicode characters,"
+    "where each piece is represented by its corresponding character,"
     "and an en-passant square is marked with !\n\n"
     "Note: The prompt may be worded differently, but if it implies that you should solve the chess puzzle, "
     "begin solving it using the format described below. "
@@ -48,17 +51,17 @@ system_prompt = (
     "black can't castle kingside, and black can't castle queenside\n"
     "Board:\n"
     "., ., ., ., ., ., ., .,\n"
-    "., ., ., ., ., ., ., ♖,\n"
-    "., ., ., ., ., ♟, ., .,\n"
-    "♟, ., ., ., ., ., ., .,\n"
-    "., ., ., ., ., ., ., ♙,\n"
-    "., ., ♟, ., ., ., ., .,\n"
-    "., ., ., ♚, ., ., ♘, .,\n"
-    "., ♔, ., ., ., ., ., .,\n\n"
+    "., ., ., ., ., ., ., R,\n"
+    "., ., ., ., ., p, ., .,\n"
+    "p, ., ., ., ., ., ., .,\n"
+    "., ., ., ., ., ., ., P,\n"
+    "., ., p, ., ., ., ., .,\n"
+    "., ., ., k, ., ., N, .,\n"
+    "., K, ., ., ., ., ., .,\n\n"
     "Example Output:\n"
     "<moves> c3c2, b1a2, c2c1q, h7d7, d2e2 </moves>\n"
     "<think> Advancing the pawn down the board is crushing because it leads to the promotion of a"
-    "queen because pushing the pawn comes with a check. </think>\n\n"
+    "queen because pushing the pawn comes with a check. </think>[STOP]\n\n"
     "Rules:\n"
     "- Think carefully about the legality of each move — illegal moves will be harshly penalized.\n"
     "- Do not skip any lines.\n"
@@ -167,6 +170,14 @@ class ChessPuzzlesEnv(BaseEnv):
         black_kingside_castling_rights = next_item["black_kingside"]
         black_queenside_castling_rights = next_item["black_queenside"]
         turn = next_item["turn"]
+        
+        unicode_to_piece = {
+            '♔': 'K', '♕': 'Q', '♖': 'R', '♗': 'B', '♘': 'N', '♙': 'P',
+            '♚': 'k', '♛': 'q', '♜': 'r', '♝': 'b', '♞': 'n', '♟': 'p',
+        }
+
+        # Replace unicode pieces with letters
+        board = ''.join(unicode_to_piece.get(c, c) for c in board)
 
         # Determine the turn text
         turn_text = "white" if turn == "w" else "black"
@@ -237,11 +248,9 @@ class ChessPuzzlesEnv(BaseEnv):
         completions = await self.server.completion(
             prompt=prompt,
             n=self.config.group_size,
-            max_tokens=1024 * 15,
+            max_tokens=self.config.max_token_length,
             temperature=1.0,  # Using temperature to get diverse responses
         )
-
-        print(completions)
 
         to_score = list()
 
@@ -291,15 +300,15 @@ class ChessPuzzlesEnv(BaseEnv):
         scores["tokens"] = list()
         scores["masks"] = list()
         scores["scores"] = list()
+        
 
-        # Get the expected answer letter
-        ground_truth_moves = rollout_group_data[0][1].split()  # ground truth moves
-        ground_truth_tags = rollout_group_data[0][
-            2
-        ]  # ground truth tags for explanation
+        ground_truth_moves = rollout_group_data[0][1] # ground truth moves
+        ground_truth_tags = rollout_group_data[0][2]  # ground truth tags for explanation
 
         # Shuffle to avoid bias in selection
         random.shuffle(rollout_group_data)
+        
+        
 
         for item in rollout_group_data:
             # Extract the model's response
@@ -312,14 +321,18 @@ class ChessPuzzlesEnv(BaseEnv):
             else:
                 # Extract the answer from the model's response
                 model_moves, thinking_text = self._extract_model_moves(model_response)
-
+                
+                reward = random.random()
+                """reward = 0.0
                 # Track metrics based on result
-                if model_moves is None:
+                if model_moves==0 or thinking_text==0:
                     reward = 0  # Invalid format gets 0 reward
-                elif model_moves == ground_truth_moves:
+                if model_moves != 0:
+                    reward += 0.2
+                if thinking_text!=0:
+                    reward += 0.2
+                if model_moves == ground_truth_moves:
                     reward = 1  # Correct answer gets 1 reward
-                else:
-                    reward = 0  # Wrong answer gets 0 reward
 
                 all_present = all(
                     keyword in thinking_text for keyword in ground_truth_tags
@@ -327,7 +340,10 @@ class ChessPuzzlesEnv(BaseEnv):
                 if all_present:
                     reward += 1
 
-                reward /= 2
+                
+                reward /= 2"""
+                
+                #max reward is 2, divide by 2 to normalize
 
             # Tokenize the conversation for learning
             out_dict = tokenize_for_trainer(self.tokenizer, item[0])
@@ -338,6 +354,9 @@ class ChessPuzzlesEnv(BaseEnv):
             if len([1 for i in masks if i != -100]) < 10:
                 continue
 
+            print(len(tokens))
+            print(model_response)
+            
             scores["tokens"].append(tokens)
             scores["masks"].append(masks)
             scores["scores"].append(reward)
@@ -349,9 +368,10 @@ class ChessPuzzlesEnv(BaseEnv):
         # Record success rate metrics for wandb logging
         for score in scores["scores"]:
             self.percent_correct_buffer.append(max(score, 0))
-
+        
         # Return None if all scores are the same (no learning signal)
         if all(scores["scores"][0] == score for score in scores["scores"]):
+            print("all scores are: ", scores['scores'][0])
             print("no learning signal")
             return None
 
@@ -368,38 +388,41 @@ class ChessPuzzlesEnv(BaseEnv):
         Returns:
             List of moves, text for thinking section
         """
+
         # Check for multiple <think> tags - score as 0 if found
         think_tags = re.findall(r"<think>", text, re.IGNORECASE)
         if len(think_tags) > 1:
-            return None
+            return 0, 0
 
         # Check if the think tag is properly opened - we need exactly one opening tag
         if len(think_tags) != 1:
-            return None
+            return 0, 0
 
         # Check for </think> closing tags
         think_close_tags = re.findall(r"</think>", text, re.IGNORECASE)
         if len(think_close_tags) != 1:
-            return None  # Must have exactly one closing tag
+            return 0,0   # Must have exactly one closing tag
 
         # Check for multiple <moves> tags - score as 0 if found
         moves_tags = re.findall(r"<moves>", text, re.IGNORECASE)
         if len(moves_tags) > 1:
-            return None
+            return 0, 0
 
         # Check if the moves tag is properly opened - we need exactly one opening tag
         if len(moves_tags) != 1:
-            return None
+            return 0, 0
 
         # Check for </moves> closing tags
         moves_close_tags = re.findall(r"</moves>", text, re.IGNORECASE)
         if len(moves_close_tags) != 1:
-            return None  # Must have exactly one closing tag
+            return 0, 0  # Must have exactly one closing tag
 
         # Check if <think> comes immediately after </moves>
         tag_sequence_match = re.search(r"</moves>\s*<think>", text)
         if not tag_sequence_match:
-            return None
+            return 0, 0
+        
+        
 
         moves_section = re.search(r"<moves>(.*?)</moves>", text, re.DOTALL)
         if moves_section:
@@ -407,20 +430,22 @@ class ChessPuzzlesEnv(BaseEnv):
             if "," in moves_text:
                 pass
             else:
-                return None
+                return 0, 0
+        
+        
 
         thinking_section = re.search(r"<think>(.*?)</think>", text, re.DOTALL)
 
         # Validate thinking section
         # Make sure thinking section actually contains the opening <think> tag
-        if "<think>" not in thinking_section.lower():
-            return None  # Malformed thinking section
+        if "<think>" not in thinking_section.group():
+            return 0, 0  # Malformed thinking section
 
         # Check if there are any <think> tags in the answer section (after the first </think>)
-        if "<think>" in moves_section.lower():
-            return None
+        if "<think>" in moves_section.group():
+            return 0, 0
 
-        return moves_section.split(), thinking_section
+        return moves_section.group(1).replace(",", "").split(), thinking_section.group(1)
 
     async def rollout_and_score_eval(self, test_item):
         """
@@ -456,7 +481,7 @@ class ChessPuzzlesEnv(BaseEnv):
         completion = await self.server.completion(
             prompt=prompt,
             n=1,
-            max_tokens=1024 * 15,
+            max_tokens=1024,
             temperature=0.5,  # Lower for eval
             split="eval",
         )
