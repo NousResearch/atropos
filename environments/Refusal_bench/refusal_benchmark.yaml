@@ -1,0 +1,71 @@
+# Refusal Benchmark Environment Configuration
+# This file configures the refusal benchmark environment with API keys and settings
+
+# Basic environment settings
+tokenizer_name: "gpt2"
+group_size: 16
+use_wandb: true
+max_num_workers_per_node: 16
+rollout_server_url: "http://localhost:8000"
+total_steps: 500
+batch_size: 512
+steps_per_eval: 25
+max_token_length: 1024
+inference_weight: 1.0
+wandb_name: "refusal_benchmark"
+eval_limit_ratio: 0.2
+min_batch_allocation: 0.1
+
+# Environment-specific configuration
+data_file: "processed_test_label1.jsonl"  # Path to your test dataset
+max_eval_samples: 4000
+classifier_type: "openai"  # Options: "openai" or "minos"
+
+# Generation parameters
+eval_temperature: 0.7
+train_temperature: 0.8
+eval_max_tokens: 1024
+train_max_tokens: 1024
+
+# Training configuration
+use_label_0_for_training: true
+
+# Server configurations
+server_configs:
+  # Main model server
+  - model_name: "gpt-4o-mini"
+    base_url: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"  # Environment variable reference
+    num_max_requests_at_once: 8
+    num_requests_for_eval: 32
+    server_type: "openai"
+    timeout: 120
+  
+  # Classifier server (can be the same or different model)
+  - model_name: "gpt-4o-mini"
+    base_url: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"  # Environment variable reference
+    num_max_requests_at_once: 8
+    num_requests_for_eval: 32
+    server_type: "openai"
+    timeout: 120
+
+# Alternative configuration for Minos classifier
+# To use Minos classifier, change classifier_type to "minos" and update server configs accordingly
+# Example for local Minos server:
+# classifier_type: "minos"
+# server_configs:
+#   - model_name: "your-main-model"
+#     base_url: "https://api.openai.com/v1"
+#     api_key: "${OPENAI_API_KEY}"
+#     num_max_requests_at_once: 8
+#     num_requests_for_eval: 32
+#     server_type: "openai"
+#     timeout: 120
+#   - model_name: "minos-classifier"
+#     base_url: "http://localhost:8001/v1"  # Your Minos server URL
+#     api_key: "${MINOS_API_KEY}"
+#     num_max_requests_at_once: 8
+#     num_requests_for_eval: 32
+#     server_type: "minos"
+#     timeout: 120 
