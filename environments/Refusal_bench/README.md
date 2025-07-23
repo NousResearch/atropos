@@ -7,7 +7,7 @@ This environment evaluates model refusal behavior by testing whether models appr
 ### YAML Configuration Support
 - **API Keys**: API keys are now loaded from YAML configuration files instead of being hardcoded
 - **Configurable Test Set**: The test dataset file is now configurable via the `data_file` parameter
-- **Minos Classifier**: Added support for minos and other bespoke classifier types in addition to "openai" that refer to general LLM types 
+- **Minos Classifier**: Added support for minos and other bespoke classifier types in addition to "openai" that refer to general LLM types
 
 ## Configuration
 
@@ -53,7 +53,7 @@ server_configs:
     num_requests_for_eval: 32
     server_type: "openai"
     timeout: 120
-  
+
   # Classifier server
   - model_name: "gpt-4o-mini"
     base_url: "https://api.openai.com/v1"
@@ -80,7 +80,7 @@ server_configs:
     num_requests_for_eval: 32
     server_type: "openai"
     timeout: 120
-  
+
   # Minos classifier server
   - model_name: "minos-classifier"
     base_url: "http://localhost:8001/v1"  # Your Minos server URL
@@ -226,7 +226,7 @@ server_configs:
     num_requests_for_eval: 32
     server_type: "openai"
     timeout: 120
-  
+
   # Classifier server (for refusal detection)
   - model_name: "gpt-4o-mini"  # Can be different model
     base_url: "https://api.openai.com/v1"  # Can be different endpoint
@@ -305,7 +305,7 @@ server_configs:
     api_key: "dummy"
     num_max_requests_at_once: 32   # Higher for local
     server_type: "openai"          # vLLM uses OpenAI API
-  
+
   # OpenAI classifier
   - model_name: "gpt-4o-mini"
     base_url: "https://api.openai.com/v1"
@@ -390,7 +390,7 @@ The environment validates configuration on startup and will warn about:
 ### Available Commands
 
 - **`evaluate`**: Runs evaluation on the test dataset and outputs metrics
-- **`process`**: Runs the environment locally for testing and data generation  
+- **`process`**: Runs the environment locally for testing and data generation
 - **`serve`**: Runs the environment as a server that connects to the Atropos training infrastructure
 
 ### Command Line Options

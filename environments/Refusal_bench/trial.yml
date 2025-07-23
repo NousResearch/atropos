@@ -65,7 +65,7 @@ server_configs:
     num_requests_for_eval: 32                  # Evaluation request pool
     server_type: "openai"
     timeout: 120                               # Standard timeout
-  
+
   # Classifier server (refusal detection)
   - model_name: "gpt-4o-mini"                  # Same model for consistency
     base_url: "https://api.openai.com/v1"
@@ -83,9 +83,9 @@ server_configs:
 # ✓ Debugging evaluation pipeline
 # ✓ Validating dataset format and classifier
 # ✓ Testing API connectivity and authentication
-# 
+#
 # For production runs, use configs/refusal_benchmark.yaml with:
 # - Higher max_eval_samples (1000-4000)
 # - More concurrent requests (4-8)
 # - Longer timeouts for reliability
-# - Different models for main vs classifier if needed 
+# - Different models for main vs classifier if needed

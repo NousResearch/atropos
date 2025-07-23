@@ -124,7 +124,7 @@ server_configs:
     num_requests_for_eval: 32                    # Evaluation request pool size
     server_type: "openai"                        # Server type (openai, vllm, etc.)
     timeout: 120                                 # Request timeout in seconds
-  
+
   # ----------------------------------------------------------------------------
   # Classifier Server (Position 1)
   # ----------------------------------------------------------------------------
@@ -150,7 +150,7 @@ server_configs:
 #     num_requests_for_eval: 16
 #     server_type: "openai"
 #     timeout: 180                              # Longer timeout for complex models
-#   
+#
 #   - model_name: "gpt-3.5-turbo"              # Cheaper/faster classifier
 #     base_url: "https://api.openai.com/v1"
 #     api_key: "${OPENAI_API_KEY}"
@@ -168,7 +168,7 @@ server_configs:
 #     num_requests_for_eval: 128
 #     server_type: "openai"                         # vLLM uses OpenAI-compatible API
 #     timeout: 300
-#   
+#
 #   - model_name: "gpt-4o-mini"                     # OpenAI classifier
 #     base_url: "https://api.openai.com/v1"
 #     api_key: "${OPENAI_API_KEY}"
@@ -188,11 +188,11 @@ server_configs:
 #     num_requests_for_eval: 32
 #     server_type: "openai"
 #     timeout: 120
-#   
+#
 #   - model_name: "minos-classifier"                # Minos classifier
 #     base_url: "http://localhost:8001/v1"          # Your Minos server URL
 #     api_key: "${MINOS_API_KEY}"                   # Minos API key
 #     num_max_requests_at_once: 8
 #     num_requests_for_eval: 32
 #     server_type: "minos"                          # or "openai" if Minos uses OpenAI API
-#     timeout: 120 
+#     timeout: 120
