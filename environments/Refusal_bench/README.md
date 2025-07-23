@@ -143,7 +143,7 @@ These parameters control the basic behavior of the environment:
 
 ### Dataset Configuration
 
-- **`data_file`** (default: `"processed_test_label1.jsonl"`)
+- **`data_file`** (default: `"test_set.jsonl"`)
   - Path to your JSONL test dataset
   - Each line should contain: `{"user": "question", "assistant": "response", "original_label": 1}`
   - Can be relative path or absolute path

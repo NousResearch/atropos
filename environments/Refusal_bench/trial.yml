@@ -30,7 +30,7 @@ min_batch_allocation: 0.1                      # Minimum batch allocation
 # Dataset Configuration - TRIAL SETTINGS
 # ============================================================================
 
-data_file: "processed_test_label1.jsonl"       # Test dataset path
+data_file: "test_set.jsonl"       # Test dataset path
 max_eval_samples: 100                          # SMALL sample for quick testing
 classifier_type: "openai"                      # Refusal classifier type
 
