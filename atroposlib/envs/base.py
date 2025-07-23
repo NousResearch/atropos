@@ -807,10 +807,35 @@ class BaseEnv(ABC):
         """
         original_was_list = isinstance(scored_data, list)  # not sure if this is needed
         data_to_process = scored_data if original_was_list else [scored_data]
+        
+        # Debug logging to understand what's being passed
+        logger.warning(f"handle_send_to_api called with scored_data type: {type(scored_data)}")
+        logger.warning(f"Is list: {original_was_list}, data_to_process length: {len(data_to_process)}")
 
         valid_groups = []
+        for i, group in enumerate(data_to_process):
+            logger.warning(f"Processing group {i}: type={type(group)}, is_none={group is None}")
+            if group is not None and hasattr(group, 'keys'):
+                logger.warning(f"  Group keys: {list(group.keys())}")
+        
         for group in data_to_process:
             if group is None:
+                logger.warning("Received None group in data_to_process, skipping")
+                continue
+            
+            # Check if group is a dict-like object
+            if not hasattr(group, 'get'):
+                logger.warning(f"Group is not a dict-like object: {type(group)}, skipping")
+                continue
+            
+            # Check for None first
+            if group is None:
+                logger.warning(f"[CRITICAL] Found None group in data_to_process - this should have been filtered earlier!")
+                continue
+                
+            # Additional safety check
+            if not isinstance(group, dict):
+                logger.warning(f"Group is not a dict, it's {type(group)}: {group}, skipping")
                 continue
 
             group_size = group.get("group_overrides", {}).get(
@@ -1090,20 +1115,7 @@ class BaseEnv(ABC):
                 "start_time": time.time(),
             }
             self.workers.add(worker)
-            worker.add_done_callback(
-                lambda fut, i=item: (
-                    (
-                        self.workers.discard(fut),
-                        (
-                            setattr(self, "last_completed_item", i)
-                            if fut.result()
-                            else None
-                        ),
-                    )[1]
-                    if fut.done() and not fut.cancelled()
-                    else None
-                )
-            )
+            worker.add_done_callback(lambda fut: self.workers.discard(fut))
 
     async def env_manager(self):
         """

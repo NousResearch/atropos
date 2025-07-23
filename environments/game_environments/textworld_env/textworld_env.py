@@ -66,7 +66,9 @@ class TextWorldEnvConfig(BaseEnvConfig):
     env_name: str = "TextWorld"
     wandb_name: str = "textworld-trainer"  # Override default None
     group_size: int = 16  # Override default 4 to match successful test (more alternatives = better)
-    max_steps: int = 100
+    max_num_workers: int = 16  # Increased workers for better throughput
+    total_steps: int = 1  # Only run one episode for testing
+    max_steps: int = 5  # Shorter episodes for faster testing
     challenge_name: str = "tw-simple"
     challenge_rewards: str = "sparse"  # Changed to sparse for VR-CLI
     challenge_goal: str = "detailed"
@@ -411,8 +413,6 @@ class TextWorldEnv(BaseEnv):
         # Store agent configuration for later use in creating episode-specific agents
         self.agent_config = agent_cfg
 
-        if self.config.debug_mode:
-            logger.setLevel(logging.DEBUG)
 
         # Initialize registry if enabled
         self.registry = None
@@ -647,7 +647,7 @@ class TextWorldEnv(BaseEnv):
 
     async def get_next_item(self) -> Optional[Dict[str, Any]]:
         """Provide a new, initialized TextWorldEpisodeState for trajectory collection."""
-        logger.info("[DEBUG] get_next_item called, creating new episode...")
+        logger.warning("[DEBUG] get_next_item called, creating new episode...")
         episode_state = await self._get_or_create_episode(
             episode_seed=self.config.game_seed
         )
@@ -655,7 +655,7 @@ class TextWorldEnv(BaseEnv):
             logger.error("Failed to create new TextWorld episode.")
             return None
 
-        logger.info(f"[DEBUG] Successfully created episode: {episode_state.episode_id}")
+        logger.warning(f"[DEBUG] Successfully created episode: {episode_state.episode_id}")
         return {"episode_state": episode_state, "episode_id": episode_state.episode_id}
 
     def _parse_action_with_prediction(
@@ -1220,7 +1220,19 @@ class TextWorldEnv(BaseEnv):
             logger.info(
                 f"[DEBUG] Episode {ep_state.episode_id} - Episode already marked as done, skipping step"
             )
-            return None, True
+            # Return empty ScoredDataGroup with score 0 instead of None
+            empty_sdg = ScoredDataGroup(
+                tokens=[[]],
+                masks=[[]],
+                scores=[0.0],
+                messages=[[]],
+                advantages=None,
+                ref_logprobs=None,
+                group_overrides=None,
+                overrides=None,
+                images=None,
+            )
+            return empty_sdg, True
 
         # 1. Get current observation
         if current_turn_num == 0:
@@ -1232,7 +1244,19 @@ class TextWorldEnv(BaseEnv):
                 logger.error(
                     f"[Episode: {ep_state.episode_id}] Missing observation data for turn {current_turn_num}"
                 )
-                return None, True
+                # Return ScoredDataGroup with score 0 for missing observation
+                error_sdg = ScoredDataGroup(
+                    tokens=[[]],
+                    masks=[[]],
+                    scores=[0.0],
+                    messages=[[]],
+                    advantages=None,
+                    ref_logprobs=None,
+                    group_overrides=None,
+                    overrides=None,
+                    images=None,
+                )
+                return error_sdg, True
             current_observation = self._format_observation(raw_obs, infos)
 
         ep_state.last_formatted_obs = current_observation
@@ -1258,13 +1282,37 @@ class TextWorldEnv(BaseEnv):
                 f"[Episode: {ep_state.episode_id}] Error getting actions from agent: {e}",
                 exc_info=True,
             )
-            return None, True
+            # Return ScoredDataGroup with score 0 for agent error
+            error_sdg = ScoredDataGroup(
+                tokens=[[]],
+                masks=[[]],
+                scores=[0.0],
+                messages=[[]],
+                advantages=None,
+                ref_logprobs=None,
+                group_overrides=None,
+                overrides=None,
+                images=None,
+            )
+            return error_sdg, True
 
         if not group_actions:
             logger.error(
                 f"[Episode: {ep_state.episode_id}] No actions received from agent"
             )
-            return None, True
+            # Return ScoredDataGroup with score 0 for no actions
+            error_sdg = ScoredDataGroup(
+                tokens=[[]],
+                masks=[[]],
+                scores=[0.0],
+                messages=[[]],
+                advantages=None,
+                ref_logprobs=None,
+                group_overrides=None,
+                overrides=None,
+                images=None,
+            )
+            return error_sdg, True
 
         # 3. Parse actions and predictions
         candidates = []
@@ -1298,7 +1346,19 @@ class TextWorldEnv(BaseEnv):
 
         if not candidates:
             logger.error(f"[Episode: {ep_state.episode_id}] No valid actions parsed")
-            return None, True
+            # Return ScoredDataGroup with score 0 for no valid candidates
+            error_sdg = ScoredDataGroup(
+                tokens=[[]],
+                masks=[[]],
+                scores=[0.0],
+                messages=[[]],
+                advantages=None,
+                ref_logprobs=None,
+                group_overrides=None,
+                overrides=None,
+                images=None,
+            )
+            return error_sdg, True
 
         # 4. Get conversation history for entropy calculation (reconstruct same as agent)
         from environments.game_environments.textworld_env.agents.atropos_agent import _convert_messages_for_api
@@ -1317,7 +1377,19 @@ class TextWorldEnv(BaseEnv):
 
         if not evaluations:
             logger.error(f"[Episode: {ep_state.episode_id}] No evaluations returned")
-            return None, True
+            # Return ScoredDataGroup with score 0 for no evaluations
+            error_sdg = ScoredDataGroup(
+                tokens=[[]],
+                masks=[[]],
+                scores=[0.0],
+                messages=[[]],
+                advantages=None,
+                ref_logprobs=None,
+                group_overrides=None,
+                overrides=None,
+                images=None,
+            )
+            return error_sdg, True
 
         # 5. Select best action based on combined score
         best_eval = max(evaluations, key=lambda x: x["combined_score"])
@@ -1343,7 +1415,19 @@ class TextWorldEnv(BaseEnv):
             logger.error(
                 f"[Episode: {ep_state.episode_id}] Error stepping environment: {e}"
             )
-            return None, True
+            # Return ScoredDataGroup with score 0 for environment error
+            error_sdg = ScoredDataGroup(
+                tokens=[[]],
+                masks=[[]],
+                scores=[0.0],
+                messages=[[]],
+                advantages=None,
+                ref_logprobs=None,
+                group_overrides=None,
+                overrides=None,
+                images=None,
+            )
+            return error_sdg, True
 
         # 8. Update episode state
         ep_state.cumulative_reward += reward
@@ -1448,7 +1532,7 @@ class TextWorldEnv(BaseEnv):
             logger.error("Episode state is None")
             return [], []
 
-        logger.info(
+        logger.warning(
             f"[Episode: {ep_state.episode_id}] Starting trajectory collection - "
             f"max_turns={ep_state.max_turns}, group_size={self.config.group_size}, "
             f"objective: {ep_state.initial_infos.get('objective', 'N/A')}"
@@ -1479,12 +1563,12 @@ class TextWorldEnv(BaseEnv):
                     await self._next_step(ep_state, current_turn_num, agent)
                 )
 
-                if scored_data_group_for_turn:
-                    policy_sdgs_for_episode.append(scored_data_group_for_turn)
-                    logger.info(
-                        f"[DEBUG] Episode {ep_state.episode_id} - Turn {current_turn_num + 1} completed "
-                        f"with {len(scored_data_group_for_turn['scores'])} scores"
-                    )
+                # Always append the ScoredDataGroup - it should never be None now
+                policy_sdgs_for_episode.append(scored_data_group_for_turn)
+                logger.warning(
+                    f"[DEBUG] Episode {ep_state.episode_id} - Turn {current_turn_num + 1} completed "
+                    f"with {len(scored_data_group_for_turn['scores'])} scores"
+                )
 
                 if episode_is_done_after_step:
                     logger.info(
@@ -1511,7 +1595,7 @@ class TextWorldEnv(BaseEnv):
             # TEMPORARILY DISABLED: Cleanup happening too early, before candidate evaluation completes
             # await self._cleanup_episode_resources(ep_state)
 
-        logger.info(
+        logger.warning(
             f"[Episode: {ep_state.episode_id}] Episode complete! Final status: "
             f"done={ep_state.done}, won={ep_state.won}, lost={ep_state.lost}, "
             f"score={ep_state.last_score}, turns_taken={len(policy_sdgs_for_episode)}/{ep_state.max_turns}, "
@@ -1557,8 +1641,7 @@ class TextWorldEnv(BaseEnv):
             )
 
             sdg = policy_sdgs_for_episode[t]
-            if sdg is None:
-                continue
+            # SDGs should never be None now
             chosen_idx = ep_state.canonical_chosen_alternative_indices[t]
 
             if 0 <= chosen_idx < len(sdg["scores"]):
@@ -1649,16 +1732,23 @@ class TextWorldEnv(BaseEnv):
     ) -> Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]:
         """Post-process policy agent trajectories with thinking block summarization."""
         start_time = time.time()
-        logger.info("Starting postprocess_histories...")
+        logger.warning("Starting postprocess_histories...")
         
         if not trajectories:
-            logger.info("No trajectories to process")
+            logger.warning("No trajectories to process")
             return trajectories
 
         if not isinstance(trajectories, list):
             trajectories = [trajectories] if trajectories is not None else []
 
-        logger.info(f"Processing {len(trajectories)} trajectories")
+        # Verify no None values (should never happen now)
+        none_count = sum(1 for t in trajectories if t is None)
+        if none_count > 0:
+            logger.error(f"[CRITICAL] Found {none_count} None ScoredDataGroups - this should NEVER happen!")
+            # Filter out None values as a safety measure
+            trajectories = [t for t in trajectories if t is not None]
+        
+        logger.warning(f"Processing {len(trajectories)} trajectories")
         
         # Since we removed metadata, we'll use a simple cache for thinking blocks
         thinking_block_cache: Dict[int, str] = {}
@@ -1667,6 +1757,10 @@ class TextWorldEnv(BaseEnv):
         processed_trajectories: List[Optional[ScoredDataGroup]] = []
         for sdg_idx, sdg in enumerate(trajectories):
             if sdg is None:
+                logger.error(
+                    f"[CRITICAL ERROR] ScoredDataGroup {sdg_idx} is None! This should NEVER happen. "
+                    f"Even failed samples should have a ScoredDataGroup with score 0."
+                )
                 processed_trajectories.append(None)
                 continue
 
