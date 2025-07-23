@@ -807,40 +807,15 @@ class BaseEnv(ABC):
         """
         original_was_list = isinstance(scored_data, list)  # not sure if this is needed
         data_to_process = scored_data if original_was_list else [scored_data]
-        
-        # Debug logging to understand what's being passed
-        logger.warning(f"handle_send_to_api called with scored_data type: {type(scored_data)}")
-        logger.warning(f"Is list: {original_was_list}, data_to_process length: {len(data_to_process)}")
 
         valid_groups = []
-        for i, group in enumerate(data_to_process):
-            logger.warning(f"Processing group {i}: type={type(group)}, is_none={group is None}")
-            if group is not None and hasattr(group, 'keys'):
-                logger.warning(f"  Group keys: {list(group.keys())}")
-        
         for group in data_to_process:
-            # Check for None first
             if group is None:
-                logger.warning(f"[CRITICAL] Found None group in data_to_process - this should have been filtered earlier!")
-                continue
-                
-            # Check if group is a dict-like object
-            if not hasattr(group, 'get'):
-                logger.warning(f"Group is not a dict-like object: {type(group)}, skipping")
-                continue
-                
-            # Additional safety check
-            if not isinstance(group, dict):
-                logger.warning(f"Group is not a dict, it's {type(group)}: {group}, skipping")
                 continue
 
-            try:
-                group_size = group.get("group_overrides", {}).get(
-                    "group_size", self.config.group_size
-                )
-            except AttributeError as e:
-                logger.error(f"[CRITICAL] AttributeError accessing group: group type={type(group)}, group={group}")
-                raise
+            group_size = group.get("group_overrides", {}).get(
+                "group_size", self.config.group_size
+            )
 
             if not (
                 (None not in group) and (len(group.get("tokens", [])) == group_size)
@@ -920,10 +895,17 @@ class BaseEnv(ABC):
             print(f"item {item_uuid} not found... returning")
             return None
         start_time = time.time()
-        logger.debug(f"handle_env: Starting with item: {item}")
+        logger.warning(f"handle_env: Starting with item: {item}")
         # do a rollout with item
         try:
             to_postprocess, to_backlog = await self.collect_trajectories(item)
+            for key, value in to_postprocess.items():
+                if key == "tokens":
+                    logger.warning(f"to_postprocess: {key}: {len(value)} tokens")
+                elif key == "masks":
+                    logger.warning(f"to_postprocess: {key}: {len(value)} masks")
+                else:
+                    logger.warning(f"to_postprocess: {key}: {value}")
         except Exception:
             to_postprocess = None
             to_backlog = []
@@ -1115,7 +1097,20 @@ class BaseEnv(ABC):
                 "start_time": time.time(),
             }
             self.workers.add(worker)
-            worker.add_done_callback(lambda fut: self.workers.discard(fut))
+            worker.add_done_callback(
+                lambda fut, i=item: (
+                    (
+                        self.workers.discard(fut),
+                        (
+                            setattr(self, "last_completed_item", i)
+                            if fut.result()
+                            else None
+                        ),
+                    )[1]
+                    if fut.done() and not fut.cancelled()
+                    else None
+                )
+            )
 
     async def env_manager(self):
         """

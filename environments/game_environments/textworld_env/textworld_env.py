@@ -49,11 +49,7 @@ from environments.game_environments.textworld_env.textworld_registry import (
     create_textworld_registry,
 )
 from environments.game_environments.textworld_env.utils.qwen_fixed_tokenizer import QwenFixedTokenizer
-from environments.game_environments.textworld_env.scoring.entropy_calculator import (
-    confidence_score,
-    calculate_sequence_entropy,
-    calculate_varentropy,
-)
+from environments.game_environments.textworld_env.scoring.entropy_calculator import confidence_score
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Ensure INFO level logging
@@ -85,9 +81,6 @@ class TextWorldEnvConfig(BaseEnvConfig):
     max_trajectory_tokens: int = 40960
 
     # VR-CLI specific configurations
-    vrcli_enabled: bool = Field(
-        default=True, description="Use VR-CLI scoring for action predictions"
-    )
     vrcli_weight: float = Field(
         default=0.3,
         description="Weight for VR-CLI score in combined reward",
@@ -1589,6 +1582,7 @@ class TextWorldEnv(BaseEnv):
                 exc_info=True,
             )
             ep_state.done = True
+            return [], []
         finally:
             self._apply_credit_assignment(ep_state, policy_sdgs_for_episode)
             # Clean up episode resources
