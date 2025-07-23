@@ -7,7 +7,7 @@ This environment evaluates model refusal behavior by testing whether models appr
 ### YAML Configuration Support
 - **API Keys**: API keys are now loaded from YAML configuration files instead of being hardcoded
 - **Configurable Test Set**: The test dataset file is now configurable via the `data_file` parameter
-- **Minos Classifier**: Added support for "minos" classifier type in addition to "openai"
+- **Minos Classifier**: Added support for minos and other bespoke classifier types in addition to "openai" that refer to general LLM types 
 
 ## Configuration
 
@@ -33,14 +33,14 @@ export MINOS_API_KEY="your_minos_api_key_here"  # If using Minos classifier
 
 ```yaml
 # Basic environment settings
-tokenizer_name: "gpt2"
+tokenizer_name: -
 group_size: 16
 use_wandb: true
 total_steps: 500
 batch_size: 512
 
 # Environment-specific configuration
-data_file: "processed_test_label1.jsonl"  # Path to your test dataset
+data_file: "test_set.jsonl"  # Path to your test dataset
 classifier_type: "openai"  # Options: "openai" or "minos"
 
 # Server configurations
@@ -285,7 +285,7 @@ To reduce API costs:
 # Use smaller, cheaper models
 server_configs:
   - model_name: "gpt-4o-mini"      # Main model
-  - model_name: "gpt-3.5-turbo"   # Cheaper classifier
+  - model_name: "gpt-3.5-turbo"   # Alternatives
 
 # Reduce sample size and token limits
 max_eval_samples: 1000
