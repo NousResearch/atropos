@@ -82,6 +82,7 @@ class TextWorldEnvConfig(BaseEnvConfig):
     use_topk_bottomk_selection: bool = True
     topk: int = 8  # Number of top-scoring alternatives to keep
     bottomk: int = 8  # Number of bottom-scoring alternatives to keep
+    allow_variable_group_size: bool = True  # Allow top-k/bottom-k filtering to reduce group size
     max_token_length: int = 8192  # Reduced to fit within 24k seq_len
     max_trajectory_tokens: int = 24576  # Match trainer seq_len
 
@@ -277,6 +278,12 @@ class TextWorldEnv(BaseEnv):
             raise
         self.config: TextWorldEnvConfig = config
         self.episodes: Dict[str, TextWorldEpisodeState] = {}
+        
+        # Wandb logging buffers
+        self.completed_episodes_buffer = []
+        self.step_metrics_buffer = []
+        self.action_counts = {}
+        self.last_logged_episodes = 0
         
         # Override tokenizer for Qwen models with our fixed tokenizer
         if "qwen" in config.tokenizer_name.lower():
@@ -638,7 +645,6 @@ class TextWorldEnv(BaseEnv):
 
     async def get_next_item(self) -> Optional[Dict[str, Any]]:
         """Provide a new, initialized TextWorldEpisodeState for trajectory collection."""
-        logger.warning("[DEBUG] get_next_item called, creating new episode...")
         episode_state = await self._get_or_create_episode(
             episode_seed=self.config.game_seed
         )
@@ -646,7 +652,6 @@ class TextWorldEnv(BaseEnv):
             logger.error("Failed to create new TextWorld episode.")
             return None
 
-        logger.warning(f"[DEBUG] Successfully created episode: {episode_state.episode_id}")
         return {"episode_state": episode_state, "episode_id": episode_state.episode_id}
 
     def _parse_action_with_prediction(
@@ -1038,7 +1043,6 @@ class TextWorldEnv(BaseEnv):
             )
             selected_idx = max(range(len(confidence_scores)), key=lambda i: confidence_scores[i])
         else:
-            logger.warning(f"[Episode: {ep_state.episode_id}] No confidence scores available, defaulting to alternative 0")
             selected_idx = 0
             
         selected_action = candidates[selected_idx][0]
@@ -1382,6 +1386,27 @@ class TextWorldEnv(BaseEnv):
             }
             return error_sdg, True
 
+        # Track step-level metrics for wandb
+        selected_eval = next((e for e in evaluations if e.get("selected", False)), None)
+        if selected_eval:
+            step_metrics = {
+                "vrcli_score": selected_eval.get("vrcli_score", 0.0),
+                "format_score": selected_eval.get("format_score", 0.0),
+                "confidence_score": selected_eval.get("entropy_score", 0.0),
+                "combined_score": selected_eval.get("combined_score", 0.0),
+                "env_reward": selected_eval.get("env_reward", 0.0),
+                "action": selected_eval.get("action", "unknown"),
+                "response_tokens": selected_eval.get("response_tokens", 0),
+                "selected_rank": sorted(evaluations, key=lambda x: x.get("entropy_score", 0), reverse=True).index(selected_eval),
+            }
+            self.step_metrics_buffer.append(step_metrics)
+            
+            # Track action counts
+            action = selected_eval.get("action", "unknown")
+            if action not in self.action_counts:
+                self.action_counts[action] = 0
+            self.action_counts[action] += 1
+
         # 5. Select best action based on combined score
         best_eval = max(evaluations, key=lambda x: x["combined_score"])
         best_idx = best_eval["index"]
@@ -1531,7 +1556,6 @@ class TextWorldEnv(BaseEnv):
         group_overrides = None
         if self.config.use_topk_bottomk_selection and len(sg_tokens) != self.config.group_size:
             group_overrides = {"group_size": len(sg_tokens)}
-            logger.warning(f"[Episode: {ep_state.episode_id}] Setting group_overrides: {group_overrides} (original group_size: {self.config.group_size}, actual: {len(sg_tokens)})")
         
         scored_data_group = {
             "tokens": sg_tokens,
@@ -1572,11 +1596,6 @@ class TextWorldEnv(BaseEnv):
             logger.error("Episode state is None")
             return [], []
 
-        logger.warning(
-            f"[Episode: {ep_state.episode_id}] Starting trajectory collection - "
-            f"max_turns={ep_state.max_turns}, group_size={self.config.group_size}, "
-            f"objective: {ep_state.initial_infos.get('objective', 'N/A')}"
-        )
         policy_sdgs_for_episode: List[Optional[ScoredDataGroup]] = []
 
         # Create a new agent for this episode with its own memory
@@ -1636,22 +1655,13 @@ class TextWorldEnv(BaseEnv):
             # TEMPORARILY DISABLED: Cleanup happening too early, before candidate evaluation completes
             # await self._cleanup_episode_resources(ep_state)
 
-        logger.warning(
+        logger.info(
             f"[Episode: {ep_state.episode_id}] Episode complete! Final status: "
             f"done={ep_state.done}, won={ep_state.won}, lost={ep_state.lost}, "
             f"score={ep_state.last_score}, turns_taken={len(policy_sdgs_for_episode)}/{ep_state.max_turns}, "
             f"cumulative_reward={ep_state.cumulative_reward:.3f}"
         )
 
-        # Log the return value for debugging
-        logger.warning(f"[Episode: {ep_state.episode_id}] collect_trajectories returning {len(policy_sdgs_for_episode)} ScoredDataGroups")
-        for i, sdg in enumerate(policy_sdgs_for_episode):
-            if sdg is None:
-                logger.warning(f"  - SDG {i}: None (THIS SHOULD NOT HAPPEN!)")
-            else:
-                # ScoredDataGroup is a dict with 'tokens' key containing alternatives
-                num_alternatives = len(sdg.get('tokens', [])) if hasattr(sdg, 'get') else 0
-                logger.warning(f"  - SDG {i}: {num_alternatives} alternatives")
         
         return policy_sdgs_for_episode, []
 
@@ -1749,6 +1759,18 @@ class TextWorldEnv(BaseEnv):
                     f"future_return={future_return:.3f}, "
                     f"total_return={new_scores[chosen_idx]:.3f}"
                 )
+        
+        # Track episode completion metrics for wandb
+        episode_metrics = {
+            "won": ep_state.won,
+            "lost": ep_state.lost,
+            "completed": ep_state.done,
+            "final_score": ep_state.last_score,
+            "num_steps": len(ep_state.canonical_rewards),
+            "cumulative_reward": ep_state.cumulative_reward,
+            "final_outcome_reward": final_outcome_reward,
+        }
+        self.completed_episodes_buffer.append(episode_metrics)
 
     async def _cleanup_episode_resources(self, ep_state: TextWorldEpisodeState) -> None:
         """Clean up episode resources including environment and game files."""
@@ -1816,11 +1838,93 @@ class TextWorldEnv(BaseEnv):
         if not processed_groups:
             return None
             
-        logger.warning(f"TextWorld returning {len(processed_groups)} ScoredDataGroups for all episode turns")
         
         # Return the list of all ScoredDataGroups
         return processed_groups
 
+    async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
+        """Log TextWorld-specific metrics to wandb."""
+        if wandb_metrics is None:
+            wandb_metrics = {}
+            
+        # Episode-level metrics
+        if self.completed_episodes_buffer:
+            num_episodes = len(self.completed_episodes_buffer)
+            
+            # Win/loss/completion rates
+            win_rate = sum(1 for e in self.completed_episodes_buffer if e["won"]) / num_episodes
+            loss_rate = sum(1 for e in self.completed_episodes_buffer if e["lost"]) / num_episodes
+            completion_rate = sum(1 for e in self.completed_episodes_buffer if e["completed"]) / num_episodes
+            
+            wandb_metrics["textworld_train/episode_win_rate"] = win_rate
+            wandb_metrics["textworld_train/episode_loss_rate"] = loss_rate
+            wandb_metrics["textworld_train/episode_completion_rate"] = completion_rate
+            
+            # Episode performance
+            avg_reward = sum(e["cumulative_reward"] for e in self.completed_episodes_buffer) / num_episodes
+            avg_steps = sum(e["num_steps"] for e in self.completed_episodes_buffer) / num_episodes
+            avg_final_score = sum(e["final_score"] for e in self.completed_episodes_buffer) / num_episodes
+            
+            wandb_metrics["textworld_train/avg_episode_reward"] = avg_reward
+            wandb_metrics["textworld_train/avg_episode_steps"] = avg_steps
+            wandb_metrics["textworld_train/avg_final_score"] = avg_final_score
+            
+            # Episode efficiency
+            winning_episodes = [e for e in self.completed_episodes_buffer if e["won"]]
+            if winning_episodes:
+                avg_steps_to_win = sum(e["num_steps"] for e in winning_episodes) / len(winning_episodes)
+                wandb_metrics["textworld_train/avg_steps_to_win"] = avg_steps_to_win
+            
+            # Learning progress
+            total_episodes = self.last_logged_episodes + num_episodes
+            wandb_metrics["textworld_train/episodes_completed"] = total_episodes
+            self.last_logged_episodes = total_episodes
+            
+            # Clear buffer
+            self.completed_episodes_buffer = []
+        
+        # Step-level metrics
+        if self.step_metrics_buffer:
+            num_steps = len(self.step_metrics_buffer)
+            
+            # Action quality metrics
+            avg_vrcli = sum(s["vrcli_score"] for s in self.step_metrics_buffer) / num_steps
+            avg_format = sum(s["format_score"] for s in self.step_metrics_buffer) / num_steps
+            avg_confidence = sum(s["confidence_score"] for s in self.step_metrics_buffer) / num_steps
+            avg_combined = sum(s["combined_score"] for s in self.step_metrics_buffer) / num_steps
+            
+            wandb_metrics["textworld_train/avg_vrcli_score"] = avg_vrcli
+            wandb_metrics["textworld_train/avg_format_score"] = avg_format
+            wandb_metrics["textworld_train/avg_confidence_score"] = avg_confidence
+            wandb_metrics["textworld_train/avg_combined_score"] = avg_combined
+            
+            # Response quality
+            avg_response_length = sum(s["response_tokens"] for s in self.step_metrics_buffer) / num_steps
+            wandb_metrics["textworld_train/avg_response_length"] = avg_response_length
+            
+            # Action selection quality
+            avg_selected_rank = sum(s["selected_rank"] for s in self.step_metrics_buffer) / num_steps
+            top_confidence_selected = sum(1 for s in self.step_metrics_buffer if s["selected_rank"] == 0) / num_steps
+            
+            wandb_metrics["textworld_train/avg_selected_alternative_rank"] = avg_selected_rank
+            wandb_metrics["textworld_train/top_confidence_selected_rate"] = top_confidence_selected
+            
+            wandb_metrics["textworld_train/steps_taken"] = num_steps
+            
+            # Clear buffer
+            self.step_metrics_buffer = []
+        
+        # Action distribution
+        if self.action_counts:
+            total_actions = sum(self.action_counts.values())
+            for action, count in self.action_counts.items():
+                wandb_metrics[f"textworld_train/action_dist/{action}"] = count / total_actions
+            
+            # Clear counts
+            self.action_counts = {}
+        
+        # Call parent wandb_log
+        await super().wandb_log(wandb_metrics)
 
     async def evaluate(self, *args, **kwargs):
         """Evaluation method - implementation pending."""
