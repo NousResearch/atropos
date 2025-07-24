@@ -805,32 +805,55 @@ class BaseEnv(ABC):
             do_send_to_api: Whether to send the data to the API
             abort_on_any_max_length_exceeded: Whether to abort if any token length exceeds the max
         """
+        logger.warning(f"handle_send_to_api called with do_send_to_api={do_send_to_api}, scored_data type: {type(scored_data)}")
         original_was_list = isinstance(scored_data, list)  # not sure if this is needed
         data_to_process = scored_data if original_was_list else [scored_data]
+        logger.warning(f"Processing {len(data_to_process)} groups")
 
         valid_groups = []
         for group in data_to_process:
             if group is None:
+                logger.warning("REJECTION: Group is None, skipping...")
+                continue
+            
+            try:
+                # Handle case where group_overrides might be None
+                overrides = group.get("group_overrides", {})
+                if overrides is None:
+                    overrides = {}
+                group_size = overrides.get("group_size", self.config.group_size)
+                logger.warning(f"DEBUG: group_overrides={group.get('group_overrides')}, overrides={overrides}, group_size={group_size}, self.config.group_size={self.config.group_size}")
+            except Exception as e:
+                logger.warning(f"REJECTION: Error getting group size: {e}")
+                logger.warning(f"Group type: {type(group)}, Group: {group}")
                 continue
 
-            group_size = group.get("group_overrides", {}).get(
-                "group_size", self.config.group_size
-            )
-
+            tokens = group.get("tokens", [])
             if not (
-                (None not in group) and (len(group.get("tokens", [])) == group_size)
+                (None not in group) and (len(tokens) == group_size)
             ):
                 logger.warning(
-                    f"Group structure invalid, or token count mismatch (expected {group_size}), "
-                    f"or 'tokens' key missing. Skipping group: {str(group)[:200]}..."
+                    f"REJECTION: Group structure invalid, or token count mismatch (expected {group_size}, got {len(tokens)}), "
+                    f"or 'tokens' key missing. Group keys: {group.keys() if hasattr(group, 'keys') else 'N/A'}"
                 )
+                continue
+
+            # Check for empty token sequences
+            empty_tokens = [i for i, t in enumerate(tokens) if len(t) == 0]
+            if empty_tokens:
+                logger.warning(f"REJECTION: Found group with empty token sequences at indices {empty_tokens}, total alternatives: {len(tokens)}")
+                continue
+
+            # Check for minimum number of alternatives (need at least 2 for meaningful advantage calculation)
+            if len(tokens) < 2:
+                logger.warning(f"REJECTION: Group has only {len(tokens)} alternatives, need at least 2 for training. Skipping...")
                 continue
 
             if (
                 self.config.ensure_scores_are_not_same
-                and len(set(group["scores"])) == 1
+                and len(set(group.get("scores", []))) == 1
             ):
-                logger.warning("Scores are the same in a group, skipping...")
+                logger.warning(f"REJECTION: All scores are the same ({group.get('scores', [])[:5]}...), skipping...")
                 continue
 
             group.setdefault("ref_logprobs", None)
@@ -865,6 +888,7 @@ class BaseEnv(ABC):
 
             valid_groups.append(group)
 
+        logger.warning(f"Valid groups: {len(valid_groups)}, do_send_to_api: {do_send_to_api}")
         if valid_groups and do_send_to_api:
             data_to_send_to_api: Union[ScoredDataGroup, List[ScoredDataGroup]]
             # send single or list of scored data groups
@@ -875,14 +899,19 @@ class BaseEnv(ABC):
 
             try:
                 self.items_sent_this_step += len(valid_groups)
+                logger.warning(f"Sending {len(valid_groups)} groups to API")
                 await self._send_scored_data_to_api(data_to_send_to_api)
+                logger.warning(f"Successfully sent data to API")
             except (Exception, TimeoutError) as e:
                 data_type_str = (
                     "single ScoredDataGroup"
                     if isinstance(data_to_send_to_api, dict)
                     else f"{len(data_to_send_to_api)} ScoredDataGroups"
                 )
+                logger.warning(f"Failed to send {data_type_str} after retries: {e}")
                 print(f"Failed to send {data_type_str} after retries: {e}")
+        else:
+            logger.warning(f"Not sending data: valid_groups={len(valid_groups)}, do_send_to_api={do_send_to_api}")
 
     async def handle_env(
         self, item_uuid: str
@@ -899,14 +928,26 @@ class BaseEnv(ABC):
         # do a rollout with item
         try:
             to_postprocess, to_backlog = await self.collect_trajectories(item)
-            for key, value in to_postprocess.items():
-                if key == "tokens":
-                    logger.warning(f"to_postprocess: {key}: {len(value)} tokens")
-                elif key == "masks":
-                    logger.warning(f"to_postprocess: {key}: {len(value)} masks")
-                else:
-                    logger.warning(f"to_postprocess: {key}: {value}")
-        except Exception:
+            
+            # Handle both single ScoredDataGroup and List[ScoredDataGroup]
+            if isinstance(to_postprocess, list):
+                logger.warning(f"to_postprocess: List of {len(to_postprocess)} ScoredDataGroups")
+                for i, sdg in enumerate(to_postprocess):
+                    if sdg is not None and hasattr(sdg, 'keys'):
+                        logger.warning(f"  Group {i}: {list(sdg.keys())}")
+            elif to_postprocess is not None and hasattr(to_postprocess, 'items'):
+                for key, value in to_postprocess.items():
+                    if key == "tokens":
+                        logger.warning(f"to_postprocess: {key}: {len(value)} tokens")
+                    elif key == "masks":
+                        logger.warning(f"to_postprocess: {key}: {len(value)} masks")
+                    else:
+                        logger.warning(f"to_postprocess: {key}: {value}")
+            else:
+                logger.warning(f"to_postprocess: Unexpected type {type(to_postprocess)}")
+                
+        except Exception as e:
+            logger.error(f"Error in collect_trajectories: {e}", exc_info=True)
             to_postprocess = None
             to_backlog = []
         # add the items to the queue

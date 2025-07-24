@@ -63,7 +63,7 @@ class TextWorldEnvConfig(BaseEnvConfig):
     wandb_name: str = "textworld-trainer"  # Override default None
     group_size: int = 16  # Override default 4 to match successful test (more alternatives = better)
     max_num_workers: int = 16  # Increased workers for better throughput
-    total_steps: int = 1  # Only run one episode for testing
+    total_steps: int = 500  # Run 500 steps for proper training
     max_steps: int = 5  # Shorter episodes for faster testing
     challenge_name: str = "tw-simple"
     challenge_rewards: str = "sparse"  # Changed to sparse for VR-CLI
@@ -77,8 +77,13 @@ class TextWorldEnvConfig(BaseEnvConfig):
     grammar_theme: str = "house"
     grammar_include_adj: bool = True
     game_seed: Optional[int] = None
-    max_token_length: int = 16384
-    max_trajectory_tokens: int = 40960
+    
+    # Top-k/bottom-k selection
+    use_topk_bottomk_selection: bool = True
+    topk: int = 3  # Number of top-scoring alternatives to keep
+    bottomk: int = 3  # Number of bottom-scoring alternatives to keep
+    max_token_length: int = 8192  # Reduced to fit within 24k seq_len
+    max_trajectory_tokens: int = 24576  # Match trainer seq_len
 
     # VR-CLI specific configurations
     vrcli_weight: float = Field(
@@ -147,13 +152,6 @@ class TextWorldEnvConfig(BaseEnvConfig):
 
     debug_mode: bool = False
 
-    enable_policy_thinking_summarization: bool = Field(
-        default=True,
-        description="Whether to use LLM-based summarization for thinking blocks in policy training data.",
-    )
-    max_policy_thinking_summary_tokens: int = Field(
-        default=128, description="Maximum tokens for LLM-summarized thinking blocks."
-    )
 
     game_generation_params: Dict[str, Any] = Field(
         default_factory=lambda: {
@@ -1214,17 +1212,17 @@ class TextWorldEnv(BaseEnv):
                 f"[DEBUG] Episode {ep_state.episode_id} - Episode already marked as done, skipping step"
             )
             # Return empty ScoredDataGroup with score 0 instead of None
-            empty_sdg = ScoredDataGroup(
-                tokens=[[]],
-                masks=[[]],
-                scores=[0.0],
-                messages=[[]],
-                advantages=None,
-                ref_logprobs=None,
-                group_overrides=None,
-                overrides=None,
-                images=None,
-            )
+            empty_sdg = {
+                "tokens": [[]],
+                "masks": [[]],
+                "scores": [0.0],
+                "messages": [[]],
+                "advantages": None,
+                "ref_logprobs": None,
+                "group_overrides": None,
+                "overrides": None,
+                "images": None,
+            }
             return empty_sdg, True
 
         # 1. Get current observation
@@ -1238,17 +1236,17 @@ class TextWorldEnv(BaseEnv):
                     f"[Episode: {ep_state.episode_id}] Missing observation data for turn {current_turn_num}"
                 )
                 # Return ScoredDataGroup with score 0 for missing observation
-                error_sdg = ScoredDataGroup(
-                    tokens=[[]],
-                    masks=[[]],
-                    scores=[0.0],
-                    messages=[[]],
-                    advantages=None,
-                    ref_logprobs=None,
-                    group_overrides=None,
-                    overrides=None,
-                    images=None,
-                )
+                error_sdg = {
+                    "tokens": [[]],
+                    "masks": [[]],
+                    "scores": [0.0],
+                    "messages": [[]],
+                    "advantages": None,
+                    "ref_logprobs": None,
+                    "group_overrides": None,
+                    "overrides": None,
+                    "images": None,
+                }
                 return error_sdg, True
             current_observation = self._format_observation(raw_obs, infos)
 
@@ -1276,17 +1274,17 @@ class TextWorldEnv(BaseEnv):
                 exc_info=True,
             )
             # Return ScoredDataGroup with score 0 for agent error
-            error_sdg = ScoredDataGroup(
-                tokens=[[]],
-                masks=[[]],
-                scores=[0.0],
-                messages=[[]],
-                advantages=None,
-                ref_logprobs=None,
-                group_overrides=None,
-                overrides=None,
-                images=None,
-            )
+            error_sdg = {
+                "tokens": [[]],
+                "masks": [[]],
+                "scores": [0.0],
+                "messages": [[]],
+                "advantages": None,
+                "ref_logprobs": None,
+                "group_overrides": None,
+                "overrides": None,
+                "images": None,
+            }
             return error_sdg, True
 
         if not group_actions:
@@ -1294,17 +1292,17 @@ class TextWorldEnv(BaseEnv):
                 f"[Episode: {ep_state.episode_id}] No actions received from agent"
             )
             # Return ScoredDataGroup with score 0 for no actions
-            error_sdg = ScoredDataGroup(
-                tokens=[[]],
-                masks=[[]],
-                scores=[0.0],
-                messages=[[]],
-                advantages=None,
-                ref_logprobs=None,
-                group_overrides=None,
-                overrides=None,
-                images=None,
-            )
+            error_sdg = {
+                "tokens": [[]],
+                "masks": [[]],
+                "scores": [0.0],
+                "messages": [[]],
+                "advantages": None,
+                "ref_logprobs": None,
+                "group_overrides": None,
+                "overrides": None,
+                "images": None,
+            }
             return error_sdg, True
 
         # 3. Parse actions and predictions
@@ -1340,17 +1338,17 @@ class TextWorldEnv(BaseEnv):
         if not candidates:
             logger.error(f"[Episode: {ep_state.episode_id}] No valid actions parsed")
             # Return ScoredDataGroup with score 0 for no valid candidates
-            error_sdg = ScoredDataGroup(
-                tokens=[[]],
-                masks=[[]],
-                scores=[0.0],
-                messages=[[]],
-                advantages=None,
-                ref_logprobs=None,
-                group_overrides=None,
-                overrides=None,
-                images=None,
-            )
+            error_sdg = {
+                "tokens": [[]],
+                "masks": [[]],
+                "scores": [0.0],
+                "messages": [[]],
+                "advantages": None,
+                "ref_logprobs": None,
+                "group_overrides": None,
+                "overrides": None,
+                "images": None,
+            }
             return error_sdg, True
 
         # 4. Get conversation history for entropy calculation (reconstruct same as agent)
@@ -1371,17 +1369,17 @@ class TextWorldEnv(BaseEnv):
         if not evaluations:
             logger.error(f"[Episode: {ep_state.episode_id}] No evaluations returned")
             # Return ScoredDataGroup with score 0 for no evaluations
-            error_sdg = ScoredDataGroup(
-                tokens=[[]],
-                masks=[[]],
-                scores=[0.0],
-                messages=[[]],
-                advantages=None,
-                ref_logprobs=None,
-                group_overrides=None,
-                overrides=None,
-                images=None,
-            )
+            error_sdg = {
+                "tokens": [[]],
+                "masks": [[]],
+                "scores": [0.0],
+                "messages": [[]],
+                "advantages": None,
+                "ref_logprobs": None,
+                "group_overrides": None,
+                "overrides": None,
+                "images": None,
+            }
             return error_sdg, True
 
         # 5. Select best action based on combined score
@@ -1409,17 +1407,17 @@ class TextWorldEnv(BaseEnv):
                 f"[Episode: {ep_state.episode_id}] Error stepping environment: {e}"
             )
             # Return ScoredDataGroup with score 0 for environment error
-            error_sdg = ScoredDataGroup(
-                tokens=[[]],
-                masks=[[]],
-                scores=[0.0],
-                messages=[[]],
-                advantages=None,
-                ref_logprobs=None,
-                group_overrides=None,
-                overrides=None,
-                images=None,
-            )
+            error_sdg = {
+                "tokens": [[]],
+                "masks": [[]],
+                "scores": [0.0],
+                "messages": [[]],
+                "advantages": None,
+                "ref_logprobs": None,
+                "group_overrides": None,
+                "overrides": None,
+                "images": None,
+            }
             return error_sdg, True
 
         # 8. Update episode state
@@ -1481,22 +1479,71 @@ class TextWorldEnv(BaseEnv):
                 sg_messages.append(alternative_history)
                 scores.append(0.0)
 
+        # Apply top-k/bottom-k selection if enabled
+        if self.config.use_topk_bottomk_selection and len(scores) > (self.config.topk + self.config.bottomk):
+            # Create list of (index, score, has_valid_tokens) tuples
+            indexed_scores = []
+            for i, score in enumerate(scores):
+                has_valid_tokens = len(sg_tokens[i]) > 0
+                if has_valid_tokens:  # Only consider alternatives with valid tokens
+                    indexed_scores.append((i, score))
+            
+            # Sort by score (descending)
+            indexed_scores.sort(key=lambda x: x[1], reverse=True)
+            
+            # Select top-k and bottom-k indices
+            selected_indices = []
+            if len(indexed_scores) >= 2:  # Ensure we have at least 2 alternatives
+                # Take top-k
+                selected_indices.extend([idx for idx, _ in indexed_scores[:self.config.topk]])
+                # Take bottom-k (if we have enough)
+                if len(indexed_scores) > self.config.topk:
+                    bottom_start = max(self.config.topk, len(indexed_scores) - self.config.bottomk)
+                    selected_indices.extend([idx for idx, _ in indexed_scores[bottom_start:]])
+                
+                # Sort selected indices to maintain order
+                selected_indices.sort()
+                
+                # Filter arrays to keep only selected indices
+                sg_tokens = [sg_tokens[i] for i in selected_indices]
+                sg_masks = [sg_masks[i] for i in selected_indices]
+                sg_messages = [sg_messages[i] for i in selected_indices]
+                scores = [scores[i] for i in selected_indices]
+                
+                logger.info(
+                    f"[Episode: {ep_state.episode_id}] Selected {len(selected_indices)} alternatives "
+                    f"(top-{self.config.topk}, bottom-{self.config.bottomk}) from {len(indexed_scores)} valid alternatives"
+                )
+            else:
+                logger.warning(
+                    f"[Episode: {ep_state.episode_id}] Only {len(indexed_scores)} valid alternatives available, "
+                    f"keeping all (need at least 2 for training)"
+                )
+        else:
+            # Log original behavior
+            logger.info(
+                f"[Episode: {ep_state.episode_id}] Creating ScoredDataGroup with {len(evaluations)} alternatives "
+                f"(all {self.config.group_size} generated alternatives included, including any with parsing errors)"
+            )
+
         # Create scored data group
-        logger.info(
-            f"[Episode: {ep_state.episode_id}] Creating ScoredDataGroup with {len(evaluations)} alternatives "
-            f"(all {self.config.group_size} generated alternatives included, including any with parsing errors)"
-        )
-        scored_data_group = ScoredDataGroup(
-            tokens=sg_tokens,
-            masks=sg_masks,
-            scores=scores,
-            messages=sg_messages,
-            advantages=None,
-            ref_logprobs=None,
-            group_overrides=None,
-            overrides=None,
-            images=None,
-        )
+        # If we're using top-k/bottom-k selection, we need to override the group size
+        group_overrides = None
+        if self.config.use_topk_bottomk_selection and len(sg_tokens) != self.config.group_size:
+            group_overrides = {"group_size": len(sg_tokens)}
+            logger.warning(f"[Episode: {ep_state.episode_id}] Setting group_overrides: {group_overrides} (original group_size: {self.config.group_size}, actual: {len(sg_tokens)})")
+        
+        scored_data_group = {
+            "tokens": sg_tokens,
+            "masks": sg_masks,
+            "scores": scores,
+            "messages": sg_messages,
+            "advantages": None,
+            "ref_logprobs": None,
+            "group_overrides": group_overrides,
+            "overrides": None,
+            "images": None,
+        }
 
         ep_state.policy_step_data.append(scored_data_group)
 
@@ -1596,6 +1643,16 @@ class TextWorldEnv(BaseEnv):
             f"cumulative_reward={ep_state.cumulative_reward:.3f}"
         )
 
+        # Log the return value for debugging
+        logger.warning(f"[Episode: {ep_state.episode_id}] collect_trajectories returning {len(policy_sdgs_for_episode)} ScoredDataGroups")
+        for i, sdg in enumerate(policy_sdgs_for_episode):
+            if sdg is None:
+                logger.warning(f"  - SDG {i}: None (THIS SHOULD NOT HAPPEN!)")
+            else:
+                # ScoredDataGroup is a dict with 'tokens' key containing alternatives
+                num_alternatives = len(sdg.get('tokens', [])) if hasattr(sdg, 'get') else 0
+                logger.warning(f"  - SDG {i}: {num_alternatives} alternatives")
+        
         return policy_sdgs_for_episode, []
 
     def _apply_credit_assignment(
@@ -1724,154 +1781,9 @@ class TextWorldEnv(BaseEnv):
         self,
         trajectories: Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]],
     ) -> Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]:
-        """Post-process policy agent trajectories with thinking block summarization."""
-        start_time = time.time()
-        logger.warning("Starting postprocess_histories...")
-        
-        if not trajectories:
-            logger.warning("No trajectories to process")
-            return trajectories
+        """Pass through trajectories without modification."""
+        return trajectories
 
-        if not isinstance(trajectories, list):
-            trajectories = [trajectories] if trajectories is not None else []
-
-        # Verify no None values (should never happen now)
-        none_count = sum(1 for t in trajectories if t is None)
-        if none_count > 0:
-            logger.error(f"[CRITICAL] Found {none_count} None ScoredDataGroups - this should NEVER happen!")
-            # Filter out None values as a safety measure
-            trajectories = [t for t in trajectories if t is not None]
-        
-        logger.warning(f"Processing {len(trajectories)} trajectories")
-        
-        # Since we removed metadata, we'll use a simple cache for thinking blocks
-        thinking_block_cache: Dict[int, str] = {}
-
-        # Process each ScoredDataGroup
-        processed_trajectories: List[Optional[ScoredDataGroup]] = []
-        for sdg_idx, sdg in enumerate(trajectories):
-            if sdg is None:
-                logger.error(
-                    f"[CRITICAL ERROR] ScoredDataGroup {sdg_idx} is None! This should NEVER happen. "
-                    f"Even failed samples should have a ScoredDataGroup with score 0."
-                )
-                processed_trajectories.append(None)
-                continue
-
-            # Process all trajectories with thinking summarization if enabled
-            try:
-                logger.debug(f"Processing ScoredDataGroup {sdg_idx}")
-                processed_policy_sdg = await self._process_policy_training_data(
-                    sdg, thinking_block_cache
-                )
-                processed_trajectories.append(processed_policy_sdg)
-            except Exception as e:
-                logger.error(f"Error processing ScoredDataGroup {sdg_idx}: {e}", exc_info=True)
-                processed_trajectories.append(sdg)
-
-        elapsed_time = time.time() - start_time
-        logger.info(f"Completed postprocess_histories in {elapsed_time:.2f} seconds")
-        logger.info(f"Cache size: {len(thinking_block_cache)} entries")
-        
-        return processed_trajectories
-
-    async def _process_policy_training_data(
-        self, sdg: ScoredDataGroup, thinking_block_cache: Dict[int, str]
-    ) -> ScoredDataGroup:
-        """Process policy training data with thinking block summarization while keeping latest message raw."""
-        if not self.config.enable_policy_thinking_summarization:
-            return sdg
-
-        processed_messages = []
-        processed_tokens = []
-        processed_masks = []
-
-        if sdg["messages"] is None:
-            # If no messages, return the original sdg
-            return sdg
-
-        for alt_idx, alt_messages in enumerate(sdg["messages"]):
-            if not alt_messages:
-                processed_messages.append(alt_messages)
-                processed_tokens.append(
-                    sdg["tokens"][alt_idx] if alt_idx < len(sdg["tokens"]) else []
-                )
-                processed_masks.append(
-                    sdg["masks"][alt_idx] if alt_idx < len(sdg["masks"]) else []
-                )
-                continue
-
-            alt_processed_messages = []
-            for msg_idx, msg in enumerate(alt_messages):
-                if msg_idx == len(alt_messages) - 1:
-                    # Keep the last message raw for training
-                    alt_processed_messages.append(msg.copy())
-                elif (
-                    msg["role"] == "assistant"
-                    and self.config.enable_policy_thinking_summarization
-                ):
-                    # Check cache for thinking block summarization
-                    original_content = msg["content"]
-                    if not isinstance(original_content, str):
-                        # Skip non-string content
-                        alt_processed_messages.append(msg.copy())
-                        continue
-
-                    cache_key = hash(original_content)
-
-                    if cache_key in thinking_block_cache:
-                        processed_content = thinking_block_cache[cache_key]
-                    else:
-                        # Strip thinking blocks since summarize doesn't exist
-                        try:
-                            from atroposlib.utils.message_history_utils import (
-                                strip_thinking,
-                            )
-
-                            processed_content = strip_thinking(original_content)
-                            thinking_block_cache[cache_key] = processed_content
-                        except Exception as e:
-                            logger.warning(f"Failed to process thinking block: {e}")
-                            processed_content = original_content
-                            thinking_block_cache[cache_key] = processed_content
-
-                    processed_msg = msg.copy()
-                    processed_msg["content"] = processed_content
-                    alt_processed_messages.append(processed_msg)
-                else:
-                    alt_processed_messages.append(msg.copy())
-
-            # Re-tokenize processed messages
-            try:
-                tokenized_output = tokenize_for_trainer(
-                    self.tokenizer, alt_processed_messages
-                )
-                processed_messages.append(alt_processed_messages)
-                processed_tokens.append(tokenized_output["tokens"])
-                processed_masks.append(tokenized_output["masks"])
-            except Exception as e:
-                logger.error(
-                    f"Error re-tokenizing processed policy messages for alt {alt_idx}: {e}"
-                )
-                processed_messages.append(alt_messages)
-                processed_tokens.append(
-                    sdg["tokens"][alt_idx] if alt_idx < len(sdg["tokens"]) else []
-                )
-                processed_masks.append(
-                    sdg["masks"][alt_idx] if alt_idx < len(sdg["masks"]) else []
-                )
-
-        return ScoredDataGroup(
-            tokens=processed_tokens,
-            masks=processed_masks,
-            scores=sdg["scores"],
-            messages=processed_messages,
-            advantages=sdg.get("advantages"),
-            ref_logprobs=sdg.get("ref_logprobs"),
-            group_overrides=sdg.get("group_overrides"),
-            overrides=sdg.get("overrides"),
-            images=sdg.get("images"),
-        )
 
     async def evaluate(self, *args, **kwargs):
         """Evaluation method - implementation pending."""
