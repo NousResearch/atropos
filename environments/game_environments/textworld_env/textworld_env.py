@@ -80,8 +80,8 @@ class TextWorldEnvConfig(BaseEnvConfig):
     
     # Top-k/bottom-k selection
     use_topk_bottomk_selection: bool = True
-    topk: int = 3  # Number of top-scoring alternatives to keep
-    bottomk: int = 3  # Number of bottom-scoring alternatives to keep
+    topk: int = 8  # Number of top-scoring alternatives to keep
+    bottomk: int = 8  # Number of bottom-scoring alternatives to keep
     max_token_length: int = 8192  # Reduced to fit within 24k seq_len
     max_trajectory_tokens: int = 24576  # Match trainer seq_len
 
@@ -1781,8 +1781,45 @@ class TextWorldEnv(BaseEnv):
         self,
         trajectories: Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]],
     ) -> Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]:
-        """Pass through trajectories without modification."""
-        return trajectories
+        """Process and return all ScoredDataGroups for training on all episode turns."""
+        
+        # If trajectories is empty or None, return None
+        if not trajectories:
+            return None
+            
+        # Ensure we have a list
+        if not isinstance(trajectories, list):
+            trajectories = [trajectories]
+            
+        # Filter out None values and create minimal ScoredDataGroups
+        processed_groups = []
+        for sdg in trajectories:
+            if sdg is None:
+                continue
+                
+            # Create minimal ScoredDataGroup with only the fields needed for training
+            tokens = sdg.get("tokens", [])
+            masks = sdg.get("masks", [])
+            scores = sdg.get("scores", [])
+            
+            # Skip empty groups
+            if not tokens or not masks or not scores:
+                continue
+                
+            minimal_sdg = {
+                "tokens": tokens,
+                "masks": masks,
+                "scores": scores
+            }
+            processed_groups.append(minimal_sdg)
+        
+        if not processed_groups:
+            return None
+            
+        logger.warning(f"TextWorld returning {len(processed_groups)} ScoredDataGroups for all episode turns")
+        
+        # Return the list of all ScoredDataGroups
+        return processed_groups
 
 
     async def evaluate(self, *args, **kwargs):

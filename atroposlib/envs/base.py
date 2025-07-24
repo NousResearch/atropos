@@ -890,26 +890,17 @@ class BaseEnv(ABC):
 
         logger.warning(f"Valid groups: {len(valid_groups)}, do_send_to_api: {do_send_to_api}")
         if valid_groups and do_send_to_api:
-            data_to_send_to_api: Union[ScoredDataGroup, List[ScoredDataGroup]]
-            # send single or list of scored data groups
-            if not original_was_list and len(valid_groups) == 1:
-                data_to_send_to_api = valid_groups[0]
-            else:
-                data_to_send_to_api = valid_groups
-
-            try:
-                self.items_sent_this_step += len(valid_groups)
-                logger.warning(f"Sending {len(valid_groups)} groups to API")
-                await self._send_scored_data_to_api(data_to_send_to_api)
-                logger.warning(f"Successfully sent data to API")
-            except (Exception, TimeoutError) as e:
-                data_type_str = (
-                    "single ScoredDataGroup"
-                    if isinstance(data_to_send_to_api, dict)
-                    else f"{len(data_to_send_to_api)} ScoredDataGroups"
-                )
-                logger.warning(f"Failed to send {data_type_str} after retries: {e}")
-                print(f"Failed to send {data_type_str} after retries: {e}")
+            # Always send groups individually to avoid distributed process issues
+            for i, group in enumerate(valid_groups):
+                try:
+                    logger.warning(f"Sending group {i+1}/{len(valid_groups)} to API individually")
+                    await self._send_scored_data_to_api(group)
+                    logger.warning(f"Successfully sent group {i+1}/{len(valid_groups)} to API")
+                except (Exception, TimeoutError) as e:
+                    logger.warning(f"Failed to send group {i+1} after retries: {e}")
+                    print(f"Failed to send group {i+1} after retries: {e}")
+            
+            self.items_sent_this_step += len(valid_groups)
         else:
             logger.warning(f"Not sending data: valid_groups={len(valid_groups)}, do_send_to_api={do_send_to_api}")
 
