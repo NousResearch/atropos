@@ -838,7 +838,7 @@ class PairwiseJudgementEnv(BaseEnv):
             else:
                 # Fallback if generation fails
                 answers = [
-                    "This is a comprehensive and well-structured response that addresses the question thoroughly with detailed examples and clear explanations.", # noqa
+                    "This is a comprehensive and well-structured response that addresses the question thoroughly with detailed examples and clear explanations.",  # noqa
                     "Brief response.",
                 ]
                 # Pad to required number of choices
@@ -850,7 +850,7 @@ class PairwiseJudgementEnv(BaseEnv):
                 answers = answers[: self.config.num_choices]
                 random.shuffle(answers)
                 correct_index = answers.index(
-                    "This is a comprehensive and well-structured response that addresses the question thoroughly with detailed examples and clear explanations." # noqa
+                    "This is a comprehensive and well-structured response that addresses the question thoroughly with detailed examples and clear explanations."  # noqa
                 )
                 correct_answer = self.choice_letters[correct_index]
 
