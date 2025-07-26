@@ -1,5 +1,4 @@
 import asyncio
-import json
 import math
 import random
 import re
@@ -502,7 +501,7 @@ class PairwiseJudgementEnv(BaseEnv):
                 )
 
         # Show configuration info
-        print(f"\nPairwise Judgement Configuration:")
+        print("\nPairwise Judgement Configuration:")
         print(
             f"  - Training dataset: {self.config.train_dataset} (split: {self.config.train_split})"
         )
@@ -517,7 +516,7 @@ class PairwiseJudgementEnv(BaseEnv):
         if len(self.train) > 0:
             try:
                 sample_train_item = self.train[0]
-                print(f"\nSample training item structure:")
+                print("\nSample training item structure:")
                 print(f"- Available keys: {list(sample_train_item.keys())}")
 
                 if "uid" in sample_train_item:
@@ -536,7 +535,7 @@ class PairwiseJudgementEnv(BaseEnv):
         if len(self.test) > 0:
             try:
                 sample_eval_item = self.test[0]
-                print(f"\nSample evaluation item structure:")
+                print("\nSample evaluation item structure:")
                 print(f"- Available keys: {list(sample_eval_item.keys())}")
 
                 # Handle different dataset structures
@@ -839,7 +838,7 @@ class PairwiseJudgementEnv(BaseEnv):
             else:
                 # Fallback if generation fails
                 answers = [
-                    "This is a comprehensive and well-structured response that addresses the question thoroughly with detailed examples and clear explanations.",
+                    "This is a comprehensive and well-structured response that addresses the question thoroughly with detailed examples and clear explanations.", # noqa
                     "Brief response.",
                 ]
                 # Pad to required number of choices
@@ -851,7 +850,7 @@ class PairwiseJudgementEnv(BaseEnv):
                 answers = answers[: self.config.num_choices]
                 random.shuffle(answers)
                 correct_index = answers.index(
-                    "This is a comprehensive and well-structured response that addresses the question thoroughly with detailed examples and clear explanations."
+                    "This is a comprehensive and well-structured response that addresses the question thoroughly with detailed examples and clear explanations." # noqa
                 )
                 correct_answer = self.choice_letters[correct_index]
 
