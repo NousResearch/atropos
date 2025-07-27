@@ -626,7 +626,7 @@ Please act as an impartial judge and evaluate the quality of the responses provi
 **Evaluation Methodology:**
 1. **Model Response Generation**: Generate response to Arena-Hard prompt using configured temperature/tokens
 2. **Thinking Validation**: If thinking mode enabled, validate exactly one `<think></think>` pair and extract content after tags
-3. **Dual-Round Judging**: 
+3. **Dual-Round Judging**:
    - Round 1: Judge model response (A) vs GPT-4 baseline (B)
    - Round 2: Judge GPT-4 baseline (A) vs model response (B)
 4. **Score Combination**: Average the two judgment scores using Arena-Hard logic
@@ -635,7 +635,7 @@ Please act as an impartial judge and evaluate the quality of the responses provi
 **Reward Function:**
 - **Training**: Scores range from -1.0 to 1.0 based on combined judgment results
   - 1.0: Model response clearly better than baseline
-  - 0.0: Tie between model and baseline  
+  - 0.0: Tie between model and baseline
   - -1.0: Baseline clearly better than model response
 - **Invalid Thinking**: Automatic 0.0 score for malformed `<think></think>` tags
 - **Evaluation**: Converted to Arena-Hard winrate format (0.0 to 1.0)
