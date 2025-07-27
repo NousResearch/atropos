@@ -36,7 +36,7 @@ class ArenaHardConfig(BaseEnvConfig):
 
     custom_system_prompt: Optional[str] = Field(
         default=None,
-        description="Custom system prompt for model responses. In non-thinking mode, used directly. In thinking mode, appended to thinking prompt.", # noqa
+        description="Custom system prompt for model responses. In non-thinking mode, used directly. In thinking mode, appended to thinking prompt.",  # noqa
     )
 
     # Judge configuration
@@ -174,7 +174,7 @@ class ArenaHardEnv(BaseEnv):
         self.thinking_system_prompt = self._get_thinking_prompt()
 
         # Judge prompt templates based on Arena-Hard-Auto
-        self.judge_system_prompt = """Please act as an impartial judge and evaluate the quality of the responses provided by two AI assistants to the user question displayed below. You should choose the assistant that follows the user's instructions and answers the user's question better. Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of their responses. Begin your evaluation by providing a short explanation. Avoid any position biases and ensure that the order in which the responses were presented does not influence your decision. Do not allow the length of the responses to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. After providing your explanation, output your final verdict by strictly following this format: "[[A>B]]" if assistant A is better, "[[B>A]]" if assistant B is better, and "[[A=B]]" for a tie.""" # noqa
+        self.judge_system_prompt = """Please act as an impartial judge and evaluate the quality of the responses provided by two AI assistants to the user question displayed below. You should choose the assistant that follows the user's instructions and answers the user's question better. Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of their responses. Begin your evaluation by providing a short explanation. Avoid any position biases and ensure that the order in which the responses were presented does not influence your decision. Do not allow the length of the responses to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. After providing your explanation, output your final verdict by strictly following this format: "[[A>B]]" if assistant A is better, "[[B>A]]" if assistant B is better, and "[[A=B]]" for a tie."""  # noqa
 
         self.judge_prompt_template = """<|User Prompt|>
 {question}
@@ -194,7 +194,7 @@ class ArenaHardEnv(BaseEnv):
         base_thinking_prompt = (
             self.config.custom_thinking_prompt
             if self.config.custom_thinking_prompt
-            else "You are a deep thinking AI assistant. Before providing your response, you should think through the problem carefully. Use <think></think> tags to enclose your internal reasoning and thought process, then provide your final response after the thinking tags." # noqa
+            else "You are a deep thinking AI assistant. Before providing your response, you should think through the problem carefully. Use <think></think> tags to enclose your internal reasoning and thought process, then provide your final response after the thinking tags."  # noqa
         )
 
         # Append custom system prompt if provided
