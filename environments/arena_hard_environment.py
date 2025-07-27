@@ -1,14 +1,10 @@
 import asyncio
-import json
 import os
-import random
 import re
 import time
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 
 import openai
-import tiktoken
-import wandb
 from datasets import load_dataset
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
@@ -40,7 +36,7 @@ class ArenaHardConfig(BaseEnvConfig):
 
     custom_system_prompt: Optional[str] = Field(
         default=None,
-        description="Custom system prompt for model responses. In non-thinking mode, used directly. In thinking mode, appended to thinking prompt.",
+        description="Custom system prompt for model responses. In non-thinking mode, used directly. In thinking mode, appended to thinking prompt.", # noqa
     )
 
     # Judge configuration
@@ -178,7 +174,7 @@ class ArenaHardEnv(BaseEnv):
         self.thinking_system_prompt = self._get_thinking_prompt()
 
         # Judge prompt templates based on Arena-Hard-Auto
-        self.judge_system_prompt = """Please act as an impartial judge and evaluate the quality of the responses provided by two AI assistants to the user question displayed below. You should choose the assistant that follows the user's instructions and answers the user's question better. Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of their responses. Begin your evaluation by providing a short explanation. Avoid any position biases and ensure that the order in which the responses were presented does not influence your decision. Do not allow the length of the responses to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. After providing your explanation, output your final verdict by strictly following this format: "[[A>B]]" if assistant A is better, "[[B>A]]" if assistant B is better, and "[[A=B]]" for a tie."""
+        self.judge_system_prompt = """Please act as an impartial judge and evaluate the quality of the responses provided by two AI assistants to the user question displayed below. You should choose the assistant that follows the user's instructions and answers the user's question better. Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of their responses. Begin your evaluation by providing a short explanation. Avoid any position biases and ensure that the order in which the responses were presented does not influence your decision. Do not allow the length of the responses to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. After providing your explanation, output your final verdict by strictly following this format: "[[A>B]]" if assistant A is better, "[[B>A]]" if assistant B is better, and "[[A=B]]" for a tie.""" # noqa
 
         self.judge_prompt_template = """<|User Prompt|>
 {question}
@@ -198,7 +194,7 @@ class ArenaHardEnv(BaseEnv):
         base_thinking_prompt = (
             self.config.custom_thinking_prompt
             if self.config.custom_thinking_prompt
-            else "You are a deep thinking AI assistant. Before providing your response, you should think through the problem carefully. Use <think></think> tags to enclose your internal reasoning and thought process, then provide your final response after the thinking tags."
+            else "You are a deep thinking AI assistant. Before providing your response, you should think through the problem carefully. Use <think></think> tags to enclose your internal reasoning and thought process, then provide your final response after the thinking tags." # noqa
         )
 
         # Append custom system prompt if provided
@@ -365,8 +361,8 @@ class ArenaHardEnv(BaseEnv):
         }
 
         # Show configuration info
-        print(f"\nArena-Hard Configuration:")
-        print(f"  - Judge model: Claude Sonnet 4")
+        print("\nArena-Hard Configuration:")
+        print("  - Judge model: Claude Sonnet 4")
         print(f"  - Judge temperature: {self.config.judge_temperature}")
         print(f"  - Eval temperature: {self.config.eval_temperature}")
         print(f"  - Rollout temperature: {self.config.rollout_temperature}")
@@ -466,12 +462,8 @@ class ArenaHardEnv(BaseEnv):
             print(f"Warning: Empty prompt for {prompt_item.get('uid')}")
             return await self.get_next_item()
 
-        # Create messages for model completion
+        # Create prompt tuple for model completion
         if self.config.thinking_mode:
-            messages = [
-                {"role": "system", "content": self.thinking_system_prompt},
-                {"role": "user", "content": prompt_text},
-            ]
             prompt = tuple(
                 [
                     frozenset(
@@ -486,10 +478,6 @@ class ArenaHardEnv(BaseEnv):
         else:
             system_prompt = self._get_system_prompt()
             if system_prompt:
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt_text},
-                ]
                 prompt = tuple(
                     [
                         frozenset({"role": "system", "content": system_prompt}.items()),
@@ -497,7 +485,6 @@ class ArenaHardEnv(BaseEnv):
                     ]
                 )
             else:
-                messages = [{"role": "user", "content": prompt_text}]
                 prompt = tuple(
                     [
                         frozenset({"role": "user", "content": prompt_text}.items()),
@@ -934,7 +921,7 @@ class ArenaHardEnv(BaseEnv):
 
                     break
 
-                except Exception as e:
+                except Exception:
                     if attempt < self.config.max_retries - 1:
                         await asyncio.sleep(self.config.retry_delay)
                         continue
