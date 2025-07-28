@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Tuple
 import openai
 from datasets import load_dataset
 from pydantic import Field
+from tenacity import retry, stop_after_attempt, wait_random_exponential
 from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
@@ -39,6 +40,22 @@ class ArenaHardConfig(BaseEnvConfig):
         description="Custom system prompt for model responses. In non-thinking mode, used directly. In thinking mode, appended to thinking prompt.", # noqa
     )
 
+    # Judge model configuration
+    judge_model_name: str = Field(
+        default="claude-sonnet-4-20250514",
+        description="Model name for the judge (e.g., 'claude-sonnet-4-20250514', 'gpt-4o', etc.)",
+    )
+
+    judge_base_url: str = Field(
+        default="https://api.anthropic.com/v1",
+        description="Base URL for the judge model API (e.g., 'https://api.anthropic.com/v1', 'https://api.openai.com/v1')",
+    )
+
+    judge_api_key_env: str = Field(
+        default="ANTHROPIC_API_KEY",
+        description="Environment variable name containing the API key for the judge model (e.g., 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY')",
+    )
+
     # Judge configuration
     judge_temperature: float = Field(
         default=0.2,
@@ -48,6 +65,25 @@ class ArenaHardConfig(BaseEnvConfig):
     judge_max_tokens: int = Field(
         default=4096,
         description="Maximum tokens for judge completions.",
+    )
+
+    # Retry configuration for judge calls
+    judge_max_retries: int = Field(
+        default=3,
+        ge=1,
+        description="Maximum number of retries for failed judge API calls.",
+    )
+
+    judge_retry_multiplier: float = Field(
+        default=1.0,
+        ge=0.0,
+        description="Exponential backoff multiplier for judge retries.",
+    )
+
+    judge_retry_max_wait: int = Field(
+        default=10,
+        ge=1,
+        description="Maximum wait time in seconds for judge retries.",
     )
 
     # Model generation configuration
@@ -152,10 +188,14 @@ class ArenaHardEnv(BaseEnv):
         self.error_count = 0
         self.rollouts_for_wandb = []
 
-        # Initialize Claude Sonnet judge client
+        # Initialize judge client with configurable settings
+        judge_api_key = os.environ.get(self.config.judge_api_key_env)
+        if not judge_api_key:
+            raise ValueError(f"Judge API key not found in environment variable: {self.config.judge_api_key_env}")
+        
         self.judge_client = openai.AsyncOpenAI(
-            api_key=os.environ.get("ANTHROPIC_API_KEY"),
-            base_url="https://api.anthropic.com/v1",
+            api_key=judge_api_key,
+            base_url=self.config.judge_base_url,
         )
 
         # Pre-compile regex patterns for judgment parsing (Arena-Hard format)
@@ -294,8 +334,14 @@ class ArenaHardEnv(BaseEnv):
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
             min_batch_allocation=0.1,
+            judge_model_name="claude-sonnet-4-20250514",
+            judge_base_url="https://api.anthropic.com/v1",
+            judge_api_key_env="ANTHROPIC_API_KEY",
             judge_temperature=0.0,
             judge_max_tokens=2048,
+            judge_max_retries=3,
+            judge_retry_multiplier=1.0,
+            judge_retry_max_wait=10,
             eval_temperature=0.0,
             rollout_temperature=1.0,
             eval_max_tokens=1024 * 16,
@@ -362,8 +408,13 @@ class ArenaHardEnv(BaseEnv):
 
         # Show configuration info
         print("\nArena-Hard Configuration:")
-        print("  - Judge model: Claude Sonnet 4")
+        print(f"  - Judge model: {self.config.judge_model_name}")
+        print(f"  - Judge base URL: {self.config.judge_base_url}")
+        print(f"  - Judge API key env: {self.config.judge_api_key_env}")
         print(f"  - Judge temperature: {self.config.judge_temperature}")
+        print(f"  - Judge max retries: {self.config.judge_max_retries}")
+        print(f"  - Judge retry multiplier: {self.config.judge_retry_multiplier}")
+        print(f"  - Judge retry max wait: {self.config.judge_retry_max_wait}s")
         print(f"  - Eval temperature: {self.config.eval_temperature}")
         print(f"  - Rollout temperature: {self.config.rollout_temperature}")
         print(f"  - Group size: {self.config.group_size}")
@@ -494,10 +545,42 @@ class ArenaHardEnv(BaseEnv):
         # Return item with prompt and baseline for later judgment
         return (prompt, {"prompt_item": prompt_item, "baseline_item": baseline_item})
 
+    @retry(
+        stop=stop_after_attempt(3),  # Will be overridden by instance config
+        wait=wait_random_exponential(multiplier=1, max=10),  # Will be overridden by instance config
+    )
+    async def _judge_api_call(self, messages: List[Dict]):
+        """Make a single judge API call with retry decorator."""
+        self._log_full_debug_request(
+            messages,
+            {
+                "temperature": self.config.judge_temperature,
+                "max_tokens": self.config.judge_max_tokens,
+            },
+            "JUDGE API CALL",
+        )
+
+        completion = await self.judge_client.chat.completions.create(
+            model=self.config.judge_model_name,
+            messages=messages,
+            temperature=self.config.judge_temperature,
+            max_tokens=self.config.judge_max_tokens,
+        )
+
+        self._log_full_debug_response(completion, "JUDGE API CALL")
+
+        if not completion.choices:
+            raise ValueError("No response from judge")
+
+        if not completion.choices[0].message.content:
+            raise ValueError("Empty judgment from judge")
+
+        return completion
+
     async def judge_responses(
         self, question: str, answer_a: str, answer_b: str
     ) -> Tuple[str, str]:
-        """Use Claude Sonnet to judge two responses."""
+        """Use configured judge model to judge two responses."""
         # Format the judge prompt
         user_content = self.judge_prompt_template.format(
             question=question, answer_a=answer_a, answer_b=answer_b
@@ -508,62 +591,29 @@ class ArenaHardEnv(BaseEnv):
             {"role": "user", "content": user_content},
         ]
 
-        # Retry logic for judge calls
-        for attempt in range(self.config.max_retries):
-            try:
-                self._log_full_debug_request(
-                    messages,
-                    {
-                        "temperature": self.config.judge_temperature,
-                        "max_tokens": self.config.judge_max_tokens,
-                    },
-                    f"JUDGE attempt {attempt + 1}/{self.config.max_retries}",
-                )
+        try:
+            # Create a new retry decorator with instance-specific configuration
+            retry_decorator = retry(
+                stop=stop_after_attempt(self.config.judge_max_retries),
+                wait=wait_random_exponential(
+                    multiplier=self.config.judge_retry_multiplier,
+                    max=self.config.judge_retry_max_wait
+                ),
+            )
+            
+            # Apply the retry decorator to the API call method
+            retrying_judge_call = retry_decorator(self._judge_api_call)
+            
+            # Make the API call with retries
+            completion = await retrying_judge_call(messages)
+            
+            judgment = completion.choices[0].message.content
+            score = self._parse_judgment(judgment)
+            return score, judgment
 
-                completion = await self.judge_client.chat.completions.create(
-                    model="claude-sonnet-4-20250514",
-                    messages=messages,
-                    temperature=self.config.judge_temperature,
-                    max_tokens=self.config.judge_max_tokens,
-                )
-
-                self._log_full_debug_response(
-                    completion, f"JUDGE attempt {attempt + 1}/{self.config.max_retries}"
-                )
-
-                if not completion.choices:
-                    if attempt < self.config.max_retries - 1:
-                        await asyncio.sleep(self.config.retry_delay)
-                        continue
-                    else:
-                        return "ERROR", "No response from judge"
-
-                judgment = completion.choices[0].message.content
-                if not judgment:
-                    if attempt < self.config.max_retries - 1:
-                        await asyncio.sleep(self.config.retry_delay)
-                        continue
-                    else:
-                        return "ERROR", "Empty judgment from judge"
-
-                # Parse judgment
-                score = self._parse_judgment(judgment)
-                return score, judgment
-
-            except Exception as e:
-                if attempt < self.config.max_retries - 1:
-                    print(
-                        f"Judge API call failed (attempt {attempt + 1}/{self.config.max_retries}): {e}"
-                    )
-                    await asyncio.sleep(self.config.retry_delay)
-                    continue
-                else:
-                    print(
-                        f"Judge API call failed after {self.config.max_retries} attempts: {e}"
-                    )
-                    return "ERROR", f"Judge error: {e}"
-
-        return "ERROR", "Judge failed after all retries"
+        except Exception as e:
+            print(f"Judge API call failed after {self.config.judge_max_retries} attempts: {e}")
+            return "ERROR", f"Judge error: {e}"
 
     def _parse_judgment(self, judgment: str) -> str:
         """Parse judgment from Claude response using Arena-Hard format."""
