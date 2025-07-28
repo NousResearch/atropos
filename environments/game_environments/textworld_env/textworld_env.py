@@ -83,8 +83,8 @@ class TextWorldEnvConfig(BaseEnvConfig):
     topk: int = 8  # Number of top-scoring alternatives to keep
     bottomk: int = 8  # Number of bottom-scoring alternatives to keep
     allow_variable_group_size: bool = True  # Allow top-k/bottom-k filtering to reduce group size
-    max_token_length: int = 8192  # Reduced to fit within 24k seq_len
-    max_trajectory_tokens: int = 24576  # Match trainer seq_len
+    max_token_length: int = 16384  # 16k max generation
+    max_trajectory_tokens: int = 32768  # Match trainer seq_len (32k)
 
     # VR-CLI specific configurations
     vrcli_weight: float = Field(
@@ -282,7 +282,6 @@ class TextWorldEnv(BaseEnv):
         # Wandb logging buffers
         self.completed_episodes_buffer = []
         self.step_metrics_buffer = []
-        self.action_counts = {}
         self.last_logged_episodes = 0
         
         # Override tokenizer for Qwen models with our fixed tokenizer
@@ -1401,11 +1400,6 @@ class TextWorldEnv(BaseEnv):
             }
             self.step_metrics_buffer.append(step_metrics)
             
-            # Track action counts
-            action = selected_eval.get("action", "unknown")
-            if action not in self.action_counts:
-                self.action_counts[action] = 0
-            self.action_counts[action] += 1
 
         # 5. Select best action based on combined score
         best_eval = max(evaluations, key=lambda x: x["combined_score"])
@@ -1913,15 +1907,6 @@ class TextWorldEnv(BaseEnv):
             
             # Clear buffer
             self.step_metrics_buffer = []
-        
-        # Action distribution
-        if self.action_counts:
-            total_actions = sum(self.action_counts.values())
-            for action, count in self.action_counts.items():
-                wandb_metrics[f"textworld_train/action_dist/{action}"] = count / total_actions
-            
-            # Clear counts
-            self.action_counts = {}
         
         # Call parent wandb_log
         await super().wandb_log(wandb_metrics)
