@@ -8,10 +8,10 @@ import sys
 import uuid
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
+import wandb
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
-import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
