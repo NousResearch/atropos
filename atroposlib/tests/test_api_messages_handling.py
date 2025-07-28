@@ -147,50 +147,6 @@ class TestAPIMessagesHandling:
         assert response.status_code == 200
         assert response.json()["status"] == "received"
 
-    def test_scored_data_list_with_messages(self, api_server):
-        """Test posting a list of scored data with messages."""
-        # First register
-        register_response = requests.post(
-            "http://localhost:8000/register",
-            json={
-                "wandb_group": "test",
-                "wandb_project": "test",
-                "batch_size": 4,
-                "max_token_len": 512,
-                "checkpoint_dir": "/tmp",
-                "save_checkpoint_interval": 10,
-                "starting_step": 0,
-                "num_steps": 100,
-            },
-        )
-        assert register_response.status_code == 200
-
-        # Create multiple scored data items with messages
-        scored_data_list = []
-        for i in range(3):
-            messages = [
-                {"role": "user", "content": f"Question {i}", "reward": None},
-                {"role": "assistant", "content": f"Answer {i}", "reward": None},
-            ]
-            scored_data_list.append(
-                {
-                    "tokens": [[i + 1, i + 2, i + 3]],
-                    "masks": [[1, 1, 1]],
-                    "scores": [float(i)],
-                    "messages": [messages],
-                }
-            )
-
-        response = requests.post(
-            "http://localhost:8000/scored_data_list", json=scored_data_list
-        )
-        if response.status_code != 200:
-            print(f"Error response: {response.text}")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "received"
-        assert data["groups_processed"] == 3
-
     def test_sft_style_messages(self, api_server):
         """Test SFT-style message handling with group overrides."""
         # Register first

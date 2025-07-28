@@ -7,7 +7,6 @@ This test suite validates the API server's handling of messages in various forma
 ### Basic API Functionality
 - **test_register_trainer**: Tests trainer registration with the API server
 - **test_scored_data_with_messages**: Tests posting scored data with OpenAI-format messages
-- **test_scored_data_list_with_messages**: Tests batch posting of multiple scored data items
 - **test_empty_messages_handling**: Tests handling of optional/empty messages field
 
 ### Message Format Tests
