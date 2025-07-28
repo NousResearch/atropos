@@ -58,7 +58,7 @@ class GSM8kEnv(BaseEnv):
     @classmethod
     def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = BaseEnvConfig(
-            tokenizer_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+            tokenizer_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
             group_size=8,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
@@ -70,26 +70,8 @@ class GSM8kEnv(BaseEnv):
         )
         server_configs = [
             APIServerConfig(
-                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
-                base_url="http://localhost:9004/v1",
-                api_key="x",
-                num_requests_for_eval=256,
-            ),
-            APIServerConfig(
-                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
-                base_url="http://localhost:9005/v1",
-                api_key="x",
-                num_requests_for_eval=256,
-            ),
-            APIServerConfig(
-                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
-                base_url="http://localhost:9006/v1",
-                api_key="x",
-                num_requests_for_eval=256,
-            ),
-            APIServerConfig(
-                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
-                base_url="http://localhost:9007/v1",
+                model_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
+                base_url="http://localhost:9001/v1",
                 api_key="x",
                 num_requests_for_eval=256,
             ),
@@ -364,77 +346,6 @@ class GSM8kEnv(BaseEnv):
         else:
             # If the gold solution is not parseable, we return None
             return None
-
-    async def postprocess_histories(
-        self,
-        trajectories: Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]],
-    ) -> Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]:
-        """Log structure of GSM8K ScoredDataGroups."""
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        # Handle single ScoredDataGroup
-        if not isinstance(trajectories, list):
-            if trajectories is not None:
-                logger.warning(f"GSM8K ScoredDataGroup structure:")
-                logger.warning(
-                    f"  - tokens: type={type(trajectories.get('tokens', [])).__name__}, len={len(trajectories.get('tokens', []))}"
-                )
-                tokens = trajectories.get("tokens", [])
-                if tokens and len(tokens) > 0:
-                    logger.warning(
-                        f"    - tokens[0]: type={type(tokens[0]).__name__}, len={len(tokens[0]) if hasattr(tokens[0], '__len__') else 'N/A'}"
-                    )
-                logger.warning(
-                    f"  - masks: type={type(trajectories.get('masks', [])).__name__}, len={len(trajectories.get('masks', []))}"
-                )
-                masks = trajectories.get("masks", [])
-                if masks and len(masks) > 0:
-                    logger.warning(
-                        f"    - masks[0]: type={type(masks[0]).__name__}, len={len(masks[0]) if hasattr(masks[0], '__len__') else 'N/A'}"
-                    )
-                logger.warning(
-                    f"  - scores: type={type(trajectories.get('scores', [])).__name__}, len={len(trajectories.get('scores', []))}"
-                )
-                scores = trajectories.get("scores", [])
-                if scores and len(scores) > 0:
-                    logger.warning(
-                        f"    - scores[0]: type={type(scores[0])}, value={scores[0]}"
-                    )
-            return trajectories
-
-        # Handle list of ScoredDataGroups (shouldn't happen for GSM8K but just in case)
-        for i, sdg in enumerate(trajectories):
-            if sdg is None:
-                continue
-            logger.warning(f"GSM8K ScoredDataGroup {i} structure:")
-            logger.warning(
-                f"  - tokens: type={type(sdg.get('tokens', [])).__name__}, len={len(sdg.get('tokens', []))}"
-            )
-            tokens = sdg.get("tokens", [])
-            if tokens and len(tokens) > 0:
-                logger.warning(
-                    f"    - tokens[0]: type={type(tokens[0]).__name__}, len={len(tokens[0]) if hasattr(tokens[0], '__len__') else 'N/A'}"
-                )
-            logger.warning(
-                f"  - masks: type={type(sdg.get('masks', [])).__name__}, len={len(sdg.get('masks', []))}"
-            )
-            masks = sdg.get("masks", [])
-            if masks and len(masks) > 0:
-                logger.warning(
-                    f"    - masks[0]: type={type(masks[0]).__name__}, len={len(masks[0]) if hasattr(masks[0], '__len__') else 'N/A'}"
-                )
-            logger.warning(
-                f"  - scores: type={type(sdg.get('scores', [])).__name__}, len={len(sdg.get('scores', []))}"
-            )
-            scores = sdg.get("scores", [])
-            if scores and len(scores) > 0:
-                logger.warning(
-                    f"    - scores[0]: type={type(scores[0])}, value={scores[0]}"
-                )
-
-        return trajectories
 
     async def get_next_item(self) -> GSM8kRow:
         next_item = self.train[self.iter % len(self.train)]
