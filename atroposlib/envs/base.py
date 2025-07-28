@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import aiohttp
 import jsonlines
 import numpy as np
-import wandb
 import yaml
 from pydantic import BaseModel, Field
 from pydantic_cli import Cmd, FailedExecutionException, run_and_exit
@@ -26,6 +25,7 @@ from tenacity import retry, stop_after_attempt, wait_random_exponential
 from transformers import AutoTokenizer
 from typing_extensions import TypedDict
 
+import wandb
 from atroposlib.envs.constants import ENV_NAMESPACE, NAMESPACE_SEP, OPENAI_NAMESPACE
 from atroposlib.envs.server_handling.openai_server import resolve_openai_configs
 from atroposlib.frontend.jsonl2html import generate_html
@@ -878,7 +878,7 @@ class BaseEnv(ABC):
             else:
                 # Strict check: must match expected group_size exactly
                 if len(tokens) != group_size:
-                    logger.debug(
+                    logger.warning(
                         f"Group size mismatch (expected {group_size}, got {len(tokens)})"
                     )
                     continue
@@ -887,7 +887,7 @@ class BaseEnv(ABC):
                 self.config.ensure_scores_are_not_same
                 and len(set(group.get("scores", []))) == 1
             ):
-                logger.debug(
+                logger.warning(
                     f"REJECTION: All scores are the same ({group.get('scores', [])[:5]}...), skipping..."
                 )
                 continue
@@ -907,7 +907,7 @@ class BaseEnv(ABC):
             elif abort_on_any_max_length_exceeded and any(
                 [len(x) >= self.max_token_len for x in group["tokens"]]
             ):
-                logger.debug("Token length is too long in a group, skipping...")
+                logger.warning("Token length is too long in a group, skipping...")
                 continue
 
             if self.config.include_messages and group.get("messages") is None:
@@ -920,11 +920,13 @@ class BaseEnv(ABC):
 
             if self.jsonl_writer is not None:
                 self.jsonl_writer.write(group)
-                print(f"Wrote scored group to {self.config.data_path_to_save_groups}")
+                logger.info(
+                    f"Wrote scored group to {self.config.data_path_to_save_groups}"
+                )
 
             valid_groups.append(group)
 
-        logger.debug(
+        logger.info(
             f"Valid groups: {len(valid_groups)}, do_send_to_api: {do_send_to_api}"
         )
         if valid_groups and do_send_to_api:
@@ -937,7 +939,7 @@ class BaseEnv(ABC):
 
             self.items_sent_this_step += len(valid_groups)
         else:
-            logger.debug(
+            logger.info(
                 f"Not sending data: valid_groups={len(valid_groups)}, do_send_to_api={do_send_to_api}"
             )
 
