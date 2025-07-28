@@ -191,8 +191,10 @@ class ArenaHardEnv(BaseEnv):
         # Initialize judge client with configurable settings
         judge_api_key = os.environ.get(self.config.judge_api_key_env)
         if not judge_api_key:
-            raise ValueError(f"Judge API key not found in environment variable: {self.config.judge_api_key_env}")
-        
+            raise ValueError(
+                f"Judge API key not found in environment variable: {self.config.judge_api_key_env}"
+            )
+
         self.judge_client = openai.AsyncOpenAI(
             api_key=judge_api_key,
             base_url=self.config.judge_base_url,
@@ -547,7 +549,9 @@ class ArenaHardEnv(BaseEnv):
 
     @retry(
         stop=stop_after_attempt(3),  # Will be overridden by instance config
-        wait=wait_random_exponential(multiplier=1, max=10),  # Will be overridden by instance config
+        wait=wait_random_exponential(
+            multiplier=1, max=10
+        ),  # Will be overridden by instance config
     )
     async def _judge_api_call(self, messages: List[Dict]):
         """Make a single judge API call with retry decorator."""
@@ -597,22 +601,24 @@ class ArenaHardEnv(BaseEnv):
                 stop=stop_after_attempt(self.config.judge_max_retries),
                 wait=wait_random_exponential(
                     multiplier=self.config.judge_retry_multiplier,
-                    max=self.config.judge_retry_max_wait
+                    max=self.config.judge_retry_max_wait,
                 ),
             )
-            
+
             # Apply the retry decorator to the API call method
             retrying_judge_call = retry_decorator(self._judge_api_call)
-            
+
             # Make the API call with retries
             completion = await retrying_judge_call(messages)
-            
+
             judgment = completion.choices[0].message.content
             score = self._parse_judgment(judgment)
             return score, judgment
 
         except Exception as e:
-            print(f"Judge API call failed after {self.config.judge_max_retries} attempts: {e}")
+            print(
+                f"Judge API call failed after {self.config.judge_max_retries} attempts: {e}"
+            )
             return "ERROR", f"Judge error: {e}"
 
     def _parse_judgment(self, judgment: str) -> str:
