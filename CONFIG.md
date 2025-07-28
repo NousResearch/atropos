@@ -24,14 +24,14 @@ Basic environment configuration settings.
 | `use_wandb`                      | `bool`                   | `True`                                          | Whether to use Weights & Biases for logging.                                                               |
 | `rollout_server_url`             | `str`                    | `"http://localhost:8000"`                       | URL of the rollout server (FastAPI interface).                                                             |
 | `total_steps`                    | `int`                    | `1000`                                          | Total number of steps to run.                                                                              |
-| `wandb_name`                     | `str | None`             | `None`                                          | Name to be grouped by in WandB.                                                                            |
+| `wandb_name`                     | `str or None`             | `None`                                          | Name to be grouped by in WandB.                                                                            |
 | `num_rollouts_to_keep`           | `int`                    | `32`                                            | Number of rollouts to display on WandB.                                                                    |
 | `num_rollouts_per_group_for_logging` | `int`                | `1`                                             | Number of rollouts per group to keep for logging. `-1` keeps all.                                          |
 | `ensure_scores_are_not_same`     | `bool`                   | `True`                                          | Ensure that scores within a group are not identical (usually `True`).                                      |
-| `data_path_to_save_groups`       | `str | None`             | `None`                                          | Path to save generated groups as a JSONL file. If set, groups will be written here.                         |
+| `data_path_to_save_groups`       | `str or None`             | `None`                                          | Path to save generated groups as a JSONL file. If set, groups will be written here.                         |
 | `min_items_sent_before_logging`  | `int`                    | `2`                                             | Minimum number of items sent to the API before logging metrics. `0` or less logs every time.             |
 | `include_messages`               | `bool`                   | `False`                                         | Whether to include messages in the output transmitted to the trainer.                                      |
-| `min_batch_allocation`           | `float | None`           | `None`                                          | Minimum proportion of a batch this environment should be allocated (0.0-1.0). Ensures this env contributes at least this fraction to each training batch. |
+| `min_batch_allocation`           | `float or None`           | `None`                                          | Minimum proportion of a batch this environment should be allocated (0.0-1.0). Ensures this env contributes at least this fraction to each training batch. |
 
 ## Server Manager Configuration (`atroposlib.envs.server_handling.server_manager.ServerManagerConfig`)
 
