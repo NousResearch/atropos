@@ -48,12 +48,12 @@ class ArenaHardConfig(BaseEnvConfig):
 
     judge_base_url: str = Field(
         default="https://api.anthropic.com/v1",
-        description="Base URL for the judge model API (e.g., 'https://api.anthropic.com/v1', 'https://api.openai.com/v1')",
+        description="Base URL for the judge model API (e.g., 'https://api.anthropic.com/v1', 'https://api.openai.com/v1')", # noqa
     )
 
     judge_api_key_env: str = Field(
         default="ANTHROPIC_API_KEY",
-        description="Environment variable name containing the API key for the judge model (e.g., 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY')",
+        description="Environment variable name containing the API key for the judge model (e.g., 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY')", # noqa
     )
 
     # Judge configuration
