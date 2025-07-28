@@ -192,3 +192,11 @@ uv.lock
 
 .DS_Store
 .aider*
+environments/community/word_hunt/Dictionary.txt
+
+# Word Hunt artefacts
+environments/community/word_hunt/Dictionary.txt
+environments/community/word_hunt/debug_test.py
+environments/community/word_hunt/template_with_metadata.html
+environments/community/word_hunt/word_hunt_rollouts*.html
+.DS_Store
