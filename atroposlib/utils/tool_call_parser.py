@@ -83,7 +83,9 @@ def parse_tool_call(
 
     except json.JSONDecodeError as json_error:
         # This is expected during training - log at debug level with the malformed content
-        logger.debug(f"Failed to parse tool call JSON: {json_error}. Content: {tool_call_content[:200]}...")
+        logger.debug(
+            f"Failed to parse tool call JSON: {json_error}. Content: {tool_call_content[:200]}..."
+        )
         return "-ERROR-", {}, True
     except Exception as e:
         # Other exceptions are more serious

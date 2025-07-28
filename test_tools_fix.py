@@ -103,19 +103,23 @@ Inventory: You are carrying nothing."""
 
 messages = [
     {"role": "system", "content": system_prompt},
-    {"role": "user", "content": user_prompt}
+    {"role": "user", "content": user_prompt},
 ]
 
 print("Test 1: Original (expecting TypeError)")
 try:
-    prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    prompt = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
     print("✗ Unexpected success! This should have failed")
 except TypeError as e:
     print(f"✓ Got expected TypeError: {e}")
 
 print("\nTest 2: With tools=[] parameter")
 try:
-    prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, tools=[])
+    prompt = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True, tools=[]
+    )
     print("✓ Success with tools=[]!")
     print(f"Prompt length: {len(prompt)} chars")
     print(f"First 200 chars: {prompt[:200]}...")

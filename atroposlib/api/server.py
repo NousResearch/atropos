@@ -330,8 +330,6 @@ async def scored_data(scored_data: ScoredData):
     return {"status": "received"}
 
 
-
-
 @app.get("/status")
 async def get_status():
     try:

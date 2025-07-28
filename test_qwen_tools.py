@@ -7,16 +7,16 @@ tokenizer = AutoTokenizer.from_pretrained("NousResearch/Hermes-4-Qwen3-14B-1-e3"
 
 messages = [
     {"role": "system", "content": "You are a helpful AI."},
-    {"role": "user", "content": "Hello"}
+    {"role": "user", "content": "Hello"},
 ]
 
 print("Test 1: With tools=[]")
 try:
     prompt = tokenizer.apply_chat_template(
-        messages, 
-        tokenize=False, 
+        messages,
+        tokenize=False,
         add_generation_prompt=True,
-        tools=[]  # Empty list instead of None
+        tools=[],  # Empty list instead of None
     )
     print("✓ Success with empty tools list!")
     print(f"Prompt: {prompt[:200]}...")
@@ -32,20 +32,15 @@ tools = [
             "description": "Execute a text command",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "command": {"type": "string"}
-                }
-            }
-        }
+                "properties": {"command": {"type": "string"}},
+            },
+        },
     }
 ]
 
 try:
     prompt = tokenizer.apply_chat_template(
-        messages, 
-        tokenize=False, 
-        add_generation_prompt=True,
-        tools=tools
+        messages, tokenize=False, add_generation_prompt=True, tools=tools
     )
     print("✓ Success with tools!")
     print(f"Prompt: {prompt[:200]}...")

@@ -2,9 +2,15 @@
 """Test script to isolate Qwen tokenizer chat template issue."""
 
 import os
+
 from transformers import AutoTokenizer
-from environments.game_environments.textworld_env.utils.qwen_fixed_tokenizer import QwenFixedTokenizer
-from environments.game_environments.textworld_env.agents.atropos_agent import AtroposAgent
+
+from environments.game_environments.textworld_env.agents.atropos_agent import (
+    AtroposAgent,
+)
+from environments.game_environments.textworld_env.utils.qwen_fixed_tokenizer import (
+    QwenFixedTokenizer,
+)
 
 # Disable tokenizers parallelism warning
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -12,7 +18,9 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 print("=== Testing Original Qwen Tokenizer ===")
 # Load the original Qwen tokenizer
 print("Loading original Qwen tokenizer...")
-original_tokenizer = AutoTokenizer.from_pretrained("NousResearch/Hermes-4-Qwen3-14B-1-e3")
+original_tokenizer = AutoTokenizer.from_pretrained(
+    "NousResearch/Hermes-4-Qwen3-14B-1-e3"
+)
 
 print("\n=== Testing Fixed Qwen Tokenizer ===")
 # Load the fixed Qwen tokenizer
@@ -23,12 +31,12 @@ fixed_tokenizer = QwenFixedTokenizer("NousResearch/Hermes-4-Qwen3-14B-1-e3")
 test_messages = [
     {
         "role": "system",
-        "content": "You are an AI agent playing a text-based adventure game. You should think step-by-step."
+        "content": "You are an AI agent playing a text-based adventure game. You should think step-by-step.",
     },
     {
-        "role": "user", 
-        "content": "Objective: Cook a meal.\n\nCurrent Location: Kitchen\nYou see a fridge and a stove."
-    }
+        "role": "user",
+        "content": "Objective: Cook a meal.\n\nCurrent Location: Kitchen\nYou see a fridge and a stove.",
+    },
 ]
 
 print("\nTest 1: Basic messages (both tokenizers)")
@@ -38,7 +46,9 @@ for i, msg in enumerate(test_messages):
 
 print("\nOriginal tokenizer:")
 try:
-    prompt = original_tokenizer.apply_chat_template(test_messages, tokenize=False, add_generation_prompt=True)
+    prompt = original_tokenizer.apply_chat_template(
+        test_messages, tokenize=False, add_generation_prompt=True
+    )
     print("✓ Success! Generated prompt:")
     print(f"Prompt length: {len(prompt)} chars")
     print(f"First 200 chars: {prompt[:200]}...")
@@ -47,7 +57,9 @@ except Exception as e:
 
 print("\nFixed tokenizer:")
 try:
-    prompt = fixed_tokenizer.apply_chat_template(test_messages, tokenize=False, add_generation_prompt=True)
+    prompt = fixed_tokenizer.apply_chat_template(
+        test_messages, tokenize=False, add_generation_prompt=True
+    )
     print("✓ Success! Generated prompt:")
     print(f"Prompt length: {len(prompt)} chars")
     print(f"First 200 chars: {prompt[:200]}...")
@@ -96,14 +108,16 @@ For your function call, return a JSON object with function name and arguments wi
 
 test_messages_full = [
     {"role": "system", "content": full_system_prompt},
-    {"role": "user", "content": "Objective: Cook a meal.\n\nCurrent Location: Kitchen"}
+    {"role": "user", "content": "Objective: Cook a meal.\n\nCurrent Location: Kitchen"},
 ]
 
 print(f"Messages: {len(test_messages_full)} messages")
 
 print("\nOriginal tokenizer:")
 try:
-    prompt = original_tokenizer.apply_chat_template(test_messages_full, tokenize=False, add_generation_prompt=True)
+    prompt = original_tokenizer.apply_chat_template(
+        test_messages_full, tokenize=False, add_generation_prompt=True
+    )
     print("✓ Success with full prompt!")
     print(f"Prompt length: {len(prompt)} chars")
 except Exception as e:
@@ -111,7 +125,9 @@ except Exception as e:
 
 print("\nFixed tokenizer:")
 try:
-    prompt = fixed_tokenizer.apply_chat_template(test_messages_full, tokenize=False, add_generation_prompt=True)
+    prompt = fixed_tokenizer.apply_chat_template(
+        test_messages_full, tokenize=False, add_generation_prompt=True
+    )
     print("✓ Success with full prompt!")
     print(f"Prompt length: {len(prompt)} chars")
 except Exception as e:
@@ -123,14 +139,16 @@ alternating_messages = [
     {"role": "system", "content": "You are a helpful AI."},
     {"role": "user", "content": "First turn"},
     {"role": "assistant", "content": "First response"},
-    {"role": "user", "content": "Second turn"}
+    {"role": "user", "content": "Second turn"},
 ]
 
 print(f"Messages: {len(alternating_messages)} messages")
 
 print("\nOriginal tokenizer:")
 try:
-    prompt = original_tokenizer.apply_chat_template(alternating_messages, tokenize=False, add_generation_prompt=True)
+    prompt = original_tokenizer.apply_chat_template(
+        alternating_messages, tokenize=False, add_generation_prompt=True
+    )
     print("✓ Success with alternating messages!")
     print(f"Prompt length: {len(prompt)} chars")
 except Exception as e:
@@ -138,7 +156,9 @@ except Exception as e:
 
 print("\nFixed tokenizer:")
 try:
-    prompt = fixed_tokenizer.apply_chat_template(alternating_messages, tokenize=False, add_generation_prompt=True)
+    prompt = fixed_tokenizer.apply_chat_template(
+        alternating_messages, tokenize=False, add_generation_prompt=True
+    )
     print("✓ Success with alternating messages!")
     print(f"Prompt length: {len(prompt)} chars")
 except Exception as e:
@@ -147,36 +167,42 @@ except Exception as e:
 # Test with tools parameter
 print("\n\nTest 4: With tools parameter (THIS IS THE MAIN TEST)")
 test_messages_with_tools = [
-    {"role": "system", "content": "You are a helpful AI assistant playing a text adventure game. Think step-by-step and then call the required tool."},
-    {"role": "user", "content": "You are in a kitchen. There's a stove, a fridge, and a table here.\n\nWhat would you like to do?"}
+    {
+        "role": "system",
+        "content": "You are a helpful AI assistant playing a text adventure game. Think step-by-step and then call the required tool.",
+    },
+    {
+        "role": "user",
+        "content": "You are in a kitchen. There's a stove, a fridge, and a table here.\n\nWhat would you like to do?",
+    },
 ]
 
 print("\n--- Testing ORIGINAL tokenizer with tools ---")
 try:
     prompt = original_tokenizer.apply_chat_template(
-        test_messages_with_tools, 
+        test_messages_with_tools,
         tools=AtroposAgent.TOOLS,
-        tokenize=False, 
-        add_generation_prompt=True
+        tokenize=False,
+        add_generation_prompt=True,
     )
     print("✓ ORIGINAL tokenizer: Success with tools!")
     print(f"Prompt length: {len(prompt)} chars")
     print(f"First 500 chars: {prompt[:500]}...")
 except Exception as e:
     print(f"✗ ORIGINAL tokenizer: Failed with error: {type(e).__name__}: {e}")
-    
+
 print("\n--- Testing FIXED tokenizer with tools ---")
 try:
     prompt = fixed_tokenizer.apply_chat_template(
-        test_messages_with_tools, 
+        test_messages_with_tools,
         tools=AtroposAgent.TOOLS,
-        tokenize=False, 
-        add_generation_prompt=True
+        tokenize=False,
+        add_generation_prompt=True,
     )
     print("✓ FIXED tokenizer: Success with tools!")
     print(f"Prompt length: {len(prompt)} chars")
     print(f"First 500 chars: {prompt[:500]}...")
-    
+
     # Verify tools are in the prompt
     if '"execute_command"' in prompt:
         print("✓ Tool definition found in prompt")
@@ -185,6 +211,7 @@ try:
 except Exception as e:
     print(f"✗ FIXED tokenizer: Failed with error: {type(e).__name__}: {e}")
     import traceback
+
     traceback.print_exc()
 
 # Check tokenizer attributes
@@ -192,14 +219,16 @@ print("\n\nTokenizer attributes:")
 print("Original tokenizer:")
 print(f"  tokenizer type: {type(original_tokenizer).__name__}")
 print(f"  has chat_template: {hasattr(original_tokenizer, 'chat_template')}")
-if hasattr(original_tokenizer, 'chat_template'):
+if hasattr(original_tokenizer, "chat_template"):
     print(f"  chat_template type: {type(original_tokenizer.chat_template)}")
     print(f"  chat_template preview: {str(original_tokenizer.chat_template)[:100]}...")
-    
+
 print("\nFixed tokenizer:")
 print(f"  tokenizer type: {type(fixed_tokenizer).__name__}")
 print(f"  underlying tokenizer type: {type(fixed_tokenizer.tokenizer).__name__}")
 print(f"  has chat_template: {hasattr(fixed_tokenizer.tokenizer, 'chat_template')}")
-if hasattr(fixed_tokenizer.tokenizer, 'chat_template'):
+if hasattr(fixed_tokenizer.tokenizer, "chat_template"):
     print(f"  chat_template type: {type(fixed_tokenizer.tokenizer.chat_template)}")
-    print(f"  chat_template preview: {str(fixed_tokenizer.tokenizer.chat_template)[:100]}...")
+    print(
+        f"  chat_template preview: {str(fixed_tokenizer.tokenizer.chat_template)[:100]}..."
+    )
