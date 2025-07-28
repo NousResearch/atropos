@@ -1,0 +1,14 @@
+# Word Hunt Environment Dependencies
+# Core Atropos dependencies are handled by the main project
+
+# Configuration and validation
+pydantic>=2.0.0
+
+# Tokenization and model handling
+transformers>=4.30.0
+
+# Optional: For enhanced word validation (if using external dictionary)
+# nltk>=3.8.0
+
+# Optional: For performance monitoring
+# psutil>=5.9.0
