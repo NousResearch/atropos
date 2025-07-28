@@ -4,12 +4,13 @@
 import logging
 import os
 import random
+from typing import Any, Dict, Optional, Tuple
+
 import textworld
 import textworld.challenges
 from textworld import GameOptions
 from textworld.generator import QuestGenerationError, compile_game
 from textworld.generator.text_grammar import MissingTextGrammar
-from typing import Dict, Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,6 @@ def compile_game_with_retry(game, options, max_retries=5, cleanup_on_error=True)
     Returns:
         Compiled game file path or None if all retries failed
     """
-    original_seed = options.seeds
     original_path = options.path
 
     for attempt in range(max_retries):
@@ -167,7 +167,7 @@ def generate_textworld_game(
             settings["seed"] = options.seeds
             return game_file, game
         else:
-            logger.error(f"compile_game_with_retry failed to produce file")
+            logger.error("compile_game_with_retry failed to produce file")
             return None, None
 
     except (QuestGenerationError, MissingTextGrammar, ValueError, Exception) as e:

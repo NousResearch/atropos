@@ -168,7 +168,7 @@ The environment uses a registry system for game diversity:
 
 1. **Game Selection**: Registry selects game (generated or challenge)
 2. **Multi-alternative Generation**: Agent generates N alternatives per state
-3. **Triple Scoring**: 
+3. **Triple Scoring**:
    - LaTRo scores action confidence (immediate)
    - Best action executed in environment
    - VR-CLI scores prediction accuracy (after outcome)

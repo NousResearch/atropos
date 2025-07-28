@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import aiohttp
 import jsonlines
 import numpy as np
-import wandb
 import yaml
 from pydantic import BaseModel, Field
 from pydantic_cli import Cmd, FailedExecutionException, run_and_exit
@@ -26,6 +25,7 @@ from tenacity import retry, stop_after_attempt, wait_random_exponential
 from transformers import AutoTokenizer
 from typing_extensions import TypedDict
 
+import wandb
 from atroposlib.envs.constants import ENV_NAMESPACE, NAMESPACE_SEP, OPENAI_NAMESPACE
 from atroposlib.envs.server_handling.openai_server import resolve_openai_configs
 from atroposlib.frontend.jsonl2html import generate_html
@@ -432,8 +432,13 @@ class BaseEnv(ABC):
         logger.debug("setup_wandb() called")
         print("BaseEnv.setup_wandb() called", flush=True)
         if self.config.use_wandb:
-            logger.debug(f"use_wandb=True, rollout_server_url={self.config.rollout_server_url}")
-            print(f"Fetching wandb info from {self.config.rollout_server_url}/wandb_info", flush=True)
+            logger.debug(
+                f"use_wandb=True, rollout_server_url={self.config.rollout_server_url}"
+            )
+            print(
+                f"Fetching wandb info from {self.config.rollout_server_url}/wandb_info",
+                flush=True,
+            )
             # Setup wandb getting the group and project via the server
             while self.wandb_project is None:
                 try:
@@ -444,11 +449,19 @@ class BaseEnv(ABC):
                             data = await parse_http_response(resp, logger)
                             self.wandb_group = data["group"]
                             self.wandb_project = data["project"]
-                            logger.debug(f"Got wandb info: group={self.wandb_group}, project={self.wandb_project}")
-                            print(f"Got wandb info: group={self.wandb_group}, project={self.wandb_project}", flush=True)
+                            logger.debug(
+                                f"Got wandb info: group={self.wandb_group}, project={self.wandb_project}"
+                            )
+                            print(
+                                f"Got wandb info: group={self.wandb_group}, project={self.wandb_project}",
+                                flush=True,
+                            )
                 except Exception as e:
                     logger.error(f"Error fetching wandb info: {e}")
-                    print(f"Error fetching wandb info: {type(e).__name__}: {e}", flush=True)
+                    print(
+                        f"Error fetching wandb info: {type(e).__name__}: {e}",
+                        flush=True,
+                    )
 
                 if self.wandb_project is None:
                     await asyncio.sleep(1)
@@ -814,15 +827,16 @@ class BaseEnv(ABC):
             abort_on_any_max_length_exceeded: Whether to abort if any token length exceeds the max
         """
         # Ensure we're working with a list of groups
-        data_to_process = scored_data if isinstance(scored_data, list) else [scored_data]
+        data_to_process = (
+            scored_data if isinstance(scored_data, list) else [scored_data]
+        )
 
         valid_groups = []
         for group in data_to_process:
             if group is None:
                 continue
-            
+
             try:
-                # Handle case where group_overrides might be None
                 overrides = group.get("group_overrides", {})
                 if overrides is None:
                     overrides = {}
@@ -832,25 +846,27 @@ class BaseEnv(ABC):
                 continue
 
             tokens = group.get("tokens", [])
-            
-            # Check basic group structure
+
             if None in group:
                 logger.debug("Group contains None values")
                 continue
-                
+
             # Check for empty token sequences
             empty_tokens = [i for i, t in enumerate(tokens) if len(t) == 0]
             if empty_tokens:
-                logger.debug(f"Found group with empty token sequences at indices {empty_tokens}")
+                logger.debug(
+                    f"Found group with empty token sequences at indices {empty_tokens}"
+                )
                 continue
 
             # Check minimum alternatives requirement
             if len(tokens) < self.config.min_alternatives:
                 logger.debug(
-                    f"Group has only {len(tokens)} alternatives, need at least {self.config.min_alternatives} for training"
+                    f"Group has only {len(tokens)} alternatives, "
+                    f"need at least {self.config.min_alternatives} for training"
                 )
                 continue
-            
+
             # Check group size constraints
             if self.config.allow_variable_group_size:
                 # Allow any size >= min_alternatives
@@ -871,7 +887,9 @@ class BaseEnv(ABC):
                 self.config.ensure_scores_are_not_same
                 and len(set(group.get("scores", []))) == 1
             ):
-                logger.debug(f"REJECTION: All scores are the same ({group.get('scores', [])[:5]}...), skipping...")
+                logger.debug(
+                    f"REJECTION: All scores are the same ({group.get('scores', [])[:5]}...), skipping..."
+                )
                 continue
 
             group.setdefault("ref_logprobs", None)
@@ -906,7 +924,9 @@ class BaseEnv(ABC):
 
             valid_groups.append(group)
 
-        logger.debug(f"Valid groups: {len(valid_groups)}, do_send_to_api: {do_send_to_api}")
+        logger.debug(
+            f"Valid groups: {len(valid_groups)}, do_send_to_api: {do_send_to_api}"
+        )
         if valid_groups and do_send_to_api:
             # Always send groups individually to avoid distributed process issues
             for i, group in enumerate(valid_groups):
@@ -914,10 +934,12 @@ class BaseEnv(ABC):
                     await self._send_scored_data_to_api(group)
                 except (Exception, TimeoutError) as e:
                     logger.error(f"Failed to send group {i+1} after retries: {e}")
-            
+
             self.items_sent_this_step += len(valid_groups)
         else:
-            logger.debug(f"Not sending data: valid_groups={len(valid_groups)}, do_send_to_api={do_send_to_api}")
+            logger.debug(
+                f"Not sending data: valid_groups={len(valid_groups)}, do_send_to_api={do_send_to_api}"
+            )
 
     async def handle_env(
         self, item_uuid: str
@@ -934,7 +956,7 @@ class BaseEnv(ABC):
         # do a rollout with item
         try:
             to_postprocess, to_backlog = await self.collect_trajectories(item)
-                
+
         except Exception as e:
             logger.error(f"Error in collect_trajectories: {e}", exc_info=True)
             to_postprocess = None
@@ -1161,8 +1183,12 @@ class BaseEnv(ABC):
             await self.get_server_info()
         except Exception as e:
             logger.error(f"Error in env_manager initialization: {e}", exc_info=True)
-            print(f"Error in env_manager initialization: {type(e).__name__}: {e}", flush=True)
+            print(
+                f"Error in env_manager initialization: {type(e).__name__}: {e}",
+                flush=True,
+            )
             import traceback
+
             traceback.print_exc()
             raise
         # Wait for other instances to get setup :)
@@ -1500,7 +1526,7 @@ class BaseEnv(ABC):
                 )
                 rprint(env_config)
                 rprint(openai_configs)
-                
+
                 print("About to start env_manager()", flush=True)
                 logger.info("About to start env_manager()")
 

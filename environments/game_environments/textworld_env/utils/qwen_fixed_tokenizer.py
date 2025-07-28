@@ -3,15 +3,19 @@ Custom Qwen tokenizer wrapper with fixed Jinja2 template.
 
 This wrapper overrides the chat_template to avoid Jinja2 sandbox restrictions
 that prevent list.append() operations in the original Qwen tokenizer.
+
+TLDR; tool calls with Qwen are a PITA, if this works well will move to some other
+directory to use with other envs in another PR
 """
 
-from transformers import AutoTokenizer
 from typing import Any, Dict, List, Optional, Union
+
+from transformers import AutoTokenizer
 
 
 class QwenFixedTokenizer:
     """Wrapper around Qwen tokenizer with fixed chat template."""
-    
+
     # Fixed Jinja2 template that avoids sandbox restrictions
     FIXED_CHAT_TEMPLATE = """{%- if tools %}
 {{- '<|im_start|>system\\n' }}
@@ -57,25 +61,25 @@ class QwenFixedTokenizer:
 {%- endfor %}
 {%- if add_generation_prompt %}
 {{- '<|im_start|>assistant\\n' }}
-{%- endif %}"""
+{%- endif %}"""  # noqa: E501
 
     def __init__(self, model_name_or_path: str, **kwargs):
         """Initialize the tokenizer wrapper.
-        
+
         Args:
             model_name_or_path: Model name or path to load tokenizer from
             **kwargs: Additional arguments passed to AutoTokenizer.from_pretrained
         """
         # Load the base tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, **kwargs)
-        
+
         # Override the chat template with our fixed version
         self.tokenizer.chat_template = self.FIXED_CHAT_TEMPLATE
-        
+
     def __getattr__(self, name: str) -> Any:
         """Delegate all other attributes to the underlying tokenizer."""
         return getattr(self.tokenizer, name)
-    
+
     def apply_chat_template(
         self,
         conversation: List[Dict[str, str]],
@@ -87,10 +91,10 @@ class QwenFixedTokenizer:
         return_tensors: Optional[Union[str, bool]] = None,
         return_dict: bool = False,
         add_generation_prompt: bool = False,
-        **kwargs
+        **kwargs,
     ):
         """Apply the fixed chat template.
-        
+
         This method delegates to the underlying tokenizer's apply_chat_template
         but ensures our fixed template is used.
         """
@@ -104,5 +108,5 @@ class QwenFixedTokenizer:
             return_tensors=return_tensors,
             return_dict=return_dict,
             add_generation_prompt=add_generation_prompt,
-            **kwargs
+            **kwargs,
         )

@@ -7,11 +7,10 @@ Generates logic puzzle games requiring problem-solving skills.
 
 import logging
 import random
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, Optional, Tuple
 
-import textworld
 from textworld import GameMaker, GameOptions
-from textworld.generator import make_game, compile_game
+from textworld.generator import make_game
 
 from ..generation_utils import DEFAULT_OUTPUT_FOLDER, compile_game_with_retry
 

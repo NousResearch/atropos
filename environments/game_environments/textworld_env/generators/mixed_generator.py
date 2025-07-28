@@ -7,16 +7,15 @@ Generates games that combine elements from different game types.
 
 import logging
 import random
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
 
-import textworld
 from textworld import GameMaker, GameOptions
-from textworld.generator import make_game, compile_game
+from textworld.generator import make_game
 
 from ..generation_utils import DEFAULT_OUTPUT_FOLDER, compile_game_with_retry
-from .quest_generator import QuestGenerator
-from .puzzle_generator import PuzzleGenerator
 from .navigation_generator import NavigationGenerator
+from .puzzle_generator import PuzzleGenerator
+from .quest_generator import QuestGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -636,7 +635,8 @@ class MixedGenerator:
             try:
                 path = maker.connect(room1.exits[direction], room2.exits[opposite])
                 return path
-            except:
+            except Exception as e:
+                logger.error(f"Error creating path: {e}")
                 continue
 
         return None

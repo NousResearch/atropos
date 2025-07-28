@@ -1,5 +1,6 @@
 import logging
 from typing import List, Optional, Tuple
+
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -7,9 +8,9 @@ logger = logging.getLogger(__name__)
 # Conditional imports for the memory system
 MEMORY_SYSTEM_PREREQUISITES_AVAILABLE = False
 try:
+    import faiss
     import torch
     from sentence_transformers import SentenceTransformer
-    import faiss
 
     MEMORY_SYSTEM_PREREQUISITES_AVAILABLE = True
 except ImportError as e:

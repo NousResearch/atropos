@@ -9,20 +9,17 @@ and dynamically generated games.
 import logging
 import os
 import random
-from typing import Dict, List, Optional, Tuple, Any
 from collections import OrderedDict
-
-import textworld
-import textworld.challenges
+from typing import Any, Dict, List, Optional, Tuple
 
 from environments.game_environments.textworld_env.generation_utils import (
     generate_textworld_game,
 )
 from environments.game_environments.textworld_env.generators import (
-    QuestGenerator,
-    PuzzleGenerator,
-    NavigationGenerator,
     MixedGenerator,
+    NavigationGenerator,
+    PuzzleGenerator,
+    QuestGenerator,
 )
 
 logger = logging.getLogger(__name__)

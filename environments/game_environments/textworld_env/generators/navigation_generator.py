@@ -7,11 +7,10 @@ Generates maze-like games focused on spatial navigation and exploration.
 
 import logging
 import random
-from typing import Dict, List, Optional, Tuple, Any, Set
+from typing import Any, Dict, List, Optional, Tuple
 
-import textworld
 from textworld import GameMaker, GameOptions
-from textworld.generator import make_game, compile_game
+from textworld.generator import make_game
 
 from ..generation_utils import DEFAULT_OUTPUT_FOLDER, compile_game_with_retry
 
@@ -142,7 +141,7 @@ class NavigationGenerator:
                 start_room, end_room, rooms
             )
             quest_commands.extend(
-                ["take golden key", f"unlock exit door with golden key"]
+                ["take golden key", "unlock exit door with golden key"]
             )
 
             maker.set_walkthrough(quest_commands)
@@ -346,22 +345,15 @@ class NavigationGenerator:
         self, maker: GameMaker, params: Dict[str, Any]
     ) -> Tuple[List[Any], Any, Any]:
         """Generate a mixed layout combining different patterns."""
-        # For simplicity, create a basic interconnected layout
         options = GameOptions()
         seed_value = self.rng.randint(0, 65535)
 
         options.seeds = seed_value
         options.nb_rooms = params["nb_rooms"]
-        options.nb_objects = 0  # We'll add objects manually
+        options.nb_objects = 0
 
-        # Generate basic game for room layout
-        game = make_game(options)
+        make_game(options)
 
-        # Extract rooms from the generated game
-        # This is a simplified approach - in practice we'd need to properly
-        # extract and recreate the rooms in our maker
-
-        # Fallback to grid layout
         return self._generate_grid_maze(maker, params)
 
     def _place_landmarks(
@@ -404,8 +396,8 @@ class NavigationGenerator:
         num_signs = params.get("nb_signs", 2)
         sign_rooms = self.rng.sample(rooms, min(num_signs, len(rooms)))
 
-        for i, room in enumerate(sign_rooms):
-            sign = maker.new(type="o", name=f"sign", desc="A sign with directions.")
+        for _, room in enumerate(sign_rooms):
+            sign = maker.new(type="o", name="sign", desc="A sign with directions.")
             room.add(sign)
 
     def _generate_navigation_quest(

@@ -8,14 +8,11 @@ Uses VR-CLI (Verifiable Rewards via Completion Likelihood Improvement) to score
 predictions based on how well the model anticipates action outcomes.
 """
 
-import json
 import logging
 import math
 import os
 import random
-# import shutil  # Not needed anymore without temp directories
-import tempfile
-import time
+import traceback
 import uuid
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -45,46 +42,41 @@ from environments.game_environments.textworld_env.agents.atropos_memory_manager 
 from environments.game_environments.textworld_env.generation_utils import (
     generate_textworld_game,
 )
+from environments.game_environments.textworld_env.scoring.entropy_calculator import (
+    confidence_score,
+)
 from environments.game_environments.textworld_env.textworld_registry import (
     create_textworld_registry,
 )
-from environments.game_environments.textworld_env.utils.qwen_fixed_tokenizer import QwenFixedTokenizer
-from environments.game_environments.textworld_env.scoring.entropy_calculator import confidence_score
+from environments.game_environments.textworld_env.utils.qwen_fixed_tokenizer import (
+    QwenFixedTokenizer,
+)
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # Ensure INFO level logging
-print(f"TextWorld module imported, logger name: {__name__}, level: {logger.level}", flush=True)
+logger.setLevel(logging.INFO)
 
 
 class TextWorldEnvConfig(BaseEnvConfig):
     """Configuration for the TextWorld environment trainer with VR-CLI."""
 
     env_name: str = "TextWorld"
-    wandb_name: str = "textworld-trainer"  # Override default None
-    group_size: int = 16  # Override default 4 to match successful test (more alternatives = better)
-    max_num_workers: int = 16  # Increased workers for better throughput
-    total_steps: int = 500  # Run 500 steps for proper training
-    max_steps: int = 5  # Shorter episodes for faster testing
+    wandb_name: str = "textworld-trainer"
+    group_size: int = 16
+    max_num_workers: int = 16
+    total_steps: int = 500
+    max_steps: int = 20  # prevent infinite loops
     challenge_name: str = "tw-simple"
     challenge_rewards: str = "sparse"  # Changed to sparse for VR-CLI
     challenge_goal: str = "detailed"
     challenge_test_mode: bool = False
-    nb_rooms: int = 5
-    nb_objects: int = 10
-    quest_min_length: int = 3
-    quest_max_length: int = 3
-    quest_max_depth: int = 3
-    grammar_theme: str = "house"
-    grammar_include_adj: bool = True
-    game_seed: Optional[int] = None
-    
+
     # Top-k/bottom-k selection
     use_topk_bottomk_selection: bool = True
-    topk: int = 8  # Number of top-scoring alternatives to keep
-    bottomk: int = 8  # Number of bottom-scoring alternatives to keep
-    allow_variable_group_size: bool = True  # Allow top-k/bottom-k filtering to reduce group size
-    max_token_length: int = 16384  # 16k max generation
-    max_trajectory_tokens: int = 32768  # Match trainer seq_len (32k)
+    topk: int = 8
+    bottomk: int = 8
+    allow_variable_group_size: bool = True
+    max_token_length: int = 16384
+    max_trajectory_tokens: int = 32768
 
     # VR-CLI specific configurations
     vrcli_weight: float = Field(
@@ -109,7 +101,7 @@ class TextWorldEnvConfig(BaseEnvConfig):
         default=0.05, description="Reward for including a proper <memory> block"
     )
     format_thinking_reward: float = Field(
-        default=0.05, description="Reward for including a proper <thinking> block"
+        default=0.05, description="Reward for including a proper <think> block"
     )
     format_strict_structure: bool = Field(
         default=True,
@@ -141,19 +133,7 @@ class TextWorldEnvConfig(BaseEnvConfig):
         description="Scale factor for token length penalty (penalty per token over baseline)",
     )
 
-    # LaTRo specific configurations (TODO: an ablation on this vs vrcli)
-    latro_enabled: bool = Field(
-        default=False,
-        description="Use LaTRo scoring for action quality (disabled for now)",
-    )
-    latro_weight: float = Field(
-        default=0.0,
-        description="Weight for LaTRo score (action confidence)",
-    )
-
-    debug_mode: bool = False
-
-
+    # Custom challenge generation parameters, kinda buggy, not using rn
     game_generation_params: Dict[str, Any] = Field(
         default_factory=lambda: {
             "max_score": 10,
@@ -239,13 +219,13 @@ class TextWorldEpisodeState:
         self.canonical_rewards: List[float] = []
         self.canonical_chosen_alternative_indices: List[int] = []
 
-        # Episode-level cache for thinking block summarizations
-        self.thinking_block_cache: Dict[int, str] = {}
+        # Episode-level cache for think block summarizations
+        self.think_block_cache: Dict[int, str] = {}
 
 
 class TextWorldEnv(BaseEnv):
     """Trainer environment for TextWorld using VR-CLI for action outcome prediction."""
-    
+
     name = "TextWorld"  # Default name for wandb
 
     def __init__(
@@ -255,7 +235,6 @@ class TextWorldEnv(BaseEnv):
         slurm: bool = True,
         testing: bool = False,
     ):
-        print(f"TextWorldEnv.__init__ called with slurm={slurm}, testing={testing}", flush=True)
         logger.info("Initializing TextWorldEnv with configuration:")
         logger.info(f"  - max_steps: {config.max_steps}")
         logger.info(f"  - group_size: {config.group_size}")
@@ -263,37 +242,34 @@ class TextWorldEnv(BaseEnv):
         logger.info(f"  - rollout_server_url: {config.rollout_server_url}")
         logger.info(f"  - num_servers: {len(server_configs)}")
         logger.info(f"  - slurm: {slurm}")
-        
-        print(f"Calling super().__init__", flush=True)
-        print(f"Config type: {type(config)}", flush=True)
-        print(f"Server configs: {len(server_configs)} configs", flush=True)
-        print(f"First server config: {server_configs[0] if server_configs else 'None'}", flush=True)
+
         try:
             super().__init__(config, server_configs, slurm, testing)
-            print(f"super().__init__ completed successfully", flush=True)
         except Exception as e:
-            print(f"Exception in super().__init__: {type(e).__name__}: {e}", flush=True)
-            import traceback
+            logger.error(f"Exception in super().__init__: {type(e).__name__}: {e}")
             traceback.print_exc()
             raise
         self.config: TextWorldEnvConfig = config
         self.episodes: Dict[str, TextWorldEpisodeState] = {}
-        
+
         # Wandb logging buffers
         self.completed_episodes_buffer = []
         self.step_metrics_buffer = []
         self.last_logged_episodes = 0
-        
+
         # Override tokenizer for Qwen models with our fixed tokenizer
         if "qwen" in config.tokenizer_name.lower():
-            logger.info(f"Detected Qwen model, using QwenFixedTokenizer for {config.tokenizer_name}")
+            logger.info(
+                f"Detected Qwen model, using QwenFixedTokenizer for {config.tokenizer_name}"
+            )
             self.tokenizer = QwenFixedTokenizer(config.tokenizer_name)
         # No longer using temp dir - using tw_generated_games instead
         logger.info("TextWorldEnv initialized, using tw_generated_games directory")
-        print("TextWorldEnv initialized, using tw_generated_games directory", flush=True)
+        print(
+            "TextWorldEnv initialized, using tw_generated_games directory", flush=True
+        )
 
         # Memory manager will be created per-agent in _create_agent_for_episode()
-
         # Define TextWorld command execution tool with outcome prediction
         self.textworld_tools = [
             {
@@ -410,7 +386,6 @@ class TextWorldEnv(BaseEnv):
         # Store agent configuration for later use in creating episode-specific agents
         self.agent_config = agent_cfg
 
-
         # Initialize registry if enabled
         self.registry = None
         if self.config.use_registry:
@@ -418,9 +393,6 @@ class TextWorldEnv(BaseEnv):
                 generation_ratio=self.config.registry_generation_ratio,
                 seed=self.config.seed if hasattr(self.config, "seed") else None,
             )
-        
-        print(f"TextWorldEnv.__init__ completed fully", flush=True)
-        print(f"Server manager created with {len(self.server.servers)} servers", flush=True)
 
     def _create_agent_for_episode(self) -> AtroposAgent:
         """Create a new agent instance for an episode with its own memory manager."""
@@ -443,62 +415,43 @@ class TextWorldEnv(BaseEnv):
         return agent
 
     async def setup(self):
-        """Ensure prerequisites are met for TextWorld."""
-        print(f"TextWorldEnv.setup() called", flush=True)
-        logger.info("Setting up TextWorldEnv...")
-        try:
-            # textworld is already imported at the top, just verify it's available
-            textworld.__version__
-            logger.info(f"TextWorld version {textworld.__version__} is available")
-        except (ImportError, AttributeError):
-            logger.error(
-                "TextWorld library not found. Please install it to use TextWorldEnv."
-            )
-            raise
-        
-        # Log registry status
-        if self.registry:
-            logger.info(f"TextWorld registry initialized with generation_ratio={self.config.registry_generation_ratio}")
-        else:
-            logger.info("TextWorld registry disabled (use_registry=False)")
-        
-        logger.info("TextWorldEnv setup complete")
-        print(f"TextWorldEnv.setup() completed", flush=True)
-        print(f"Server manager has {len(self.server.servers)} servers configured", flush=True)
         for i, server in enumerate(self.server.servers):
-            # Server objects have config attribute with base_url
-            if hasattr(server, 'config'):
-                print(f"  Server {i}: {server.config.base_url} (api_key={'set' if server.config.api_key else 'empty'})", flush=True)
+            if hasattr(server, "config"):
+                logger.info(
+                    f"  Server {i}: {server.config.base_url} "
+                    f"(api_key={'set' if server.config.api_key else 'empty'})"
+                )
             else:
-                print(f"  Server {i}: {type(server).__name__}", flush=True)
+                logger.info(f"  Server {i}: {type(server).__name__}")
 
     async def register_env(self):
         """Register environment with rollout server."""
-        print(f"TextWorldEnv.register_env() called", flush=True)
-        logger.info(f"Registering TextWorldEnv with rollout server at {self.config.rollout_server_url}")
+        logger.info(
+            f"Registering TextWorldEnv with rollout server at {self.config.rollout_server_url}"
+        )
         try:
             await super().register_env()
             # Override max token length to allow full trajectories
             self.max_token_len = 40960
-            logger.info(f"Successfully registered with rollout server, max_token_len set to {self.max_token_len}")
-            print(f"TextWorldEnv.register_env() completed successfully", flush=True)
+            logger.info(
+                f"Successfully registered with rollout server, "
+                f"max_token_len set to {self.max_token_len}"
+            )
         except Exception as e:
             logger.error(f"Failed to register with rollout server: {e}", exc_info=True)
-            print(f"TextWorldEnv.register_env() failed: {e}", flush=True)
             raise
 
     async def get_server_info(self):
         """Get server information after registration."""
-        print(f"TextWorldEnv.get_server_info() called", flush=True)
         logger.info("Getting server information...")
         try:
             await super().get_server_info()
             logger.info("Server information retrieved successfully")
-            logger.info(f"TextWorldEnv is ready to receive requests on {self.config.rollout_server_url}")
-            print(f"TextWorldEnv.get_server_info() completed successfully", flush=True)
+            logger.info(
+                f"TextWorldEnv is ready to receive requests on {self.config.rollout_server_url}"
+            )
         except Exception as e:
             logger.error(f"Failed to get server info: {e}", exc_info=True)
-            print(f"TextWorldEnv.get_server_info() failed: {e}", flush=True)
             raise
 
     def _format_observation(self, obs: str, infos: Dict[str, Any]) -> str:
@@ -526,7 +479,9 @@ class TextWorldEnv(BaseEnv):
         current_game_seed = (
             episode_seed if episode_seed is not None else random.randint(0, 0xFFFFFFFF)
         )
-        logger.info(f"[Episode: {episode_id}] Using game seed: {current_game_seed} (passed seed: {episode_seed})")
+        logger.info(
+            f"[Episode: {episode_id}] Using game seed: {current_game_seed} (passed seed: {episode_seed})"
+        )
 
         # Generate or select game using registry if enabled
         if self.config.use_registry and self.registry:
@@ -568,10 +523,12 @@ class TextWorldEnv(BaseEnv):
             }
 
             try:
-                # Use the tw_generated_games directory instead of temp dir
-                output_folder = "/home/maxpaperclips/atropos/environments/game_environments/textworld_env/tw_generated_games"
+                output_folder = (
+                    "/home/maxpaperclips/atropos/environments/game_environments"
+                    "/textworld_env/tw_generated_games"
+                )
                 os.makedirs(output_folder, exist_ok=True)
-                
+
                 game_file_path, game_object = generate_textworld_game(
                     challenge_name=self.config.challenge_name,
                     settings=challenge_settings,
@@ -685,14 +642,16 @@ class TextWorldEnv(BaseEnv):
     ) -> float:
         """Calculate perplexity using logprobs from the inference server."""
         # Import AtroposAgent to access TOOLS constant
-        from environments.game_environments.textworld_env.agents.atropos_agent import AtroposAgent
-        
+        from environments.game_environments.textworld_env.agents.atropos_agent import (
+            AtroposAgent,
+        )
+
         # Apply chat template to get the full formatted text with tools
         full_text = self.tokenizer.apply_chat_template(
-            messages, 
+            messages,
             tools=AtroposAgent.TOOLS,
-            tokenize=False, 
-            add_generation_prompt=False
+            tokenize=False,
+            add_generation_prompt=False,
         )
 
         # Use completion mode to get logprobs for the entire sequence
@@ -709,10 +668,10 @@ class TextWorldEnv(BaseEnv):
         if len(messages) > 1:
             prefix_messages = messages[:-1]
             prefix_text = self.tokenizer.apply_chat_template(
-                prefix_messages, 
+                prefix_messages,
                 tools=AtroposAgent.TOOLS,
-                tokenize=False, 
-                add_generation_prompt=True
+                tokenize=False,
+                add_generation_prompt=True,
             )
             prefix_tokens = self.tokenizer.encode(prefix_text, add_special_tokens=False)
 
@@ -744,20 +703,24 @@ class TextWorldEnv(BaseEnv):
     ) -> List[float]:
         """Get logprobs for assistant response using echo mode from the inference server."""
         # Import AtroposAgent to access TOOLS constant
-        from environments.game_environments.textworld_env.agents.atropos_agent import AtroposAgent
-        
+        from environments.game_environments.textworld_env.agents.atropos_agent import (
+            AtroposAgent,
+        )
+
         try:
             # Create the full conversation including the assistant response
-            full_messages = messages + [{"role": "assistant", "content": assistant_response}]
-            
+            full_messages = messages + [
+                {"role": "assistant", "content": assistant_response}
+            ]
+
             # Apply chat template to get the full formatted text with tools
             full_text = self.tokenizer.apply_chat_template(
-                full_messages, 
+                full_messages,
                 tools=AtroposAgent.TOOLS,
-                tokenize=False, 
-                add_generation_prompt=False
+                tokenize=False,
+                add_generation_prompt=False,
             )
-            
+
             # Use completion mode to get logprobs for the entire sequence
             response = await self.server.completion(
                 prompt=full_text,
@@ -766,29 +729,29 @@ class TextWorldEnv(BaseEnv):
                 logprobs=1,  # Return log probability of the selected tokens (must be > 0 for SGLang)
                 temperature=0.0,
             )
-            
+
             # Find where the assistant message starts in the tokenized sequence
             # Tokenize the messages without the assistant response to find the boundary
             prefix_text = self.tokenizer.apply_chat_template(
-                messages, 
+                messages,
                 tools=AtroposAgent.TOOLS,
-                tokenize=False, 
-                add_generation_prompt=True
+                tokenize=False,
+                add_generation_prompt=True,
             )
             prefix_tokens = self.tokenizer.encode(prefix_text, add_special_tokens=False)
-            
+
             # Extract logprobs for the assistant message (the completion we're evaluating)
             if (
                 response.choices[0].logprobs is None
                 or response.choices[0].logprobs.token_logprobs is None
             ):
                 return []
-            
+
             all_logprobs = response.choices[0].logprobs.token_logprobs
-            assistant_logprobs = all_logprobs[len(prefix_tokens):]
-            
+            assistant_logprobs = all_logprobs[len(prefix_tokens) :]
+
             return assistant_logprobs
-            
+
         except Exception as e:
             logger.error(
                 f"Error getting logprobs for assistant response: {e}",
@@ -833,7 +796,7 @@ class TextWorldEnv(BaseEnv):
         # Calculate perplexities using server
         base_ppl = await self._calculate_perplexity_from_server(base_messages)
         pred_ppl = await self._calculate_perplexity_from_server(prediction_messages)
-        
+
         logger.debug(
             f"VR-CLI perplexity calculation: base_ppl={base_ppl:.3f}, pred_ppl={pred_ppl:.3f}"
         )
@@ -845,7 +808,7 @@ class TextWorldEnv(BaseEnv):
             return 0.0
 
         improvement = (1 - pred_ppl / base_ppl) * 100
-        
+
         logger.debug(
             f"VR-CLI improvement: {improvement:.2f}% (ratio: {pred_ppl/base_ppl:.3f})"
         )
@@ -859,10 +822,9 @@ class TextWorldEnv(BaseEnv):
             reward = 0.9  # Moderate improvement
         else:
             reward = 1.0  # Significant improvement
-            
+
         logger.debug(f"VR-CLI final reward: {reward} (improvement: {improvement:.2f}%)")
         return reward
-
 
     def _calculate_format_reward(self, response_text: str) -> float:
         """Calculate format reward based on adherence to required structure.
@@ -978,11 +940,12 @@ class TextWorldEnv(BaseEnv):
 
         return is_valid, score
 
-
     async def _score_alternatives_hybrid(
         self,
         ep_state: TextWorldEpisodeState,
-        candidates: List[Tuple[Optional[str], Optional[str], str, Optional[List[Dict[str, Any]]]]],
+        candidates: List[
+            Tuple[Optional[str], Optional[str], str, Optional[List[Dict[str, Any]]]]
+        ],
         agent: AtroposAgent,
         conversation_history: List[Dict[str, str]],
     ) -> List[Dict[str, Any]]:
@@ -994,33 +957,37 @@ class TextWorldEnv(BaseEnv):
         4. Score rejected alternatives with entropy confidence scores
         """
         evaluations = []
-        
+
         # Step 1: Calculate confidence scores for all alternatives
         confidence_scores = []
-        for i, (action, prediction, response_text, logprobs_data) in enumerate(candidates):
+        for i, (action, prediction, response_text, logprobs_data) in enumerate(
+            candidates
+        ):
             if action is None:
                 action = "look"  # Default action
-            
+
             # Get logprobs for this alternative using the new method
             try:
                 assistant_logprobs = await self._get_assistant_logprobs_from_server(
                     conversation_history, response_text
                 )
-                
+
                 # Convert to format expected by entropy calculator
                 if assistant_logprobs:
                     # Create legacy format for compatibility with existing entropy calculator
                     legacy_logprobs_data = []
                     for logprob in assistant_logprobs:
-                        legacy_logprobs_data.append({
-                            "token": "",
-                            "logprob": logprob,
-                            "top_logprobs": [{"token": "", "logprob": logprob}]
-                        })
+                        legacy_logprobs_data.append(
+                            {
+                                "token": "",
+                                "logprob": logprob,
+                                "top_logprobs": [{"token": "", "logprob": logprob}],
+                            }
+                        )
                     entropy_confidence = confidence_score(legacy_logprobs_data)
                 else:
                     entropy_confidence = 0.0  # No logprobs available
-                    
+
                 logger.debug(
                     f"[Episode: {ep_state.episode_id}] Alternative {i}: action='{action}', "
                     f"entropy_confidence={entropy_confidence:.3f}, logprobs_count={len(assistant_logprobs)}"
@@ -1030,7 +997,7 @@ class TextWorldEnv(BaseEnv):
                     f"[Episode: {ep_state.episode_id}] Failed to get logprobs for alternative {i}: {e}"
                 )
                 entropy_confidence = 0.0
-            
+
             confidence_scores.append(entropy_confidence)
 
         # Step 2: Select best alternative (highest confidence)
@@ -1040,10 +1007,12 @@ class TextWorldEnv(BaseEnv):
                 f"[Episode: {ep_state.episode_id}] Confidence scores for all alternatives: "
                 f"{[f'alt{i}={score:.3f}' for i, score in enumerate(confidence_scores)]}"
             )
-            selected_idx = max(range(len(confidence_scores)), key=lambda i: confidence_scores[i])
+            selected_idx = max(
+                range(len(confidence_scores)), key=lambda i: confidence_scores[i]
+            )
         else:
             selected_idx = 0
-            
+
         selected_action = candidates[selected_idx][0]
         if selected_action is None:
             selected_action = "look"
@@ -1057,11 +1026,11 @@ class TextWorldEnv(BaseEnv):
         # Step 3: Execute selected action in main environment
         # Save previous observation for VR-CLI scoring
         previous_obs = ep_state.last_formatted_obs
-        
+
         try:
             obs, reward, done, info = ep_state.textworld_env.step(selected_action)
             actual_outcome = self._format_observation(obs, info)
-            
+
             # Update episode state
             ep_state.last_env_raw_observation = obs
             ep_state.last_env_infos = info
@@ -1069,14 +1038,16 @@ class TextWorldEnv(BaseEnv):
             ep_state.won = info.get("won", False)
             ep_state.lost = info.get("lost", False)
             ep_state.done = done
-            
+
             logger.info(
                 f"[Episode: {ep_state.episode_id}] Executed action '{selected_action}', "
                 f"reward={reward}, done={done}"
             )
-            
+
         except Exception as e:
-            logger.error(f"[Episode: {ep_state.episode_id}] Error executing selected action: {e}")
+            logger.error(
+                f"[Episode: {ep_state.episode_id}] Error executing selected action: {e}"
+            )
             actual_outcome = f"Error executing action: {e}"
             reward = -1.0
             done = True
@@ -1084,7 +1055,9 @@ class TextWorldEnv(BaseEnv):
 
         # Step 4: Group alternatives by action to identify same-action alternatives
         action_groups = {}
-        for i, (action, prediction, response_text, logprobs_data) in enumerate(candidates):
+        for i, (action, prediction, response_text, logprobs_data) in enumerate(
+            candidates
+        ):
             if action is None:
                 action = "look"
             if action not in action_groups:
@@ -1092,13 +1065,15 @@ class TextWorldEnv(BaseEnv):
             action_groups[action].append(i)
 
         # Step 5: Score all alternatives
-        for i, (action, prediction, response_text, logprobs_data) in enumerate(candidates):
+        for i, (action, prediction, response_text, logprobs_data) in enumerate(
+            candidates
+        ):
             if action is None:
                 action = "look"
 
             # Calculate format reward
             format_score = self._calculate_format_reward(response_text)
-            
+
             # Apply token length penalty/bonus if enabled
             response_tokens = 0
             token_length_adjustment = 0.0
@@ -1107,9 +1082,13 @@ class TextWorldEnv(BaseEnv):
                     self.tokenizer.encode(response_text, add_special_tokens=False)
                 )
                 token_deviation = response_tokens - self.config.token_length_baseline
-                token_length_adjustment = -token_deviation * self.config.token_length_penalty_scale
+                token_length_adjustment = (
+                    -token_deviation * self.config.token_length_penalty_scale
+                )
                 max_adjustment = self.config.token_length_penalty_weight
-                token_length_adjustment = max(-max_adjustment, min(max_adjustment, token_length_adjustment))
+                token_length_adjustment = max(
+                    -max_adjustment, min(max_adjustment, token_length_adjustment)
+                )
 
             if action == selected_action:
                 # Use VR-CLI for selected action and same-action alternatives
@@ -1126,9 +1105,11 @@ class TextWorldEnv(BaseEnv):
                         f"[Episode: {ep_state.episode_id}] VR-CLI score for alt {i}: {vrcli_score:.3f}"
                     )
                 except Exception as e:
-                    logger.error(f"Error calculating VR-CLI score for alternative {i}: {e}")
+                    logger.error(
+                        f"Error calculating VR-CLI score for alternative {i}: {e}"
+                    )
                     vrcli_score = 0.0
-                
+
                 # Combine scores with proper weighting
                 env_weight = (
                     1.0 - self.config.vrcli_weight - self.config.format_reward_weight
@@ -1138,63 +1119,67 @@ class TextWorldEnv(BaseEnv):
                     + self.config.format_reward_weight * format_score
                     + env_weight * reward
                 )
-                
+
                 # Apply token length adjustment
                 if self.config.token_length_penalty_enabled:
                     combined_score *= 1.0 + token_length_adjustment
 
-                evaluations.append({
-                    "index": i,
-                    "action": action,
-                    "prediction": prediction,
-                    "vrcli_score": vrcli_score,
-                    "entropy_score": confidence_scores[i],
-                    "latro_score": 0.0,
-                    "format_score": format_score,
-                    "env_reward": reward,
-                    "combined_score": combined_score,
-                    "response_text": response_text,
-                    "response_tokens": response_tokens,
-                    "token_length_adjustment": token_length_adjustment,
-                    "actual_outcome": actual_outcome,
-                    "done": done,
-                    "info": info,
-                    "selected": i == selected_idx,
-                    "scoring_method": "vrcli",
-                })
+                evaluations.append(
+                    {
+                        "index": i,
+                        "action": action,
+                        "prediction": prediction,
+                        "vrcli_score": vrcli_score,
+                        "entropy_score": confidence_scores[i],
+                        "latro_score": 0.0,
+                        "format_score": format_score,
+                        "env_reward": reward,
+                        "combined_score": combined_score,
+                        "response_text": response_text,
+                        "response_tokens": response_tokens,
+                        "token_length_adjustment": token_length_adjustment,
+                        "actual_outcome": actual_outcome,
+                        "done": done,
+                        "info": info,
+                        "selected": i == selected_idx,
+                        "scoring_method": "vrcli",
+                    }
+                )
             else:
                 # Use entropy confidence for rejected alternatives
                 entropy_confidence = confidence_scores[i]
-                
+
                 # Use entropy score as primary score for rejected alternatives
                 combined_score = (
-                    0.7 * entropy_confidence +  # Entropy confidence as main score
-                    0.3 * format_score         # Format reward for structure
+                    0.7 * entropy_confidence  # Entropy confidence as main score
+                    + 0.3 * format_score  # Format reward for structure
                 )
-                
+
                 # Apply token length adjustment
                 if self.config.token_length_penalty_enabled:
                     combined_score *= 1.0 + token_length_adjustment
 
-                evaluations.append({
-                    "index": i,
-                    "action": action,
-                    "prediction": prediction,
-                    "vrcli_score": 0.0,  # Not calculated for rejected alternatives
-                    "entropy_score": entropy_confidence,
-                    "latro_score": 0.0,
-                    "format_score": format_score,
-                    "env_reward": 0.0,  # Not applicable
-                    "combined_score": combined_score,
-                    "response_text": response_text,
-                    "response_tokens": response_tokens,
-                    "token_length_adjustment": token_length_adjustment,
-                    "actual_outcome": "",  # Not executed
-                    "done": False,
-                    "info": {},
-                    "selected": False,
-                    "scoring_method": "entropy",
-                })
+                evaluations.append(
+                    {
+                        "index": i,
+                        "action": action,
+                        "prediction": prediction,
+                        "vrcli_score": 0.0,  # Not calculated for rejected alternatives
+                        "entropy_score": entropy_confidence,
+                        "latro_score": 0.0,
+                        "format_score": format_score,
+                        "env_reward": 0.0,  # Not applicable
+                        "combined_score": combined_score,
+                        "response_text": response_text,
+                        "response_tokens": response_tokens,
+                        "token_length_adjustment": token_length_adjustment,
+                        "actual_outcome": "",  # Not executed
+                        "done": False,
+                        "info": {},
+                        "selected": False,
+                        "scoring_method": "entropy",
+                    }
+                )
 
         return evaluations
 
@@ -1313,9 +1298,9 @@ class TextWorldEnv(BaseEnv):
         for i, action_response in enumerate(group_actions):
             response_text = action_response["action_text"]
             logprobs_data = action_response.get("logprobs")
-            print(f"\n=== Alternative {i} Full Response ===")
-            print(response_text)
-            print("=== End Response ===\n")
+            logger.info(f"\n=== Alternative {i} Full Response ===")
+            logger.info(response_text)
+            logger.info("=== End Response ===\n")
 
             # Validate structure before parsing
             structure_valid, structure_score = self._validate_response_structure(
@@ -1355,19 +1340,22 @@ class TextWorldEnv(BaseEnv):
             return error_sdg, True
 
         # 4. Get conversation history for entropy calculation (reconstruct same as agent)
-        from environments.game_environments.textworld_env.agents.atropos_agent import _convert_messages_for_api
+        from environments.game_environments.textworld_env.agents.atropos_agent import (
+            _convert_messages_for_api,
+        )
+
         current_history_atropos = agent._reconstruct_canonical_history()
-        
-        # Add the current observation (same as agent does)
-        from atroposlib.type_definitions import Message
+
         observation_message = Message(
             role="user", content=current_observation, reward=None
         )
         current_history_atropos.append(observation_message)
         conversation_history = _convert_messages_for_api(current_history_atropos)
-        
+
         # 4. Score alternatives using hybrid entropy + VR-CLI system
-        evaluations = await self._score_alternatives_hybrid(ep_state, candidates, agent, conversation_history)
+        evaluations = await self._score_alternatives_hybrid(
+            ep_state, candidates, agent, conversation_history
+        )
 
         if not evaluations:
             logger.error(f"[Episode: {ep_state.episode_id}] No evaluations returned")
@@ -1396,10 +1384,11 @@ class TextWorldEnv(BaseEnv):
                 "env_reward": selected_eval.get("env_reward", 0.0),
                 "action": selected_eval.get("action", "unknown"),
                 "response_tokens": selected_eval.get("response_tokens", 0),
-                "selected_rank": sorted(evaluations, key=lambda x: x.get("entropy_score", 0), reverse=True).index(selected_eval),
+                "selected_rank": sorted(
+                    evaluations, key=lambda x: x.get("entropy_score", 0), reverse=True
+                ).index(selected_eval),
             }
             self.step_metrics_buffer.append(step_metrics)
-            
 
         # 5. Select best action based on combined score
         best_eval = max(evaluations, key=lambda x: x["combined_score"])
@@ -1483,7 +1472,6 @@ class TextWorldEnv(BaseEnv):
                     role="assistant", content=eval_data["response_text"], reward=None
                 )
             )
-
             # Tokenize
             try:
                 tokenized = tokenize_for_trainer(self.tokenizer, alternative_history)
@@ -1492,6 +1480,8 @@ class TextWorldEnv(BaseEnv):
                 sg_messages.append(alternative_history)
                 scores.append(eval_data["combined_score"])
             except Exception as e:
+                # Had a couple issues with a weird sample from sglang
+                # So just skipping that for now (will be thrown out & not sent to trainer)
                 logger.error(f"Error tokenizing alternative {i}: {e}")
                 sg_tokens.append([])
                 sg_masks.append([])
@@ -1499,44 +1489,58 @@ class TextWorldEnv(BaseEnv):
                 scores.append(0.0)
 
         # Apply top-k/bottom-k selection if enabled
-        if self.config.use_topk_bottomk_selection and len(scores) > (self.config.topk + self.config.bottomk):
+        # Idea is to keep the extreme ends of the distribution, but not the middle
+        # Just for fun, I saw it on x somewhere, thought it was worth trying
+        # TODO: Also add this: https://arxiv.org/html/2506.02177v1
+        # Not sure how that interacts with multistep training like this tho
+        if self.config.use_topk_bottomk_selection and len(scores) > (
+            self.config.topk + self.config.bottomk
+        ):
             # Create list of (index, score, has_valid_tokens) tuples
             indexed_scores = []
             for i, score in enumerate(scores):
                 has_valid_tokens = len(sg_tokens[i]) > 0
                 if has_valid_tokens:  # Only consider alternatives with valid tokens
                     indexed_scores.append((i, score))
-            
+
             # Sort by score (descending)
             indexed_scores.sort(key=lambda x: x[1], reverse=True)
-            
+
             # Select top-k and bottom-k indices
             selected_indices = []
             if len(indexed_scores) >= 2:  # Ensure we have at least 2 alternatives
                 # Take top-k
-                selected_indices.extend([idx for idx, _ in indexed_scores[:self.config.topk]])
+                selected_indices.extend(
+                    [idx for idx, _ in indexed_scores[: self.config.topk]]
+                )
                 # Take bottom-k (if we have enough)
                 if len(indexed_scores) > self.config.topk:
-                    bottom_start = max(self.config.topk, len(indexed_scores) - self.config.bottomk)
-                    selected_indices.extend([idx for idx, _ in indexed_scores[bottom_start:]])
-                
+                    bottom_start = max(
+                        self.config.topk, len(indexed_scores) - self.config.bottomk
+                    )
+                    selected_indices.extend(
+                        [idx for idx, _ in indexed_scores[bottom_start:]]
+                    )
+
                 # Sort selected indices to maintain order
                 selected_indices.sort()
-                
+
                 # Filter arrays to keep only selected indices
                 sg_tokens = [sg_tokens[i] for i in selected_indices]
                 sg_masks = [sg_masks[i] for i in selected_indices]
                 sg_messages = [sg_messages[i] for i in selected_indices]
                 scores = [scores[i] for i in selected_indices]
-                
+
                 logger.info(
                     f"[Episode: {ep_state.episode_id}] Selected {len(selected_indices)} alternatives "
-                    f"(top-{self.config.topk}, bottom-{self.config.bottomk}) from {len(indexed_scores)} valid alternatives"
+                    f"(top-{self.config.topk}, bottom-{self.config.bottomk}) "
+                    f"from {len(indexed_scores)} valid alternatives"
                 )
             else:
                 logger.warning(
-                    f"[Episode: {ep_state.episode_id}] Only {len(indexed_scores)} valid alternatives available, "
-                    f"keeping all (need at least 2 for training)"
+                    f"[Episode: {ep_state.episode_id}] Only "
+                    f"{len(indexed_scores)} valid alternatives available, "
+                    "keeping all (need at least 2 for training)"
                 )
         else:
             # Log original behavior
@@ -1548,9 +1552,12 @@ class TextWorldEnv(BaseEnv):
         # Create scored data group
         # If we're using top-k/bottom-k selection, we need to override the group size
         group_overrides = None
-        if self.config.use_topk_bottomk_selection and len(sg_tokens) != self.config.group_size:
+        if (
+            self.config.use_topk_bottomk_selection
+            and len(sg_tokens) != self.config.group_size
+        ):
             group_overrides = {"group_size": len(sg_tokens)}
-        
+
         scored_data_group = {
             "tokens": sg_tokens,
             "masks": sg_masks,
@@ -1576,7 +1583,7 @@ class TextWorldEnv(BaseEnv):
         """Run a full TextWorld episode collecting data for each step."""
         # Ensure logger is at INFO level for debugging
         logger.setLevel(logging.INFO)
-        
+
         logger.info(
             f"[DEBUG] collect_trajectories called with item: {item.get('episode_id', 'unknown')}"
         )
@@ -1656,7 +1663,6 @@ class TextWorldEnv(BaseEnv):
             f"cumulative_reward={ep_state.cumulative_reward:.3f}"
         )
 
-        
         return policy_sdgs_for_episode, []
 
     def _apply_credit_assignment(
@@ -1753,7 +1759,7 @@ class TextWorldEnv(BaseEnv):
                     f"future_return={future_return:.3f}, "
                     f"total_return={new_scores[chosen_idx]:.3f}"
                 )
-        
+
         # Track episode completion metrics for wandb
         episode_metrics = {
             "won": ep_state.won,
@@ -1798,41 +1804,36 @@ class TextWorldEnv(BaseEnv):
         trajectories: Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]],
     ) -> Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]:
         """Process and return all ScoredDataGroups for training on all episode turns."""
-        
+
         # If trajectories is empty or None, return None
         if not trajectories:
             return None
-            
+
         # Ensure we have a list
         if not isinstance(trajectories, list):
             trajectories = [trajectories]
-            
+
         # Filter out None values and create minimal ScoredDataGroups
         processed_groups = []
         for sdg in trajectories:
             if sdg is None:
                 continue
-                
+
             # Create minimal ScoredDataGroup with only the fields needed for training
             tokens = sdg.get("tokens", [])
             masks = sdg.get("masks", [])
             scores = sdg.get("scores", [])
-            
+
             # Skip empty groups
             if not tokens or not masks or not scores:
                 continue
-                
-            minimal_sdg = {
-                "tokens": tokens,
-                "masks": masks,
-                "scores": scores
-            }
+
+            minimal_sdg = {"tokens": tokens, "masks": masks, "scores": scores}
             processed_groups.append(minimal_sdg)
-        
+
         if not processed_groups:
             return None
-            
-        
+
         # Return the list of all ScoredDataGroups
         return processed_groups
 
@@ -1840,74 +1841,113 @@ class TextWorldEnv(BaseEnv):
         """Log TextWorld-specific metrics to wandb."""
         if wandb_metrics is None:
             wandb_metrics = {}
-            
+
         # Episode-level metrics
         if self.completed_episodes_buffer:
             num_episodes = len(self.completed_episodes_buffer)
-            
+
             # Win/loss/completion rates
-            win_rate = sum(1 for e in self.completed_episodes_buffer if e["won"]) / num_episodes
-            loss_rate = sum(1 for e in self.completed_episodes_buffer if e["lost"]) / num_episodes
-            completion_rate = sum(1 for e in self.completed_episodes_buffer if e["completed"]) / num_episodes
-            
+            win_rate = (
+                sum(1 for e in self.completed_episodes_buffer if e["won"])
+                / num_episodes
+            )
+            loss_rate = (
+                sum(1 for e in self.completed_episodes_buffer if e["lost"])
+                / num_episodes
+            )
+            completion_rate = (
+                sum(1 for e in self.completed_episodes_buffer if e["completed"])
+                / num_episodes
+            )
+
             wandb_metrics["textworld_train/episode_win_rate"] = win_rate
             wandb_metrics["textworld_train/episode_loss_rate"] = loss_rate
             wandb_metrics["textworld_train/episode_completion_rate"] = completion_rate
-            
+
             # Episode performance
-            avg_reward = sum(e["cumulative_reward"] for e in self.completed_episodes_buffer) / num_episodes
-            avg_steps = sum(e["num_steps"] for e in self.completed_episodes_buffer) / num_episodes
-            avg_final_score = sum(e["final_score"] for e in self.completed_episodes_buffer) / num_episodes
-            
+            avg_reward = (
+                sum(e["cumulative_reward"] for e in self.completed_episodes_buffer)
+                / num_episodes
+            )
+            avg_steps = (
+                sum(e["num_steps"] for e in self.completed_episodes_buffer)
+                / num_episodes
+            )
+            avg_final_score = (
+                sum(e["final_score"] for e in self.completed_episodes_buffer)
+                / num_episodes
+            )
+
             wandb_metrics["textworld_train/avg_episode_reward"] = avg_reward
             wandb_metrics["textworld_train/avg_episode_steps"] = avg_steps
             wandb_metrics["textworld_train/avg_final_score"] = avg_final_score
-            
+
             # Episode efficiency
             winning_episodes = [e for e in self.completed_episodes_buffer if e["won"]]
             if winning_episodes:
-                avg_steps_to_win = sum(e["num_steps"] for e in winning_episodes) / len(winning_episodes)
+                avg_steps_to_win = sum(e["num_steps"] for e in winning_episodes) / len(
+                    winning_episodes
+                )
                 wandb_metrics["textworld_train/avg_steps_to_win"] = avg_steps_to_win
-            
+
             # Learning progress
             total_episodes = self.last_logged_episodes + num_episodes
             wandb_metrics["textworld_train/episodes_completed"] = total_episodes
             self.last_logged_episodes = total_episodes
-            
+
             # Clear buffer
             self.completed_episodes_buffer = []
-        
+
         # Step-level metrics
         if self.step_metrics_buffer:
             num_steps = len(self.step_metrics_buffer)
-            
+
             # Action quality metrics
-            avg_vrcli = sum(s["vrcli_score"] for s in self.step_metrics_buffer) / num_steps
-            avg_format = sum(s["format_score"] for s in self.step_metrics_buffer) / num_steps
-            avg_confidence = sum(s["confidence_score"] for s in self.step_metrics_buffer) / num_steps
-            avg_combined = sum(s["combined_score"] for s in self.step_metrics_buffer) / num_steps
-            
+            avg_vrcli = (
+                sum(s["vrcli_score"] for s in self.step_metrics_buffer) / num_steps
+            )
+            avg_format = (
+                sum(s["format_score"] for s in self.step_metrics_buffer) / num_steps
+            )
+            avg_confidence = (
+                sum(s["confidence_score"] for s in self.step_metrics_buffer) / num_steps
+            )
+            avg_combined = (
+                sum(s["combined_score"] for s in self.step_metrics_buffer) / num_steps
+            )
+
             wandb_metrics["textworld_train/avg_vrcli_score"] = avg_vrcli
             wandb_metrics["textworld_train/avg_format_score"] = avg_format
             wandb_metrics["textworld_train/avg_confidence_score"] = avg_confidence
             wandb_metrics["textworld_train/avg_combined_score"] = avg_combined
-            
+
             # Response quality
-            avg_response_length = sum(s["response_tokens"] for s in self.step_metrics_buffer) / num_steps
+            avg_response_length = (
+                sum(s["response_tokens"] for s in self.step_metrics_buffer) / num_steps
+            )
             wandb_metrics["textworld_train/avg_response_length"] = avg_response_length
-            
+
             # Action selection quality
-            avg_selected_rank = sum(s["selected_rank"] for s in self.step_metrics_buffer) / num_steps
-            top_confidence_selected = sum(1 for s in self.step_metrics_buffer if s["selected_rank"] == 0) / num_steps
-            
-            wandb_metrics["textworld_train/avg_selected_alternative_rank"] = avg_selected_rank
-            wandb_metrics["textworld_train/top_confidence_selected_rate"] = top_confidence_selected
-            
+            avg_selected_rank = (
+                sum(s["selected_rank"] for s in self.step_metrics_buffer) / num_steps
+            )
+            top_confidence_selected = (
+                sum(1 for s in self.step_metrics_buffer if s["selected_rank"] == 0)
+                / num_steps
+            )
+
+            wandb_metrics["textworld_train/avg_selected_alternative_rank"] = (
+                avg_selected_rank
+            )
+            wandb_metrics["textworld_train/top_confidence_selected_rate"] = (
+                top_confidence_selected
+            )
+
             wandb_metrics["textworld_train/steps_taken"] = num_steps
-            
+
             # Clear buffer
             self.step_metrics_buffer = []
-        
+
         # Call parent wandb_log
         await super().wandb_log(wandb_metrics)
 
@@ -1954,5 +1994,6 @@ class TextWorldEnv(BaseEnv):
 
 if __name__ == "__main__":
     import sys
-    print(f"TextWorld module started with args: {sys.argv}", flush=True)
+
+    logger.info(f"TextWorld module started with args: {sys.argv}")
     TextWorldEnv.cli()

@@ -1,11 +1,9 @@
 import asyncio
 import logging
-import os
 
 from dotenv import load_dotenv
 
 from atroposlib.envs.base import APIServerConfig
-
 from environments.game_environments.textworld_env.agents.atropos_agent import (
     AtroposAgentConfig,
 )
@@ -159,7 +157,8 @@ async def main():
                                         logger.info(
                                             f"      Prediction: {prediction[:100]}..."
                                         )
-                                except:
+                                except Exception as e:
+                                    logger.error(f"Error parsing tool call: {e}")
                                     logger.info(f"      Raw: {last_msg[:200]}...")
 
     except Exception as e:

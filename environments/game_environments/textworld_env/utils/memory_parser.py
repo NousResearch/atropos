@@ -1,7 +1,7 @@
 """Utility functions for parsing memory blocks from agent responses."""
 
-import re
 import logging
+import re
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
