@@ -34,6 +34,7 @@ from atroposlib.utils.tool_call_parser import parse_tool_call
 from environments.game_environments.textworld_env.agents.atropos_agent import (
     AtroposAgent,
     AtroposAgentConfig,
+    _convert_messages_for_api,
 )
 from environments.game_environments.textworld_env.agents.atropos_memory_manager import (
     MEMORY_SYSTEM_PREREQUISITES_AVAILABLE,
@@ -760,7 +761,11 @@ class TextWorldEnv(BaseEnv):
             return []
 
     async def _vrcli_score(
-        self, current_obs: str, predicted_outcome: str, actual_outcome: str
+        self,
+        current_obs: str,
+        actual_action: str,
+        predicted_outcome: str,
+        actual_outcome: str,
     ) -> float:
         """Score prediction quality using perplexity improvement with discrete reward levels.
 
@@ -769,6 +774,11 @@ class TextWorldEnv(BaseEnv):
         - 0.5: 0.05 ≤ improvement < 1 (small improvement)
         - 0.9: 1 ≤ improvement < 2 (moderate improvement)
         - 1.0: improvement ≥ 2 (significant improvement)
+
+        TODO: try other ways of conditioning the predictions, like including history,
+        full samples, memories, etc
+        Plus, should the base contain action or not, ablations needed on this
+        seems to work tho
         """
         if not predicted_outcome:
             return 0.0
@@ -777,16 +787,21 @@ class TextWorldEnv(BaseEnv):
         base_messages = [
             {
                 "role": "user",
-                "content": f"Current state:\n{current_obs}\n\nWhat happens next?",
+                "content": (
+                    f"Current state:\n{current_obs}\n\n"
+                    f"Action Taken: {actual_action}\n\n"
+                    "What happens next?"
+                ),
             },
             {"role": "assistant", "content": actual_outcome},
         ]
-
         prediction_messages = [
             {
                 "role": "user",
                 "content": (
-                    f"Current state:\n{current_obs}\n\nPredicted outcome: {predicted_outcome}\n\n"
+                    f"Current state:\n{current_obs}\n\n"
+                    f"Action Taken: {actual_action}\n\n"
+                    f"Predicted outcome: {predicted_outcome}\n\n"
                     "What actually happens?"
                 ),
             },
@@ -844,12 +859,9 @@ class TextWorldEnv(BaseEnv):
             return 0.0
 
         # Parse the response into structured components and always return partial score
-        structure_valid, structure_score = self._validate_response_structure(
-            response_text
-        )
+        _, structure_score = self._validate_response_structure(response_text)
 
         # Return partial score even if structure is considered "invalid"
-        # This gives credit for good memory/thinking blocks even if tool_call is malformed
         return structure_score
 
     def _validate_response_structure(self, response_text: str) -> Tuple[bool, float]:
@@ -902,6 +914,7 @@ class TextWorldEnv(BaseEnv):
             score += self.config.format_memory_reward
 
         # Apply strict structure enforcement if enabled
+        # Want to see if mixing it up or letting it generate multiple changes stuffs
         if self.config.format_strict_structure:
             # Bonus for correct ordering (only if all blocks present)
             if (
@@ -927,8 +940,7 @@ class TextWorldEnv(BaseEnv):
 
             score = max(0.0, score - extra_blocks_penalty)
         else:
-            # Legacy behavior: just check for presence of blocks (less strict)
-            pass  # Score already calculated above
+            pass
 
         # Consider response valid if it has the basic structure, even if not perfect
         is_valid = (
@@ -946,7 +958,6 @@ class TextWorldEnv(BaseEnv):
         candidates: List[
             Tuple[Optional[str], Optional[str], str, Optional[List[Dict[str, Any]]]]
         ],
-        agent: AtroposAgent,
         conversation_history: List[Dict[str, str]],
     ) -> List[Dict[str, Any]]:
         """
@@ -955,6 +966,9 @@ class TextWorldEnv(BaseEnv):
         2. Execute selected alternative in real environment
         3. Score selected alternative + same-action alternatives with VR-CLI
         4. Score rejected alternatives with entropy confidence scores
+
+        TODO: Try keeping entropy score + VR-CLI, see what combinations work best
+        Also compare VR-CLI against a GenRM (once we have a good one)
         """
         evaluations = []
 
@@ -974,19 +988,20 @@ class TextWorldEnv(BaseEnv):
 
                 # Convert to format expected by entropy calculator
                 if assistant_logprobs:
-                    # Create legacy format for compatibility with existing entropy calculator
-                    legacy_logprobs_data = []
+                    logprobs_data = []
                     for logprob in assistant_logprobs:
-                        legacy_logprobs_data.append(
+                        logprobs_data.append(
                             {
                                 "token": "",
                                 "logprob": logprob,
                                 "top_logprobs": [{"token": "", "logprob": logprob}],
                             }
                         )
-                    entropy_confidence = confidence_score(legacy_logprobs_data)
+                    entropy_confidence = confidence_score(logprobs_data)
                 else:
-                    entropy_confidence = 0.0  # No logprobs available
+                    entropy_confidence = (
+                        0.0  # No logprobs available, eg openai or something
+                    )
 
                 logger.debug(
                     f"[Episode: {ep_state.episode_id}] Alternative {i}: action='{action}', "
@@ -1002,7 +1017,6 @@ class TextWorldEnv(BaseEnv):
 
         # Step 2: Select best alternative (highest confidence)
         if confidence_scores:
-            # Log all confidence scores before selection
             logger.debug(
                 f"[Episode: {ep_state.episode_id}] Confidence scores for all alternatives: "
                 f"{[f'alt{i}={score:.3f}' for i, score in enumerate(confidence_scores)]}"
@@ -1099,7 +1113,10 @@ class TextWorldEnv(BaseEnv):
                         f"action='{action}', prediction='{prediction[:50] if prediction else 'None'}...'"
                     )
                     vrcli_score = await self._vrcli_score(
-                        previous_obs, prediction or "", actual_outcome
+                        previous_obs,
+                        action,
+                        prediction or "",
+                        actual_outcome,
                     )
                     logger.debug(
                         f"[Episode: {ep_state.episode_id}] VR-CLI score for alt {i}: {vrcli_score:.3f}"
@@ -1239,12 +1256,12 @@ class TextWorldEnv(BaseEnv):
             current_observation = self._format_observation(raw_obs, infos)
 
         ep_state.last_formatted_obs = current_observation
-        logger.info(
+        logger.debug(
             f"[DEBUG] Episode {ep_state.episode_id} - Observation length: {len(current_observation)}"
         )
 
         # 2. Generate candidate actions with predictions
-        logger.info(
+        logger.debug(
             f"[DEBUG] Episode {ep_state.episode_id} - Calling agent.generate_action with "
             f"n={self.config.group_size}"
         )
@@ -1252,7 +1269,7 @@ class TextWorldEnv(BaseEnv):
             group_actions = await agent.generate_action(
                 current_observation, n=self.config.group_size
             )
-            logger.info(
+            logger.debug(
                 f"[DEBUG] Episode {ep_state.episode_id} - Received "
                 f"{len(group_actions) if group_actions else 0} actions from agent"
             )
@@ -1340,9 +1357,6 @@ class TextWorldEnv(BaseEnv):
             return error_sdg, True
 
         # 4. Get conversation history for entropy calculation (reconstruct same as agent)
-        from environments.game_environments.textworld_env.agents.atropos_agent import (
-            _convert_messages_for_api,
-        )
 
         current_history_atropos = agent._reconstruct_canonical_history()
 
@@ -1354,7 +1368,7 @@ class TextWorldEnv(BaseEnv):
 
         # 4. Score alternatives using hybrid entropy + VR-CLI system
         evaluations = await self._score_alternatives_hybrid(
-            ep_state, candidates, agent, conversation_history
+            ep_state, candidates, conversation_history
         )
 
         if not evaluations:

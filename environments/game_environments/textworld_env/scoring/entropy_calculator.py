@@ -2,6 +2,9 @@
 
 Implements entropy and varentropy calculations based on token-level logprobs
 to determine model confidence in generated responses.
+
+More or less entropix, for a sequence of tokens, so "confidence" is used as a value estimate
+https://github.com/xjdr-alt/entropix/blob/main/entropix/sampler.py
 """
 
 import math
@@ -123,6 +126,7 @@ def confidence_score(
     return confidence
 
 
+# TODO: try using it for steering an agent! Or a reward function
 def classify_confidence(entropy: float, varentropy: float) -> str:
     """Classify response based on entropy/varentropy combination.
 
