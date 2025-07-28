@@ -161,8 +161,7 @@ class WordHuntEnvConfig(BaseEnvConfig):
     def get_prompt_template(self) -> str:
         """Get the prompt template for presenting boards to the model"""
         if self.prompt_style == "grid_visual":
-            template = """
-You are playing Word Hunt! Find as many English words as possible on this 4x4 letter grid.
+            template = """You are playing Word Hunt! Find as many English words as possible on this 4x4 letter grid.
 
 Rules:
 - Words must be at least 3 letters long
@@ -178,8 +177,7 @@ Here's your board:
 Find all the words you can! Return them as a space-separated list.
 """
         elif self.prompt_style == "text_description":
-            template = """
-You are playing Word Hunt! Find English words from these letters arranged in a 4x4 grid.
+            template = """You are playing Word Hunt! Find English words from these letters arranged in a 4x4 grid.
 
 Rules:
 - Words must be at least 3 letters long
@@ -194,8 +192,7 @@ Letters (reading left to right, top to bottom): {board_letters}
 Find all the words you can! Return them as a space-separated list.
 """
         else:  # both
-            template = """
-You are playing Word Hunt! Find as many English words as possible on this 4x4 letter grid.
+            template = """You are playing Word Hunt! Find as many English words as possible on this 4x4 letter grid.
 
 Rules:
 - Words must be at least 3 letters long
