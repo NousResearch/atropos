@@ -5,6 +5,7 @@ TextWorld Challenge Registry
 Provides a simple registry for the pre-built TextWorld challenges.
 """
 
+import itertools
 import logging
 import random
 from typing import Any, Dict, List, Optional, Tuple
@@ -23,18 +24,18 @@ class TextWorldChallengeRegistry:
             "test": [False],
         },
         "tw-cooking": {
-            "recipe": [1, 2, 3],  # Number of ingredients in recipe
-            "take": [1, 2, 3],  # Number of ingredients to find
+            "recipe": [1, 2, 3, 4],  # Number of ingredients in recipe
+            "take": [1, 2, 3, 4],  # Number of ingredients to find (will be constrained)
             "cook": [False, True],  # Whether ingredients need cooking
             "open": [False, True],  # Whether containers/doors need opening
             "drop": [False, True],  # Whether inventory has limited capacity
             "go": [1, 6, 9, 12],  # Number of locations
         },
         "tw-coin_collector": {
-            "level": [1, 2, 3, 4, 5],  # Difficulty levels
+            "level": list(range(1, 301)),  # Levels 1-300 (full range)
         },
         "tw-treasure_hunter": {
-            "level": [1, 2, 3, 4, 5],  # Difficulty levels
+            "level": list(range(1, 31)),  # Levels 1-30 (full range)
         },
     }
 
@@ -44,6 +45,10 @@ class TextWorldChallengeRegistry:
     def __init__(self, seed: Optional[int] = None):
         self._challenges = self.CHALLENGES.copy()
         self.rng = random.Random(seed)
+        
+        # Cache for all possible combinations
+        self._all_combinations = None
+        self._combination_index = 0
 
     def list_challenges(self) -> List[str]:
         """List all available pre-built challenges."""
@@ -90,6 +95,13 @@ class TextWorldChallengeRegistry:
             else:
                 # Use first (default) option
                 settings[key] = options[0]
+
+        # Special handling for tw-cooking: ensure take <= recipe
+        if name == "tw-cooking" and randomize_settings:
+            recipe_value = settings["recipe"]
+            # Constrain take to be at most recipe value
+            valid_take_values = [t for t in settings_ranges["take"] if t <= recipe_value]
+            settings["take"] = self.rng.choice(valid_take_values) if valid_take_values else 1
 
         # Generate a seed for this specific game instance
         settings["seed"] = self.rng.randint(0, 0xFFFFFFFF)
