@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import gymnasium as gym
 import textworld
 import textworld.challenges
+import textworld.gym
 
 from atroposlib.envs.base import (
     APIServerConfig,
@@ -85,7 +86,7 @@ class TextWorldEnv(BaseEnv):
 
     async def setup(self):
         """Initialize the environment and challenge registry."""
-        await super().setup()
+        logger.info(f"Setting up {self.name} environment.")
 
         # Import registry creation from local module
         from environments.game_environments.textworld_env.textworld_registry import (
@@ -116,6 +117,40 @@ class TextWorldEnv(BaseEnv):
             "game_type": "challenge",
         }
 
+    def _create_game(self, challenge_name: str, settings: Dict[str, Any]) -> Any:
+        """Create a TextWorld game based on challenge name and settings."""
+        # Create default options
+        options = textworld.GameOptions()
+        options.seeds = settings.get('seed', random.randint(0, 1000000))
+        
+        if challenge_name == "tw-simple":
+            # Simple challenge expects rewards, goal, test settings
+            game_settings = {
+                "rewards": settings.get('rewards', 'balanced'),
+                "goal": settings.get('goal', 'detailed'),
+                "test": str(settings.get('test', False)).lower()
+            }
+            game = textworld.challenges.simple.make(game_settings, options=options)
+        elif challenge_name == "tw-cooking":
+            # Cooking challenge expects "recipe[1-4]+take[1-6]+open+drop+go[1-12]"
+            recipe = settings.get('recipe', 1)
+            take = settings.get('take', 2)
+            go = settings.get('go', 1)
+            game_settings = {"recipe": f"recipe{recipe}+take{take}+open+drop+go{go}"}
+            game = textworld.challenges.cooking.make(game_settings, options=options)
+        elif challenge_name == "tw-coin_collector":
+            # Coin collector expects level as integer
+            game_settings = {"level": settings.get('level', 1)}
+            game = textworld.challenges.coin_collector.make(game_settings, options=options)
+        elif challenge_name == "tw-treasure_hunter":
+            # Treasure hunter expects level as integer  
+            game_settings = {"level": settings.get('level', 1)}
+            game = textworld.challenges.treasure_hunter.make(game_settings, options=options)
+        else:
+            raise ValueError(f"Unknown challenge: {challenge_name}")
+            
+        return game
+
     async def collect_trajectories(
         self, item: Item
     ) -> Tuple[ScoredDataGroup, List[Item]]:
@@ -124,19 +159,8 @@ class TextWorldEnv(BaseEnv):
         challenge_name = item["challenge_name"]
         settings = item["settings"]
 
-        # Create the challenge using TextWorld's challenge module
-
-        # Create challenge based on type
-        if challenge_name == "tw-simple":
-            game_file = textworld.challenges.simple.make(**settings)[0]
-        elif challenge_name == "tw-cooking":
-            game_file = textworld.challenges.cooking.make(**settings)[0]
-        elif challenge_name == "tw-coin_collector":
-            game_file = textworld.challenges.coin_collector.make(**settings)[0]
-        elif challenge_name == "tw-treasure_hunter":
-            game_file = textworld.challenges.treasure_hunter.make(**settings)[0]
-        else:
-            raise ValueError(f"Unknown challenge: {challenge_name}")
+        # Create the game using our helper method
+        game = self._create_game(challenge_name, settings)
 
         # Register the game
         request_infos = textworld.EnvInfos(
@@ -150,7 +174,7 @@ class TextWorldEnv(BaseEnv):
             moves=True,
             max_score=True,
         )
-        env_id = textworld.gym.register_game(game_file, request_infos)
+        env_id = textworld.gym.register_game(game, request_infos)
 
         # Collect trajectories in parallel
         scored_items = []
@@ -324,3 +348,8 @@ class TextWorldEnv(BaseEnv):
         ]
 
         return env_config, server_configs
+
+    async def evaluate(self, num_items: int) -> Dict[str, Any]:
+        """Evaluate the model - not implemented for this minimal environment."""
+        logger.warning("Evaluation not implemented in minimal TextWorld environment")
+        return {"message": "Evaluation not implemented"}
