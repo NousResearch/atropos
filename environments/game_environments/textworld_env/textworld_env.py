@@ -8,7 +8,9 @@ No thinking tokens, memory, format rewards, or complex scoring - just pure envir
 """
 
 import logging
+import os
 import random
+import tempfile
 import traceback
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -70,6 +72,13 @@ class TextWorldEnv(BaseEnv):
         self.config: TextWorldEnvConfig = config
         self.challenge_registry = None
 
+        # Track generated game files for cleanup
+        self._generated_files = set()
+
+        # Create temp directory for game files
+        self._temp_dir = tempfile.mkdtemp(prefix="textworld_minimal_")
+        logger.info(f"Created temp directory for game files: {self._temp_dir}")
+
         # Simple system prompt - just ask for actions
         self.system_prompt = (
             "You are playing a text-based adventure game. "
@@ -117,39 +126,70 @@ class TextWorldEnv(BaseEnv):
             "game_type": "challenge",
         }
 
-    def _create_game(self, challenge_name: str, settings: Dict[str, Any]) -> Any:
-        """Create a TextWorld game based on challenge name and settings."""
+    def _create_game(self, challenge_name: str, settings: Dict[str, Any]) -> str:
+        """Create a TextWorld game and save it to a file.
+
+        Returns:
+            Path to the saved game file (.z8)
+        """
         # Create default options
         options = textworld.GameOptions()
-        options.seeds = settings.get('seed', random.randint(0, 1000000))
-        
+        options.seeds = settings.get("seed", random.randint(0, 1000000))
+
         if challenge_name == "tw-simple":
             # Simple challenge expects rewards, goal, test settings
             game_settings = {
-                "rewards": settings.get('rewards', 'balanced'),
-                "goal": settings.get('goal', 'detailed'),
-                "test": str(settings.get('test', False)).lower()
+                "rewards": settings.get("rewards", "balanced"),
+                "goal": settings.get("goal", "detailed"),
+                "test": str(settings.get("test", False)).lower(),
             }
             game = textworld.challenges.simple.make(game_settings, options=options)
         elif challenge_name == "tw-cooking":
-            # Cooking challenge expects "recipe[1-4]+take[1-6]+open+drop+go[1-12]"
-            recipe = settings.get('recipe', 1)
-            take = settings.get('take', 2)
-            go = settings.get('go', 1)
-            game_settings = {"recipe": f"recipe{recipe}+take{take}+open+drop+go{go}"}
+            # Cooking challenge expects individual parameters as integers/booleans
+            game_settings = {
+                "recipe": settings.get("recipe", 1),  # Number of ingredients
+                "take": settings.get("take", 1),  # Number to find
+                "cook": settings.get("cook", False),  # Whether to cook
+                "open": settings.get("open", False),  # Whether to open containers
+                "drop": settings.get("drop", False),  # Whether limited inventory
+                "go": settings.get("go", 1),  # Number of locations
+                "recipe_seed": settings.get(
+                    "recipe-seed",
+                    settings.get("recipe_seed", random.randint(0, 1000000)),
+                ),
+                "split": "train",  # cooking challenge expects this
+            }
+            logger.debug(f"Cooking game settings: {game_settings}")
             game = textworld.challenges.cooking.make(game_settings, options=options)
         elif challenge_name == "tw-coin_collector":
             # Coin collector expects level as integer
-            game_settings = {"level": settings.get('level', 1)}
-            game = textworld.challenges.coin_collector.make(game_settings, options=options)
+            game_settings = {"level": settings.get("level", 1)}
+            game = textworld.challenges.coin_collector.make(
+                game_settings, options=options
+            )
         elif challenge_name == "tw-treasure_hunter":
-            # Treasure hunter expects level as integer  
-            game_settings = {"level": settings.get('level', 1)}
-            game = textworld.challenges.treasure_hunter.make(game_settings, options=options)
+            # Treasure hunter expects level as integer
+            game_settings = {"level": settings.get("level", 1)}
+            game = textworld.challenges.treasure_hunter.make(
+                game_settings, options=options
+            )
         else:
             raise ValueError(f"Unknown challenge: {challenge_name}")
-            
-        return game
+
+        # Save game to file
+        game_file = os.path.join(
+            self._temp_dir,
+            f"{challenge_name}_{settings.get('seed', random.randint(0, 1000000))}.z8",
+        )
+        options.path = game_file
+        options.file_ext = ".z8"
+        game_file = textworld.generator.compile_game(game, options)
+
+        # Track for cleanup
+        self._generated_files.add(game_file)
+        logger.debug(f"Generated game file: {game_file}")
+
+        return game_file
 
     async def collect_trajectories(
         self, item: Item
@@ -159,8 +199,8 @@ class TextWorldEnv(BaseEnv):
         challenge_name = item["challenge_name"]
         settings = item["settings"]
 
-        # Create the game using our helper method
-        game = self._create_game(challenge_name, settings)
+        # Create the game file using our helper method
+        game_file = self._create_game(challenge_name, settings)
 
         # Register the game
         request_infos = textworld.EnvInfos(
@@ -174,7 +214,7 @@ class TextWorldEnv(BaseEnv):
             moves=True,
             max_score=True,
         )
-        env_id = textworld.gym.register_game(game, request_infos)
+        env_id = textworld.gym.register_game(game_file, request_infos)
 
         # Collect trajectories in parallel
         scored_items = []
@@ -202,6 +242,9 @@ class TextWorldEnv(BaseEnv):
             },
         )
 
+        # Clean up the game file
+        self._cleanup_game_file(game_file)
+
         return sdg, []
 
     async def _collect_single_trajectory(
@@ -211,8 +254,8 @@ class TextWorldEnv(BaseEnv):
         messages: List[Message] = []
 
         try:
-            # Create and reset environment
-            env = gym.make(env_id)
+            # Create and reset environment using TextWorld's gym
+            env = textworld.gym.make(env_id)
             obs, info = env.reset()
 
             # Initial messages
@@ -230,11 +273,16 @@ class TextWorldEnv(BaseEnv):
                 while not done and len(messages) < self.config.max_steps * 2:
                     # Check token limit
                     current_tokens = len(
-                        self.tokenizer.apply_chat_template(messages, tokenize=False)
+                        self.tokenizer.apply_chat_template(messages, tokenize=True)
                     )
                     if current_tokens > self.config.max_token_length - 500:
                         logger.warning(
                             f"Trajectory {trajectory_idx}: Approaching token limit, ending episode"
+                        )
+                        logger.info(f"Token usage: {current_tokens} tokens")
+                        logger.info(f"Number of messages: {len(messages)}")
+                        logger.info(
+                            f"Last observation length: {len(messages[-1]['content']) if messages else 0}"
                         )
                         break
 
@@ -353,3 +401,53 @@ class TextWorldEnv(BaseEnv):
         """Evaluate the model - not implemented for this minimal environment."""
         logger.warning("Evaluation not implemented in minimal TextWorld environment")
         return {"message": "Evaluation not implemented"}
+
+    def _cleanup_game_file(self, game_file: str):
+        """Clean up a generated game file and its associated files."""
+        if game_file in self._generated_files:
+            try:
+                # Remove .z8 file
+                if os.path.exists(game_file):
+                    os.remove(game_file)
+                    logger.debug(f"Removed game file: {game_file}")
+
+                # Remove .ni file if it exists
+                ni_file = game_file.replace(".z8", ".ni")
+                if os.path.exists(ni_file):
+                    os.remove(ni_file)
+                    logger.debug(f"Removed ni file: {ni_file}")
+
+                # Remove .json file if it exists
+                json_file = game_file.replace(".z8", ".json")
+                if os.path.exists(json_file):
+                    os.remove(json_file)
+                    logger.debug(f"Removed json file: {json_file}")
+
+                self._generated_files.remove(game_file)
+            except OSError as e:
+                logger.warning(f"Failed to clean up game file {game_file}: {e}")
+
+    async def cleanup(self):
+        """Clean up all resources - called after each episode by base class."""
+        # Don't clean up temp directory here since env is singleton
+        # Just log that cleanup was called
+        logger.debug(
+            f"Cleanup called, {len(self._generated_files)} files still tracked"
+        )
+
+    def __del__(self):
+        """Ensure cleanup on deletion - this is when we actually clean the temp dir."""
+        # Clean up any remaining game files
+        files_to_clean = list(self._generated_files)
+        for game_file in files_to_clean:
+            self._cleanup_game_file(game_file)
+
+        # Clean up temp directory
+        if hasattr(self, "_temp_dir") and os.path.exists(self._temp_dir):
+            import shutil
+
+            try:
+                shutil.rmtree(self._temp_dir)
+                logger.debug(f"Cleaned up temp directory: {self._temp_dir}")
+            except Exception:
+                pass

@@ -37,7 +37,7 @@ async def main():
         total_steps=1,
         batch_size=1,
         steps_per_eval=0,
-        max_token_length=1024,
+        max_token_length=32768,
         inference_weight=1.0,
         data_path_to_save_groups=None,
         eval_handling=EvalHandlingEnum.NONE,
@@ -75,46 +75,88 @@ async def main():
     logger.info("Running a single trajectory directly using collect_trajectories")
     try:
         await env.setup()
-        
-        # Get a random game
+
+        # Test each challenge type
+        import sys
+
+        challenge_to_test = sys.argv[1] if len(sys.argv) > 1 else None
+
+        if challenge_to_test:
+            # Override config to test specific challenge
+            env.config.challenge_names = [challenge_to_test]
+
         item = await env.get_next_item()
         logger.info(f"Using game: {item}")
 
         # Collect trajectories (group_size=1 so just one trajectory)
         sdg, _ = await env.collect_trajectories(item)
 
-        if sdg and sdg.scored_data_items and len(sdg.scored_data_items) > 0:
+        scored_data_item = None
+        if (
+            sdg
+            and hasattr(sdg, "scored_data_items")
+            and sdg.scored_data_items
+            and len(sdg.scored_data_items) > 0
+        ):
             scored_data_item = sdg.scored_data_items[0]
-            logger.info(
-                f"Trajectory collection complete. Score: {scored_data_item.scores}"
+        elif (
+            sdg
+            and isinstance(sdg, dict)
+            and "scored_data_items" in sdg
+            and len(sdg["scored_data_items"]) > 0
+        ):
+            scored_data_item = sdg["scored_data_items"][0]
+
+        if scored_data_item:
+            # Handle both object and dict access patterns
+            scores = (
+                scored_data_item.scores
+                if hasattr(scored_data_item, "scores")
+                else scored_data_item.get("scores")
             )
-            if env_config.include_messages and scored_data_item.messages:
+            messages = (
+                scored_data_item.messages
+                if hasattr(scored_data_item, "messages")
+                else scored_data_item.get("messages")
+            )
+            tokens = (
+                scored_data_item.tokens
+                if hasattr(scored_data_item, "tokens")
+                else scored_data_item.get("tokens", [])
+            )
+            masks = (
+                scored_data_item.masks
+                if hasattr(scored_data_item, "masks")
+                else scored_data_item.get("masks", [])
+            )
+            metadata = (
+                scored_data_item.metadata
+                if hasattr(scored_data_item, "metadata")
+                else scored_data_item.get("metadata", {})
+            )
+
+            logger.info(f"Trajectory collection complete. Score: {scores}")
+            if env_config.include_messages and messages:
                 logger.info("Collected Messages:")
-                for i, msg in enumerate(scored_data_item.messages):
+                for i, msg in enumerate(messages):
                     logger.info(
                         f"  {i}. Role: {msg['role']}, Content: '{str(msg['content'])[:150]}...'"
                     )
-            logger.info(
-                f"Tokens ({len(scored_data_item.tokens)}): {str(scored_data_item.tokens)[:100]}..."
-            )
-            logger.info(
-                f"Masks ({len(scored_data_item.masks)}): {str(scored_data_item.masks)[:100]}..."
-            )
+            logger.info(f"Tokens ({len(tokens)}): {str(tokens)[:100]}...")
+            logger.info(f"Masks ({len(masks)}): {str(masks)[:100]}...")
 
             # Episode summary
-            if scored_data_item.metadata:
+            if metadata:
                 logger.info("\n========== Episode Summary ==========")
                 logger.info(f"Game: {item.get('challenge_name', 'unknown')}")
-                logger.info(
-                    f"Final Environment reward (Score): {scored_data_item.scores:.2f}"
-                )
+                logger.info(f"Final Environment reward (Score): {scores:.2f}")
                 outcome_str = "Loss"
-                if scored_data_item.metadata.get("won"):
+                if metadata.get("won"):
                     outcome_str = "Win"
-                elif scored_data_item.scores > 0:
+                elif scores > 0:
                     outcome_str = "Partial Success"
                 logger.info(f"Game Outcome: {outcome_str}")
-                logger.info(f"Moves: {scored_data_item.metadata.get('moves', 0)}")
+                logger.info(f"Moves: {metadata.get('moves', 0)}")
                 logger.info("=======================================")
         else:
             logger.error("Trajectory collection did not return a ScoredDataItem.")
