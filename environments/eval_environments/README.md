@@ -281,4 +281,4 @@ python arena_hard_environment.py evaluate \
 - **Robust Parsing**: Multiple regex patterns for judgment extraction ([[A>B]], [[B>A]], [[A=B]])
 - **Thinking Validation**: Strict validation of thinking tag format and content extraction
 - **Error Handling**: Comprehensive retry logic with exponential backoff
-- **Arena-Hard Compatibility**: Scores and metrics match original Arena-Hard methodology 
+- **Arena-Hard Compatibility**: Scores and metrics match original Arena-Hard methodology
