@@ -7,6 +7,7 @@ that prevent list.append() operations in the original Qwen tokenizer.
 TLDR; tool calls with Qwen are a PITA
 """
 
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from transformers import AutoTokenizer
@@ -15,52 +16,12 @@ from transformers import AutoTokenizer
 class QwenFixedTokenizer:
     """Wrapper around Qwen tokenizer with fixed chat template."""
 
-    # Fixed Jinja2 template that avoids sandbox restrictions
-    FIXED_CHAT_TEMPLATE = """{%- if tools %}
-{{- '<|im_start|>system\\n' }}
-{%- if messages[0].role == 'system' %}
-{{- messages[0].content + '\\n\\n' }}
-{%- endif %}
-{{- "# Tools\\n\\nYou may call one or more functions to assist with the user query.\\n\\nYou are provided with function signatures within <tools></tools> XML tags:\\n<tools>" }}
-{%- for tool in tools %}
-{{- "\\n" }}
-{{- tool | tojson }}
-{%- endfor %}
-{{- "\\n</tools>\\n\\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\\n<tool_call>\\n{\\"name\\": <function-name>, \\"arguments\\": <args-json-object>}\\n</tool_call><|im_end|>\\n" }}
-{%- else %}
-{%- if messages[0].role == 'system' %}
-{{- '<|im_start|>system\\n' + messages[0].content + '<|im_end|>\\n' }}
-{%- endif %}
-{%- endif %}
-{%- for message in messages %}
-{%- if message.role == 'user' or (message.role == 'assistant' and message.tool_calls is not defined) or (message.role == 'tool' and loop.index > 1) %}
-{%- if message.role == 'user' %}
-{%- if tools and not loop.first %}
-{{- '<|im_start|>user\\n' + message.content + '<|im_end|>\\n' }}
-{%- elif not tools or (tools and loop.first) %}
-{{- '<|im_start|>user\\n' + message.content + '<|im_end|>\\n' }}
-{%- endif %}
-{%- elif message.role == 'assistant' %}
-{{- '<|im_start|>assistant\\n' + message.content + '<|im_end|>\\n' }}
-{%- elif message.role == 'tool' %}
-{{- '<|im_start|>user\\n<tool_response>\\n' + message.content + '\\n</tool_response><|im_end|>\\n' }}
-{%- endif %}
-{%- elif message.role == 'assistant' and message.tool_calls is defined %}
-{{- '<|im_start|>assistant\\n' }}
-{%- if message.content %}
-{{- message.content + '\\n\\n' }}
-{%- endif %}
-{%- for tool_call in message.tool_calls %}
-{%- if tool_call.function is defined %}
-{{- '<tool_call>\\n{\\"name\\": \\"' + tool_call.function.name + '\\", \\"arguments\\": ' + tool_call.function.arguments + '}\\n</tool_call>' }}
-{%- endif %}
-{%- endfor %}
-{{- '<|im_end|>\\n' }}
-{%- endif %}
-{%- endfor %}
-{%- if add_generation_prompt %}
-{{- '<|im_start|>assistant\\n' }}
-{%- endif %}"""  # noqa: E501
+    @classmethod
+    def _load_chat_template(cls) -> str:
+        """Load the chat template from the .jinja file."""
+        template_path = Path(__file__).parent / "qwen_chat_template.jinja"
+        with open(template_path, "r", encoding="utf-8") as f:
+            return f.read()
 
     def __init__(self, model_name_or_path: str, **kwargs):
         """Initialize the tokenizer wrapper.
@@ -73,7 +34,7 @@ class QwenFixedTokenizer:
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, **kwargs)
 
         # Override the chat template with our fixed version
-        self.tokenizer.chat_template = self.FIXED_CHAT_TEMPLATE
+        self.tokenizer.chat_template = self._load_chat_template()
 
     def __getattr__(self, name: str) -> Any:
         """Delegate all other attributes to the underlying tokenizer."""
