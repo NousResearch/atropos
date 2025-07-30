@@ -213,7 +213,7 @@ class RefusalBenchmarkEnv(BaseEnv):
 
         # Default server configuration - framework will override from YAML/CLI
         default_api_key = os.environ.get("OPENAI_API_KEY", "")
-        
+
         server_configs = [
             APIServerConfig(
                 model_name="gpt-4o-mini",
@@ -222,7 +222,7 @@ class RefusalBenchmarkEnv(BaseEnv):
                 server_type="openai",
             ),
             APIServerConfig(
-                model_name="gpt-4o-mini", 
+                model_name="gpt-4o-mini",
                 base_url="https://api.openai.com/v1",
                 api_key=default_api_key,
                 server_type="openai",
@@ -347,10 +347,11 @@ class RefusalBenchmarkEnv(BaseEnv):
         """
         try:
             # Minos-specific prompt formatting
-            
 
-            messages = [{"role": "user", "content": question},
-                        {"role": "assistant", "content": response}]
+            messages = [
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": response},
+            ]
 
             # Use classifier server (could be the same as main server or different)
             completion = await self.classifier_server.chat_completion(
