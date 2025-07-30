@@ -57,6 +57,13 @@ code_exec = modal.Function.from_name("code_exec", "execute_code")
 
 run_test = modal.Function.from_name("test-lcb-code", "run_test")
 
+
+async def submit_code(test_cases, code):
+    """Submit code for execution with container semaphore"""
+    async with containers_semaphore:
+        return await run_test.remote.aio(test_cases, code)
+
+
 httpx_timeout = httpx.Timeout(None, connect=None, read=None, write=None, pool=None)
 httpx_limits = httpx.Limits(
     max_keepalive_connections=None,
@@ -447,8 +454,7 @@ class CodingEnv(BaseEnv):
                         }
                     }
 
-                    async with containers_semaphore:
-                        res, metadata = await run_test.remote.aio(test_cases, code_text)
+                    res, metadata = await submit_code(test_cases, code_text)
                     passed = set(res) == {True}
                     error_trace = metadata
                     execution_output = str(res)
@@ -733,8 +739,7 @@ class CodingEnv(BaseEnv):
                 continue
             else:
                 try:
-                    async with containers_semaphore:
-                        res, metadata = await run_test.remote.aio(test_cases, code)
+                    res, metadata = await submit_code(test_cases, code)
 
                 except modal.exception.RemoteError:
                     res = [False]
