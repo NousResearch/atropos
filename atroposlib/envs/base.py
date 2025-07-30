@@ -829,7 +829,7 @@ class BaseEnv(ABC):
 
             if (
                 self.config.ensure_scores_are_not_same
-                and len(set(group.get("scores", []))) == 1
+                and len(set(group["scores"])) == 1
             ):
                 logger.warning(
                     f"All scores are the same ({group.get('scores', [])[:5]}...), skipping..."
