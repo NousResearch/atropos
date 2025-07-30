@@ -1,198 +1,42 @@
-# ============================================================================
-# Refusal Benchmark Environment Configuration
-# ============================================================================
-# This file configures the refusal benchmark environment for evaluating
-# model refusal behavior on potentially harmful or inappropriate questions.
+# Environment configuration
+env:
+  group_size: 16
+  tokenizer_name: "gpt2"
+  use_wandb: true
+  rollout_server_url: "http://localhost:8000"
+  wandb_name: "refusal_benchmark"
+  total_steps: 500
+  batch_size: 512
+  max_token_length: 1024
+  data_file: "test_set.jsonl"
+  max_eval_samples: 4000
+  classifier_type: "openai"
+  eval_temperature: 0.7
+  train_temperature: 0.8
+  eval_max_tokens: 1024
+  train_max_tokens: 1024
+  use_label_0_for_training: true
+  data_dir_to_save_evals: "results/refusal_evaluation"
 
-# ============================================================================
-# Core Environment Settings (inherited from BaseEnvConfig)
-# ============================================================================
+# Server configurations - [0] main model, [1] classifier
+openai:
+  - model_name: "gpt-4o-mini"
+    base_url: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"
+    num_max_requests_at_once: 8
+    num_requests_for_eval: 32
+    server_type: "openai"
+    timeout: 120
+    weight: 1.0
 
-# Tokenizer used for encoding/decoding text - should match your model
-tokenizer_name: "gpt2"
+  - model_name: "minos-v1"
+    base_url: "http://localhost:1234/v1"
+    api_key: "${MINOS_API_KEY}"
+    num_max_requests_at_once: 8
+    num_requests_for_eval: 32
+    server_type: "openai"
+    timeout: 120
+    weight: 1.0
 
-# Number of responses generated per training item (affects cost/diversity)
-group_size: 16
-
-# Enable Weights & Biases logging for experiment tracking
-use_wandb: true
-
-# Maximum concurrent workers for parallel processing (adjust for your hardware)
-max_num_workers_per_node: 16
-
-# URL of the Atropos rollout server (for training mode)
-rollout_server_url: "http://localhost:8000"
-
-# Total number of training steps (or items processed in evaluation mode)
-total_steps: 500
-
-# Batch size for training (set by trainer, used for memory management)
-batch_size: 512
-
-# How frequently to run evaluation during training (0 = disable)
-steps_per_eval: 25
-
-# Maximum sequence length for tokenization (prompt + response)
-max_token_length: 1024
-
-# Inference weight for training (usually 1.0)
-inference_weight: 1.0
-
-# Name for WandB experiment tracking
-wandb_name: "refusal_benchmark"
-
-# Ratio of training workers to limit during evaluation
-eval_limit_ratio: 0.2
-
-# Minimum batch allocation ratio
-min_batch_allocation: 0.1
-
-# ============================================================================
-# Dataset Configuration
-# ============================================================================
-
-# Path to your JSONL test dataset
-# Each line should contain: {"user": "question", "assistant": "response", "original_label": 1}
-# Can be relative path from script location or absolute path
-data_file: "test_set.jsonl"
-
-# Maximum number of samples to evaluate (use smaller values for testing)
-# Set to -1 to evaluate all available samples
-max_eval_samples: 4000
-
-# ============================================================================
-# Classifier Configuration
-# ============================================================================
-
-# Type of refusal classifier to use:
-# "openai" - Uses OpenAI models with <answer></answer> tag format
-# "minos" - Uses Minos classifier with [CLASSIFICATION]:[CONFIDENCE] format
-classifier_type: "openai"
-
-# ============================================================================
-# Generation Parameters
-# ============================================================================
-
-# Temperature for evaluation responses (0.0 = deterministic, 1.0 = random)
-# Lower values (0.1-0.3) recommended for consistent evaluation
-eval_temperature: 0.7
-
-# Temperature for training responses (higher values = more diverse training data)
-train_temperature: 0.8
-
-# Maximum tokens for evaluation responses (typical refusals are short)
-eval_max_tokens: 1024
-
-# Maximum tokens for training responses (can be different from eval)
-train_max_tokens: 1024
-
-# ============================================================================
-# Training Configuration
-# ============================================================================
-
-# Whether to use label 0 data (non-refusal examples) for training
-# Label 0: Questions that should be answered helpfully
-# Label 1: Questions that should be refused (used for evaluation only)
-use_label_0_for_training: true
-
-# ============================================================================
-# Evaluation Output Configuration
-# ============================================================================
-
-# Directory where evaluation results will be saved
-# Creates: metrics.json, samples.jsonl, detailed_samples_*.jsonl, evaluation_summary_*.json
-# Set to null to disable file output (console/WandB only)
-data_dir_to_save_evals: "results/refusal_evaluation"
-
-# ============================================================================
-# Server Configuration
-# ============================================================================
-# Define API endpoints for the main model and classifier
-# The environment requires TWO servers:
-# 1. Main model server (for the model being evaluated)
-# 2. Classifier server (for refusal detection)
-
-server_configs:
-  # ----------------------------------------------------------------------------
-  # Main Model Server (Position 0)
-  # ----------------------------------------------------------------------------
-  # This server hosts the model whose refusal behavior is being evaluated
-  - model_name: "gpt-4o-mini"                    # Model identifier
-    base_url: "https://api.openai.com/v1"        # API endpoint URL
-    api_key: "${OPENAI_API_KEY}"                 # API key (use env vars for security)
-    num_max_requests_at_once: 8                  # Concurrent request limit
-    num_requests_for_eval: 32                    # Evaluation request pool size
-    server_type: "openai"                        # Server type (openai, vllm, etc.)
-    timeout: 120                                 # Request timeout in seconds
-
-  # ----------------------------------------------------------------------------
-  # Classifier Server (Position 1)
-  # ----------------------------------------------------------------------------
-  # This server runs the refusal classifier (can be same or different from main model)
-  - model_name: "gpt-4o-mini"                    # Classifier model (can be different)
-    base_url: "https://api.openai.com/v1"        # Classifier endpoint (can be different)
-    api_key: "${OPENAI_API_KEY}"                 # Classifier API key
-    num_max_requests_at_once: 8                  # Classifier concurrent requests
-    num_requests_for_eval: 32                    # Classifier evaluation pool
-    server_type: "openai"                        # Classifier server type
-    timeout: 120                                 # Classifier timeout
-
-# ============================================================================
-# Alternative Configurations
-# ============================================================================
-
-# Example 1: Using different models for main and classifier
-# server_configs:
-#   - model_name: "gpt-4"                        # Main model being evaluated
-#     base_url: "https://api.openai.com/v1"
-#     api_key: "${OPENAI_API_KEY}"
-#     num_max_requests_at_once: 4               # Lower for expensive models
-#     num_requests_for_eval: 16
-#     server_type: "openai"
-#     timeout: 180                              # Longer timeout for complex models
-#
-#   - model_name: "gpt-3.5-turbo"              # Cheaper/faster classifier
-#     base_url: "https://api.openai.com/v1"
-#     api_key: "${OPENAI_API_KEY}"
-#     num_max_requests_at_once: 16             # Higher for cheaper models
-#     num_requests_for_eval: 64
-#     server_type: "openai"
-#     timeout: 60
-
-# Example 2: Using local vLLM server for main model + OpenAI for classifier
-# server_configs:
-#   - model_name: "meta-llama/Llama-2-7b-chat-hf"  # Local model
-#     base_url: "http://localhost:8000/v1"          # Local vLLM server
-#     api_key: "dummy"                              # vLLM doesn't need real API key
-#     num_max_requests_at_once: 32                  # Higher for local
-#     num_requests_for_eval: 128
-#     server_type: "openai"                         # vLLM uses OpenAI-compatible API
-#     timeout: 300
-#
-#   - model_name: "gpt-4o-mini"                     # OpenAI classifier
-#     base_url: "https://api.openai.com/v1"
-#     api_key: "${OPENAI_API_KEY}"
-#     num_max_requests_at_once: 8
-#     num_requests_for_eval: 32
-#     server_type: "openai"
-#     timeout: 120
-
-# Example 3: Minos classifier configuration
-# To use Minos classifier, set classifier_type to "minos" and configure accordingly:
-# classifier_type: "minos"
-# server_configs:
-#   - model_name: "gpt-4o-mini"                     # Main model
-#     base_url: "https://api.openai.com/v1"
-#     api_key: "${OPENAI_API_KEY}"
-#     num_max_requests_at_once: 8
-#     num_requests_for_eval: 32
-#     server_type: "openai"
-#     timeout: 120
-#
-#   - model_name: "minos-classifier"                # Minos classifier
-#     base_url: "http://localhost:8001/v1"          # Your Minos server URL
-#     api_key: "${MINOS_API_KEY}"                   # Minos API key
-#     num_max_requests_at_once: 8
-#     num_requests_for_eval: 32
-#     server_type: "minos"                          # or "openai" if Minos uses OpenAI API
-#     timeout: 120
+slurm: false
+testing: false
