@@ -61,13 +61,6 @@ The framework supports collecting, distributing and evaluating LLM trajectories 
 
 </div>
 
-## 🎉 Upcoming Atropos Hackathon: LLM RL Environments
-
-Join us in San Francisco on May 18th, 2025 for an exciting hackathon focused on building and experimenting with LLM RL Environments! This in-person event will bring together researchers and developers interested in advancing the field of LLM reinforcement learning.
-
-More details coming soon! Follow us on Twitter [@NousResearch](https://x.com/NousResearch) to stay updated.
-
-
 ---
 
 ## Experimental results from models trained using Atropos' environments
