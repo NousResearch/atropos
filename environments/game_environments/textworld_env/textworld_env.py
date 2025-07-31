@@ -7,6 +7,8 @@ to train LLMs. The LLM outputs actions in plain text and receives only environme
 No thinking tokens, memory, format rewards, or complex scoring - just pure environment interaction.
 """
 
+print("TEXTWORLD_ENV: Script is being executed", flush=True)
+
 import logging
 import os
 import random
@@ -40,8 +42,8 @@ class TextWorldEnvConfig(BaseEnvConfig):
     group_size: int = 16
     max_num_workers: int = 16
     total_steps: int = 500
-    max_steps: int = 20  # max steps per episode
-    max_token_length: int = 8192
+    max_steps: int = 300  # max steps per episode (matches coin_collector max)
+    max_token_length: int = 32768
 
     # Challenge settings
     challenge_names: List[str] = [
@@ -68,16 +70,27 @@ class TextWorldEnv(BaseEnv):
         slurm: bool = True,
         testing: bool = False,
     ):
+        logger.warning(f"Initializing TextWorldEnv with config: {config}")
+        logger.warning(f"Server configs: {server_configs}")
+        logger.warning(f"Slurm: {slurm}, Testing: {testing}")
         super().__init__(config, server_configs, slurm, testing)
         self.config: TextWorldEnvConfig = config
         self.challenge_registry = None
+        logger.warning("TextWorldEnv initialized successfully")
 
         # Track generated game files for cleanup
         self._generated_files = set()
 
         # Create temp directory for game files
         self._temp_dir = tempfile.mkdtemp(prefix="textworld_minimal_")
-        logger.info(f"Created temp directory for game files: {self._temp_dir}")
+        logger.warning(f"Created temp directory for game files: {self._temp_dir}")
+        
+        # Tracking buffers for wandb logging
+        self.episode_outcomes_buffer = []  # Store episode outcomes (-1, 0, 1)
+        self.episode_rewards_buffer = []  # Store actual reward scores
+        self.episode_steps_buffer = []  # Store number of steps per episode  
+        self.episode_challenge_types = []  # Track which challenges were played
+        self.eval_metrics_custom = []
 
         # Simple system prompt - just ask for actions
         self.system_prompt = (
@@ -95,17 +108,24 @@ class TextWorldEnv(BaseEnv):
 
     async def setup(self):
         """Initialize the environment and challenge registry."""
-        logger.info(f"Setting up {self.name} environment.")
+        logger.warning(f"Starting TextWorldEnv setup...")
+        logger.warning(f"Setting up {self.name} environment.")
 
         # Import registry creation from local module
         from environments.game_environments.textworld_env.textworld_registry import (
             create_textworld_registry,
         )
 
-        self.challenge_registry = create_textworld_registry()
-        logger.info(
-            f"Initialized TextWorld challenge registry with challenges: {self.config.challenge_names}"
-        )
+        try:
+            self.challenge_registry = create_textworld_registry()
+            logger.warning(
+                f"Initialized TextWorld challenge registry with challenges: {self.config.challenge_names}"
+            )
+            logger.warning("TextWorldEnv setup completed successfully")
+        except Exception as e:
+            logger.error(f"Failed to create TextWorld registry: {e}")
+            logger.error(traceback.format_exc())
+            raise
 
     async def get_next_item(self) -> Item:
         """Get the next game configuration."""
@@ -221,7 +241,7 @@ class TextWorldEnv(BaseEnv):
 
         for i in range(self.config.group_size):
             try:
-                scored_item = await self._collect_single_trajectory(env_id, i)
+                scored_item = await self._collect_single_trajectory(env_id, i, challenge_name)
                 if scored_item:
                     scored_items.append(scored_item)
             except Exception as e:
@@ -230,17 +250,64 @@ class TextWorldEnv(BaseEnv):
 
         if not scored_items:
             logger.error("No successful trajectories collected")
-            return ScoredDataGroup(scored_data_items=[]), []
+            # Return empty ScoredDataGroup with correct structure
+            return ScoredDataGroup(
+                tokens=[],
+                masks=[],
+                scores=[],
+                messages=[],
+                advantages=None,
+                ref_logprobs=None,
+                group_overrides={},  # Should be empty dict, not None
+                overrides=None,
+                images=None,
+            ), []
 
-        # Create ScoredDataGroup with all trajectories
+        # Create ScoredDataGroup by aggregating all trajectories
         sdg = ScoredDataGroup(
-            scored_data_items=scored_items,
-            metadata={
-                "game_type": item.get("game_type", "unknown"),
-                "difficulty": item.get("difficulty", "unknown"),
-                "num_trajectories": len(scored_items),
-            },
+            tokens=[],
+            masks=[],
+            scores=[],
+            messages=[],
+            advantages=None,
+            ref_logprobs=None,
+            group_overrides={},  # Should be empty dict, not None
+            overrides=None,
+            images=None,
         )
+        
+        # Aggregate data from all scored items
+        for scored_item in scored_items:
+            sdg["tokens"].append(scored_item["tokens"])
+            sdg["masks"].append(scored_item["masks"])
+            sdg["scores"].append(scored_item["scores"])
+            if self.config.include_messages and scored_item.get("messages"):
+                sdg["messages"].append(scored_item["messages"])
+                
+            # Track outcomes for wandb logging
+            metadata = scored_item.get("metadata", {})
+            final_score = metadata.get("final_score", 0)
+            won = metadata.get("won", False)
+            lost = metadata.get("lost", False)
+            moves = metadata.get("moves", 0)
+            
+            # Convert to outcome: 1 for win, -1 for loss, 0 for neither
+            if won:
+                outcome = 1.0
+                logger.warning(f"Episode WON! Score: {final_score}, Moves: {moves}, Challenge: {metadata.get('challenge_name', 'unknown')}")
+            elif lost:
+                outcome = -1.0
+                logger.warning(f"Episode LOST! Score: {final_score}, Moves: {moves}, Challenge: {metadata.get('challenge_name', 'unknown')}")
+            else:
+                outcome = 0.0
+                logger.warning(f"Episode DRAW! Score: {final_score}, Moves: {moves}, Challenge: {metadata.get('challenge_name', 'unknown')}")
+                
+            self.episode_outcomes_buffer.append(outcome)
+            self.episode_rewards_buffer.append(final_score)
+            self.episode_steps_buffer.append(moves)
+            self.episode_challenge_types.append(metadata.get("challenge_name", "unknown"))
+        
+        logger.warning(f"DEBUG: Created ScoredDataGroup with {len(sdg['tokens'])} trajectories")
 
         # Clean up the game file
         self._cleanup_game_file(game_file)
@@ -248,7 +315,7 @@ class TextWorldEnv(BaseEnv):
         return sdg, []
 
     async def _collect_single_trajectory(
-        self, env_id: str, trajectory_idx: int
+        self, env_id: str, trajectory_idx: int, challenge_name: str = "unknown"
     ) -> Optional[ScoredDataItem]:
         """Collect a single trajectory for the game."""
         messages: List[Message] = []
@@ -338,6 +405,7 @@ class TextWorldEnv(BaseEnv):
                     "won": info.get("won", False),
                     "lost": info.get("lost", False),
                     "moves": info.get("moves", 0),
+                    "challenge_name": challenge_name,
                 },
             )
 
@@ -371,11 +439,11 @@ class TextWorldEnv(BaseEnv):
     def config_init(cls) -> Tuple[TextWorldEnvConfig, List[APIServerConfig]]:
         """Initialize default configuration."""
         env_config = TextWorldEnvConfig(
-            tokenizer_name="NousResearch/Hermes-3-Llama-3.1-8B",
+            tokenizer_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
             group_size=16,
             use_wandb=True,
             wandb_name=cls.name,
-            max_token_length=8192,
+            max_token_length=32768,
             total_steps=500,
             challenge_names=[
                 "tw-simple",
@@ -388,8 +456,26 @@ class TextWorldEnv(BaseEnv):
 
         server_configs = [
             APIServerConfig(
-                model_name="NousResearch/Hermes-3-Llama-3.1-8B",
-                base_url="http://localhost:8001/v1",
+                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+                base_url="http://localhost:9004/v1",
+                api_key="x",
+                num_requests_for_eval=128,
+            ),
+            APIServerConfig(
+                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+                base_url="http://localhost:9005/v1",
+                api_key="x",
+                num_requests_for_eval=128,
+            ),
+            APIServerConfig(
+                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+                base_url="http://localhost:9006/v1",
+                api_key="x",
+                num_requests_for_eval=128,
+            ),
+            APIServerConfig(
+                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+                base_url="http://localhost:9007/v1",
                 api_key="x",
                 num_requests_for_eval=128,
             ),
@@ -401,6 +487,104 @@ class TextWorldEnv(BaseEnv):
         """Evaluate the model - not implemented for this minimal environment."""
         logger.warning("Evaluation not implemented in minimal TextWorld environment")
         return {"message": "Evaluation not implemented"}
+    
+    async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
+        """Log episode statistics to wandb."""
+        if wandb_metrics is None:
+            wandb_metrics = {}
+        
+        # Log training episode outcomes
+        if self.episode_outcomes_buffer:
+            # Calculate overall statistics
+            wins = sum(1 for outcome in self.episode_outcomes_buffer if outcome > 0)
+            losses = sum(1 for outcome in self.episode_outcomes_buffer if outcome < 0)
+            draws = sum(1 for outcome in self.episode_outcomes_buffer if outcome == 0)
+            total_episodes = len(self.episode_outcomes_buffer)
+            
+            # Calculate rates (percentages)
+            win_rate = (wins / total_episodes) * 100 if total_episodes > 0 else 0.0
+            loss_rate = (losses / total_episodes) * 100 if total_episodes > 0 else 0.0
+            draw_rate = (draws / total_episodes) * 100 if total_episodes > 0 else 0.0
+            
+            # Average metrics
+            avg_steps = sum(self.episode_steps_buffer) / len(self.episode_steps_buffer) if self.episode_steps_buffer else 0
+            avg_outcome = sum(self.episode_outcomes_buffer) / len(self.episode_outcomes_buffer) if self.episode_outcomes_buffer else 0
+            avg_reward = sum(self.episode_rewards_buffer) / len(self.episode_rewards_buffer) if self.episode_rewards_buffer else 0
+            max_reward = max(self.episode_rewards_buffer) if self.episode_rewards_buffer else 0
+            min_reward = min(self.episode_rewards_buffer) if self.episode_rewards_buffer else 0
+            
+            # Log overall metrics with clear labels
+            wandb_metrics[f"{self.name}/train/total_episodes"] = total_episodes
+            wandb_metrics[f"{self.name}/train/win_count_absolute"] = wins
+            wandb_metrics[f"{self.name}/train/loss_count_absolute"] = losses  
+            wandb_metrics[f"{self.name}/train/draw_count_absolute"] = draws
+            wandb_metrics[f"{self.name}/train/win_rate_percent"] = win_rate
+            wandb_metrics[f"{self.name}/train/loss_rate_percent"] = loss_rate
+            wandb_metrics[f"{self.name}/train/draw_rate_percent"] = draw_rate
+            wandb_metrics[f"{self.name}/train/avg_episode_steps"] = avg_steps
+            wandb_metrics[f"{self.name}/train/avg_outcome"] = avg_outcome  # -1, 0, 1 average
+            wandb_metrics[f"{self.name}/train/avg_reward_score"] = avg_reward  # Actual game score
+            wandb_metrics[f"{self.name}/train/max_reward_score"] = max_reward
+            wandb_metrics[f"{self.name}/train/min_reward_score"] = min_reward
+            
+            # Per-challenge statistics
+            challenge_stats = {}
+            for i, (outcome, reward, steps, challenge) in enumerate(zip(
+                self.episode_outcomes_buffer,
+                self.episode_rewards_buffer,
+                self.episode_steps_buffer, 
+                self.episode_challenge_types
+            )):
+                if challenge not in challenge_stats:
+                    challenge_stats[challenge] = {
+                        'outcomes': [],
+                        'rewards': [],
+                        'steps': [],
+                        'count': 0
+                    }
+                challenge_stats[challenge]['outcomes'].append(outcome)
+                challenge_stats[challenge]['rewards'].append(reward)
+                challenge_stats[challenge]['steps'].append(steps)
+                challenge_stats[challenge]['count'] += 1
+            
+            # Log per-challenge metrics
+            for challenge, stats in challenge_stats.items():
+                challenge_wins = sum(1 for o in stats['outcomes'] if o > 0)
+                challenge_losses = sum(1 for o in stats['outcomes'] if o < 0)
+                challenge_draws = sum(1 for o in stats['outcomes'] if o == 0)
+                challenge_total = stats['count']
+                
+                # Counts
+                wandb_metrics[f"{self.name}/train/{challenge}/episodes_count"] = challenge_total
+                wandb_metrics[f"{self.name}/train/{challenge}/wins_count"] = challenge_wins
+                wandb_metrics[f"{self.name}/train/{challenge}/losses_count"] = challenge_losses
+                wandb_metrics[f"{self.name}/train/{challenge}/draws_count"] = challenge_draws
+                
+                # Rates
+                wandb_metrics[f"{self.name}/train/{challenge}/win_rate_percent"] = (challenge_wins / challenge_total) * 100 if challenge_total > 0 else 0
+                wandb_metrics[f"{self.name}/train/{challenge}/loss_rate_percent"] = (challenge_losses / challenge_total) * 100 if challenge_total > 0 else 0
+                wandb_metrics[f"{self.name}/train/{challenge}/draw_rate_percent"] = (challenge_draws / challenge_total) * 100 if challenge_total > 0 else 0
+                
+                # Average metrics
+                wandb_metrics[f"{self.name}/train/{challenge}/avg_steps"] = sum(stats['steps']) / len(stats['steps']) if stats['steps'] else 0
+                wandb_metrics[f"{self.name}/train/{challenge}/avg_outcome"] = sum(stats['outcomes']) / len(stats['outcomes']) if stats['outcomes'] else 0
+                wandb_metrics[f"{self.name}/train/{challenge}/avg_reward_score"] = sum(stats['rewards']) / len(stats['rewards']) if stats['rewards'] else 0
+                wandb_metrics[f"{self.name}/train/{challenge}/max_reward_score"] = max(stats['rewards']) if stats['rewards'] else 0
+                wandb_metrics[f"{self.name}/train/{challenge}/min_reward_score"] = min(stats['rewards']) if stats['rewards'] else 0
+            
+            # Clear buffers
+            self.episode_outcomes_buffer = []
+            self.episode_rewards_buffer = []
+            self.episode_steps_buffer = []
+            self.episode_challenge_types = []
+        
+        # Log eval metrics if any
+        for key, value in self.eval_metrics_custom:
+            wandb_metrics[key] = value
+        self.eval_metrics_custom = []
+        
+        # Call parent wandb_log
+        await super().wandb_log(wandb_metrics)
 
     def _cleanup_game_file(self, game_file: str):
         """Clean up a generated game file and its associated files."""
@@ -451,3 +635,15 @@ class TextWorldEnv(BaseEnv):
                 logger.debug(f"Cleaned up temp directory: {self._temp_dir}")
             except Exception:
                 pass
+
+
+# Add main block to catch errors
+if __name__ == "__main__":
+    print("TEXTWORLD_ENV: Main block executing", flush=True)
+    try:
+        TextWorldEnv.cli()
+    except Exception as e:
+        print(f"TEXTWORLD_ENV: Fatal error in main: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        raise
