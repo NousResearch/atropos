@@ -45,7 +45,7 @@ class TextWorldChallengeRegistry:
     def __init__(self, seed: Optional[int] = None):
         self._challenges = self.CHALLENGES.copy()
         self.rng = random.Random(seed)
-        
+
         # Cache for all possible combinations
         self._all_combinations = None
         self._combination_index = 0
@@ -100,8 +100,12 @@ class TextWorldChallengeRegistry:
         if name == "tw-cooking" and randomize_settings:
             recipe_value = settings["recipe"]
             # Constrain take to be at most recipe value
-            valid_take_values = [t for t in settings_ranges["take"] if t <= recipe_value]
-            settings["take"] = self.rng.choice(valid_take_values) if valid_take_values else 1
+            valid_take_values = [
+                t for t in settings_ranges["take"] if t <= recipe_value
+            ]
+            settings["take"] = (
+                self.rng.choice(valid_take_values) if valid_take_values else 1
+            )
 
         # Generate a seed for this specific game instance
         settings["seed"] = self.rng.randint(0, 0xFFFFFFFF)
