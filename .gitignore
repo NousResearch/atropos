@@ -200,3 +200,8 @@ environments/community/word_hunt/debug_test.py
 environments/community/word_hunt/template_with_metadata.html
 environments/community/word_hunt/word_hunt_rollouts*.html
 .DS_Store
+
+# Textworld artefacts
+*.z8
+*.ni
+*.z5
