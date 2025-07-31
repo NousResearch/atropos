@@ -1,0 +1,41 @@
+env:
+  wandb_name: bleuberi
+  group_size: 4
+  max_token_length: 2048
+  max_num_workers_per_node: 8
+  steps_per_eval: 100
+  total_steps: 1000
+  include_messages: true
+
+  # Dataset configuration
+  dataset_name: "allenai/tulu-3-sft-mixture"
+  dataset_split: "train"
+  selection_mode: "hard"
+  num_examples: 5000
+  cache_dir: null
+  streaming: false
+  shuffle: true
+
+  # Reward configuration
+  reward_funcs:
+    - "bleu"
+  ref_models:
+    - "gold"  # Use ground truth as reference
+
+  # System prompt configuration
+  system_prompt: "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution prior to answering. You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem. After your thinking, make sure to clearly provide your final answer inside <answer></answer> tags."
+
+  # Seeds and evaluation
+  seed: 42
+  eval_seed: 123
+  num_eval_samples_per_task: 5
+  eval_limit_ratio: 0.1
+  reasoning: true
+
+openai:
+  base_url: "http://localhost:8000/v1"
+  model: "Llama-3.1-8B-Instruct"
+  api_key: "PLACEHOLDER"
+  temperature: 0.7
+  max_tokens: 1024
+  top_p: 0.95
