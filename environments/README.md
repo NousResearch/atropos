@@ -2,125 +2,16 @@
 
 This directory contains various environments for training and evaluating language models on different tasks. Each environment implements a specific task with its own input format, reward function, and evaluation metrics.
 
+## Directory Structure
+
+- **Main Environments**: Training-focused environments with comprehensive datasets
+- **[Evaluation Environments](eval_environments/)**: Benchmark-focused environments primarily designed for model evaluation (see [eval_environments/README.md](eval_environments/README.md))
+
 ## Available Environments
 
 ---
 
-### 🏆 Pairwise Judgment Environment (`pairwise_judgement_environment.py`) - **BENCHMARK**
 
-**⚠️ PRIMARY USE CASE: EVALUATION BENCHMARK** - This environment implements the official RewardBench-2 evaluation suite for measuring how well models can judge the quality of AI assistant responses. Use this to benchmark your models against state-of-the-art judgment capabilities.
-
-A comprehensive benchmark environment based on the official RewardBench-2 dataset that evaluates models' ability to judge AI assistant responses through two evaluation modes:
-- **Choice Mode**: Compare 4 responses (A/B/C/D) and select the best one
-- **Ties Mode**: Rate individual responses on a 1-10 scale to identify winners
-
-**Benchmark Categories:**
-- **Factuality**: Factual accuracy and correctness
-- **Focus**: Staying on topic and following instructions
-- **Math**: Mathematical reasoning and problem-solving
-- **Precise IF**: Precise instruction following
-- **Safety**: Harmful content detection and safety
-- **Ties**: Multiple correct responses requiring nuanced judgment
-
-**Input Format:**
-- **Choice Mode**: Question + 4 AI responses (A, B, C, D) → Select best response
-- **Ties Mode**: Question + individual response → Rate 1-10 scale
-- Each item contains:
-  - `prompt`: The user question
-  - `chosen`: List of high-quality responses
-  - `rejected`: List of lower-quality responses
-  - `subset`: Category (Factuality, Math, Safety, etc.)
-
-**System Prompt (Thinking Mode):**
-```
-You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution prior to answering. You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem.
-You are allowed to monologue in freeform at times, but the majority of your reasoning must be done using markdown, with point, bolding and italics used appropriately to structure your reasoning.
-```
-
-**Evaluation Methodology:**
-- **Choice Mode**: Score 1.0 if model selects the correct response (A/B/C/D format: `[[A]]`)
-- **Ties Mode**: Rate all responses → Find maximum rating → Score 1.0 if any max-rated response is correct
-- **Format Compliance**: Must use exact format (`[[A]]` for choice, trailing number for rating)
-- **Robust to Parsing Errors**: Partial failures don't invalidate entire samples
-
-**Key Features:**
-- **Dual Evaluation Modes**: Automatic detection of choice vs. ties samples
-- **Category Filtering**: Evaluate specific RewardBench categories
-- **Thinking Mode Support**: Full `<think></think>` tag parsing and evaluation
-- **Chat Completions**: Uses modern chat completion API endpoints
-- **Comprehensive Metrics**: A-bias detection, compliance rates, rating distributions
-- **Original RewardBench Compliance**: Matches official methodology exactly
-
-**Configuration Options:**
-- `thinking_mode`: Enable `<think></think>` reasoning mode (default: True)
-- `num_choices`: Number of response choices (2-26, default: 4)
-- `eval_categories`: Filter to specific categories (default: all)
-- `max_ties_responses`: Limit ties responses for cost control (default: 100)
-- `eval_temperature`: Temperature for evaluation (default: 0.6)
-- `eval_max_tokens`: Max tokens for evaluation (default: 16384)
-
-**Benchmark Usage (Primary Use Case):**
-```bash
-# Evaluate OpenAI models
-python pairwise_judgement_environment.py evaluate \
-    --openai.base_url https://api.openai.com/v1 \
-    --openai.api_key sk-YOURAPIKEY \
-    --openai.model_name gpt-4o \
-    --env.data_dir_to_save_evals ./evals/rewardbench-gpt-4o
-
-# Evaluate specific categories only
-python pairwise_judgement_environment.py evaluate \
-    --openai.model_name gpt-4o-mini \
-    --env.eval_categories='["MATH", "SAFETY"]' \
-    --env.data_dir_to_save_evals ./evals/math-safety-only
-
-# Evaluate with custom settings
-python pairwise_judgement_environment.py evaluate \
-    --openai.model_name gpt-4o \
-    --env.thinking_mode=False \
-    --env.eval_temperature=0.0 \
-    --env.max_ties_responses=50 \
-    --env.data_dir_to_save_evals ./evals/deterministic-eval
-```
-
-**Training Usage - Will Require Your Own Custom Dataset(Secondary Use Case):**
-```bash
-# Train with synthetic judgment data
-python pairwise_judgement_environment.py serve \
-    --env.thinking_mode=True \
-    --env.num_choices=4 \
-    --env.rollout_temperature=0.8
-```
-
-**Benchmark Metrics:**
-- `eval/percent_correct`: Overall accuracy across all categories
-- `eval/percent_correct_{category}`: Per-category accuracy scores
-- `eval/choice_format_compliance_rate`: Format compliance for choice mode
-- `eval/ties_format_compliance_rate`: Format compliance for ties mode
-- `eval/ties_error_rate`: Proportion of unparseable rating attempts
-- `eval/wrong_answer_a_bias_rate`: A-bias detection in incorrect responses
-- `eval/avg_ties_rating`: Average rating in ties mode
-- `eval/ties_rating_freq_{1-10}`: Distribution of ratings 1-10
-
-**Dependencies:**
-- `datasets` (for RewardBench-2 dataset)
-- `wandb` (for metrics tracking)
-- `tqdm` (for progress bars)
-
-**Citation:**
-```bibtex
-@misc{lambert2024rewardbenchevaluatingrewardmodels,
-      title={RewardBench: Evaluating Reward Models for Language Modeling},
-      author={Nathan Lambert and Valentina Pyatkin and Jacob Morrison and LJ Miranda and Bill Yuchen Lin and Khyathi Chandu and Nouha Dziri and Sachin Kumar and Tom Zick and Yejin Choi and Noah A. Smith and Hannaneh Hajishirzi},
-      year={2024},
-      eprint={2403.13787},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2403.13787},
-}
-```
-
----
 
 ### Letter Counting Environment (`letter_counting_environment.py`)
 
@@ -580,6 +471,8 @@ python instruction_following_algorithm_environment.py serve \
 - Configurable dataset shuffling for reproducible experiments
 
 ---
+
+
 
 ### SWE-RL Environment (`swe_rl_env.py`)
 
