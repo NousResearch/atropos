@@ -6,7 +6,6 @@ Local test server for the minimalist TextWorld environment.
 import asyncio
 import logging
 import os
-import random
 
 from dotenv import load_dotenv
 
@@ -85,8 +84,13 @@ async def main():
 
         # Track statistics
         episode_results = []
-        challenge_counts = {"tw-simple": 0, "tw-cooking": 0, "tw-coin_collector": 0, "tw-treasure_hunter": 0}
-        
+        challenge_counts = {
+            "tw-simple": 0,
+            "tw-cooking": 0,
+            "tw-coin_collector": 0,
+            "tw-treasure_hunter": 0,
+        }
+
         for episode_num in range(num_episodes):
             if challenge_to_test:
                 # Override config to test specific challenge
@@ -95,7 +99,7 @@ async def main():
             item = await env.get_next_item()
             challenge_name = item["challenge_name"]
             challenge_counts[challenge_name] += 1
-            
+
             logger.info(f"\n===== Episode {episode_num + 1}/{num_episodes} =====")
             logger.info(f"Using game: {item}")
 
@@ -137,54 +141,74 @@ async def main():
                     outcome_str = "Win"
                 elif scores > 0:
                     outcome_str = "Partial Success"
-                    
+
                 moves = metadata.get("moves", 0)
-                logger.info(f"Result: {outcome_str}, Score: {scores:.2f}, Moves: {moves}")
-                
+                logger.info(
+                    f"Result: {outcome_str}, Score: {scores:.2f}, Moves: {moves}"
+                )
+
                 # Collect statistics
-                episode_results.append({
-                    "episode": episode_num + 1,
-                    "challenge": challenge_name,
-                    "score": scores,
-                    "won": metadata.get("won", False),
-                    "moves": moves,
-                    "difficulty": item.get("settings", {})
-                })
+                episode_results.append(
+                    {
+                        "episode": episode_num + 1,
+                        "challenge": challenge_name,
+                        "score": scores,
+                        "won": metadata.get("won", False),
+                        "moves": moves,
+                        "difficulty": item.get("settings", {}),
+                    }
+                )
             else:
                 logger.error("Trajectory collection did not return a ScoredDataItem.")
-                episode_results.append({
-                    "episode": episode_num + 1,
-                    "challenge": challenge_name,
-                    "score": 0.0,
-                    "won": False,
-                    "moves": 0,
-                    "difficulty": item.get("settings", {})
-                })
-        
+                episode_results.append(
+                    {
+                        "episode": episode_num + 1,
+                        "challenge": challenge_name,
+                        "score": 0.0,
+                        "won": False,
+                        "moves": 0,
+                        "difficulty": item.get("settings", {}),
+                    }
+                )
+
         # Print overall statistics
         logger.info("\n" + "=" * 60)
         logger.info("OVERALL RESULTS SUMMARY")
         logger.info("=" * 60)
         logger.info(f"Total episodes: {num_episodes}")
         logger.info(f"Challenge distribution: {challenge_counts}")
-        
+
         # Calculate win rates per challenge
         for challenge in challenge_counts:
-            challenge_episodes = [ep for ep in episode_results if ep["challenge"] == challenge]
+            challenge_episodes = [
+                ep for ep in episode_results if ep["challenge"] == challenge
+            ]
             if challenge_episodes:
                 wins = sum(1 for ep in challenge_episodes if ep["won"])
-                avg_score = sum(ep["score"] for ep in challenge_episodes) / len(challenge_episodes)
-                avg_moves = sum(ep["moves"] for ep in challenge_episodes) / len(challenge_episodes)
+                avg_score = sum(ep["score"] for ep in challenge_episodes) / len(
+                    challenge_episodes
+                )
+                avg_moves = sum(ep["moves"] for ep in challenge_episodes) / len(
+                    challenge_episodes
+                )
                 logger.info(f"\n{challenge}:")
                 logger.info(f"  Episodes: {len(challenge_episodes)}")
-                logger.info(f"  Win rate: {wins}/{len(challenge_episodes)} ({100*wins/len(challenge_episodes):.1f}%)")
+                logger.info(
+                    f"  Win rate: {wins}/{len(challenge_episodes)} ({100*wins/len(challenge_episodes):.1f}%)"
+                )
                 logger.info(f"  Avg score: {avg_score:.2f}")
                 logger.info(f"  Avg moves: {avg_moves:.1f}")
-        
+
         # Overall stats
         total_wins = sum(1 for ep in episode_results if ep["won"])
-        total_avg_score = sum(ep["score"] for ep in episode_results) / len(episode_results) if episode_results else 0
-        logger.info(f"\nOverall win rate: {total_wins}/{len(episode_results)} ({100*total_wins/len(episode_results):.1f}%)")
+        total_avg_score = (
+            sum(ep["score"] for ep in episode_results) / len(episode_results)
+            if episode_results
+            else 0
+        )
+        logger.info(
+            f"\nOverall win rate: {total_wins}/{len(episode_results)} ({100*total_wins/len(episode_results):.1f}%)"
+        )
         logger.info(f"Overall avg score: {total_avg_score:.2f}")
 
     except Exception as e:
