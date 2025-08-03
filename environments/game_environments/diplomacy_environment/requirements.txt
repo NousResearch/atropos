@@ -1,0 +1,11 @@
+# Requirements for minimal Diplomacy environment
+
+# Core dependencies
+httpx>=0.24.0
+pydantic>=2.0.0
+numpy>=1.24.0
+
+# AI_Diplomacy dependencies
+tornado>=6.0
+ujson>=5.0
+websockets>=10.0

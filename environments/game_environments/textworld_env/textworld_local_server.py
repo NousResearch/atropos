@@ -49,7 +49,7 @@ async def main():
     # Configure server - using same model as blackjack example
     server_configs = [
         APIServerConfig(
-            model_name="gpt-4.1-nano",
+            model_name="gpt-4.1",
             base_url="https://api.openai.com/v1",
             api_key=os.getenv("OPENAI_API_KEY"),
             num_requests_for_eval=0,
