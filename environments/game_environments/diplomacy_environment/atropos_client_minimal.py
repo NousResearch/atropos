@@ -36,7 +36,10 @@ class AtroposClientMinimal(BaseModelClient):
         server_config: Dict,
     ):
         super().__init__(model_name)
-        self.server_url = server_config.get("base_url", "http://localhost:8000")
+        self.server_config = server_config  # Store for later use
+        # Remove trailing /v1 if present to avoid double v1 path
+        base_url = server_config.get("base_url", "http://localhost:8000")
+        self.server_url = base_url.rstrip("/v1")
         self.actual_model = server_config.get("model_name", "training-policy")
         self.client = httpx.AsyncClient(timeout=60.0)
 
@@ -78,6 +81,12 @@ class AtroposClientMinimal(BaseModelClient):
                 {"role": "user", "content": prompt},
             ]
 
+            # Add API key header if provided
+            headers = {}
+            api_key = self.server_config.get("api_key")
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+
             response = await self.client.post(
                 f"{self.server_url}/v1/chat/completions",
                 json={
@@ -86,6 +95,7 @@ class AtroposClientMinimal(BaseModelClient):
                     "temperature": temperature,
                     "max_tokens": 2000,
                 },
+                headers=headers,
             )
             response.raise_for_status()
 
@@ -191,19 +201,34 @@ class AtroposClientMinimal(BaseModelClient):
         await self.client.aclose()
 
 
-def register_atropos_models(server_config: Dict):
+def register_atropos_models(server_config):
     """
     Register AtroposClientMinimal with AI_Diplomacy's model loading system.
+
+    Args:
+        server_config: Either a dict or an APIServerConfig object
     """
     from ai_diplomacy import clients
 
+    # Convert APIServerConfig to dict if needed
+    if hasattr(server_config, "__dict__"):
+        config_dict = {
+            "model_name": server_config.model_name,
+            "base_url": server_config.base_url,
+            "api_key": server_config.api_key,
+        }
+    else:
+        config_dict = server_config
+
     original_load = clients.load_model_client
 
-    def load_model_client_with_atropos(model_id: str) -> BaseModelClient:
+    def load_model_client_with_atropos(
+        model_id: str, prompts_dir: Optional[str] = None
+    ) -> BaseModelClient:
         if model_id.startswith("atropos-"):
             # Create our minimal proxy client
             logger.info(f"Creating AtroposClientMinimal for {model_id}")
-            return AtroposClientMinimal(model_id, server_config)
+            return AtroposClientMinimal(model_id, config_dict)
         else:
             # Use original loader for other models
             return original_load(model_id)

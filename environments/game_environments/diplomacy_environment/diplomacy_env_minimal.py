@@ -132,7 +132,18 @@ class DiplomacyEnvMinimal(BaseEnv):
         try:
             from atropos_client_minimal import register_atropos_models
 
-            register_atropos_models(self.server_configs[0])
+            # Get the first server config from the server manager
+            if (
+                hasattr(self, "server")
+                and hasattr(self.server, "servers")
+                and self.server.servers
+            ):
+                server_config = self.server.servers[0].config
+                register_atropos_models(server_config)
+            else:
+                logger.error(
+                    "No server configuration available for AtroposClient registration"
+                )
             logger.info("Registered AtroposClient proxy")
         except Exception as e:
             logger.error(f"Failed to register AtroposClient: {e}")
@@ -285,14 +296,26 @@ class DiplomacyEnvMinimal(BaseEnv):
         # Configure game
         game_output_path = os.path.join(self.config.game_logs_dir, f"{game_id}.json")
 
-        # Build models list - training power uses atropos, others use LLMs
+        # Build models list - training power uses atropos, others use diverse LLMs
         models = []
+        # Mix of OpenAI and Anthropic models for variety
+        opponent_models = [
+            "gpt-4o-mini",  # OpenAI
+            "anthropic:claude-sonnet-4-20250514",  # Anthropic Sonnet
+            "gpt-4o-mini",  # OpenAI
+            "anthropic:claude-opus-4-20250514",  # Anthropic Opus
+            "gpt-4o-mini",  # OpenAI
+            "anthropic:claude-sonnet-4-20250514",  # Anthropic Sonnet
+        ]
+        opponent_idx = 0
+
         for power in POWERS:
             if power == self.config.training_power:
                 models.append("atropos-training-policy")
             else:
-                # Use a simple LLM for other powers
-                models.append("gpt-4o-mini")
+                # Assign from opponent models
+                models.append(opponent_models[opponent_idx])
+                opponent_idx += 1
 
         # Save original argv
         original_argv = sys.argv
@@ -319,8 +342,10 @@ class DiplomacyEnvMinimal(BaseEnv):
             await lm_game.main()
 
             # Load and parse results
-            if os.path.exists(game_output_path):
-                with open(game_output_path, "r") as f:
+            # The output path is actually a directory, the game file is inside
+            actual_game_file = os.path.join(game_output_path, "lmvsgame.json")
+            if os.path.exists(actual_game_file):
+                with open(actual_game_file, "r") as f:
                     saved_game = json.load(f)
 
                 # Extract key info
@@ -342,7 +367,7 @@ class DiplomacyEnvMinimal(BaseEnv):
 
                 return result
             else:
-                logger.error(f"Game output not found: {game_output_path}")
+                logger.error(f"Game output not found: {actual_game_file}")
                 return None
 
         finally:

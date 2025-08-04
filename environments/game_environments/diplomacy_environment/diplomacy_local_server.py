@@ -1,220 +1,186 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
-Local test server for Diplomacy minimal environment
+Local test server for the minimal Diplomacy environment.
 
-This script:
-1. Starts a mock Atropos policy server
-2. Runs a quick test game
-3. Useful for development and testing
+This script runs the full AI_Diplomacy game with real OpenAI models
+to test the AtroposClient proxy integration.
 """
 
 import asyncio
-import json
 import logging
-import time
+import os
+
+from dotenv import load_dotenv
+
+from atroposlib.envs.base import APIServerConfig, EvalHandlingEnum
+from environments.game_environments.diplomacy_environment.diplomacy_env_minimal import (
+    DiplomacyEnvMinimal,
+    DiplomacyEnvMinimalConfig,
+)
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class MockPolicyServer:
-    """Simple mock server that returns random but valid Diplomacy responses."""
+async def main():
+    """Run Diplomacy games for testing the minimal environment."""
+    logger.info("Starting Diplomacy minimal environment local test runner")
 
-    def __init__(self, port=8000):
-        self.port = port
-        self.app = None
-        self.runner = None
-
-    async def start(self):
-        """Start the mock server."""
-        from aiohttp import web
-
-        self.app = web.Application()
-        self.app.router.add_post("/v1/chat/completions", self.handle_chat_completion)
-        self.app.router.add_post("/v1/completions", self.handle_completion)
-
-        self.runner = web.AppRunner(self.app)
-        await self.runner.setup()
-        site = web.TCPSite(self.runner, "localhost", self.port)
-        await site.start()
-        logger.info(f"Mock policy server started on port {self.port}")
-
-    async def stop(self):
-        """Stop the mock server."""
-        if self.runner:
-            await self.runner.cleanup()
-
-    async def handle_chat_completion(self, request):
-        """Handle chat completion requests."""
-        data = await request.json()
-
-        # Extract the last user message
-        messages = data.get("messages", [])
-        last_message = messages[-1]["content"] if messages else ""
-
-        # Generate a simple response based on the request type
-        response_text = self._generate_response(last_message)
-
-        # Return OpenAI-compatible response
-        from aiohttp import web
-
-        return web.json_response(
-            {
-                "id": f"chatcmpl-{int(time.time())}",
-                "object": "chat.completion",
-                "created": int(time.time()),
-                "model": data.get("model", "mock-model"),
-                "choices": [
-                    {
-                        "index": 0,
-                        "message": {"role": "assistant", "content": response_text},
-                        "finish_reason": "stop",
-                    }
-                ],
-                "usage": {
-                    "prompt_tokens": 10,
-                    "completion_tokens": 20,
-                    "total_tokens": 30,
-                },
-            }
+    # Check for OpenAI API key
+    if not os.getenv("OPENAI_API_KEY"):
+        logger.error(
+            "OPENAI_API_KEY not found. Please set it in your environment or .env file"
         )
+        return
 
-    async def handle_completion(self, request):
-        """Handle completion requests."""
-        data = await request.json()
-        prompt = data.get("prompt", "")
+    # Configure environment - using real OpenAI model
+    env_config = DiplomacyEnvMinimalConfig(
+        tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+        group_size=2,  # Run 2 parallel games
+        use_wandb=False,
+        wandb_name="diplomacy_minimal_local_test",
+        max_num_workers=1,
+        rollout_server_url="http://localhost:8000",
+        total_steps=1,
+        batch_size=1,
+        steps_per_eval=0,
+        max_token_length=4096,
+        inference_weight=1.0,
+        data_path_to_save_groups=None,
+        eval_handling=EvalHandlingEnum.NONE,
+        eval_limit_ratio=0.0,
+        max_game_turns=5,  # Short games for testing
+        training_power="FRANCE",  # Which power we're training
+        include_messages=True,  # Include messages for debugging
+        eval_episodes=0,
+        start_diplomacy_server=True,  # Let the env start the server
+        save_game_logs=True,
+        game_logs_dir="./test_game_logs",
+    )
 
-        response_text = self._generate_response(prompt)
-
-        from aiohttp import web
-
-        return web.json_response(
-            {
-                "id": f"cmpl-{int(time.time())}",
-                "object": "text_completion",
-                "created": int(time.time()),
-                "model": data.get("model", "mock-model"),
-                "choices": [
-                    {
-                        "text": response_text,
-                        "index": 0,
-                        "logprobs": None,
-                        "finish_reason": "stop",
-                    }
-                ],
-                "usage": {
-                    "prompt_tokens": 10,
-                    "completion_tokens": 20,
-                    "total_tokens": 30,
-                },
-            }
+    # Configure server - using gpt-4.1 as suggested
+    server_configs = [
+        APIServerConfig(
+            model_name="gpt-4.1",  # Using the OpenAI model directly
+            base_url="https://api.openai.com/v1",
+            api_key=os.getenv("OPENAI_API_KEY"),
+            num_requests_for_eval=0,
         )
+    ]
 
-    def _generate_response(self, prompt: str) -> str:
-        """Generate a mock response based on the prompt."""
-        prompt_lower = prompt.lower()
-
-        if "orders" in prompt_lower:
-            # Return empty orders (AI_Diplomacy will use defaults)
-            return json.dumps(
-                {
-                    "orders": {},
-                    "explanations": {"general": "Mock server - using default orders"},
-                }
-            )
-        elif "message" in prompt_lower or "negotiate" in prompt_lower:
-            # Return no messages
-            return json.dumps(
-                {
-                    "messages": [],
-                    "explanations": {"general": "Mock server - no negotiations"},
-                }
-            )
-        else:
-            return "Mock response from test server"
-
-
-async def run_test_game():
-    """Run a quick test game with the mock server."""
-    # Start mock server
-    server = MockPolicyServer(port=8000)
-    await server.start()
+    logger.info("Using OpenAI gpt-4.1 for Diplomacy test")
+    logger.debug(f"Env Config: {env_config}")
+    logger.debug(f"Server Configs: {server_configs}")
 
     try:
-        # Import and run the environment
-        from diplomacy_env_minimal import DiplomacyEnvMinimal, DiplomacyEnvMinimalConfig
-
-        from atroposlib.envs.base import APIServerConfig
-
-        # Create minimal config
-        config = DiplomacyEnvMinimalConfig(
-            tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
-            group_size=2,  # Just 2 parallel games for testing
-            max_game_turns=3,  # Very short games
-            start_diplomacy_server=False,  # We'll start it manually
-            save_game_logs=True,
+        env = DiplomacyEnvMinimal(
+            config=env_config,
+            server_configs=server_configs,
+            slurm=False,
+            testing=False,
         )
+    except Exception as e:
+        logger.exception(f"Failed to initialize DiplomacyEnvMinimal: {e}")
+        return
 
-        server_configs = [
-            APIServerConfig(
-                model_name="training-policy",
-                base_url="http://localhost:8000/v1",
-                api_key="x",
-            )
-        ]
-
-        # Create environment
-        env = DiplomacyEnvMinimal(config, server_configs)
+    logger.info("Running test games")
+    try:
         await env.setup()
 
-        # Run one trajectory collection
-        item = await env.get_next_item()
-        result = await env.collect_trajectory(item)
+        # Get number of episodes from command line or default
+        import sys
 
-        if result[0]:
-            logger.info(
-                f"Successfully collected trajectory with score: {result[0]['scores']}"
+        num_episodes = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+
+        # Track statistics
+        episode_results = []
+
+        for episode_num in range(num_episodes):
+            logger.info(f"\n===== Episode {episode_num + 1}/{num_episodes} =====")
+
+            item = await env.get_next_item()
+            logger.info(f"Game ID: {item['game_id']}, Seed: {item['seed']}")
+
+            # Collect trajectory (will run group_size parallel games)
+            scored_item, _ = await env.collect_trajectory(item)
+
+            if scored_item:
+                score = scored_item.scores
+                logger.info(f"Trajectory collected with score: {score:.2f}")
+
+                # Get game outcomes from buffer
+                if env.game_outcomes_buffer:
+                    latest_outcomes = env.game_outcomes_buffer[-env.config.group_size :]
+                    for i, outcome in enumerate(latest_outcomes):
+                        logger.info(
+                            f"  Game {i}: Score={outcome['score']:.2f}, "
+                            f"Winner={outcome['winner']}, "
+                            f"Turns={outcome['turns']}, "
+                            f"Centers={outcome['final_centers'].get(env.config.training_power, 0)}"
+                        )
+
+                episode_results.append(
+                    {
+                        "episode": episode_num + 1,
+                        "score": score,
+                        "outcomes": latest_outcomes if env.game_outcomes_buffer else [],
+                    }
+                )
+            else:
+                logger.error("Failed to collect trajectory")
+                episode_results.append(
+                    {
+                        "episode": episode_num + 1,
+                        "score": 0.0,
+                        "outcomes": [],
+                    }
+                )
+
+        # Print overall statistics
+        logger.info("\n" + "=" * 60)
+        logger.info("OVERALL RESULTS SUMMARY")
+        logger.info("=" * 60)
+        logger.info(f"Total episodes: {num_episodes}")
+        logger.info(f"Group size: {env.config.group_size} games per episode")
+        logger.info(f"Training power: {env.config.training_power}")
+
+        # Calculate statistics
+        if episode_results:
+            avg_score = sum(ep["score"] for ep in episode_results) / len(
+                episode_results
             )
-        else:
-            logger.error("Failed to collect trajectory")
+            logger.info(f"\nAverage trajectory score: {avg_score:.2f}")
 
-    finally:
-        await server.stop()
+            # Count wins
+            total_games = 0
+            wins = 0
+            for ep in episode_results:
+                for outcome in ep["outcomes"]:
+                    total_games += 1
+                    if outcome["winner"] == env.config.training_power:
+                        wins += 1
 
+            if total_games > 0:
+                logger.info(
+                    f"Win rate: {wins}/{total_games} ({100*wins/total_games:.1f}%)"
+                )
 
-def main():
-    """Main entry point."""
-    import argparse
+                # Average supply centers
+                total_centers = sum(
+                    outcome["final_centers"].get(env.config.training_power, 0)
+                    for ep in episode_results
+                    for outcome in ep["outcomes"]
+                )
+                avg_centers = total_centers / total_games
+                logger.info(f"Average final supply centers: {avg_centers:.1f}")
 
-    parser = argparse.ArgumentParser(
-        description="Diplomacy minimal environment test server"
-    )
-    parser.add_argument("--quick", action="store_true", help="Run a quick test game")
-    parser.add_argument(
-        "--server-only", action="store_true", help="Just run the mock server"
-    )
-    parser.add_argument("--port", type=int, default=8000, help="Port for mock server")
+        logger.info("\nTest completed successfully!")
 
-    args = parser.parse_args()
-
-    if args.server_only:
-        # Just run the server
-        async def run_server():
-            server = MockPolicyServer(port=args.port)
-            await server.start()
-            logger.info(
-                f"Mock server running on port {args.port}. Press Ctrl+C to stop."
-            )
-            try:
-                await asyncio.Event().wait()
-            except KeyboardInterrupt:
-                await server.stop()
-
-        asyncio.run(run_server())
-    else:
-        # Run test game
-        asyncio.run(run_test_game())
+    except Exception as e:
+        logger.exception(f"An error occurred during test: {e}")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
