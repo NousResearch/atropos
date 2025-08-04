@@ -86,7 +86,7 @@ async def main():
             base_url="https://api.openai.com/v1",
             api_key=os.getenv("OPENAI_API_KEY"),
             num_requests_for_eval=0,
-        )
+        ),
     ]
 
     logger.info("Using OpenAI gpt-4.1 for Diplomacy test")
