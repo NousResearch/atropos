@@ -23,6 +23,13 @@ from atroposlib.envs.base import APIServerConfig, BaseEnv, BaseEnvConfig, Scored
 from atroposlib.type_definitions import Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
+from queue_manager import (
+    PolicyRequest,
+    PolicyResponse,
+    QueueManager,
+    get_queue_manager,
+)
+
 # Add AI_Diplomacy to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "AI_Diplomacy"))
 
@@ -84,6 +91,10 @@ class DiplomacyEnvMinimal(BaseEnv):
         self.game_server_process: Optional[subprocess.Popen] = None
         self.game_outcomes_buffer: List[Dict] = []
         self.eval_metrics_custom: List[Tuple[str, float]] = []
+        
+        # Queue manager for handling requests
+        self.queue_manager = get_queue_manager()
+        self.active_games: Dict[str, Dict] = {}  # Track active games and their clients
 
         # Ensure game logs directory exists
         if config.save_game_logs:
@@ -139,33 +150,89 @@ class DiplomacyEnvMinimal(BaseEnv):
         """Set up the environment."""
         logger.info(f"Setting up {self.name} environment")
 
-        # Register our AtroposClient proxy
-        await self._register_atropos_client()
-
         # Start Diplomacy server if requested
         if self.config.start_diplomacy_server:
             await self._start_diplomacy_server()
+            
+        # Start queue polling task
+        asyncio.create_task(self._poll_request_queues())
 
-    async def _register_atropos_client(self):
-        """Register AtroposClient with AI_Diplomacy."""
+    async def _poll_request_queues(self):
+        """Poll request queues and handle policy requests."""
+        while True:
+            try:
+                # Check all active game queues
+                for game_id in list(self.active_games.keys()):
+                    queue_pair = self.queue_manager.get_queue_pair(game_id)
+                    if not queue_pair:
+                        continue
+                        
+                    # Non-blocking check for requests
+                    try:
+                        request = queue_pair.request_queue.get_nowait()
+                        # Handle request asynchronously
+                        asyncio.create_task(self._handle_policy_request(request))
+                    except asyncio.QueueEmpty:
+                        pass
+                        
+                # Small delay to avoid busy waiting
+                await asyncio.sleep(0.01)
+                
+            except Exception as e:
+                logger.error(f"Error in queue polling: {e}")
+                await asyncio.sleep(1)  # Back off on error
+                
+    async def _handle_policy_request(self, request: PolicyRequest):
+        """Handle a single policy request by sampling from SGLang."""
         try:
-            from atropos_client_minimal import register_atropos_models
-
-            # Get the first server config from the server manager
-            if (
-                hasattr(self, "server")
-                and hasattr(self.server, "servers")
-                and self.server.servers
-            ):
-                server_config = self.server.servers[0].config
-                register_atropos_models(server_config)
-            else:
-                logger.error(
-                    "No server configuration available for AtroposClient registration"
+            logger.info(f"Handling request {request.request_id} for {request.power} in game {request.game_id}")
+            
+            # Build messages from trajectory + current prompt
+            messages = [{"role": "system", "content": self.system_prompt}]
+            
+            # Add trajectory history
+            for interaction in request.trajectory:
+                messages.append({"role": "user", "content": interaction["prompt"]})
+                messages.append({"role": "assistant", "content": interaction["response"]})
+                
+            # Add current prompt
+            messages.append({"role": "user", "content": request.prompt})
+            
+            # Sample from policy using SGLang
+            async with self.server.dedicated_server() as server:
+                response = await server.chat_completion(
+                    messages=messages,
+                    n=1,  # Could do best-of-n here
+                    temperature=request.temperature,
+                    max_tokens=2000,
                 )
-            logger.info("Registered AtroposClient proxy")
+                
+            response_text = response.choices[0].message.content.strip()
+            
+            # Create response with any metadata we want
+            policy_response = PolicyResponse(
+                request_id=request.request_id,
+                response=response_text,
+                metadata={
+                    "power": request.power,
+                    "phase": request.phase,
+                    # Could add scores, rewards, etc. here
+                }
+            )
+            
+            # Put response back on queue
+            await self.queue_manager.put_response(request.game_id, policy_response)
+            logger.debug(f"Sent response for request {request.request_id}")
+            
         except Exception as e:
-            logger.error(f"Failed to register AtroposClient: {e}")
+            logger.error(f"Error handling policy request: {e}")
+            # Send error response
+            error_response = PolicyResponse(
+                request_id=request.request_id,
+                response="Error: Failed to generate response",
+                metadata={"error": str(e)}
+            )
+            await self.queue_manager.put_response(request.game_id, error_response)
 
     async def _start_diplomacy_server(self):
         """Start the AI_Diplomacy game server."""
@@ -252,6 +319,19 @@ class DiplomacyEnvMinimal(BaseEnv):
         Run a single Diplomacy game and return scored trajectory.
         """
         try:
+            # Set up queues for this game
+            queue_pair = await self.queue_manager.create_game_queues(game_id)
+            
+            # Register AtroposClient proxy for this game
+            from atropos_client_minimal import register_atropos_models
+            game_clients = register_atropos_models(game_id, self.queue_manager)
+            
+            # Track this active game
+            self.active_games[game_id] = {
+                "queue_pair": queue_pair,
+                "clients": game_clients,
+                "start_time": time.time()
+            }
             # Run game using AI_Diplomacy
             game_result = await self._run_diplomacy_game(game_id, seed, trajectory_id)
 
@@ -263,15 +343,46 @@ class DiplomacyEnvMinimal(BaseEnv):
             score = self._calculate_score(game_result, self.config.training_power)
 
             # Extract trajectory from our client
-            # In a full implementation, we'd get actual game interactions here
-            messages = [
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": f"Playing Diplomacy game {game_id}"},
-                {
-                    "role": "assistant",
-                    "content": f"Game completed with score {score:.2f}",
-                },
-            ]
+            game_info = self.active_games.get(game_id)
+            client = None
+            if game_info and "clients" in game_info:
+                # Find the client for our training power
+                for model_id, c in game_info["clients"].items():
+                    if c.current_power == self.config.training_power:
+                        client = c
+                        break
+                        
+            if client and client.interactions:
+                # Build conversation from actual game interactions
+                messages = [{"role": "system", "content": self.system_prompt}]
+                
+                for interaction in client.interactions:
+                    # Add the prompt as user message
+                    messages.append({
+                        "role": "user", 
+                        "content": interaction["prompt"]
+                    })
+                    # Add the response as assistant message
+                    messages.append({
+                        "role": "assistant",
+                        "content": interaction["response"]
+                    })
+                
+                logger.info(f"Collected {len(client.interactions)} interactions for {self.config.training_power}")
+                
+                # Clear interactions for next game
+                client.clear_interactions()
+            else:
+                # Fallback if no client found or no interactions
+                logger.warning(f"No client or interactions found for {self.config.training_power}")
+                messages = [
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": f"Playing Diplomacy game {game_id}"},
+                    {
+                        "role": "assistant",
+                        "content": f"Game completed with score {score:.2f}",
+                    },
+                ]
 
             # Tokenize
             tokenization_result = tokenize_for_trainer(
@@ -303,6 +414,11 @@ class DiplomacyEnvMinimal(BaseEnv):
         except Exception as e:
             logger.error(f"Error in game {game_id}: {e}", exc_info=True)
             return None, None
+        finally:
+            # Clean up game resources
+            if game_id in self.active_games:
+                del self.active_games[game_id]
+            await self.queue_manager.remove_game_queues(game_id)
 
     async def _run_diplomacy_game(
         self, game_id: str, seed: int, trajectory_id: int = 0

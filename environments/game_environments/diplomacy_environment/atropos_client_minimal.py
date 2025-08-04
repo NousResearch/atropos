@@ -1,10 +1,11 @@
 """
 Minimal AtroposClient - LLM Proxy for AI_Diplomacy Integration
 
-This is a simplified version that:
+This is a queue-based proxy that:
 - Intercepts LLM requests from AI_Diplomacy
-- Forwards them to the Atropos policy server
-- Collects trajectory data for training
+- Puts them on a queue for the environment to process
+- Waits for responses from the environment
+- Returns responses to AI_Diplomacy
 """
 
 import asyncio
@@ -12,9 +13,8 @@ import json
 import logging
 import os
 import sys
+import uuid
 from typing import Dict, List, Optional
-
-import httpx
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "AI_Diplomacy"))
 
@@ -22,41 +22,45 @@ from environments.game_environments.diplomacy_environment.AI_Diplomacy.ai_diplom
     BaseModelClient,
 )
 
+from queue_manager import (
+    PolicyRequest,
+    PolicyResponse,
+    QueueManager,
+    get_queue_manager,
+)
+
 logger = logging.getLogger(__name__)
 
 
 class AtroposClientMinimal(BaseModelClient):
     """
-    Minimal proxy client that forwards LLM requests to Atropos policy server.
+    Queue-based proxy client that forwards LLM requests through queues.
     """
 
     def __init__(
         self,
         model_name: str,
-        server_config: Dict,
+        game_id: str,
+        queue_manager: Optional[QueueManager] = None,
     ):
         super().__init__(model_name)
-        self.server_config = server_config  # Store for later use
-        # Remove trailing /v1 if present to avoid double v1 path
-        base_url = server_config.get("base_url", "http://localhost:8000")
-        self.server_url = base_url.rstrip("/v1")
-        self.actual_model = server_config.get("model_name", "training-policy")
-        self.client = httpx.AsyncClient(timeout=60.0)
-
+        self.game_id = game_id
+        self.queue_manager = queue_manager or get_queue_manager()
+        
         # Track interactions for trajectory collection
         self.interactions: List[Dict] = []
         self.current_power: Optional[str] = None
         self.current_phase: Optional[str] = None
 
         logger.info(
-            f"Initialized AtroposClientMinimal for {model_name} -> {self.actual_model}"
+            f"Initialized AtroposClientMinimal for {model_name} in game {game_id}"
         )
 
     async def generate_response(
         self, prompt: str, temperature: float = 0.0, inject_random_seed: bool = True
     ) -> str:
         """
-        Forward prompt to Atropos server and return response.
+        Put request on queue and wait for response from environment.
         This is the main method AI_Diplomacy calls for all LLM interactions.
         """
         # Infer context from prompt
@@ -72,35 +76,30 @@ class AtroposClientMinimal(BaseModelClient):
         logger.debug(f"Generating response for {self.current_power}: {task_type}")
 
         try:
-            # Use chat completion API for better compatibility
-            messages = [
-                {
-                    "role": "system",
-                    "content": f"You are playing Diplomacy as {self.current_power}.",
-                },
-                {"role": "user", "content": prompt},
-            ]
-
-            # Add API key header if provided
-            headers = {}
-            api_key = self.server_config.get("api_key")
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
-
-            response = await self.client.post(
-                f"{self.server_url}/v1/chat/completions",
-                json={
-                    "model": self.actual_model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": 2000,
-                },
-                headers=headers,
+            # Create policy request
+            request_id = str(uuid.uuid4())
+            request = PolicyRequest(
+                request_id=request_id,
+                game_id=self.game_id,
+                power=self.current_power or "UNKNOWN",
+                phase=self.current_phase or "UNKNOWN",
+                prompt=prompt,
+                temperature=temperature,
+                trajectory=self.interactions.copy()  # Send current trajectory
             )
-            response.raise_for_status()
-
-            result = response.json()
-            response_text = result["choices"][0]["message"]["content"]
+            
+            # Put request on queue
+            await self.queue_manager.put_request(self.game_id, request)
+            logger.debug(f"Put request {request_id} on queue for game {self.game_id}")
+            
+            # Wait for response
+            response = await self.queue_manager.get_response(self.game_id)
+            
+            # Verify response matches our request
+            if response.request_id != request_id:
+                logger.warning(f"Response ID mismatch: expected {request_id}, got {response.request_id}")
+            
+            response_text = response.response
 
             # Track interaction
             self.interactions.append(
@@ -110,13 +109,14 @@ class AtroposClientMinimal(BaseModelClient):
                     "task_type": task_type,
                     "prompt": prompt,
                     "response": response_text,
+                    "metadata": response.metadata  # Store any additional info from environment
                 }
             )
 
             return response_text
 
-        except httpx.ConnectError:
-            logger.error(f"Failed to connect to Atropos server at {self.server_url}")
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout waiting for response from environment")
             return self._generate_fallback_response(prompt)
         except Exception as e:
             logger.error(f"Error generating response: {e}")
@@ -196,45 +196,43 @@ class AtroposClientMinimal(BaseModelClient):
         self.current_power = None
         self.current_phase = None
 
-    async def close(self):
-        """Clean up resources."""
-        await self.client.aclose()
 
-
-def register_atropos_models(server_config):
+def register_atropos_models(game_id: str, queue_manager: Optional[QueueManager] = None):
     """
-    Register AtroposClientMinimal with AI_Diplomacy's model loading system.
+    Register AtroposClientMinimal with AI_Diplomacy's model loading system for a specific game.
 
     Args:
-        server_config: Either a dict or an APIServerConfig object
+        game_id: The game ID for this instance
+        queue_manager: Optional queue manager (uses global if not provided)
     """
     from ai_diplomacy import clients
 
-    # Convert APIServerConfig to dict if needed
-    if hasattr(server_config, "__dict__"):
-        config_dict = {
-            "model_name": server_config.model_name,
-            "base_url": server_config.base_url,
-            "api_key": server_config.api_key,
-        }
-    else:
-        config_dict = server_config
+    # Save original function if not already saved
+    if not hasattr(clients, '_original_load_model_client'):
+        clients._original_load_model_client = clients.load_model_client
 
-    original_load = clients.load_model_client
+    # Store the client instances for this game
+    game_clients = {}
 
     def load_model_client_with_atropos(
         model_id: str, prompts_dir: Optional[str] = None
     ) -> BaseModelClient:
+        logger.info(f"load_model_client_with_atropos called with model_id: {model_id}")
         if model_id.startswith("atropos-"):
-            # Create our minimal proxy client
-            logger.info(f"Creating AtroposClientMinimal for {model_id}")
-            return AtroposClientMinimal(model_id, config_dict)
+            # Create our queue-based proxy client
+            logger.info(f"Creating AtroposClientMinimal for {model_id} in game {game_id}")
+            client = AtroposClientMinimal(model_id, game_id, queue_manager)
+            game_clients[model_id] = client
+            return client
         else:
             # Use original loader for other models
-            return original_load(model_id)
+            logger.info(f"Falling back to original loader for {model_id}")
+            return clients._original_load_model_client(model_id, prompts_dir)
 
     clients.load_model_client = load_model_client_with_atropos
-    logger.info("Registered AtroposClientMinimal with AI_Diplomacy")
+    logger.info(f"Registered AtroposClientMinimal with AI_Diplomacy for game {game_id}")
+    
+    return game_clients  # Return dict of created clients for this game
 
 
 if __name__ == "__main__":
