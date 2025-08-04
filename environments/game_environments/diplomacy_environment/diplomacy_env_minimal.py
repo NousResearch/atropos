@@ -22,11 +22,12 @@ from typing import Dict, List, Optional, Tuple
 from atroposlib.envs.base import APIServerConfig, BaseEnv, BaseEnvConfig, ScoredDataItem
 from atroposlib.type_definitions import Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
-
-from queue_manager import (
+from environments.game_environments.diplomacy_environment.atropos_client_minimal import (
+    register_atropos_models,
+)
+from environments.game_environments.diplomacy_environment.queue_manager import (
     PolicyRequest,
     PolicyResponse,
-    QueueManager,
     get_queue_manager,
 )
 
@@ -53,10 +54,10 @@ class DiplomacyEnvMinimalConfig(BaseEnvConfig):
 
     env_name: str = "diplomacy_minimal"
 
-    # Game settings
-    max_game_turns: int = 10  # Keep games short for faster iteration
-    training_power: str = "FRANCE"  # Which power the RL agent controls
-    total_steps: int = 10  # Low for initial testing
+    # Game settings (minimal implementation, no randomisation stuff)
+    max_game_turns: int = 10
+    training_power: str = "FRANCE"
+    total_steps: int = 10
 
     # Scoring
     supply_center_weight: float = 1.0
@@ -91,16 +92,15 @@ class DiplomacyEnvMinimal(BaseEnv):
         self.game_server_process: Optional[subprocess.Popen] = None
         self.game_outcomes_buffer: List[Dict] = []
         self.eval_metrics_custom: List[Tuple[str, float]] = []
-        
+
         # Queue manager for handling requests
         self.queue_manager = get_queue_manager()
-        self.active_games: Dict[str, Dict] = {}  # Track active games and their clients
+        self.active_games: Dict[str, Dict] = {}
 
         # Ensure game logs directory exists
         if config.save_game_logs:
             Path(config.game_logs_dir).mkdir(exist_ok=True)
 
-        # Simple system prompt for the training agent
         self.system_prompt = (
             f"You are playing Diplomacy as {config.training_power}. "
             "Analyze the game state and respond with your strategy and orders."
@@ -111,7 +111,7 @@ class DiplomacyEnvMinimal(BaseEnv):
         """Initialize default configuration."""
         env_config = DiplomacyEnvMinimalConfig(
             tokenizer_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
-            group_size=4,  # Run 4 parallel games
+            group_size=4,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
             max_token_length=4096,
@@ -150,11 +150,9 @@ class DiplomacyEnvMinimal(BaseEnv):
         """Set up the environment."""
         logger.info(f"Setting up {self.name} environment")
 
-        # Start Diplomacy server if requested
         if self.config.start_diplomacy_server:
             await self._start_diplomacy_server()
-            
-        # Start queue polling task
+
         asyncio.create_task(self._poll_request_queues())
 
     async def _poll_request_queues(self):
@@ -166,7 +164,7 @@ class DiplomacyEnvMinimal(BaseEnv):
                     queue_pair = self.queue_manager.get_queue_pair(game_id)
                     if not queue_pair:
                         continue
-                        
+
                     # Non-blocking check for requests
                     try:
                         request = queue_pair.request_queue.get_nowait()
@@ -174,63 +172,59 @@ class DiplomacyEnvMinimal(BaseEnv):
                         asyncio.create_task(self._handle_policy_request(request))
                     except asyncio.QueueEmpty:
                         pass
-                        
+
                 # Small delay to avoid busy waiting
                 await asyncio.sleep(0.01)
-                
+
             except Exception as e:
                 logger.error(f"Error in queue polling: {e}")
                 await asyncio.sleep(1)  # Back off on error
-                
+
     async def _handle_policy_request(self, request: PolicyRequest):
         """Handle a single policy request by sampling from SGLang."""
         try:
-            logger.info(f"Handling request {request.request_id} for {request.power} in game {request.game_id}")
-            
-            # Build messages from trajectory + current prompt
+            logger.info(
+                f"Handling request {request.request_id} for {request.power} in game {request.game_id}"
+            )
+
             messages = [{"role": "system", "content": self.system_prompt}]
-            
-            # Add trajectory history
+
             for interaction in request.trajectory:
                 messages.append({"role": "user", "content": interaction["prompt"]})
-                messages.append({"role": "assistant", "content": interaction["response"]})
-                
-            # Add current prompt
+                messages.append(
+                    {"role": "assistant", "content": interaction["response"]}
+                )
+
             messages.append({"role": "user", "content": request.prompt})
-            
-            # Sample from policy using SGLang
+
             async with self.server.dedicated_server() as server:
                 response = await server.chat_completion(
                     messages=messages,
-                    n=1,  # Could do best-of-n here
+                    n=1,
                     temperature=request.temperature,
                     max_tokens=2000,
                 )
-                
+
             response_text = response.choices[0].message.content.strip()
-            
-            # Create response with any metadata we want
+
             policy_response = PolicyResponse(
                 request_id=request.request_id,
                 response=response_text,
                 metadata={
                     "power": request.power,
                     "phase": request.phase,
-                    # Could add scores, rewards, etc. here
-                }
+                },
             )
-            
-            # Put response back on queue
+
             await self.queue_manager.put_response(request.game_id, policy_response)
             logger.debug(f"Sent response for request {request.request_id}")
-            
+
         except Exception as e:
             logger.error(f"Error handling policy request: {e}")
-            # Send error response
             error_response = PolicyResponse(
                 request_id=request.request_id,
                 response="Error: Failed to generate response",
-                metadata={"error": str(e)}
+                metadata={"error": str(e)},
             )
             await self.queue_manager.put_response(request.game_id, error_response)
 
@@ -265,12 +259,6 @@ class DiplomacyEnvMinimal(BaseEnv):
     ) -> Tuple[Optional[ScoredDataItem], List[Item]]:
         """
         Run parallel Diplomacy games and collect best trajectory.
-
-        This implements the key RL training pattern:
-        1. Run group_size parallel games with the same seed
-        2. Each game explores different action sequences
-        3. Score each trajectory based on game outcome
-        4. Return the best trajectory for training
         """
         base_game_id = item.get("game_id", f"game-{int(time.time())}")
         seed = item.get("seed", random.randint(0, 1_000_000))
@@ -279,18 +267,15 @@ class DiplomacyEnvMinimal(BaseEnv):
             f"Starting {self.config.group_size} parallel games with seed {seed}"
         )
 
-        # Run parallel games
+        # Run parallel games w/ same seed
         game_tasks = []
         for i in range(self.config.group_size):
             game_id = f"{base_game_id}-{i}"
-            # Use same seed but different trajectory_id to get different rollouts
             task = self._run_single_game(game_id, seed, trajectory_id=i)
             game_tasks.append(task)
 
-        # Wait for all games to complete
         results = await asyncio.gather(*game_tasks, return_exceptions=True)
 
-        # Find best trajectory
         best_score = float("-inf")
         best_trajectory = None
 
@@ -299,7 +284,7 @@ class DiplomacyEnvMinimal(BaseEnv):
                 logger.error(f"Game {i} failed: {result}")
                 continue
 
-            if result and result[0]:  # Check if we got a valid ScoredDataItem
+            if result and result[0]:
                 score = result[0]["scores"]
                 if score > best_score:
                     best_score = score
@@ -319,62 +304,51 @@ class DiplomacyEnvMinimal(BaseEnv):
         Run a single Diplomacy game and return scored trajectory.
         """
         try:
-            # Set up queues for this game
             queue_pair = await self.queue_manager.create_game_queues(game_id)
-            
-            # Register AtroposClient proxy for this game
-            from atropos_client_minimal import register_atropos_models
+
             game_clients = register_atropos_models(game_id, self.queue_manager)
-            
-            # Track this active game
+
             self.active_games[game_id] = {
                 "queue_pair": queue_pair,
                 "clients": game_clients,
-                "start_time": time.time()
+                "start_time": time.time(),
             }
-            # Run game using AI_Diplomacy
+
             game_result = await self._run_diplomacy_game(game_id, seed, trajectory_id)
 
             if not game_result:
                 logger.error(f"Game {game_id} failed to complete")
                 return None, None
 
-            # Calculate score for training power
             score = self._calculate_score(game_result, self.config.training_power)
 
-            # Extract trajectory from our client
             game_info = self.active_games.get(game_id)
             client = None
             if game_info and "clients" in game_info:
-                # Find the client for our training power
-                for model_id, c in game_info["clients"].items():
+                # not using model_id, just using the client for now
+                for _, c in game_info["clients"].items():
                     if c.current_power == self.config.training_power:
                         client = c
                         break
-                        
+
             if client and client.interactions:
-                # Build conversation from actual game interactions
                 messages = [{"role": "system", "content": self.system_prompt}]
-                
+
                 for interaction in client.interactions:
-                    # Add the prompt as user message
-                    messages.append({
-                        "role": "user", 
-                        "content": interaction["prompt"]
-                    })
-                    # Add the response as assistant message
-                    messages.append({
-                        "role": "assistant",
-                        "content": interaction["response"]
-                    })
-                
-                logger.info(f"Collected {len(client.interactions)} interactions for {self.config.training_power}")
-                
-                # Clear interactions for next game
+                    messages.append({"role": "user", "content": interaction["prompt"]})
+                    messages.append(
+                        {"role": "assistant", "content": interaction["response"]}
+                    )
+
+                logger.info(
+                    f"Collected {len(client.interactions)} interactions for {self.config.training_power}"
+                )
+
                 client.clear_interactions()
             else:
-                # Fallback if no client found or no interactions
-                logger.warning(f"No client or interactions found for {self.config.training_power}")
+                logger.warning(
+                    f"No client or interactions found for {self.config.training_power}"
+                )
                 messages = [
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": f"Playing Diplomacy game {game_id}"},
@@ -384,7 +358,6 @@ class DiplomacyEnvMinimal(BaseEnv):
                     },
                 ]
 
-            # Tokenize
             tokenization_result = tokenize_for_trainer(
                 tokenizer=self.tokenizer,
                 chat=messages,
@@ -398,7 +371,6 @@ class DiplomacyEnvMinimal(BaseEnv):
                 scores=score,
             )
 
-            # Store outcome for metrics
             self.game_outcomes_buffer.append(
                 {
                     "game_id": game_id,
@@ -424,14 +396,11 @@ class DiplomacyEnvMinimal(BaseEnv):
         self, game_id: str, seed: int, trajectory_id: int = 0
     ) -> Optional[Dict]:
         """Run a Diplomacy game using AI_Diplomacy's lm_game module."""
-        # Import lm_game
         sys.path.append(os.path.join(os.path.dirname(__file__), "AI_Diplomacy"))
         import lm_game
 
-        # Configure game
         game_output_path = os.path.join(self.config.game_logs_dir, f"{game_id}.json")
 
-        # Build models list - training power uses atropos, others use diverse LLMs
         models = []
         # Mix of OpenAI and Anthropic models for variety
         opponent_models = [
@@ -448,7 +417,6 @@ class DiplomacyEnvMinimal(BaseEnv):
             if power == self.config.training_power:
                 models.append("atropos-training-policy")
             else:
-                # Assign from opponent models
                 models.append(opponent_models[opponent_idx])
                 opponent_idx += 1
 
@@ -470,20 +438,16 @@ class DiplomacyEnvMinimal(BaseEnv):
                     seed + trajectory_id
                 ),  # Vary seed by trajectory for different rollouts
                 "--num_negotiation_rounds",
-                "0",  # No negotiation for minimal version
+                "0",
             ]
 
-            # Run the game
             await lm_game.main()
-
-            # Load and parse results
-            # The output path is actually a directory, the game file is inside
+            # Get Diplomacy results
             actual_game_file = os.path.join(game_output_path, "lmvsgame.json")
             if os.path.exists(actual_game_file):
                 with open(actual_game_file, "r") as f:
                     saved_game = json.load(f)
 
-                # Extract key info
                 phases = saved_game.get("phases", [])
                 last_phase = phases[-1] if phases else {}
 
@@ -583,7 +547,6 @@ class DiplomacyEnvMinimal(BaseEnv):
             wandb_metrics = {}
 
         if self.game_outcomes_buffer:
-            # Calculate aggregate metrics
             total_games = len(self.game_outcomes_buffer)
             avg_score = sum(g["score"] for g in self.game_outcomes_buffer) / total_games
             wins = sum(
@@ -603,10 +566,8 @@ class DiplomacyEnvMinimal(BaseEnv):
                 }
             )
 
-        # Clear buffer
         self.game_outcomes_buffer = []
 
-        # Add eval metrics
         for key, value in self.eval_metrics_custom:
             wandb_metrics[key] = value
         self.eval_metrics_custom = []

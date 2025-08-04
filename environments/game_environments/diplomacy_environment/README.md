@@ -52,13 +52,3 @@ Key settings in `DiplomacyEnvMinimalConfig`:
 2. **LLM Interception**: AtroposClientMinimal intercepts all LLM calls from AI_Diplomacy
 3. **Trajectory Collection**: Game interactions are collected and scored
 4. **Best Selection**: The highest scoring trajectory is returned for training
-
-## Limitations
-
-This is a minimal implementation. It does not include:
-- GRPO/best-of-N selection within games
-- Episodic memory systems
-- Complex scoring (VR-CLI, negotiation quality)
-- Multi-agent training support
-
-These features can be added later as the foundation is proven.
