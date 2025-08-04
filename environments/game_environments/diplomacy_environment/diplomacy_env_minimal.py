@@ -49,6 +49,7 @@ class DiplomacyEnvMinimalConfig(BaseEnvConfig):
     # Game settings
     max_game_turns: int = 10  # Keep games short for faster iteration
     training_power: str = "FRANCE"  # Which power the RL agent controls
+    total_steps: int = 10  # Low for initial testing
 
     # Scoring
     supply_center_weight: float = 1.0
@@ -98,7 +99,7 @@ class DiplomacyEnvMinimal(BaseEnv):
     def config_init(cls) -> Tuple[DiplomacyEnvMinimalConfig, List[APIServerConfig]]:
         """Initialize default configuration."""
         env_config = DiplomacyEnvMinimalConfig(
-            tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
+            tokenizer_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
             group_size=4,  # Run 4 parallel games
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
@@ -108,10 +109,28 @@ class DiplomacyEnvMinimal(BaseEnv):
         )
         server_configs = [
             APIServerConfig(
-                model_name="training-policy",
-                base_url="http://localhost:8000/v1",
+                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+                base_url="http://localhost:9004/v1",
                 api_key="x",
-                num_requests_for_eval=10,
+                num_requests_for_eval=128,
+            ),
+            APIServerConfig(
+                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+                base_url="http://localhost:9005/v1",
+                api_key="x",
+                num_requests_for_eval=128,
+            ),
+            APIServerConfig(
+                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+                base_url="http://localhost:9006/v1",
+                api_key="x",
+                num_requests_for_eval=128,
+            ),
+            APIServerConfig(
+                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+                base_url="http://localhost:9007/v1",
+                api_key="x",
+                num_requests_for_eval=128,
             ),
         ]
         return env_config, server_configs
@@ -302,7 +321,7 @@ class DiplomacyEnvMinimal(BaseEnv):
         opponent_models = [
             "gpt-4o-mini",  # OpenAI
             "anthropic:claude-sonnet-4-20250514",  # Anthropic Sonnet
-            "gpt-4o-mini",  # OpenAI
+            "o3",  # OpenAI o3
             "anthropic:claude-opus-4-20250514",  # Anthropic Opus
             "gpt-4o-mini",  # OpenAI
             "anthropic:claude-sonnet-4-20250514",  # Anthropic Sonnet

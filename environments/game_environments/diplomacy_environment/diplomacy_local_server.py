@@ -60,10 +60,29 @@ async def main():
         game_logs_dir="./test_game_logs",
     )
 
-    # Configure server - using gpt-4.1 as suggested
+    # Configure server - using 4 servers to match SLURM setup
+    # For local testing, we'll simulate this with the same OpenAI endpoint
     server_configs = [
         APIServerConfig(
             model_name="gpt-4.1",  # Using the OpenAI model directly
+            base_url="https://api.openai.com/v1",
+            api_key=os.getenv("OPENAI_API_KEY"),
+            num_requests_for_eval=0,
+        ),
+        APIServerConfig(
+            model_name="gpt-4.1",
+            base_url="https://api.openai.com/v1",
+            api_key=os.getenv("OPENAI_API_KEY"),
+            num_requests_for_eval=0,
+        ),
+        APIServerConfig(
+            model_name="gpt-4.1",
+            base_url="https://api.openai.com/v1",
+            api_key=os.getenv("OPENAI_API_KEY"),
+            num_requests_for_eval=0,
+        ),
+        APIServerConfig(
+            model_name="gpt-4.1",
             base_url="https://api.openai.com/v1",
             api_key=os.getenv("OPENAI_API_KEY"),
             num_requests_for_eval=0,
