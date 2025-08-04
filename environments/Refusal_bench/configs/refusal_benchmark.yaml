@@ -8,7 +8,7 @@ env:
   total_steps: 500
   batch_size: 512
   max_token_length: 1024
-  data_file: "test_set.jsonl"
+  data_file: "hf_full_dataset.json"
   max_eval_samples: 4000
   classifier_type: "openai"
   eval_temperature: 0.7
@@ -20,18 +20,18 @@ env:
 
 # Server configurations - [0] main model, [1] classifier
 openai:
-  - model_name: "gpt-4o-mini"
-    base_url: "https://api.openai.com/v1"
-    api_key: "${OPENAI_API_KEY}"
+  - model_name: "Hermes-3-Llama-3.1-70B"
+    base_url: "https://inference-api.nousresearch.com/v1"
+    api_key: "sk-_yoJ_CBLbSNN2R5rGZ_rpg"
     num_max_requests_at_once: 8
     num_requests_for_eval: 32
     server_type: "openai"
     timeout: 120
     weight: 1.0
 
-  - model_name: "minos-v1"
-    base_url: "http://localhost:1234/v1"
-    api_key: "${MINOS_API_KEY}"
+  - model_name: "Hermes-3-Llama-3.1-70B"
+    base_url: "https://inference-api.nousresearch.com/v1"
+    api_key: "sk-_yoJ_CBLbSNN2R5rGZ_rpg"
     num_max_requests_at_once: 8
     num_requests_for_eval: 32
     server_type: "openai"
