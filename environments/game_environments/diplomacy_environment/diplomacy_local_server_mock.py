@@ -220,12 +220,12 @@ async def main():
             item = await env.get_next_item()
             logger.info(f"Game ID: {item['game_id']}, Seed: {item['seed']}")
 
-            # Collect trajectory
-            scored_item, _ = await env.collect_trajectory(item)
+            # Collect trajectories
+            scored_data_group, _ = await env.collect_trajectories(item)
 
-            if scored_item:
-                score = scored_item.scores
-                logger.info(f"Trajectory collected with score: {score:.2f}")
+            if scored_data_group and scored_data_group["scores"]:
+                avg_score = sum(scored_data_group["scores"]) / len(scored_data_group["scores"])
+                logger.info(f"Collected {len(scored_data_group['scores'])} trajectories with average score: {avg_score:.2f}")
 
                 # Check interactions
                 if env.active_games:

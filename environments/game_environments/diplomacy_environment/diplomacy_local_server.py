@@ -122,12 +122,12 @@ async def main():
             item = await env.get_next_item()
             logger.info(f"Game ID: {item['game_id']}, Seed: {item['seed']}")
 
-            # Collect trajectory (will run group_size parallel games)
-            scored_item, _ = await env.collect_trajectory(item)
+            # Collect trajectories (will run group_size parallel games)
+            scored_data_group, _ = await env.collect_trajectories(item)
 
-            if scored_item:
-                score = scored_item.scores
-                logger.info(f"Trajectory collected with score: {score:.2f}")
+            if scored_data_group and scored_data_group["scores"]:
+                avg_score = sum(scored_data_group["scores"]) / len(scored_data_group["scores"])
+                logger.info(f"Collected {len(scored_data_group['scores'])} trajectories with average score: {avg_score:.2f}")
 
                 # Get game outcomes from buffer
                 if env.game_outcomes_buffer:
@@ -143,7 +143,7 @@ async def main():
                 episode_results.append(
                     {
                         "episode": episode_num + 1,
-                        "score": score,
+                        "score": avg_score,
                         "outcomes": latest_outcomes if env.game_outcomes_buffer else [],
                     }
                 )
