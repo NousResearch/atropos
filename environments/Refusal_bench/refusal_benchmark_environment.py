@@ -62,6 +62,20 @@ class RefusalBenchmarkConfig(BaseEnvConfig):
     )
 
     # ========================================
+    # Main Model Configuration (being evaluated)
+    # ========================================
+    
+    rollout_model_name: str = Field(
+        default="Hermes-3-Llama-3.1-70B",
+        description="Model name for the model being evaluated"
+    )
+    
+    rollout_api_key: str = Field(
+        default="",
+        description="API key for the model being evaluated"
+    )
+
+    # ========================================
     # Classifier Configuration
     # ========================================
 
@@ -116,20 +130,6 @@ class RefusalBenchmarkConfig(BaseEnvConfig):
     )
 
     # ========================================
-    # Training Configuration
-    # ========================================
-
-    use_label_0_for_training: bool = Field(
-        default=True,
-        description=(
-            "Whether to use label 0 data (non-refusal examples) for training. "
-            "Label 0 examples are questions that should be answered helpfully. "
-            "Set to False if you only want to use the environment for evaluation. "
-            "Currently, label 1 data is reserved for evaluation only."
-        ),
-    )
-
-    # ========================================
     # Evaluation Output Configuration
     # ========================================
 
@@ -169,45 +169,33 @@ class RefusalBenchmarkEnv(BaseEnv):
         print("REFUSAL BENCHMARK ENVIRONMENT INITIALIZATION")
         print("=" * 60)
         print(f"Config: slurm={slurm}, testing={testing}")
-        print(f"Number of server configs: {len(server_configs)}")
-
-        for i, server_config in enumerate(server_configs):
-            print(f"\nServer {i} configuration:")
-            print(f"  - model_name: '{server_config.model_name}'")
-            print(f"  - base_url: '{server_config.base_url}'")
-            print(
-                f"  - api_key: '{server_config.api_key[:20] if server_config.api_key else 'None'}...{server_config.api_key[-5:] if server_config.api_key and len(server_config.api_key) > 25 else ''}'"
-            )
-            print(f"  - server_type: '{server_config.server_type}'")
-            print(f"  - timeout: {server_config.timeout}")
-            print(
-                f"  - num_max_requests_at_once: {server_config.num_max_requests_at_once}"
-            )
-            print(f"  - num_requests_for_eval: {server_config.num_requests_for_eval}")
-            print(
-                f"  - health_check: {getattr(server_config, 'health_check', 'not set')}"
-            )
-
-        print("=" * 60)
-
-        # Call parent class constructor to set up base environment functionality
-        super().__init__(config, server_configs, slurm, testing)
+        
+        # Create main model server config from rollout config
+        main_model_config = APIServerConfig(
+            model_name=config.rollout_model_name,
+            base_url=config.rollout_server_url,
+            api_key=config.rollout_api_key,
+            server_type="openai",
+        )
+        
+        # Call parent class constructor with main model config
+        super().__init__(config, [main_model_config], slurm, testing)
         self.config: RefusalBenchmarkConfig = config
 
-        # Initialize classifier server manager if we have multiple servers
-        if len(server_configs) > 1:
+        # Set up classifier server from the provided server configs
+        if len(server_configs) >= 1:
             from atroposlib.envs.server_handling.server_manager import ServerManager
-
-            # Create classifier server manager
-            print("The server configs are as following ", server_configs[1])
+            
+            print(f"Setting up classifier server: {server_configs[0]}")
             self.classifier_server = ServerManager(
-                configs=[server_configs[1]],
+                configs=[server_configs[0]],
                 slurm=slurm,
                 testing=False,
                 server_class=self.server_cls,
             )
         else:
-            # Use the same server for both main model and classifier
+            # Fallback: use the main server for classification too
+            print("Warning: No classifier server config provided, using main server")
             self.classifier_server = self.server
 
         # Initialize metrics tracking
@@ -236,19 +224,11 @@ class RefusalBenchmarkEnv(BaseEnv):
         Initialize configuration for the environment.
         """
         # Create environment configuration with defaults
-        # The framework will handle YAML and CLI overrides automatically
         env_config = RefusalBenchmarkConfig()
 
-        # Default server configuration - framework will override from YAML/CLI
-        default_api_key = os.environ.get("NOUS_API_KEY", "")
-
+        # Only need one server config for the classifier/judge
+        # The main model comes from rollout_server_url
         server_configs = [
-            APIServerConfig(
-                model_name="Hermes-3-Llama-3.1-405B",
-                base_url="https://inference-api.nousresearch.com/v1",
-                api_key=os.getenv("NOUS_API_KEY"),
-                server_type="openai",
-            ),
             APIServerConfig(
                 model_name="Hermes-3-Llama-3.1-405B",
                 base_url="https://inference-api.nousresearch.com/v1",

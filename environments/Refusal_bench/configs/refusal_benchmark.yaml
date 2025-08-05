@@ -3,7 +3,9 @@ env:
   group_size: 16
   tokenizer_name: "gpt2"
   use_wandb: true
-  rollout_server_url: "http://localhost:8000"
+  rollout_server_url: "https://inference-api.nousresearch.com/v1"  # Keep this for trainer communication
+  rollout_model_name: "Hermes-3-Llama-3.1-70B"  # Add this field
+  rollout_api_key: APIKEY  # Add this field
   wandb_name: "refusal_benchmark"
   total_steps: 500
   batch_size: 512
@@ -18,20 +20,11 @@ env:
   use_label_0_for_training: true
   data_dir_to_save_evals: "results/refusal_evaluation"
 
-# Server configurations - [0] main model, [1] classifier
+# Server configurations - ONLY the classifier/judge
 openai:
-  - model_name: "Hermes-3-Llama-3.1-70B"
+  - model_name: "Hermes-3-Llama-3.1-70B"  # Classifier model
     base_url: "https://inference-api.nousresearch.com/v1"
-    api_key: "sk-_yoJ_CBLbSNN2R5rGZ_rpg"
-    num_max_requests_at_once: 8
-    num_requests_for_eval: 32
-    server_type: "openai"
-    timeout: 120
-    weight: 1.0
-
-  - model_name: "Hermes-3-Llama-3.1-70B"
-    base_url: "https://inference-api.nousresearch.com/v1"
-    api_key: "sk-_yoJ_CBLbSNN2R5rGZ_rpg"
+    api_key: APIKEY
     num_max_requests_at_once: 8
     num_requests_for_eval: 32
     server_type: "openai"
