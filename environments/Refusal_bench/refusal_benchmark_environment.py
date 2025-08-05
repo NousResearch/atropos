@@ -64,15 +64,14 @@ class RefusalBenchmarkConfig(BaseEnvConfig):
     # ========================================
     # Main Model Configuration (being evaluated)
     # ========================================
-    
+
     rollout_model_name: str = Field(
         default="Hermes-3-Llama-3.1-70B",
-        description="Model name for the model being evaluated"
+        description="Model name for the model being evaluated",
     )
-    
+
     rollout_api_key: str = Field(
-        default="",
-        description="API key for the model being evaluated"
+        default="", description="API key for the model being evaluated"
     )
 
     # ========================================
@@ -169,7 +168,7 @@ class RefusalBenchmarkEnv(BaseEnv):
         print("REFUSAL BENCHMARK ENVIRONMENT INITIALIZATION")
         print("=" * 60)
         print(f"Config: slurm={slurm}, testing={testing}")
-        
+
         # Create main model server config from rollout config
         main_model_config = APIServerConfig(
             model_name=config.rollout_model_name,
@@ -177,7 +176,7 @@ class RefusalBenchmarkEnv(BaseEnv):
             api_key=config.rollout_api_key,
             server_type="openai",
         )
-        
+
         # Call parent class constructor with main model config
         super().__init__(config, [main_model_config], slurm, testing)
         self.config: RefusalBenchmarkConfig = config
@@ -185,7 +184,7 @@ class RefusalBenchmarkEnv(BaseEnv):
         # Set up classifier server from the provided server configs
         if len(server_configs) >= 1:
             from atroposlib.envs.server_handling.server_manager import ServerManager
-            
+
             print(f"Setting up classifier server: {server_configs[0]}")
             self.classifier_server = ServerManager(
                 configs=[server_configs[0]],
