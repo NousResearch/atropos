@@ -77,6 +77,9 @@ class DiplomacyEnvMinimalConfig(BaseEnvConfig):
 
     # Evaluation
     eval_episodes: int = 10
+    
+    # Opponent models (None = use SGLang endpoints from server_configs)
+    opponent_models: Optional[List[str]] = None
 
 
 class DiplomacyEnvMinimal(BaseEnv):
@@ -108,6 +111,16 @@ class DiplomacyEnvMinimal(BaseEnv):
             f"You are playing Diplomacy as {config.training_power}. "
             "Analyze the game state and respond with your strategy and orders."
         )
+        
+        # Configure opponent models
+        if config.opponent_models:
+            self.opponent_models = config.opponent_models
+        else:
+            # Default to SGLang endpoints from server_configs
+            self.opponent_models = []
+            for server_config in server_configs:
+                model_spec = f"openai:{server_config.model_name}@{server_config.base_url}#{server_config.api_key}"
+                self.opponent_models.append(model_spec)
 
     @classmethod
     def config_init(cls) -> Tuple[DiplomacyEnvMinimalConfig, List[APIServerConfig]]:
@@ -466,24 +479,17 @@ class DiplomacyEnvMinimal(BaseEnv):
 
         game_output_path = os.path.join(self.config.game_logs_dir, f"{game_id}.json")
 
-        # Build models list - training power uses atropos, others use SGLang endpoints
+        # Build models list - training power uses atropos, others use configured opponent models
         models = []
-        # Use SGLang endpoints for all opponents (self-play)
-        sglang_endpoints = [
-            "openai:NousResearch/Hermes-4-Qwen3-14B-1-e3@http://localhost:9004/v1#x",
-            "openai:NousResearch/Hermes-4-Qwen3-14B-1-e3@http://localhost:9005/v1#x",
-            "openai:NousResearch/Hermes-4-Qwen3-14B-1-e3@http://localhost:9006/v1#x",
-            "openai:NousResearch/Hermes-4-Qwen3-14B-1-e3@http://localhost:9007/v1#x",
-        ]
-        endpoint_idx = 0
+        opponent_idx = 0
 
         for power in POWERS:
             if power == self.config.training_power:
                 models.append("atropos-training-policy")
             else:
-                # Use SGLang endpoint for opponent
-                models.append(sglang_endpoints[endpoint_idx % len(sglang_endpoints)])
-                endpoint_idx += 1
+                # Use configured opponent model
+                models.append(self.opponent_models[opponent_idx % len(self.opponent_models)])
+                opponent_idx += 1
 
         # Save original argv
         original_argv = sys.argv

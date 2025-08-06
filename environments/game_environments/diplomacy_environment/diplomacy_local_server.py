@@ -28,14 +28,20 @@ async def main():
     """Run Diplomacy games for testing the minimal environment."""
     logger.info("Starting Diplomacy minimal environment local test runner")
 
-    # Check for OpenAI API key
-    if not os.getenv("OPENAI_API_KEY"):
+    # Check for OpenRouter API key
+    if not os.getenv("OPENROUTER_API_KEY"):
         logger.error(
-            "OPENAI_API_KEY not found. Please set it in your environment or .env file"
+            "OPENROUTER_API_KEY not found. Please set it in your environment or .env file"
         )
         return
 
-    # Configure environment - using real OpenAI model
+    # Configure environment - using OpenRouter model
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+    openrouter_model = f"openai:openai/gpt-oss-120b@https://openrouter.ai/api/v1#{openrouter_api_key}"
+    
+    # Create list of opponent models (6 powers besides training power)
+    opponent_models = [openrouter_model] * 6
+    
     env_config = DiplomacyEnvMinimalConfig(
         tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
         group_size=2,  # Run 2 parallel games
@@ -58,38 +64,39 @@ async def main():
         start_diplomacy_server=True,  # Let the env start the server
         save_game_logs=True,
         game_logs_dir="./test_game_logs",
+        opponent_models=opponent_models,  # Use OpenRouter for all opponents
     )
 
     # Configure server - using 4 servers to match SLURM setup
-    # For local testing, we'll simulate this with the same OpenAI endpoint
+    # For local testing, we'll simulate this with the same OpenRouter endpoint
     server_configs = [
         APIServerConfig(
-            model_name="gpt-4.1",  # Using the OpenAI model directly
-            base_url="https://api.openai.com/v1",
-            api_key=os.getenv("OPENAI_API_KEY"),
+            model_name="openai/gpt-oss-120b",  # Using the OpenRouter model
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
             num_requests_for_eval=0,
         ),
         APIServerConfig(
-            model_name="gpt-4.1",
-            base_url="https://api.openai.com/v1",
-            api_key=os.getenv("OPENAI_API_KEY"),
+            model_name="openai/gpt-oss-120b",
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
             num_requests_for_eval=0,
         ),
         APIServerConfig(
-            model_name="gpt-4.1",
-            base_url="https://api.openai.com/v1",
-            api_key=os.getenv("OPENAI_API_KEY"),
+            model_name="openai/gpt-oss-120b",
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
             num_requests_for_eval=0,
         ),
         APIServerConfig(
-            model_name="gpt-4.1",
-            base_url="https://api.openai.com/v1",
-            api_key=os.getenv("OPENAI_API_KEY"),
+            model_name="openai/gpt-oss-120b",
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
             num_requests_for_eval=0,
         ),
     ]
 
-    logger.info("Using OpenAI gpt-4.1 for Diplomacy test")
+    logger.info("Using OpenRouter openai/gpt-oss-120b for Diplomacy test")
     logger.debug(f"Env Config: {env_config}")
     logger.debug(f"Server Configs: {server_configs}")
 
