@@ -31,7 +31,7 @@ from environments.game_environments.diplomacy_environment.AI_Diplomacy.ai_diplom
 logger = logging.getLogger(__name__)
 
 # Context variable to track current game_id
-current_game_context = contextvars.ContextVar('current_game_id', default=None)
+current_game_context = contextvars.ContextVar("current_game_id", default=None)
 
 # Global registry for game interactions (since clients are created per-request now)
 _game_interactions = {}
@@ -52,7 +52,7 @@ class AtroposClientMinimal(BaseModelClient):
         self.game_id = current_game_context.get()
         if not self.game_id:
             raise ValueError("AtroposClientMinimal created without game context set")
-        
+
         self.queue_manager = queue_manager or get_queue_manager()
 
         # Track interactions for trajectory collection
@@ -111,10 +111,10 @@ class AtroposClientMinimal(BaseModelClient):
                 "task_type": task_type,
                 "prompt": prompt,
                 "response": response_text,
-                "metadata": response.metadata  # Store any additional info from environment
+                "metadata": response.metadata,  # Store any additional info from environment
             }
             self.interactions.append(interaction)
-            
+
             # Also store in global registry for this game
             if self.game_id not in _game_interactions:
                 _game_interactions[self.game_id] = []
@@ -218,20 +218,21 @@ def register_atropos_models_globally(queue_manager: Optional[QueueManager] = Non
     """
     Register AtroposClientMinimal with AI_Diplomacy's model loading system globally.
     This should be called ONCE during environment setup.
-    
+
     Args:
         queue_manager: Optional queue manager (uses global if not provided)
     """
     from ai_diplomacy import clients
-    
+
     # Save original function if not already saved
-    if hasattr(clients, '_atropos_registered'):
+    if hasattr(clients, "_atropos_registered"):
         logger.info("AtroposClientMinimal already registered globally")
         return
-        
+
     # Save the original loader
     clients._original_load_model_client = clients.load_model_client
     clients._atropos_queue_manager = queue_manager or get_queue_manager()
+
     def load_model_client_with_atropos(
         model_id: str, prompts_dir: Optional[str] = None
     ) -> BaseModelClient:
@@ -243,10 +244,10 @@ def register_atropos_models_globally(queue_manager: Optional[QueueManager] = Non
             # Use original loader for other models
             logger.info(f"Falling back to original loader for {model_id}")
             return clients._original_load_model_client(model_id, prompts_dir)
-    
+
     clients.load_model_client = load_model_client_with_atropos
     clients._atropos_registered = True
-    
+
     logger.info("Registered AtroposClientMinimal globally with AI_Diplomacy")
 
 

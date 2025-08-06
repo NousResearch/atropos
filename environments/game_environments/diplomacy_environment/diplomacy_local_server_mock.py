@@ -27,125 +27,111 @@ logger = logging.getLogger(__name__)
 
 class MockDiplomacyEnv(DiplomacyEnvMinimal):
     """Mock version that simulates SGLang responses."""
-    
+
     async def _handle_policy_request(self, request):
         """Handle policy request with mock responses instead of SGLang."""
         try:
-            logger.info(f"Mock handling request {request.request_id} for {request.power} in game {request.game_id}")
-            
+            logger.info(
+                f"Mock handling request {request.request_id} for {request.power} in game {request.game_id}"
+            )
+
             # Generate a mock response based on the prompt
             response_text = self._generate_mock_response(request.prompt, request.power)
-            
+
             # Create response
             from queue_manager import PolicyResponse
+
             policy_response = PolicyResponse(
                 request_id=request.request_id,
                 response=response_text,
-                metadata={
-                    "power": request.power,
-                    "phase": request.phase,
-                    "mock": True
-                }
+                metadata={"power": request.power, "phase": request.phase, "mock": True},
             )
-            
+
             # Put response back on queue
             await self.queue_manager.put_response(request.game_id, policy_response)
             logger.info(f"Sent mock response for request {request.request_id}")
-            
+
         except Exception as e:
             logger.error(f"Error handling policy request: {e}")
             # Send error response
             from queue_manager import PolicyResponse
+
             error_response = PolicyResponse(
                 request_id=request.request_id,
                 response="Error: Failed to generate response",
-                metadata={"error": str(e)}
+                metadata={"error": str(e)},
             )
             await self.queue_manager.put_response(request.game_id, error_response)
-    
+
     def _generate_mock_response(self, prompt: str, power: str) -> str:
         """Generate a mock response based on the prompt type."""
         prompt_lower = prompt.lower()
-        
+
         if "orders" in prompt_lower:
             # Mock orders response
             orders = self._get_mock_orders(power)
             explanations = {
                 "general": f"Mock orders for {power} - focusing on defense and expansion",
-                "per_unit": {unit: f"Moving {unit} strategically" for unit in orders}
+                "per_unit": {unit: f"Moving {unit} strategically" for unit in orders},
             }
-            return json.dumps({
-                "orders": orders,
-                "explanations": explanations
-            })
+            return json.dumps({"orders": orders, "explanations": explanations})
         elif "message" in prompt_lower or "negotiate" in prompt_lower:
             # Mock negotiation response
-            return json.dumps({
-                "messages": {
-                    "ENGLAND": f"Greetings from {power}. Let's work together.",
-                    "GERMANY": f"{power} proposes cooperation against common threats."
-                },
-                "explanations": {
-                    "general": f"Mock diplomatic messages from {power}"
+            return json.dumps(
+                {
+                    "messages": {
+                        "ENGLAND": f"Greetings from {power}. Let's work together.",
+                        "GERMANY": f"{power} proposes cooperation against common threats.",
+                    },
+                    "explanations": {
+                        "general": f"Mock diplomatic messages from {power}"
+                    },
                 }
-            })
+            )
         elif "goals" in prompt_lower or "strategy" in prompt_lower:
             # Mock strategy response
-            return json.dumps({
-                "initial_goals": [
-                    f"Secure {power}'s home centers",
-                    "Form strategic alliances",
-                    "Expand carefully"
-                ],
-                "initial_relationships": {
-                    p: "Neutral" for p in ["AUSTRIA", "ENGLAND", "FRANCE", "GERMANY", "ITALY", "RUSSIA", "TURKEY"]
-                    if p != power
+            return json.dumps(
+                {
+                    "initial_goals": [
+                        f"Secure {power}'s home centers",
+                        "Form strategic alliances",
+                        "Expand carefully",
+                    ],
+                    "initial_relationships": {
+                        p: "Neutral"
+                        for p in [
+                            "AUSTRIA",
+                            "ENGLAND",
+                            "FRANCE",
+                            "GERMANY",
+                            "ITALY",
+                            "RUSSIA",
+                            "TURKEY",
+                        ]
+                        if p != power
+                    },
                 }
-            })
+            )
         else:
             # Generic response
             return f"Mock response from {power}: Acknowledged. Proceeding with diplomatic strategy."
-    
+
     def _get_mock_orders(self, power: str) -> Dict[str, str]:
         """Get mock orders for a power."""
         # Simple mock orders for Spring 1901
         mock_orders = {
-            "FRANCE": {
-                "A PAR": "BUR",
-                "A MAR": "SPA",
-                "F BRE": "MAO"
-            },
-            "ENGLAND": {
-                "F LON": "NTH",
-                "F EDI": "NWG", 
-                "A LVP": "YOR"
-            },
-            "GERMANY": {
-                "A BER": "KIE",
-                "A MUN": "RUH",
-                "F KIE": "DEN"
-            },
-            "ITALY": {
-                "A VEN": "TYR",
-                "A ROM": "VEN",
-                "F NAP": "ION"
-            },
-            "AUSTRIA": {
-                "A VIE": "GAL",
-                "A BUD": "SER",
-                "F TRI": "ALB"
-            },
+            "FRANCE": {"A PAR": "BUR", "A MAR": "SPA", "F BRE": "MAO"},
+            "ENGLAND": {"F LON": "NTH", "F EDI": "NWG", "A LVP": "YOR"},
+            "GERMANY": {"A BER": "KIE", "A MUN": "RUH", "F KIE": "DEN"},
+            "ITALY": {"A VEN": "TYR", "A ROM": "VEN", "F NAP": "ION"},
+            "AUSTRIA": {"A VIE": "GAL", "A BUD": "SER", "F TRI": "ALB"},
             "RUSSIA": {
                 "A MOS": "UKR",
                 "A WAR": "GAL",
                 "F SEV": "BLA",
-                "F STP/SC": "BOT"
+                "F STP/SC": "BOT",
             },
-            "TURKEY": {
-                "A CON": "BUL",
-                "A SMY": "ARM",
-                "F ANK": "BLA"
-            }
+            "TURKEY": {"A CON": "BUL", "A SMY": "ARM", "F ANK": "BLA"},
         }
         return mock_orders.get(power, {})
 
@@ -209,6 +195,7 @@ async def main():
 
         # Get number of episodes from command line or default
         import sys
+
         num_episodes = int(sys.argv[1]) if len(sys.argv) > 1 else 1
 
         # Track statistics
@@ -224,17 +211,27 @@ async def main():
             scored_data_group, _ = await env.collect_trajectories(item)
 
             if scored_data_group and scored_data_group["scores"]:
-                avg_score = sum(scored_data_group["scores"]) / len(scored_data_group["scores"])
-                logger.info(f"Collected {len(scored_data_group['scores'])} trajectories with average score: {avg_score:.2f}")
+                avg_score = sum(scored_data_group["scores"]) / len(
+                    scored_data_group["scores"]
+                )
+                logger.info(
+                    f"Collected {len(scored_data_group['scores'])} trajectories with average score: {avg_score:.2f}"
+                )
 
                 # Check interactions
                 if env.active_games:
                     for game_id, game_info in env.active_games.items():
                         for model_id, client in game_info.get("clients", {}).items():
                             if client.current_power == env.config.training_power:
-                                logger.info(f"Client for {client.current_power} collected {len(client.interactions)} interactions")
-                                for i, interaction in enumerate(client.interactions[:3]):  # Show first 3
-                                    logger.info(f"  Interaction {i+1}: {interaction['task_type']} - {interaction['prompt'][:50]}...")
+                                logger.info(
+                                    f"Client for {client.current_power} collected {len(client.interactions)} interactions"
+                                )
+                                for i, interaction in enumerate(
+                                    client.interactions[:3]
+                                ):  # Show first 3
+                                    logger.info(
+                                        f"  Interaction {i+1}: {interaction['task_type']} - {interaction['prompt'][:50]}..."
+                                    )
 
         logger.info("\n✅ Mock test completed successfully!")
 
