@@ -1,5 +1,4 @@
 """
-Minimal AtroposClient - LLM Proxy for AI_Diplomacy Integration
 
 This is a queue-based proxy that:
 - Intercepts LLM requests from AI_Diplomacy
@@ -17,17 +16,16 @@ import sys
 import uuid
 from typing import Dict, List, Optional
 
+from environments.game_environments.diplomacy_environment.queue_manager import (
+    PolicyRequest,
+    QueueManager,
+    get_queue_manager,
+)
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "AI_Diplomacy"))
 
 from environments.game_environments.diplomacy_environment.AI_Diplomacy.ai_diplomacy.clients import (  # noqa: E402
     BaseModelClient,
-)
-
-from queue_manager import (
-    PolicyRequest,
-    PolicyResponse,
-    QueueManager,
-    get_queue_manager,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,7 +54,7 @@ class AtroposClientMinimal(BaseModelClient):
             raise ValueError("AtroposClientMinimal created without game context set")
         
         self.queue_manager = queue_manager or get_queue_manager()
-        
+
         # Track interactions for trajectory collection
         self.interactions: List[Dict] = []
         self.current_power: Optional[str] = None
@@ -66,14 +64,11 @@ class AtroposClientMinimal(BaseModelClient):
             f"Initialized AtroposClientMinimal for {model_name} in game {self.game_id}"
         )
 
-    async def generate_response(
-        self, prompt: str, temperature: float = 0.0, inject_random_seed: bool = True
-    ) -> str:
+    async def generate_response(self, prompt: str, temperature: float = 0.0) -> str:
         """
         Put request on queue and wait for response from environment.
         This is the main method AI_Diplomacy calls for all LLM interactions.
         """
-        # Infer context from prompt
         task_type = self._infer_task_type(prompt)
         power = self._extract_power(prompt)
         phase = self._extract_phase(prompt)
@@ -86,7 +81,6 @@ class AtroposClientMinimal(BaseModelClient):
         logger.debug(f"Generating response for {self.current_power}: {task_type}")
 
         try:
-            # Create policy request
             request_id = str(uuid.uuid4())
             request = PolicyRequest(
                 request_id=request_id,
@@ -95,20 +89,19 @@ class AtroposClientMinimal(BaseModelClient):
                 phase=self.current_phase or "UNKNOWN",
                 prompt=prompt,
                 temperature=temperature,
-                trajectory=self.interactions.copy()  # Send current trajectory
+                trajectory=self.interactions.copy(),
             )
-            
-            # Put request on queue
+
             await self.queue_manager.put_request(self.game_id, request)
             logger.debug(f"Put request {request_id} on queue for game {self.game_id}")
-            
-            # Wait for response
+
             response = await self.queue_manager.get_response(self.game_id)
-            
-            # Verify response matches our request
+
             if response.request_id != request_id:
-                logger.warning(f"Response ID mismatch: expected {request_id}, got {response.request_id}")
-            
+                logger.warning(
+                    f"Response ID mismatch: expected {request_id}, got {response.request_id}"
+                )
+
             response_text = response.response
 
             # Track interaction
@@ -130,7 +123,7 @@ class AtroposClientMinimal(BaseModelClient):
             return response_text
 
         except asyncio.TimeoutError:
-            logger.error(f"Timeout waiting for response from environment")
+            logger.error("Timeout waiting for response from environment")
             return self._generate_fallback_response(prompt)
         except Exception as e:
             logger.error(f"Error generating response: {e}")
@@ -168,7 +161,6 @@ class AtroposClientMinimal(BaseModelClient):
         """Extract game phase from prompt if mentioned."""
         import re
 
-        # Look for phase patterns like "Spring 1901" or "S1901M"
         phase_match = re.search(r"[SF]\d{4}[MRB]", prompt)
         if phase_match:
             return phase_match.group()
@@ -180,7 +172,7 @@ class AtroposClientMinimal(BaseModelClient):
         return None
 
     def _generate_fallback_response(self, prompt: str) -> str:
-        """Generate a simple fallback response when server is unavailable."""
+        """Generate a simple fallback response if there's an issue."""
         task_type = self._infer_task_type(prompt)
 
         if task_type == "orders":
@@ -240,7 +232,6 @@ def register_atropos_models_globally(queue_manager: Optional[QueueManager] = Non
     # Save the original loader
     clients._original_load_model_client = clients.load_model_client
     clients._atropos_queue_manager = queue_manager or get_queue_manager()
-    
     def load_model_client_with_atropos(
         model_id: str, prompts_dir: Optional[str] = None
     ) -> BaseModelClient:
@@ -260,7 +251,7 @@ def register_atropos_models_globally(queue_manager: Optional[QueueManager] = Non
 
 
 if __name__ == "__main__":
-    # Simple test
+    # Simple test everything is working
     async def test_client():
         client = AtroposClientMinimal(
             "atropos-test",
