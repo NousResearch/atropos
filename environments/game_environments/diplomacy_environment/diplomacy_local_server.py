@@ -133,8 +133,12 @@ async def main():
             scored_data_group, _ = await env.collect_trajectories(item)
 
             if scored_data_group and scored_data_group["scores"]:
-                avg_score = sum(scored_data_group["scores"]) / len(scored_data_group["scores"])
-                logger.info(f"Collected {len(scored_data_group['scores'])} trajectories with average score: {avg_score:.2f}")
+                avg_score = sum(scored_data_group["scores"]) / len(
+                    scored_data_group["scores"]
+                )
+                logger.info(
+                    f"Collected {len(scored_data_group['scores'])} trajectories with average score: {avg_score:.2f}"
+                )
 
                 # Get game outcomes from buffer
                 if env.game_outcomes_buffer:
