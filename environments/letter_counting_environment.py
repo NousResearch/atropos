@@ -61,6 +61,20 @@ system_prompt = (
 class LetterCountingConfig(BaseEnvConfig):
     """Configuration class for Letter Counting Environment with custom parameters."""
 
+    # Dataset configuration
+    dataset: str = Field(
+        "NousResearch/letter_counting",
+        description="HuggingFace dataset to use for training and evaluation",
+    )
+    max_eval_samples: Optional[int] = Field(
+        default=None,
+        description="Maximum number of samples to use for evaluation. If None, use all samples.",
+    )
+    eval_sample_seed: int = Field(
+        default=42,
+        description="Random seed for sampling evaluation data when max_eval_samples is set",
+    )
+
     # Word dataset configuration
     min_word_length: int = Field(3, description="Minimum word length to include")
     max_word_length: int = Field(30, description="Maximum word length to include")
@@ -352,11 +366,52 @@ class LetterCountingEnv(BaseEnv):
 
         return env_config, server_configs
 
+    def _load_hf_dataset(self):
+        """Load data from HuggingFace dataset."""
+        try:
+            # Load train and test splits from the dataset
+            train_dataset = load_dataset(self.config.dataset, split="train")
+            test_dataset = load_dataset(self.config.dataset, split="test")
+
+            # Convert to list format expected by the environment
+            train_items = []
+            for item in train_dataset:
+                train_items.append(item.get("text", item.get("word", "")))
+
+            test_items = []
+            for item in test_dataset:
+                test_items.append(item.get("text", item.get("word", "")))
+
+            # Apply max_eval_samples if specified
+            if (
+                self.config.max_eval_samples
+                and len(test_items) > self.config.max_eval_samples
+            ):
+                random.seed(self.config.eval_sample_seed)
+                test_items = random.sample(test_items, self.config.max_eval_samples)
+
+            return train_items, test_items
+
+        except Exception as e:
+            self.logger.info(
+                f"Failed to load HuggingFace dataset '{self.config.dataset}': {e}. Falling back to generated data."
+            )
+            return None, None
+
     async def setup(self):
         """
         Set up the environment by loading and preparing the word/text dataset.
         """
-        if self.config.use_text_passages:
+        # Try to load from HuggingFace dataset first
+        train_words, test_words = self._load_hf_dataset()
+
+        if train_words is not None and test_words is not None:
+            self.train_words = train_words
+            self.test_words = test_words
+            self.logger.info(
+                f"Loaded {len(self.train_words)} train and {len(self.test_words)} test items from HuggingFace dataset"
+            )
+        elif self.config.use_text_passages:
             await self._setup_mixed_dataset()
         else:
             await self._setup_word_dataset()

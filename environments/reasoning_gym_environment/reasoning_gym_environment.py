@@ -56,6 +56,18 @@ system_prompt = (
 class ReasoningGymEnvConfig(BaseEnvConfig):
     """Extended configuration for ReasoningGymEnv with additional fields."""
 
+    dataset: str = Field(
+        default="NousResearch/reasoning_gym",
+        description="HuggingFace dataset to use for training and evaluation",
+    )
+    max_eval_samples: Optional[int] = Field(
+        default=None,
+        description="Maximum number of samples to use for evaluation. If None, use all samples.",
+    )
+    eval_sample_seed: int = Field(
+        default=42,
+        description="Random seed for sampling evaluation data when max_eval_samples is set",
+    )
     dump_rollouts: bool = Field(
         default=False,
         description="Whether to dump successful rollouts (above threshold) to JSONL files.",
@@ -489,23 +501,78 @@ class ReasoningGymEnv(BaseEnv):
         print(f"Validated {len(valid_tasks)} tasks for use.")
         return valid_tasks
 
+    def _load_hf_dataset(self):
+        """Load data from HuggingFace dataset."""
+        try:
+            from datasets import load_dataset
+
+            # Load train and test splits from the dataset
+            train_dataset = load_dataset(self.config.dataset, split="train")
+            test_dataset = load_dataset(self.config.dataset, split="test")
+
+            # Convert to the format expected by the environment
+            train_items = []
+            test_items_with_scorers = []
+
+            # For reasoning gym, we need to handle the data differently
+            # The HF dataset should contain items with problem/answer pairs
+            for item in train_dataset:
+                train_items.append(item)
+
+            for item in test_dataset:
+                # For test items, we need to create a scorer
+                # We'll use a simple exact match scorer for now
+                test_items_with_scorers.append(
+                    (item, None)
+                )  # None scorer will be handled later
+
+            # Apply max_eval_samples if specified
+            if (
+                self.config.max_eval_samples
+                and len(test_items_with_scorers) > self.config.max_eval_samples
+            ):
+                random.seed(self.config.eval_sample_seed)
+                test_items_with_scorers = random.sample(
+                    test_items_with_scorers, self.config.max_eval_samples
+                )
+
+            return train_items, test_items_with_scorers
+
+        except Exception as e:
+            self.logger.info(
+                f"Failed to load HuggingFace dataset '{self.config.dataset}': {e}. Falling back to reasoning_gym generation."  # noqa: E501
+            )
+            return None, None
+
     async def setup(self):
-        # The reasoning_gym import is now handled at the top with sys.path modification.
-        if reasoning_gym is None:
-            raise ImportError(
-                "reasoning-gym library could not be imported from the local submodule. "
-                "This environment cannot function. Check submodule presence and integrity."
-            )
+        # Try to load from HuggingFace dataset first
+        train_items, test_items = self._load_hf_dataset()
 
-        self.logger.info("Setting up ReasoningGym environment...")
-
-        self.task_names = (
-            self._get_task_names()
-        )  # _get_task_names now uses self._validate_discovered_tasks
-        if not self.task_names:
-            raise ValueError(
-                "No reasoning_gym tasks could be loaded. Environment setup failed."
+        if train_items is not None and test_items is not None:
+            self.task_names = ["hf_dataset"]  # Use a single task name for HF dataset
+            self.test_items_with_scorers = test_items
+            self.hf_train_items = train_items
+            self.logger.info(
+                f"Loaded {len(train_items)} train and {len(test_items)} test items from HuggingFace dataset"
             )
+        else:
+            # Fall back to original reasoning_gym setup
+            # The reasoning_gym import is now handled at the top with sys.path modification.
+            if reasoning_gym is None:
+                raise ImportError(
+                    "reasoning-gym library could not be imported from the local submodule. "
+                    "This environment cannot function. Check submodule presence and integrity."
+                )
+
+            self.logger.info("Setting up ReasoningGym environment...")
+
+            self.task_names = (
+                self._get_task_names()
+            )  # _get_task_names now uses self._validate_discovered_tasks
+            if not self.task_names:
+                raise ValueError(
+                    "No reasoning_gym tasks could be loaded. Environment setup failed."
+                )
 
         self.logger.info(
             f"ReasoningGymEnv: Initialized with {len(self.task_names)} tasks."
@@ -584,6 +651,24 @@ class ReasoningGymEnv(BaseEnv):
         """
         if not self.task_names:
             return None  # Should not happen if setup is correct
+
+        # Check if we're using HuggingFace dataset
+        if hasattr(self, "hf_train_items") and self.hf_train_items:
+            # Select a random item from the HF dataset
+            rg_item = self.rng.choice(self.hf_train_items)
+            prompt_messages = [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": rg_item.get("question", rg_item.get("problem", "")),
+                },
+            ]
+            self.iter += 1
+            return (
+                prompt_messages,
+                rg_item,
+                None,
+            )  # None for dataset_obj as we don't have a scorer
 
         selected_task_name = self.rng.choice(self.task_names)
 
