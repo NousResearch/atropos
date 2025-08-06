@@ -501,23 +501,16 @@ class ReasoningGymEnv(BaseEnv):
         print(f"Validated {len(valid_tasks)} tasks for use.")
         return valid_tasks
 
-    def _load_hf_dataset(self):
-        """Load data from HuggingFace dataset."""
+    def _load_hf_test_dataset(self):
+        """Load test data from HuggingFace dataset (test split only for reasoning_gym)."""
         try:
             from datasets import load_dataset
 
-            # Load train and test splits from the dataset
-            train_dataset = load_dataset(self.config.dataset, split="train")
+            # Load only test split from the dataset (reasoning_gym only has test split)
             test_dataset = load_dataset(self.config.dataset, split="test")
 
             # Convert to the format expected by the environment
-            train_items = []
             test_items_with_scorers = []
-
-            # For reasoning gym, we need to handle the data differently
-            # The HF dataset should contain items with problem/answer pairs
-            for item in train_dataset:
-                train_items.append(item)
 
             for item in test_dataset:
                 # For test items, we need to create a scorer
@@ -536,43 +529,32 @@ class ReasoningGymEnv(BaseEnv):
                     test_items_with_scorers, self.config.max_eval_samples
                 )
 
-            return train_items, test_items_with_scorers
+            return test_items_with_scorers
 
         except Exception as e:
             self.logger.info(
-                f"Failed to load HuggingFace dataset '{self.config.dataset}': {e}. Falling back to reasoning_gym generation."  # noqa: E501
+                f"Failed to load HuggingFace test dataset '{self.config.dataset}': {e}. Falling back to reasoning_gym generation."  # noqa: E501
             )
-            return None, None
+            return None
 
     async def setup(self):
-        # Try to load from HuggingFace dataset first
-        train_items, test_items = self._load_hf_dataset()
-
-        if train_items is not None and test_items is not None:
-            self.task_names = ["hf_dataset"]  # Use a single task name for HF dataset
-            self.test_items_with_scorers = test_items
-            self.hf_train_items = train_items
-            self.logger.info(
-                f"Loaded {len(train_items)} train and {len(test_items)} test items from HuggingFace dataset"
+        # The reasoning_gym import is now handled at the top with sys.path modification.
+        if reasoning_gym is None:
+            raise ImportError(
+                "reasoning-gym library could not be imported from the local submodule. "
+                "This environment cannot function. Check submodule presence and integrity."
             )
-        else:
-            # Fall back to original reasoning_gym setup
-            # The reasoning_gym import is now handled at the top with sys.path modification.
-            if reasoning_gym is None:
-                raise ImportError(
-                    "reasoning-gym library could not be imported from the local submodule. "
-                    "This environment cannot function. Check submodule presence and integrity."
-                )
 
-            self.logger.info("Setting up ReasoningGym environment...")
+        self.logger.info("Setting up ReasoningGym environment...")
 
-            self.task_names = (
-                self._get_task_names()
-            )  # _get_task_names now uses self._validate_discovered_tasks
-            if not self.task_names:
-                raise ValueError(
-                    "No reasoning_gym tasks could be loaded. Environment setup failed."
-                )
+        # Always use procedural generation for training
+        self.task_names = (
+            self._get_task_names()
+        )  # _get_task_names now uses self._validate_discovered_tasks
+        if not self.task_names:
+            raise ValueError(
+                "No reasoning_gym tasks could be loaded. Environment setup failed."
+            )
 
         self.logger.info(
             f"ReasoningGymEnv: Initialized with {len(self.task_names)} tasks."
@@ -584,36 +566,47 @@ class ReasoningGymEnv(BaseEnv):
         self.rng.seed(self.config.seed)
         self.iter = 0
 
-        # Create a fixed test set for evaluation
-        self.logger.info("Generating fixed test set for evaluation...")
-        eval_tasks_sample = self.rng.sample(
-            self.task_names, min(len(self.task_names), 20)
-        )  # Sample 20 tasks for eval
+        # Try to load test set from HuggingFace dataset first
+        hf_test_items = self._load_hf_test_dataset()
 
-        for task_name in tqdm_asyncio(eval_tasks_sample, desc="Creating eval dataset"):
-            try:
-                # Each task gets its own dataset instance for evaluation
-                # Using a fixed seed for reproducibility of the test set
-                dataset = reasoning_gym.create_dataset(
-                    task_name,
-                    size=self.config.num_eval_samples_per_task,
-                    seed=self.config.eval_seed,
-                )
-                for item in dataset:
-                    self.test_items_with_scorers.append((item, dataset))
-            except Exception as e:
-                self.logger.warning(
-                    f"Could not create eval dataset for task '{task_name}': {e}"
-                )
-
-        if not self.test_items_with_scorers:
-            self.logger.warning(
-                "No evaluation items could be generated. Evaluation might be skipped or fail."
+        if hf_test_items is not None:
+            self.test_items_with_scorers = hf_test_items
+            self.logger.info(
+                f"Loaded {len(hf_test_items)} test items from HuggingFace dataset '{self.config.dataset}'"
             )
         else:
-            self.logger.info(
-                f"Generated {len(self.test_items_with_scorers)} items for the evaluation test set."
-            )
+            # Fall back to generating test set using reasoning_gym
+            self.logger.info("Generating fixed test set for evaluation...")
+            eval_tasks_sample = self.rng.sample(
+                self.task_names, min(len(self.task_names), 20)
+            )  # Sample 20 tasks for eval
+
+            for task_name in tqdm_asyncio(
+                eval_tasks_sample, desc="Creating eval dataset"
+            ):
+                try:
+                    # Each task gets its own dataset instance for evaluation
+                    # Using a fixed seed for reproducibility of the test set
+                    dataset = reasoning_gym.create_dataset(
+                        task_name,
+                        size=self.config.num_eval_samples_per_task,
+                        seed=self.config.eval_seed,
+                    )
+                    for item in dataset:
+                        self.test_items_with_scorers.append((item, dataset))
+                except Exception as e:
+                    self.logger.warning(
+                        f"Could not create eval dataset for task '{task_name}': {e}"
+                    )
+
+            if not self.test_items_with_scorers:
+                self.logger.warning(
+                    "No evaluation items could be generated. Evaluation might be skipped or fail."
+                )
+            else:
+                self.logger.info(
+                    f"Generated {len(self.test_items_with_scorers)} items for the evaluation test set."
+                )
 
         # Initialize complexity mapping after task names are loaded
         self._initialize_complexity_mapping()
@@ -652,24 +645,7 @@ class ReasoningGymEnv(BaseEnv):
         if not self.task_names:
             return None  # Should not happen if setup is correct
 
-        # Check if we're using HuggingFace dataset
-        if hasattr(self, "hf_train_items") and self.hf_train_items:
-            # Select a random item from the HF dataset
-            rg_item = self.rng.choice(self.hf_train_items)
-            prompt_messages = [
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": rg_item.get("question", rg_item.get("problem", "")),
-                },
-            ]
-            self.iter += 1
-            return (
-                prompt_messages,
-                rg_item,
-                None,
-            )  # None for dataset_obj as we don't have a scorer
-
+        # Always use procedural generation for training
         selected_task_name = self.rng.choice(self.task_names)
 
         try:
