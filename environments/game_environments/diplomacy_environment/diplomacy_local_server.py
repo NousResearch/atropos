@@ -37,11 +37,13 @@ async def main():
 
     # Configure environment - using OpenRouter model
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-    openrouter_model = f"openai:openai/gpt-oss-120b@https://openrouter.ai/api/v1#{openrouter_api_key}"
-    
+    openrouter_model = (
+        f"openai:openai/gpt-oss-120b@https://openrouter.ai/api/v1#{openrouter_api_key}"
+    )
+
     # Create list of opponent models (6 powers besides training power)
     opponent_models = [openrouter_model] * 6
-    
+
     env_config = DiplomacyEnvMinimalConfig(
         tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
         group_size=2,  # Run 2 parallel games

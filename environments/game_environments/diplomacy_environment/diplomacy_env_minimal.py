@@ -83,7 +83,7 @@ class DiplomacyEnvMinimalConfig(BaseEnvConfig):
 
     # Evaluation
     eval_episodes: int = 10
-    
+
     # Opponent models (None = use SGLang endpoints from server_configs)
     opponent_models: Optional[List[str]] = None
 
@@ -117,7 +117,7 @@ class DiplomacyEnvMinimal(BaseEnv):
             f"You are playing Diplomacy as {config.training_power}. "
             "Analyze the game state and respond with your strategy and orders."
         )
-        
+
         # Configure opponent models
         if config.opponent_models:
             self.opponent_models = config.opponent_models
@@ -503,7 +503,9 @@ class DiplomacyEnvMinimal(BaseEnv):
                 models.append("atropos-training-policy")
             else:
                 # Use configured opponent model
-                models.append(self.opponent_models[opponent_idx % len(self.opponent_models)])
+                models.append(
+                    self.opponent_models[opponent_idx % len(self.opponent_models)]
+                )
                 opponent_idx += 1
 
         # Save original argv
