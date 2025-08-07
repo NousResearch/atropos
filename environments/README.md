@@ -165,26 +165,111 @@ So please end your answer with \boxed{your answer here}
 
 ### Tool Calling Environment (`tool_calling_server.py`)
 
-Environment for training models to make function calls in a structured format.
+A comprehensive environment for training models to make function calls in a structured format with configurable thinking mode and modern evaluation capabilities.
 
 **Input Format:**
-- Conversations from ShareGPT-Hermes function call dataset
+- Conversations from the NousResearch/XLAM-Atropos dataset (configurable)
 - Each item contains:
   - `conversations`: List of messages with roles (system, human, gpt)
-  - Expected tool calls in JSON format
+  - Expected tool calls in JSON format within `<tool_call>` tags
 
-**System Prompt:**
+**System Prompt Configuration:**
+- **Thinking Mode (default)**: Uses deep thinking prompt with `<think></think>` tags
+- **Non-thinking Mode**: Optional custom system prompt or empty
+- **Custom Prompts**: Configurable thinking and system prompts via config
+
+**Default Thinking System Prompt:**
 ```
 You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the problem and deliberate with yourself via systematic reasoning processes to help come to a correct solution prior to answering. You should enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem.
 ```
 
+**Key Features:**
+- **Configurable Thinking Mode**: Enable/disable thinking tags with validation
+- **Modern Evaluation**: Comprehensive metrics and sample logging via `evaluate_log()`
+- **Debug Capabilities**: Full request/response logging when enabled
+- **Flexible Configuration**: Separate train/eval datasets, temperatures, and token limits
+- **Robust Tool Call Parsing**: Handles multiple tool calls with nested JSON validation
+- **Error Tracking**: Detailed metrics for format errors, thinking validation, and success rates
+
 **Reward Function:**
 - Score of 1.0 if all expected tool calls are present and match exactly (including nested JSON fields)
-- Score of 0.0 if any tool calls are missing, incorrect, or malformed
+- Score of 0.0 if any tool calls are missing, incorrect, malformed, or have invalid thinking format
 - Length penalty applied if all responses are correct:
   - No penalty for responses under 50% of max token length
   - Linear penalty scaling from 1.0 down to 0.0 for responses between 50% and 100% of max length
   - Returns None if all scores are identical (no learning signal)
+- In thinking mode, responses with malformed `<think></think>` tags are automatically scored 0.0
+
+**Configuration Options (`ToolCallingConfig`):**
+- `thinking_mode`: Enable thinking mode with `<think></think>` tags (default: True)
+- `custom_thinking_prompt`: Override default thinking prompt (default: None)
+- `custom_system_prompt`: Additional system prompt content (default: None)
+- `eval_temperature`: Temperature for evaluation completions (default: 1.0)
+- `rollout_temperature`: Temperature for training completions (default: 0.8)
+- `eval_max_tokens`: Max tokens for evaluation (default: 15360)
+- `train_max_tokens`: Max tokens for training (default: 15360)
+- `train_dataset`: Training dataset name or path (default: "NousResearch/XLAM-Atropos")
+- `eval_dataset`: Evaluation dataset name or path (default: "NousResearch/XLAM-Atropos")
+- `eval_test_size`: Number of evaluation samples (default: 100)
+- `full_debug`: Enable comprehensive debug logging (default: False)
+- `max_retries`: API retry attempts (default: 3)
+- `min_response_length`: Minimum valid response length (default: 5)
+
+**Evaluation Metrics:**
+- `eval/percent_correct`: Overall tool calling accuracy
+- `eval/total_samples`: Number of evaluation samples
+- `eval/successful_tool_calls`: Count of successful tool calls
+- `eval/thinking_format_errors`: Count of malformed thinking tags
+- `eval/thinking_valid_rate`: Rate of valid thinking tag usage (thinking mode only)
+- `eval/format_error_rate`: Rate of format errors
+- `eval/success_rate`: Overall success rate
+- `train/percent_correct`: Training accuracy
+
+**Tool Call Format:**
+Expected format for tool calls in responses:
+```
+<tool_call>
+{
+  "name": "function_name",
+  "arguments": {
+    "param1": "value1",
+    "param2": "value2"
+  }
+}
+</tool_call>
+```
+
+**Usage Examples:**
+```bash
+# Default thinking mode
+python tool_calling_server.py serve
+
+# Non-thinking mode
+python tool_calling_server.py serve \
+    --env.thinking_mode=False
+
+# Custom configuration with debug
+python tool_calling_server.py serve \
+    --env.eval_temperature=0.7 \
+    --env.rollout_temperature=1.0 \
+    --env.full_debug=True \
+    --env.eval_test_size=200
+
+# Custom system prompt
+python tool_calling_server.py serve \
+    --env.custom_system_prompt="You are an expert function calling assistant."
+
+# Data directory for evaluation logging
+python tool_calling_server.py serve \
+    --data_dir_to_save_evals="/path/to/eval/results"
+```
+
+**Modern Evaluation Features:**
+- Automatic saving of evaluation metrics to `metrics.json`
+- Sample-level data saved to `samples.jsonl` for detailed analysis
+- Integration with `evaluate_log()` for consistent evaluation data format
+- Comprehensive error tracking and categorization
+- Support for both HuggingFace datasets and local JSONL files
 
 ---
 

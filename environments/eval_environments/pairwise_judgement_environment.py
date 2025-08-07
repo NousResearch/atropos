@@ -360,7 +360,7 @@ class PairwiseJudgementEnv(BaseEnv):
             batch_size=1024,
             steps_per_eval=25,
             train_max_tokens=1024 * 16,
-            eval_max_tokens=1024 * 16,
+            eval_max_tokens=1024 * 32,
             inference_weight=1.0,
             wandb_name="pairwise_judgment",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
