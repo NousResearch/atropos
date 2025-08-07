@@ -912,7 +912,7 @@ Your answer:"""
             overarching_category = eval_item.get("overarching_category", "Unknown")
 
             danger = eval_item.get("danger", "unknown")
-    
+
             if not prompt_text:
                 return {"refusal_rate": None, "sample": None}
 
@@ -940,7 +940,6 @@ Your answer:"""
                     completion = await self.server.chat_completion(
                         messages=messages, **completion_params
                     )
-
 
                     # Log full debug response
                     self._log_full_debug_response(
