@@ -912,13 +912,7 @@ Your answer:"""
             overarching_category = eval_item.get("overarching_category", "Unknown")
 
             danger = eval_item.get("danger", "unknown")
-
-            print("Here is the prompt text ", prompt_text)
-
-            print("Here is the overarching category ", overarching_category)
-
-            print("Here is the danger ", danger)
-
+    
             if not prompt_text:
                 return {"refusal_rate": None, "sample": None}
 
@@ -943,11 +937,10 @@ Your answer:"""
                         completion_params,
                         f"EVAL attempt {attempt + 1}/{max_retries}",
                     )
-                    print("Tried")
                     completion = await self.server.chat_completion(
                         messages=messages, **completion_params
                     )
-                    print("passed")
+
 
                     # Log full debug response
                     self._log_full_debug_response(
