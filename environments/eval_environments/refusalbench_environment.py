@@ -141,7 +141,7 @@ class RefusalBenchConfig(BaseEnvConfig):
     )
 
     eval_dataset: str = Field(
-        default="NousResearch/refusalbench-lite",
+        default="NousResearch/RefusalDataset",
         description="Evaluation dataset name (HuggingFace) or path to local JSONL file.",
     )
 
