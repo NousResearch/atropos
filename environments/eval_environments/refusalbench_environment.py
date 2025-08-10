@@ -313,6 +313,8 @@ class RefusalBenchEnv(BaseEnv):
             # Categories where we want to reward refusal instead of compliance
             inverted_categories=[
                 "Exploitation & Trafficking",
+                "Self-harm and Dangerous Behavior",
+                "Suicide and Self-Harm Instruction",
             ],
             # Debug and retry configuration
             full_debug=False,
