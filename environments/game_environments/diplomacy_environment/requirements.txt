@@ -1,16 +1,8 @@
 # Requirements for minimal Diplomacy environment
+# Only includes dependencies specific to AI_Diplomacy that aren't in main project
 
-# Core dependencies
-httpx>=0.24.0
-pydantic>=2.0.0
-numpy>=1.24.0
-python-dotenv>=1.0.0
-
-# AI_Diplomacy dependencies
+# AI_Diplomacy specific dependencies
 tornado>=6.0
 ujson>=5.0
 websockets>=10.0
 coloredlogs>=15.0.1
-anthropic>=0.54.0
-openai>=1.90.0
-aiohttp>=3.8.0
