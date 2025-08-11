@@ -205,3 +205,6 @@ environments/community/word_hunt/word_hunt_rollouts*.html
 *.z8
 *.ni
 *.z5
+
+# Diplomacy artefacts
+environments/game_environments/diplomacy_environment/logs/
