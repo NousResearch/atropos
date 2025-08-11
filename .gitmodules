@@ -4,3 +4,6 @@
 [submodule "environments/reasoning_gym_environment/reasoning-gym"]
 	path = environments/reasoning_gym_environment/reasoning-gym
 	url = https://github.com/open-thought/reasoning-gym
+[submodule "environments/game_environments/diplomacy_environment/AI_Diplomacy"]
+	path = environments/game_environments/diplomacy_environment/AI_Diplomacy
+	url = https://github.com/GoodStartLabs/AI_Diplomacy.git

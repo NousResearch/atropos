@@ -44,7 +44,6 @@ class TextWorldChallengeRegistry:
     def __init__(self, seed: Optional[int] = None):
         self._challenges = self.CHALLENGES.copy()
         self.rng = random.Random(seed)
-
         # Cache for all possible combinations
         self._all_combinations = None
         self._combination_index = 0

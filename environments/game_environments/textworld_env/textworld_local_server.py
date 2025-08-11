@@ -49,7 +49,7 @@ async def main():
     # Configure server - using same model as blackjack example
     server_configs = [
         APIServerConfig(
-            model_name="gpt-4.1-nano",
+            model_name="gpt-4.1",
             base_url="https://api.openai.com/v1",
             api_key=os.getenv("OPENAI_API_KEY"),
             num_requests_for_eval=0,
@@ -99,7 +99,6 @@ async def main():
             item = await env.get_next_item()
             challenge_name = item["challenge_name"]
             challenge_counts[challenge_name] += 1
-
             logger.info(f"\n===== Episode {episode_num + 1}/{num_episodes} =====")
             logger.info(f"Using game: {item}")
 
