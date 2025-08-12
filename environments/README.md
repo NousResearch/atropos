@@ -554,3 +554,57 @@ Wrap each *SEARCH/REPLACE* edit in a code block as shown in the example above. I
 - **Dataset Handling:** Loads training and test data from Hugging Face datasets, specifically tailored for SWE-bench like formats.
 - **Patch Parsing:** Implements robust parsing for a specific SEARCH/REPLACE patch format.
 - **Thinking Tag Processing:** Extracts content after `<think> </think>`
+
+---
+
+### Text Reversal Environment (`text_reversal_environment.py`)
+
+Environment for training and evaluating exact string reversal with optional thinking and split train/eval context lengths.
+
+**Dataset:**
+- `PrimeIntellect/Reverse-Text-SFT`
+
+**Input Format:**
+- Each item contains two `prompt` messages and one `completion` message:
+  - `prompt`: list of messages with roles {`system`, `user`}
+  - `completion`: list with a single assistant message containing the reversed text, wrapped in `<reversed_text>...</reversed_text>`
+
+**Prompt Construction:**
+- The dataset's system text is NOT used as a system message to the model.
+- Instead, it is prepended to the user content with two newline separators and sent as the user turn:
+  - Effective user content: `"{dataset_system}\n\n{dataset_user}"`
+- Optional thinking system prompt is included only when `use_thinking=True`.
+
+**Reward Function:**
+- Extract the model output after the first closing `</think>` tag (if present), trim whitespace.
+- Score is 1.0 if the remaining output EXACTLY matches the dataset assistant `completion` content; otherwise 0.0.
+
+**Configuration Options (`TextReversalEnvConfig`):**
+- `use_thinking` (bool, default: False): include thinking system prompt.
+- `dataset_name` (str, default: `PrimeIntellect/Reverse-Text-SFT`): training dataset.
+- `eval_dataset_name` (Optional[str], default: None): static eval dataset to use (full split). If `None`, the environment samples `test_set_size` examples from the training dataset for eval.
+- `test_set_size` (int, default: 100): number of samples for eval when `eval_dataset_name=None`.
+- `max_train_token_length` (int, default: 16384): max tokens for training generations.
+- `max_eval_token_length` (int, default: 32768): max tokens for eval generations.
+
+**Usage Examples:**
+```bash
+# Basic training with default 16k train context, 32k eval context, and sampled eval set (100 examples)
+python text_reversal_environment.py serve
+
+# Enable thinking system prompt
+python text_reversal_environment.py serve \
+  --env.use_thinking=True
+
+# Use a static eval dataset instead of sampling from train
+python text_reversal_environment.py serve \
+  --env.eval_dataset_name="someorg/Reverse-Text-EVAL"
+
+# Override max token lengths if needed
+python text_reversal_environment.py serve \
+  --env.max_train_token_length=12000 \
+  --env.max_eval_token_length=28000
+```
+
+**Evaluation Metric:**
+- `eval/percent_correct`: strict exact-match accuracy on the eval set.
