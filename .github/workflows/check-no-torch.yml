@@ -15,7 +15,7 @@ jobs:
     name: Ensure torch is not in main dependencies
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Check pyproject.toml for torch in main dependencies
       run: |
