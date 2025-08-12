@@ -26,12 +26,11 @@ import re
 from collections import Counter
 from typing import Dict, List, Optional, Tuple
 
-import aiohttp
-import wandb
 from datasets import load_dataset
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
+import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
@@ -40,49 +39,7 @@ from atroposlib.envs.base import (
     Item,
     ScoredDataGroup,
 )
-from atroposlib.utils.io import parse_http_response
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
-
-logger = logging.getLogger(__name__)
-
-# ------------------------------------------------------------------
-# Filter: skip tasks that were already processed in a finished SFT dataset
-# ------------------------------------------------------------------
-# COMPLETED_DATASET_ID = "interstellarninja/toolace_sequential_tool_use_reasoning"
-COMPLETED_DATASET_ID = "interstellarninja/tool-use-multiturn-reasoning"
-
-# COMPLETED_DATASET_ID = "interstellarninja/tool-calls-single-reasoning"
-
-try:
-    _done_ds = load_dataset(COMPLETED_DATASET_ID, split="train")
-    COMPLETED_TASKS: set[str] = set(_done_ds["task"])
-    print(
-        f"[filter] Loaded {len(COMPLETED_TASKS):,} completed tasks from {COMPLETED_DATASET_ID}"
-    )
-except Exception as _exc:
-    COMPLETED_TASKS = set()
-    print(
-        f"[filter] Could not load completed-task dataset: {_exc}. No skipping will occur."
-    )
-
-# Easy-to-change constants for experimentation - modify these for quick testing
-WRONG_CALL_PENALTY = -0.2
-MAX_GEN_PER_TURN = 1024
-MAX_TOOL_CALL_TURNS_CAP = 1  # Default: keep up to 3 tool-calling turns for multiturn
-# Narration turns do NOT count against this cap.
-VALIDATE_THINK_BLOCKS = False
-
-GENERATE_ALL_GPT_TURNS = False
-# When True, prepend the latest successful assistant tool‑calling example
-# (<think>… <tool_call>…) to the system prompt as a live few‑shot.
-ADD_DYNAMIC_FEW_SHOT = True
-
-# Supported benchmark categories, aligned with BFCL‑V3
-#   "single"     → single‑turn  (one assistant tool‑calling turn)
-#   "multistep"  → multi‑step   (≥2 assistant tool‑calling turns, no extra user turns)
-#   "multiturn"  → multi‑turn   (≥1 extra user turn after the first tool call)
-#   "relevance"  → relevance / no‑tool (exactly one assistant narration turn)
-SCENARIO_CATEGORY = "multiturn"  # set to "single" | "multistep" | "multiturn"
 
 
 class MultiTurnEnvConfig(BaseEnvConfig):
@@ -93,7 +50,7 @@ class MultiTurnEnvConfig(BaseEnvConfig):
         description="Upper cap on assistant TOOL‑CALLING turns per episode (None → no cap)",
     )
     validate_think_blocks: bool = Field(
-        default=True,
+        default=False,
         description="Whether to validate that all GPT messages have <think> blocks [useful when non-tool call gpt messages are inserted]",
     )
     generate_all_gpt_turns: bool = Field(
@@ -117,6 +74,10 @@ class MultiTurnEnvConfig(BaseEnvConfig):
     skip_completed: bool = Field(
         default=True,
         description="Skip any conversation whose first user prompt appears in COMPLETED_TASKS.",
+    )
+    completed_dataset_id: Optional[str] = Field(
+        default=None,
+        description="Dataset id containing tasks already completed; used to skip duplicates when skip_completed=True. If None, no skipping will occur.",
     )
     scenario_category: str = Field(
         default="multiturn",
@@ -188,8 +149,6 @@ NARRATION_THINK_HELPER = (
 # ------------------------------------------------------------------
 # Helper: normalize assistant tool_call blocks to canonical JSON
 # ------------------------------------------------------------------
-
-
 def _normalize_tool_call_json(txt: str) -> str:
     """
     Normalise assistant replies so that:
@@ -261,8 +220,6 @@ def _canonicalise_tool_json(raw: str) -> Optional[str]:
 # ------------------------------------------------------------------
 # Helper: validate a GPT reply that *may* include tool calls
 # ------------------------------------------------------------------
-
-
 def _validate_think_only(txt: str) -> bool:
     """
     A narration / summary turn must:
@@ -543,6 +500,9 @@ class MultiTurnToolCallingEnv(BaseEnv):
         # Holds latest good assistant tool‑calling example (<think> + <tool_call>)
         self.dynamic_example: Optional[str] = None
 
+        # Completed tasks (loaded in setup if enabled)
+        self.completed_tasks: set[str] = set()
+
         # List of (messages_tuple, expected_calls_by_turn, inter_turns) triples
         self.train_items: List[
             Tuple[Tuple[frozenset, ...], List[List[str]], List[List[Dict[str, str]]]]
@@ -552,26 +512,6 @@ class MultiTurnToolCallingEnv(BaseEnv):
         ] = []
         self.iter = 0
         self.max_token_len = 4096
-
-    async def get_server_info(self):
-        """Override to prevent server from overwriting our max_token_len"""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{self.config.rollout_server_url}/info") as resp:
-                data = await parse_http_response(resp, logger)
-                if data["batch_size"] != -1:
-                    self.config.batch_size = data["batch_size"]
-                # Log what the server tried to set max_token_len to
-                if data["max_token_len"] != -1:
-                    logger.info(
-                        f"Server tried to set max_token_len to {data['max_token_len']}, keeping our value of {self.max_token_len}"
-                    )
-        if self.config.batch_size == -1:
-            logging.warning("Batch size not set by config or server!")
-        if self.config.group_size > self.config.batch_size:
-            raise ValueError(
-                f"group_size ({self.config.group_size}) "
-                f"must be less than batch_size ({self.config.batch_size})"
-            )
 
     @classmethod
     def config_init(cls) -> Tuple[MultiTurnEnvConfig, List[APIServerConfig]]:
@@ -588,15 +528,8 @@ class MultiTurnToolCallingEnv(BaseEnv):
             wandb_name="multiturn_tool_use",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
-            # Override config defaults with experimental constants
-            wrong_call_penalty=WRONG_CALL_PENALTY,
-            max_gen_per_turn=MAX_GEN_PER_TURN,
-            max_tool_call_turns_cap=MAX_TOOL_CALL_TURNS_CAP,
-            validate_think_blocks=VALIDATE_THINK_BLOCKS,
-            generate_all_gpt_turns=GENERATE_ALL_GPT_TURNS,
+            # Use config defaults; all knobs are overrideable via CLI/YAML
             skip_completed=True,
-            scenario_category=SCENARIO_CATEGORY,
-            add_dynamic_few_shot=ADD_DYNAMIC_FEW_SHOT,
         )
         # ─── Scenario‑specific tweaks ──────────────────────────────
         # For strict multi‑turn datasets we generate an explicit narration
@@ -627,6 +560,20 @@ class MultiTurnToolCallingEnv(BaseEnv):
 
     async def setup(self):
         ds = self.ds.shuffle()
+
+        # Populate completed-tasks filter inside setup
+        if self.config.skip_completed and self.config.completed_dataset_id:
+            try:
+                _done_ds = load_dataset(self.config.completed_dataset_id, split="train")
+                self.completed_tasks = set(_done_ds["task"])  # type: ignore
+                print(
+                    f"[filter] Loaded {len(self.completed_tasks):,} completed tasks from {self.config.completed_dataset_id}"
+                )
+            except Exception as _exc:
+                self.completed_tasks = set()
+                print(
+                    f"[filter] Could not load completed-task dataset: {_exc}. No skipping will occur."
+                )
 
         counts = Counter()
         sequential_counts = Counter()
@@ -679,9 +626,9 @@ class MultiTurnToolCallingEnv(BaseEnv):
                 continue
 
             # Skip if task already completed
-            if self.config.skip_completed and COMPLETED_TASKS:
+            if self.config.skip_completed and self.completed_tasks:
                 first_user_msg = conv[1]["value"].strip()
-                if first_user_msg in COMPLETED_TASKS:
+                if first_user_msg in self.completed_tasks:
                     continue
 
             # Find all tool-calling turns
