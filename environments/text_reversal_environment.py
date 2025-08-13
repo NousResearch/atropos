@@ -100,7 +100,7 @@ class TextReversalEnv(BaseEnv):
             # Env-specific
             use_thinking=False,
             dataset_name="PrimeIntellect/Reverse-Text-SFT",
-            #eval_dataset_name=None,
+            # eval_dataset_name=None,
             test_set_size=100,
             eval_dataset_name=None,
             max_train_token_length=1024 * 16,
@@ -454,12 +454,18 @@ class TextReversalEnv(BaseEnv):
         # Apply CoT length penalty within-group for correct rollouts if enabled
         if getattr(self.config, "length_penalty_enabled", True):
             # Compute baseline from correct rollouts with valid think lengths
-            indices_with_think = [i for i, (r, L) in enumerate(zip(scores["scores"], think_lengths)) if r == 1.0 and L is not None]
+            indices_with_think = [
+                i
+                for i, (r, L) in enumerate(zip(scores["scores"], think_lengths))
+                if r == 1.0 and L is not None
+            ]
             if len(indices_with_think) > 1:
                 lengths = [think_lengths[i] for i in indices_with_think]
                 baseline = sum(lengths) / len(lengths) if lengths else None
                 if baseline is not None and baseline > 0:
-                    delta = max(0, int(getattr(self.config, "penalty_deadband_tokens", 5)))
+                    delta = max(
+                        0, int(getattr(self.config, "penalty_deadband_tokens", 5))
+                    )
                     alpha = float(getattr(self.config, "penalty_alpha", 0.5))
                     power = float(getattr(self.config, "penalty_power", 2.0))
                     min_score = float(getattr(self.config, "penalty_min_score", 0.2))
@@ -471,7 +477,7 @@ class TextReversalEnv(BaseEnv):
                         L_i = float(think_lengths[i])
                         if L_i > threshold:
                             r_excess = max(0.0, (L_i - threshold) / denom)
-                            penalized = 1.0 - alpha * (r_excess ** power)
+                            penalized = 1.0 - alpha * (r_excess**power)
                             penalized = max(min_score, min(1.0, penalized))
                             scores["scores"][i] = penalized
 
