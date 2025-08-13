@@ -587,6 +587,12 @@ Environment for training and evaluating exact string reversal with optional thin
   - Defaults: `α=0.5`, `p=2`, `penalty_min_score=0.2`.
 - Incorrect rollouts remain at 0.0. If no valid think block (or thinking disabled), penalty is skipped for that rollout.
 
+**Curriculum: One-Epoch + Hard Retries (optional):**
+- Controlled by `curriculum_one_epoch_enabled` (default: True).
+- First pass (one epoch): each item is attempted once. If any rollout in the group is correct (≥1/N), the item is considered solved and never revisited. If the group has zero correct (0/N), the item is marked “hard” and placed into a retry pool.
+- Retry phase: only begins after the first pass over all training items completes. Items in the retry pool are revisited up to `hard_retry_max_attempts` times (default: 3). If still unsolved, they are dropped and training completes naturally when the retry pool is exhausted.
+- Tip: Use a large `total_steps`. The environment will stop serving items once the one-epoch + retries queues are exhausted (it raises completion in `get_next_item`).
+
 **Configuration Options (`TextReversalEnvConfig`):**
 - `use_thinking` (bool, default: False): include thinking system prompt.
 - `dataset_name` (str, default: `PrimeIntellect/Reverse-Text-SFT`): training dataset.
@@ -599,6 +605,8 @@ Environment for training and evaluating exact string reversal with optional thin
 - `penalty_alpha` (float, default: 0.5): penalty scale.
 - `penalty_power` (float, default: 2.0): penalty exponent (quadratic by default).
 - `penalty_min_score` (float, default: 0.2): lower bound for penalized correct rollouts.
+- `curriculum_one_epoch_enabled` (bool, default: True): enables one-pass training plus a late retry phase for hard items.
+- `hard_retry_max_attempts` (int, default: 3): maximum retry attempts per hard item in the retry phase.
 
 **Usage Examples:**
 ```bash
@@ -625,6 +633,11 @@ python text_reversal_environment.py serve \
   --env.penalty_alpha=0.6 \
   --env.penalty_power=2.0 \
   --env.penalty_min_score=0.3
+
+# Enable one-epoch + retries curriculum and set max retries
+python text_reversal_environment.py serve \
+  --env.curriculum_one_epoch_enabled=True \
+  --env.hard_retry_max_attempts=3
 ```
 
 **Evaluation Metric:**
