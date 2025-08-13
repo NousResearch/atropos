@@ -422,7 +422,9 @@ class TextReversalEnv(BaseEnv):
         for trajectory_messages, _ in to_score:
             model_response_text = trajectory_messages[-1]["content"]
             model_answer_text = self._strip_think_and_trailing(model_response_text)
-            if (model_answer_text or "").strip() == (expected_text_for_group or "").strip():
+            if (model_answer_text or "").strip() == (
+                expected_text_for_group or ""
+            ).strip():
                 any_correct = True
                 break
 
@@ -578,8 +580,14 @@ class TextReversalEnv(BaseEnv):
                     # enter retry phase
                     self.in_retry_phase = True
                     # Build retry queue preserving original order
-                    self.retry_queue = [ri for ri in self.train if f"{hash(str(ri))}" in self.retry_pool_ids]
-                    self.retry_attempt_counts = {f"{hash(str(ri))}": 0 for ri in self.retry_queue}
+                    self.retry_queue = [
+                        ri
+                        for ri in self.train
+                        if f"{hash(str(ri))}" in self.retry_pool_ids
+                    ]
+                    self.retry_attempt_counts = {
+                        f"{hash(str(ri))}": 0 for ri in self.retry_queue
+                    }
 
             if self.in_retry_phase:
                 while selected_item is None:
@@ -589,7 +597,9 @@ class TextReversalEnv(BaseEnv):
                     candidate = self.retry_queue.pop(0)
                     cand_id = f"{hash(str(candidate))}"
                     attempts = self.retry_attempt_counts.get(cand_id, 0)
-                    max_attempts = int(getattr(self.config, "hard_retry_max_attempts", 3))
+                    max_attempts = int(
+                        getattr(self.config, "hard_retry_max_attempts", 3)
+                    )
                     if attempts >= max_attempts:
                         continue
                     self.retry_attempt_counts[cand_id] = attempts + 1
