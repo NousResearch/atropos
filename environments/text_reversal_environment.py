@@ -50,6 +50,13 @@ class TextReversalEnvConfig(BaseEnvConfig):
     max_train_token_length: int = 1024 * 16
     max_eval_token_length: int = 1024 * 32
 
+    # Optional CoT length penalty for correct rollouts (applied within groups only)
+    length_penalty_enabled: bool = True
+    penalty_deadband_tokens: int = 5
+    penalty_alpha: float = 0.5
+    penalty_power: float = 2.0
+    penalty_min_score: float = 0.2
+
 
 class TextReversalEnv(BaseEnv):
     env_config_cls = TextReversalEnvConfig
@@ -93,10 +100,17 @@ class TextReversalEnv(BaseEnv):
             # Env-specific
             use_thinking=False,
             dataset_name="PrimeIntellect/Reverse-Text-SFT",
+            #eval_dataset_name=None,
             test_set_size=100,
             eval_dataset_name=None,
             max_train_token_length=1024 * 16,
             max_eval_token_length=1024 * 32,
+            # CoT length penalty
+            length_penalty_enabled=True,
+            penalty_deadband_tokens=5,
+            penalty_alpha=0.5,
+            penalty_power=2.0,
+            penalty_min_score=0.2,
         )
 
         server_configs = [
@@ -306,6 +320,21 @@ class TextReversalEnv(BaseEnv):
             return text[close_match.end() :].strip()
         return text.strip()
 
+    @staticmethod
+    def _extract_think_content(text: str) -> Optional[str]:
+        """Extract content inside the first <think>...</think> block (case-insensitive).
+        Returns None if not found or malformed.
+        """
+        if not text:
+            return None
+        open_match = re.search(r"<think>", text, flags=re.IGNORECASE)
+        close_match = re.search(r"</think>", text, flags=re.IGNORECASE)
+        if not open_match or not close_match:
+            return None
+        if open_match.start() >= close_match.start():
+            return None
+        return text[open_match.end() : close_match.start()].strip()
+
     async def rollout_and_score_eval(self, test_item: Dict) -> float:
         messages = self._build_messages(
             test_item.get("system_content", ""), test_item.get("user_content", "")
@@ -385,6 +414,9 @@ class TextReversalEnv(BaseEnv):
 
         random.shuffle(rollout_group_data)
 
+        think_lengths: List[Optional[int]] = []
+        correct_flags: List[float] = []
+
         for trajectory, expected in rollout_group_data:
             model_response = trajectory[-1]["content"]
             model_answer = self._strip_think_and_trailing(model_response)
@@ -401,12 +433,51 @@ class TextReversalEnv(BaseEnv):
             scores["masks"].append(masks)
             scores["scores"].append(reward)
 
+            # Track correctness separately for logging
+            correct_flags.append(1.0 if reward == 1.0 else 0.0)
+
+            # Extract CoT think length (tokens) for penalty purposes
+            think_text = self._extract_think_content(model_response)
+            if think_text is not None and reward == 1.0:
+                try:
+                    # Use tokenizer to count tokens of the CoT content
+                    think_token_ids = self.tokenizer.encode(think_text)
+                    think_lengths.append(len(think_token_ids))
+                except Exception:
+                    think_lengths.append(None)
+            else:
+                think_lengths.append(None)
+
             if len(scores["tokens"]) >= self.config.group_size:
                 break
 
-        # Record success metrics
-        for r in scores["scores"]:
-            self.percent_correct_buffer.append(1.0 if r >= 1.0 else 0.0)
+        # Apply CoT length penalty within-group for correct rollouts if enabled
+        if getattr(self.config, "length_penalty_enabled", True):
+            # Compute baseline from correct rollouts with valid think lengths
+            indices_with_think = [i for i, (r, L) in enumerate(zip(scores["scores"], think_lengths)) if r == 1.0 and L is not None]
+            if len(indices_with_think) > 1:
+                lengths = [think_lengths[i] for i in indices_with_think]
+                baseline = sum(lengths) / len(lengths) if lengths else None
+                if baseline is not None and baseline > 0:
+                    delta = max(0, int(getattr(self.config, "penalty_deadband_tokens", 5)))
+                    alpha = float(getattr(self.config, "penalty_alpha", 0.5))
+                    power = float(getattr(self.config, "penalty_power", 2.0))
+                    min_score = float(getattr(self.config, "penalty_min_score", 0.2))
+
+                    threshold = baseline + delta
+                    denom = max(baseline, 1.0)
+
+                    for i in indices_with_think:
+                        L_i = float(think_lengths[i])
+                        if L_i > threshold:
+                            r_excess = max(0.0, (L_i - threshold) / denom)
+                            penalized = 1.0 - alpha * (r_excess ** power)
+                            penalized = max(min_score, min(1.0, penalized))
+                            scores["scores"][i] = penalized
+
+        # Record success metrics based on correctness (not penalized score)
+        for flag in correct_flags:
+            self.percent_correct_buffer.append(flag)
 
         if not scores["tokens"]:
             return None

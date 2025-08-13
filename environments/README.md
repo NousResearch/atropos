@@ -579,6 +579,14 @@ Environment for training and evaluating exact string reversal with optional thin
 - Extract the model output after the first closing `</think>` tag (if present), trim whitespace.
 - Score is 1.0 if the remaining output EXACTLY matches the dataset assistant `completion` content; otherwise 0.0.
 
+**Optional CoT Length Penalty (for correct rollouts only):**
+- Enabled by default (`length_penalty_enabled=True`).
+- Within each training group, compute CoT token lengths from the content inside the first `<think>...</think>` block of correct rollouts.
+- Let L̄ be the average of those lengths. A deadband δ (default 5 tokens) defines a threshold `L̄ + δ`.
+- Any correct rollout with length above this threshold is penalized: `score = 1 - α * ((excess / L̄)^p)`, clipped to `[penalty_min_score, 1]`.
+  - Defaults: `α=0.5`, `p=2`, `penalty_min_score=0.2`.
+- Incorrect rollouts remain at 0.0. If no valid think block (or thinking disabled), penalty is skipped for that rollout.
+
 **Configuration Options (`TextReversalEnvConfig`):**
 - `use_thinking` (bool, default: False): include thinking system prompt.
 - `dataset_name` (str, default: `PrimeIntellect/Reverse-Text-SFT`): training dataset.
@@ -586,6 +594,11 @@ Environment for training and evaluating exact string reversal with optional thin
 - `test_set_size` (int, default: 100): number of samples for eval when `eval_dataset_name=None`.
 - `max_train_token_length` (int, default: 16384): max tokens for training generations.
 - `max_eval_token_length` (int, default: 32768): max tokens for eval generations.
+- `length_penalty_enabled` (bool, default: True): enable within-group CoT length penalty for correct rollouts.
+- `penalty_deadband_tokens` (int, default: 5): δ deadband added above average length before penalizing.
+- `penalty_alpha` (float, default: 0.5): penalty scale.
+- `penalty_power` (float, default: 2.0): penalty exponent (quadratic by default).
+- `penalty_min_score` (float, default: 0.2): lower bound for penalized correct rollouts.
 
 **Usage Examples:**
 ```bash
@@ -604,6 +617,14 @@ python text_reversal_environment.py serve \
 python text_reversal_environment.py serve \
   --env.max_train_token_length=12000 \
   --env.max_eval_token_length=28000
+
+# Adjust/disable the CoT length penalty for correct rollouts
+python text_reversal_environment.py serve \
+  --env.length_penalty_enabled=False \
+  --env.penalty_deadband_tokens=8 \
+  --env.penalty_alpha=0.6 \
+  --env.penalty_power=2.0 \
+  --env.penalty_min_score=0.3
 ```
 
 **Evaluation Metric:**
