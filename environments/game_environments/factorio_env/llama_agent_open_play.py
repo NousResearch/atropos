@@ -1,30 +1,34 @@
 #!/usr/bin/env python3
 """
-Fixed Factorio agent using proper Gym environment initialization.
+Demo script for use with Factorio client
+Open play mode, no task goals beyond "build giant factory"
 """
 
 import os
 import sys
 
-import gym
+# import gym  # Unused import
 
 # Add FLE to path
 fle_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fle")
 sys.path.insert(0, fle_path)
 
-import ast
-import json
-import re
-import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+import ast  # noqa: E402
+import json  # noqa: E402
+import re  # noqa: E402
+import time  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Any, Dict, List, Optional, Tuple, Union  # noqa: E402
 
-import fle  # Registers the environments
-import requests
-from fle.commons.models.game_state import GameState
-from fle.env.gym_env.action import Action
-from fle.env.gym_env.registry import get_environment_info, list_available_environments
-from fle.env.tools import get_agent_tools
+import fle  # noqa: F401,E402  # Registers the environments
+import requests  # noqa: E402
+from fle.commons.models.game_state import GameState  # noqa: E402
+from fle.env.gym_env.action import Action  # noqa: E402
+from fle.env.gym_env.registry import (  # noqa: E402
+    get_environment_info,
+    list_available_environments,
+)
+from fle.env.tools import get_agent_tools  # noqa: E402
 
 
 class LlamaFactorioAgent:
@@ -39,9 +43,9 @@ class LlamaFactorioAgent:
         # Check server connection
         try:
             requests.get(f"{server_url}/health", timeout=1)
-            print(f"✅ Connected to llama.cpp server")
-        except:
-            print(f"⚠️ Could not connect to llama.cpp server")
+            print("✅ Connected to llama.cpp server")
+        except Exception:
+            print("⚠️ Could not connect to llama.cpp server")
 
         self.system_prompt = (
             "You are an autonomous Factorio agent in open play."
@@ -50,8 +54,10 @@ class LlamaFactorioAgent:
             "\n<tool_call>{'name': '<tool_name>', 'arguments': { ... }}</tool_call>\n"
             # "\nThe <tool_call> block MUST follow the <think>...</think> block."
             "\n\nIMPORTANT DISTINCTIONS:\n"
-            "- RESOURCES are natural materials you harvest: Coal, IronOre, CopperOre, Stone, Wood (trees), Water, CrudeOil, UraniumOre\n"
-            "- ENTITIES are built structures: TransportBelt, Inserter, AssemblingMachine1, StoneFurnace, IronChest, etc.\n"
+            "- RESOURCES are natural materials you harvest: Coal, IronOre, CopperOre, Stone, "
+            "Wood (trees), Water, CrudeOil, UraniumOre\n"
+            "- ENTITIES are built structures: TransportBelt, Inserter, AssemblingMachine1, "
+            "StoneFurnace, IronChest, etc.\n"
             "- Use nearest(Resource.X) to find resources, get_entities(Prototype.Y) to find built structures\n"
             "- Tool results are always shown in the response (e.g., nearest returns 'Position(x=10, y=20)')\n"
             "\n\nAvailable Resources (use with nearest, harvest_resource, get_resource_patch):\n"
@@ -65,7 +71,8 @@ class LlamaFactorioAgent:
             "- Machines: Prototype.AssemblingMachine1, Prototype.Lab, Prototype.ChemicalPlant\n"
             "- Storage: Prototype.WoodenChest, Prototype.IronChest, Prototype.SteelChest\n"
             "- Power: Prototype.SmallElectricPole, Prototype.SteamEngine, Prototype.Boiler\n"
-            "- Items: Prototype.IronPlate, Prototype.CopperPlate, Prototype.IronGearWheel, Prototype.ElectronicCircuit\n"
+            "- Items: Prototype.IronPlate, Prototype.CopperPlate, Prototype.IronGearWheel, "
+            "Prototype.ElectronicCircuit\n"
             "\n\nConventions:\n"
             "- Positions are objects: {'x': float, 'y': float} - use exact coordinates from nearest()\n"
             "- Resources/Prototypes can be bare names ('Wood', 'IronOre') or fully qualified ('Resource.Wood')\n"
@@ -293,7 +300,7 @@ class LlamaFactorioAgent:
                 parts.append(
                     f"Entities nearby ({len(entities)} total): {entity_summary}"
                 )
-            except:
+            except Exception:
                 parts.append(f"Entities nearby: {len(entities)}")
         else:
             parts.append(
@@ -470,7 +477,6 @@ class LlamaFactorioAgent:
             func_call = f"{name}({', '.join(parts)})"
 
         # Always wrap with print() to capture any return values
-        # Tools that don't return anything will just print None or empty
         return f"print({func_call})"
 
 
@@ -539,7 +545,7 @@ def main():
         obs, info = env.reset(options={"game_state": None})
         print("✅ Environment reset\n")
 
-        # Simple goals
+        # Simple goals - change em to whatever you want
         goals = [
             "Find the nearest trees (Wood resource) and tell me the position",
             "Move to the position of the trees you just found",
@@ -598,16 +604,13 @@ def main():
                 # Debug: Show what the tool returned
                 raw_result = obs.get("raw_text", "") if isinstance(obs, dict) else ""
 
-                # Special handling for nearest - it returns Position but raw_text is empty
+                # Special handling for nearest - it returns Position
                 if (
                     tool_call.get("name") == "nearest"
                     and not raw_result
                     and reward >= 0
                 ):
-                    # Try to extract position from the last action's result
-                    # The Position is likely returned but not in raw_text
-                    # For now, we'll need to work around this
-                    raw_result = f"Position found (check game state for coordinates)"
+                    raw_result = "Position found (check game state for coordinates)"
 
                 if raw_result:
                     print(f"📝 Tool returned: {raw_result[:200]}")
