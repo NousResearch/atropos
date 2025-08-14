@@ -133,10 +133,6 @@ class CodingEnv(BaseEnv):
         self.deq = deque()
         self.next_heap = []
 
-    def get_system_prompt(self) -> Optional[str]:
-        """Get the custom system prompt or None if no system message should be used."""
-        return self.config.system_prompt
-
     @classmethod
     def config_init(cls) -> Tuple[CodeConfig, List[APIServerConfig]]:
         env_config = CodeConfig(
@@ -183,9 +179,8 @@ class CodingEnv(BaseEnv):
 
         # Build chat messages, only include system message if provided
         chat_messages = []
-        system_prompt_content = self.get_system_prompt()
-        if system_prompt_content is not None:
-            chat_messages.append({"role": "system", "content": system_prompt_content})
+        if self.config.system_prompt is not None:
+            chat_messages.append({"role": "system", "content": self.config.system_prompt})
         chat_messages.append(user_msg)
 
         prompt_tokens = tokenize_for_trainer(self.tokenizer, chat=chat_messages)
