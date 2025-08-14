@@ -180,7 +180,9 @@ class CodingEnv(BaseEnv):
         # Build chat messages, only include system message if provided
         chat_messages = []
         if self.config.system_prompt is not None:
-            chat_messages.append({"role": "system", "content": self.config.system_prompt})
+            chat_messages.append(
+                {"role": "system", "content": self.config.system_prompt}
+            )
         chat_messages.append(user_msg)
 
         prompt_tokens = tokenize_for_trainer(self.tokenizer, chat=chat_messages)
