@@ -43,3 +43,4 @@ services:
     - source: ../../data/_screenshots
       target: /opt/factorio/script-output
       type: bind
+

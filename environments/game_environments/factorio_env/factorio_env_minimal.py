@@ -94,8 +94,8 @@ class FactorioEnvConfig(BaseEnvConfig):
     max_goals: int = 10  # Maximum number of self-managed goals
 
     # Training settings
-    group_size: int = 1  # Start with single trajectory (scale later)
-    max_num_workers: int = 1  # Single Docker instance for now
+    group_size: int = 16  # 16 trajectories for GRPO training
+    max_num_workers: int = 32  # Increased to utilize more Factorio containers
     total_steps: int = 100
     max_token_length: int = 32768
 
@@ -105,7 +105,7 @@ class FactorioEnvConfig(BaseEnvConfig):
     efficiency_weight: float = 0.1  # Reward for fewer steps
 
     # Monitoring and preflight
-    factorio_total_servers: int = 1  # Number of locally running server containers
+    factorio_total_servers: int = 32  # Number of locally running server containers
     resource_log_interval_seconds: int = 15
     enable_resource_logging: bool = True
     preflight_timeout_seconds: int = 60
@@ -379,9 +379,10 @@ class FactorioEnv(BaseEnv):
 
     async def setup(self):
         """Initialize the environment (but don't connect to server yet)."""
-        logger.info(
+        logger.warning(f"[DEBUG] FactorioEnv.setup() called")
+        logger.warning(
             (
-                f"setup: env={self.name} base_port={self.config.factorio_tcp_port_base} "
+                f"[DEBUG] setup: env={self.name} base_port={self.config.factorio_tcp_port_base} "
                 f"total_servers={self.config.factorio_total_servers} group_size={self.config.group_size} "
                 f"max_workers={self.config.max_num_workers}"
             )
@@ -418,6 +419,7 @@ class FactorioEnv(BaseEnv):
 
     async def get_next_item(self) -> Item:
         """Get the next task configuration."""
+        logger.warning(f"[DEBUG] get_next_item called")
         # Select task
         if self.config.randomize_task_selection:
             task_name = random.choice(self.config.task_names)
@@ -428,8 +430,8 @@ class FactorioEnv(BaseEnv):
             "seed": random.randint(0, 1_000_000),
             "episode_id": f"ep-{int(time.time())}-{random.randint(1000, 9999)}",
         }
-        logger.info(
-            f"get_next_item: prepared episode_id={item['episode_id']} task={item['task_name']}"
+        logger.warning(
+            f"[DEBUG] get_next_item: prepared episode_id={item['episode_id']} task={item['task_name']}"
         )
         return item
 
@@ -532,12 +534,13 @@ class FactorioEnv(BaseEnv):
         self, item: Item
     ) -> Tuple[ScoredDataGroup, List[Item]]:
         """Collect trajectories from parallel games (currently just one)."""
+        logger.warning(f"[DEBUG] collect_trajectories called with item: {item}")
         task_name = item["task_name"]
         # seed = item["seed"]  # Unused variable
         episode_id = item["episode_id"]
 
-        logger.info(
-            f"collect_trajectories: episode_id={episode_id} task={task_name} group_size={self.config.group_size}"
+        logger.warning(
+            f"[DEBUG] collect_trajectories: episode_id={episode_id} task={task_name} group_size={self.config.group_size}"
         )
 
         # Parallel rollouts: clone identical initial GameState across instances
@@ -1042,7 +1045,8 @@ class FactorioEnv(BaseEnv):
         """Initialize default configuration."""
         env_config = FactorioEnvConfig(
             tokenizer_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
-            group_size=1,  # Single trajectory for now
+            group_size=8,  # 8 alternatives for GRPO training
+            max_num_workers=4,  # 4 workers * 8 group_size = 32 containers (using all available)
             use_wandb=True,
             wandb_name=cls.name,
             max_token_length=32768,
@@ -1051,13 +1055,31 @@ class FactorioEnv(BaseEnv):
             enable_self_planning=True,
         )
 
-        # Single server config for testing
+        # Use multiple SGLang servers on ports 9004-9007
         server_configs = [
             APIServerConfig(
                 model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
-                base_url="http://localhost:8080/v1",  # Assuming local LLM server
+                base_url="http://localhost:9004/v1",
                 api_key="x",
-                num_requests_for_eval=10,
+                num_requests_for_eval=128,
+            ),
+            APIServerConfig(
+                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+                base_url="http://localhost:9005/v1",
+                api_key="x",
+                num_requests_for_eval=128,
+            ),
+            APIServerConfig(
+                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+                base_url="http://localhost:9006/v1",
+                api_key="x",
+                num_requests_for_eval=128,
+            ),
+            APIServerConfig(
+                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+                base_url="http://localhost:9007/v1",
+                api_key="x",
+                num_requests_for_eval=128,
             ),
         ]
 
