@@ -1,10 +1,12 @@
 import json
 import random
 import re
+import time
 from typing import Dict, List, Optional, Tuple, Union
 
 import wandb
 from datasets import load_dataset
+from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
@@ -25,10 +27,29 @@ system_prompt = (
 )
 
 
+class ToolCallingConfig(BaseEnvConfig):
+    """Configuration class for Tool Calling Environment with custom parameters."""
+
+    dataset: str = Field(
+        default="NousResearch/tool_calling",
+        description="HuggingFace dataset to use for training and evaluation",
+    )
+    max_eval_samples: Optional[int] = Field(
+        default=None,
+        description="Maximum number of samples to use for evaluation. If None, use all samples.",
+    )
+    eval_sample_seed: int = Field(
+        default=42,
+        description="Random seed for sampling evaluation data when max_eval_samples is set",
+    )
+
+
 class SingleToolCallingEnv(BaseEnv):
+    env_config_cls = ToolCallingConfig
+
     def __init__(
         self,
-        config: BaseEnvConfig,
+        config: ToolCallingConfig,
         server_configs: List[APIServerConfig],
         slurm=True,
         testing=False,
@@ -41,8 +62,8 @@ class SingleToolCallingEnv(BaseEnv):
         self.completion_lengths = []
 
     @classmethod
-    def config_init(self) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
-        env_config = BaseEnvConfig(
+    def config_init(cls) -> Tuple[ToolCallingConfig, List[APIServerConfig]]:
+        env_config = ToolCallingConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
             group_size=16,
             use_wandb=True,
@@ -104,22 +125,61 @@ class SingleToolCallingEnv(BaseEnv):
         self.eval_metrics = list()
         await super().wandb_log(wandb_metrics)
 
+    def _load_hf_dataset(self):
+        """Load data from HuggingFace dataset."""
+        try:
+            # Load train and test splits from the dataset
+            train_dataset = load_dataset(self.config.dataset, split="train")
+            test_dataset = load_dataset(self.config.dataset, split="test")
+
+            # Apply max_eval_samples if specified
+            if (
+                self.config.max_eval_samples
+                and len(test_dataset) > self.config.max_eval_samples
+            ):
+                # Convert to list, sample, then convert back if needed
+                test_indices = list(range(len(test_dataset)))
+                random.seed(self.config.eval_sample_seed)
+                sampled_indices = random.sample(
+                    test_indices, self.config.max_eval_samples
+                )
+                test_dataset = test_dataset.select(sampled_indices)
+
+            return train_dataset, test_dataset
+
+        except Exception as e:
+            print(
+                f"Failed to load HuggingFace dataset '{self.config.dataset}': {e}. Falling back to XLAM-Atropos."
+            )
+            return None, None
+
     async def setup(self):
-        # Load the full dataset
-        full_dataset = load_dataset(
-            "NousResearch/XLAM-Atropos",
-            "default",
-            split="train",
-        )
+        # Try to load from HuggingFace dataset first
+        train_dataset, test_dataset = self._load_hf_dataset()
 
-        full_dataset = full_dataset.shuffle(seed=42)
+        if train_dataset is not None and test_dataset is not None:
+            self.train = train_dataset
+            self.test = test_dataset
+            print(
+                f"Loaded {len(self.train)} train and {len(self.test)} test items from HuggingFace dataset '{self.config.dataset}'"  # noqa: E501
+            )
+        else:
+            # Fall back to original XLAM-Atropos dataset
+            # Load the full dataset
+            full_dataset = load_dataset(
+                "NousResearch/XLAM-Atropos",
+                "default",
+                split="train",
+            )
 
-        # Create train/test split on the fly (e.g., 95% train, 5% test)
-        split_dataset = full_dataset.train_test_split(test_size=100, seed=42)
+            full_dataset = full_dataset.shuffle(seed=42)
 
-        # Keep the splits as is - no need to reformat
-        self.train = split_dataset["train"]
-        self.test = split_dataset["test"]
+            # Create train/test split on the fly (e.g., 95% train, 5% test)
+            split_dataset = full_dataset.train_test_split(test_size=100, seed=42)
+
+            # Keep the splits as is - no need to reformat
+            self.train = split_dataset["train"]
+            self.test = split_dataset["test"]
 
         self.iter = 0
 
@@ -139,7 +199,7 @@ class SingleToolCallingEnv(BaseEnv):
         )
 
         if not human_message or not expected_gpt_message:
-            return 0  # Skip invalid conversations
+            return {"score": 0, "sample": None}  # Skip invalid conversations
 
         # Create messages for model
         messages = []
@@ -158,12 +218,13 @@ class SingleToolCallingEnv(BaseEnv):
         )
 
         # Get model completion using completion() instead of chat_completion()
+        eval_temperature = 1.0
+        eval_max_tokens = 1024 * 15
         completion = await self.server.completion(
             prompt=prompt,
             n=1,
-            max_tokens=1024 * 15,
-            temperature=1.0,
-            split="eval",
+            max_tokens=eval_max_tokens,
+            temperature=eval_temperature,
         )
 
         # Extract the model's response from the completion
@@ -172,7 +233,18 @@ class SingleToolCallingEnv(BaseEnv):
 
         # Extract and compare tool calls
         score = self._compare_tool_calls(model_response, expected_response)
-        return score
+
+        # Create sample data
+        sample = {
+            "messages": messages + [{"role": "assistant", "content": model_response}],
+            "expected_tool_calls": expected_response,
+            "model_tool_calls": model_response,
+            "score": int(score),
+            "correct": bool(score),
+            "finish_reason": completion.choices[0].finish_reason,
+        }
+
+        return {"score": score, "sample": sample}
 
     def _extract_tool_call_jsons(self, text):
         """
@@ -272,11 +344,44 @@ class SingleToolCallingEnv(BaseEnv):
             return False
 
     async def evaluate(self, *args, **kwargs):
+        start_time = time.time()
+        eval_temperature = 1.0
+        eval_max_tokens = 1024 * 15
+
         eval_tasks = []
         for test_item in self.test:
             eval_tasks.append(self.rollout_and_score_eval(test_item))
-        scores = await tqdm_asyncio.gather(*eval_tasks)
-        self.eval_metrics.append(("eval/percent_correct", sum(scores) / len(scores)))
+        results = await tqdm_asyncio.gather(*eval_tasks)
+
+        # Extract scores and samples, filtering out invalid ones
+        scores = []
+        samples = []
+        for result in results:
+            if result["sample"] is not None:
+                scores.append(result["score"])
+                samples.append(result["sample"])
+
+        percent_correct = sum(scores) / len(scores) if scores else 0.0
+        end_time = time.time()
+
+        # Add to existing metrics for wandb
+        self.eval_metrics.append(("eval/percent_correct", percent_correct))
+
+        # Log evaluation results
+        eval_metrics = {
+            "eval/percent_correct": percent_correct,
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "temperature": eval_temperature,
+                "max_tokens": eval_max_tokens,
+            },
+        )
 
     async def collect_trajectories(self, item) -> Tuple[ScoredDataGroup, List]:
         # Extract messages from the item

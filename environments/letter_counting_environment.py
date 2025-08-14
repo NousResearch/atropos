@@ -3,6 +3,7 @@ import logging
 import os
 import random
 import re
+import time
 import uuid
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -59,6 +60,20 @@ system_prompt = (
 
 class LetterCountingConfig(BaseEnvConfig):
     """Configuration class for Letter Counting Environment with custom parameters."""
+
+    # Dataset configuration
+    dataset: str = Field(
+        "NousResearch/letter_counting",
+        description="HuggingFace dataset to use for training and evaluation",
+    )
+    max_eval_samples: Optional[int] = Field(
+        default=None,
+        description="Maximum number of samples to use for evaluation. If None, use all samples.",
+    )
+    eval_sample_seed: int = Field(
+        default=42,
+        description="Random seed for sampling evaluation data when max_eval_samples is set",
+    )
 
     # Word dataset configuration
     min_word_length: int = Field(3, description="Minimum word length to include")
@@ -351,11 +366,52 @@ class LetterCountingEnv(BaseEnv):
 
         return env_config, server_configs
 
+    def _load_hf_dataset(self):
+        """Load data from HuggingFace dataset."""
+        try:
+            # Load train and test splits from the dataset
+            train_dataset = load_dataset(self.config.dataset, split="train")
+            test_dataset = load_dataset(self.config.dataset, split="test")
+
+            # Convert to list format expected by the environment
+            train_items = []
+            for item in train_dataset:
+                train_items.append(item.get("text", item.get("word", "")))
+
+            test_items = []
+            for item in test_dataset:
+                test_items.append(item.get("text", item.get("word", "")))
+
+            # Apply max_eval_samples if specified
+            if (
+                self.config.max_eval_samples
+                and len(test_items) > self.config.max_eval_samples
+            ):
+                random.seed(self.config.eval_sample_seed)
+                test_items = random.sample(test_items, self.config.max_eval_samples)
+
+            return train_items, test_items
+
+        except Exception as e:
+            self.logger.info(
+                f"Failed to load HuggingFace dataset '{self.config.dataset}': {e}. Falling back to generated data."
+            )
+            return None, None
+
     async def setup(self):
         """
         Set up the environment by loading and preparing the word/text dataset.
         """
-        if self.config.use_text_passages:
+        # Try to load from HuggingFace dataset first
+        train_words, test_words = self._load_hf_dataset()
+
+        if train_words is not None and test_words is not None:
+            self.train_words = train_words
+            self.test_words = test_words
+            self.logger.info(
+                f"Loaded {len(self.train_words)} train and {len(self.test_words)} test items from HuggingFace dataset"
+            )
+        elif self.config.use_text_passages:
             await self._setup_mixed_dataset()
         else:
             await self._setup_word_dataset()
@@ -1911,7 +1967,6 @@ class LetterCountingEnv(BaseEnv):
             n=1,
             max_tokens=self.config.max_generation_tokens,
             temperature=self.config.eval_temperature,
-            split="eval",
         )
 
         # Extract the model's response from the completion
@@ -1942,7 +1997,22 @@ class LetterCountingEnv(BaseEnv):
                 else 0
             )
 
-        return score
+        # Create sample data
+        sample = {
+            "messages": messages + [{"role": "assistant", "content": model_response}],
+            "test_text": test_text,
+            "target_letters": target_letters,
+            "expected_counts": expected_counts,
+            "model_response": model_response,
+            "model_answer": model_answer,
+            "expected_format": expected_format,
+            "score": float(score),
+            "correct": bool(score > 0),
+            "finish_reason": completion.choices[0].finish_reason,
+            "is_text_passage": is_text_passage,
+        }
+
+        return {"score": score, "sample": sample}
 
     async def evaluate(self, *args, **kwargs):
         """
@@ -1953,6 +2023,8 @@ class LetterCountingEnv(BaseEnv):
             self.logger.warning("No test texts available for evaluation. Skipping.")
             self.eval_metrics.append(("eval/percent_correct", 0.0))
             return
+
+        start_time = time.time()
 
         eval_tasks = []
         # Sample a subset of test texts for evaluation to keep it manageable
@@ -1973,15 +2045,38 @@ class LetterCountingEnv(BaseEnv):
             eval_tasks.append(self.rollout_and_score_eval(test_text))
 
         # Run evaluation
-        scores = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
+        results = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
+
+        # Extract scores and samples
+        scores = [result["score"] for result in results]
+        samples = [result["sample"] for result in results]
 
         if not scores:
             percent_correct = 0.0
         else:
             percent_correct = sum(scores) / len(scores)
 
+        end_time = time.time()
+
+        # Add to existing metrics for wandb
         self.eval_metrics.append(("eval/percent_correct", percent_correct))
         self.logger.info(f"Evaluation finished. Percent correct: {percent_correct:.4f}")
+
+        # Log evaluation results
+        eval_metrics = {
+            "eval/percent_correct": percent_correct,
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "temperature": self.config.eval_temperature,
+                "max_tokens": self.config.max_generation_tokens,
+            },
+        )
 
     async def add_rollouts_for_wandb(
         self,
