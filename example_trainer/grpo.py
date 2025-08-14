@@ -371,7 +371,8 @@ def train(config: TrainingConfig):
             with torch.no_grad():
                 pos = (advantages > 0).float()
                 neg = (advantages <= 0).float()
-                avg_logp = (logp_per_token * mask).sum(-1) / mask.sum(-1)
+                mask_sum = mask.sum(-1).clamp(min=1e-8)
+                avg_logp = (logp_per_token * mask).sum(-1)
                 pos_logp = (logp_per_token * pos).mean().item()
                 neg_logp = (logp_per_token * neg).mean().item()
                 total_pos_logp += pos_logp
