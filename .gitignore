@@ -175,6 +175,8 @@ cython_debug/
 # data
 *.json
 *.jsonl
+# Keep the TextArena registry cache in version control because it's expensive to generate
+!environments/game_environments/textarena_env/textarena_registry_cache.json
 
 # wandb
 wandb
