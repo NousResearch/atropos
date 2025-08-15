@@ -95,7 +95,7 @@ class FactorioEnvConfig(BaseEnvConfig):
 
     # Training settings
     group_size: int = 16  # 16 trajectories for GRPO training
-    max_num_workers: int = 32  # Increased to utilize more Factorio containers
+    max_num_workers: int = 1  # 1 worker * 16 group_size = 16 containers (testing with single worker)
     total_steps: int = 100
     max_token_length: int = 32768
 
@@ -109,6 +109,7 @@ class FactorioEnvConfig(BaseEnvConfig):
     resource_log_interval_seconds: int = 15
     enable_resource_logging: bool = True
     preflight_timeout_seconds: int = 60
+    skip_preflight_check: bool = True  # Skip RCON connectivity check to avoid startup delays with many containers
 
 
 class FactorioEnv(BaseEnv):
@@ -116,6 +117,10 @@ class FactorioEnv(BaseEnv):
 
     name = "factorio_minimal"
     env_config_cls = FactorioEnvConfig
+    
+    # Class-level port allocation (shared across all instances)
+    # Simple dictionary: port -> bool (True if in use, False if free)
+    _port_status: Dict[int, bool] = {}
 
     def __init__(
         self,
@@ -140,9 +145,13 @@ class FactorioEnv(BaseEnv):
         self.tools_prompt = self._build_tools_prompt()
         # System prompt will be built per-trajectory with specific task goal
 
-        # Port allocation for multi-worker scaling
-        self._port_lock = asyncio.Lock()
-        self._ports_in_use: set[int] = set()
+        # Initialize port status dictionary on first instance
+        if not FactorioEnv._port_status:
+            base = int(self.config.factorio_tcp_port_base)
+            total = int(self.config.factorio_total_servers)
+            # Initialize all ports as free
+            for port in range(base, base + total):
+                FactorioEnv._port_status[port] = False  # False = free, True = in use
 
         # Resource logger task
         self._resource_logger_task: Optional[asyncio.Task] = None
@@ -401,7 +410,10 @@ class FactorioEnv(BaseEnv):
                     )
                 )
             # Preflight RCON connectivity and capacity vs demand
-            await self._preflight_check()
+            if not self.config.skip_preflight_check:
+                await self._preflight_check()
+            else:
+                logger.info("Skipping preflight check (skip_preflight_check=True)")
 
             # Start resource logger
             if (
@@ -485,10 +497,9 @@ class FactorioEnv(BaseEnv):
         interval = max(5, int(self.config.resource_log_interval_seconds))
         while True:
             try:
-                # Ports in use snapshot
-                async with self._port_lock:
-                    in_use = sorted(list(self._ports_in_use))
-                    num_in_use = len(in_use)
+                # Ports in use snapshot (using class-level dictionary)
+                in_use = sorted([port for port, status in FactorioEnv._port_status.items() if status])
+                num_in_use = len(in_use)
 
                 # CPU/Mem usage (best-effort)
                 cpu_pct = mem_pct = rss_mb = -1.0
@@ -663,64 +674,57 @@ class FactorioEnv(BaseEnv):
 
     async def _reserve_ports(self, n: int) -> List[int]:
         """Reserve n distinct RCON ports from the configured cluster pool.
-        Waits until enough free ports are available. Logs allocations to aid debugging.
+        Simple dictionary-based tracking without complex locks.
         """
         if n <= 1 and self.config.factorio_total_servers <= 1:
             return [self.config.factorio_tcp_port]
 
-        base = int(self.config.factorio_tcp_port_base)
-        total = int(self.config.factorio_total_servers)
         deadline = time.time() + 300  # 5 minute safety timeout
         while True:
-            async with self._port_lock:
-                free_ports = [
-                    p for p in range(base, base + total) if p not in self._ports_in_use
-                ]
-                if len(free_ports) >= n:
-                    chosen = free_ports[:n]
-                    self._ports_in_use.update(chosen)
-                    logger.info(
-                        (
-                            f"port_allocator: reserved ports={chosen} "
-                            f"in_use={sorted(list(self._ports_in_use))}"
-                        )
-                    )
-                    return chosen
-                else:
-                    logger.warning(
-                        (
-                            f"port_allocator: waiting for {n} ports; free={free_ports}, "
-                            f"in_use={sorted(list(self._ports_in_use))}"
-                        )
-                    )
-            if time.time() > deadline:
-                raise TimeoutError(
-                    f"Timed out reserving {n} ports from pool base={base} total={total}"
+            # Find free ports (where value is False)
+            free_ports = [port for port, in_use in FactorioEnv._port_status.items() if not in_use]
+            in_use_ports = [port for port, in_use in FactorioEnv._port_status.items() if in_use]
+            
+            if len(free_ports) >= n:
+                # Reserve the first n free ports
+                chosen = free_ports[:n]
+                for port in chosen:
+                    FactorioEnv._port_status[port] = True  # Mark as in use
+                logger.info(
+                    f"port_allocator: reserved ports={chosen} "
+                    f"in_use={sorted(in_use_ports + chosen)}"
                 )
+                return chosen
+            else:
+                logger.warning(
+                    f"port_allocator: waiting for {n} ports; "
+                    f"free={sorted(free_ports)}, in_use={sorted(in_use_ports)}"
+                )
+            
+            if time.time() > deadline:
+                raise TimeoutError(f"Timed out reserving {n} ports")
             await asyncio.sleep(1.0)
 
     async def _release_ports(self, ports: List[int]):
-        async with self._port_lock:
-            for p in ports:
-                self._ports_in_use.discard(p)
-            logger.info(
-                (
-                    f"port_allocator: released ports={ports} "
-                    f"now_in_use={sorted(list(self._ports_in_use))}"
-                )
-            )
+        """Release ports back to the pool by marking them as free."""
+        for port in ports:
+            if port in FactorioEnv._port_status:
+                FactorioEnv._port_status[port] = False  # Mark as free
+        
+        in_use_ports = [port for port, in_use in FactorioEnv._port_status.items() if in_use]
+        logger.warning(
+            f"[DEBUG] port_allocator: RELEASED ports={ports} "
+            f"now_in_use={sorted(in_use_ports)}"
+        )
 
     async def _prepare_template_state(self, task: Any, tcp_port: int) -> GameState:
         """Create a Factorio instance, run task.setup() to produce a canonical starting GameState, then close it."""
-        loop = asyncio.get_event_loop()
-        instance = await loop.run_in_executor(
-            None,
-            lambda: FactorioInstance(
-                address=self.config.factorio_host,
-                tcp_port=tcp_port,
-                fast=self.config.factorio_fast_mode,
-                num_agents=1,
-            ),
+        # Direct creation without executor - simpler and works fine
+        instance = FactorioInstance(
+            address=self.config.factorio_host,
+            tcp_port=tcp_port,
+            fast=self.config.factorio_fast_mode,
+            num_agents=1,
         )
         try:
             # Let the task configure inventory/tech and capture its starting state
@@ -752,24 +756,18 @@ class FactorioEnv(BaseEnv):
             # Create NEW instance for this trajectory (like llama_agent.py does)
             logger.warning(f"Creating FactorioInstance for trajectory {trajectory_id}")
 
-            # Run blocking FactorioInstance creation in executor to avoid blocking async loop
-            import asyncio
-
-            loop = asyncio.get_event_loop()
             logger.info(
                 (
                     f"_run_single_trajectory: trajectory_id={trajectory_id} connecting "
                     f"rcon={self.config.factorio_host}:{tcp_port}"
                 )
             )
-            instance = await loop.run_in_executor(
-                None,
-                lambda: FactorioInstance(
-                    address=self.config.factorio_host,
-                    tcp_port=tcp_port,
-                    fast=self.config.factorio_fast_mode,
-                    num_agents=1,
-                ),
+            # Direct creation without executor - simpler and works fine
+            instance = FactorioInstance(
+                address=self.config.factorio_host,
+                tcp_port=tcp_port,
+                fast=self.config.factorio_fast_mode,
+                num_agents=1,
             )
             logger.warning(
                 f"_run_single_trajectory: trajectory_id={trajectory_id} FactorioInstance created"
@@ -816,6 +814,7 @@ class FactorioEnv(BaseEnv):
             steps = 0
 
             async with self.server.dedicated_server() as server:
+                logger.warning(f"[DEBUG] {trajectory_id} STARTING MAIN LOOP: max_steps={self.config.max_steps_per_episode}")
                 while not done and steps < self.config.max_steps_per_episode:
                     # Check token limit
                     # Format observation
@@ -834,6 +833,7 @@ class FactorioEnv(BaseEnv):
                     messages.append({"role": "assistant", "content": "<tool_call>"})
                     # Get LLM action
                     try:
+                        logger.warning(f"[DEBUG] {trajectory_id} Step {steps+1}: Calling LLM with {len(messages)} messages")
                         response = await server.chat_completion(
                             messages=messages,
                             n=1,
@@ -843,8 +843,8 @@ class FactorioEnv(BaseEnv):
                         action_text = (
                             "<tool_call>" + response.choices[0].message.content.strip()
                         )
-                        logger.info(
-                            f"Step {steps+1} - LLM response: {action_text[:150]}..."
+                        logger.warning(
+                            f"[DEBUG] {trajectory_id} Step {steps+1} - LLM response: {action_text[:150]}..."
                         )
                     except Exception as e:
                         logger.error(f"LLM error: {e}")
@@ -894,6 +894,8 @@ class FactorioEnv(BaseEnv):
             score = self._calculate_score(
                 task_completed, throughput_achieved, steps, total_reward
             )
+            
+            logger.warning(f"[DEBUG] {trajectory_id} TRAJECTORY COMPLETE: steps={steps}, task_completed={task_completed}, throughput={throughput_achieved}, reward={total_reward}, score={score}")
 
             # Tokenize trajectory
             tokenization_result = tokenize_for_trainer(
@@ -1045,14 +1047,15 @@ class FactorioEnv(BaseEnv):
         """Initialize default configuration."""
         env_config = FactorioEnvConfig(
             tokenizer_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
-            group_size=8,  # 8 alternatives for GRPO training
-            max_num_workers=4,  # 4 workers * 8 group_size = 32 containers (using all available)
+            group_size=16,  # 16 alternatives for GRPO training (more diversity)
+            max_num_workers=1,  # 1 worker * 16 group_size = 16 containers (testing with single worker)
             use_wandb=True,
             wandb_name=cls.name,
             max_token_length=32768,
             total_steps=100,
             task_names=["iron_ore_throughput"],  # Start simple
             enable_self_planning=True,
+            factorio_total_servers=32,  # Total number of containers
         )
 
         # Use multiple SGLang servers on ports 9004-9007
