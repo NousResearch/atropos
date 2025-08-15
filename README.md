@@ -352,12 +352,12 @@ If you have found the library helpful in your work, you can cite this repository
 
 ```latex
 @misc{atropos,
-  title = {{Atropos - An Async First Environment Rollout Controller}},
-  author = {Dakota Mahan, Roger Jin, Teknium, Shannon Sands, Artem Yatsenko, Jai Suphavadeeprasit, Karan Malhotra, Chen Guang, Joe Li},
-  url = {https://www.github.com/NousResearch/Atropos},
-  month = {4},
-  year = {2025},
-  version = {0.1},
+  title        = {Atropos: An Async First Environment Rollout Controller},
+  author       = {Mahan, Dakota and Jin, Roger and Teknium and Sands, Shannon and Yatsenko, Artem and Suphavadeeprasit, Jai and Malhotra, Karan and Guang, Chen and Li, Joe},
+  howpublished = {\url{https://www.github.com/NousResearch/Atropos}},
+  year         = {2025},
+  month        = apr,
+  note         = {Version 0.3.0},
 }
 ```
 
