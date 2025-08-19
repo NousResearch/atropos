@@ -336,9 +336,9 @@ class RefusalBenchEnv(BaseEnv):
         )
         server_configs = [
             APIServerConfig(
-                model_name="Hermes-3-Llama-3.1-405B",
-                base_url="https://inference-api.nousresearch.com/v1",
-                api_key=os.getenv("NOUS_API_KEY"),
+                model_name="gpt-4.1-nano",
+                base_url="https://api.openai.com/v1",
+                api_key=os.getenv("OPENAI_API_KEY"),
                 num_max_requests_at_once=32,
                 num_requests_for_eval=256,
             ),
