@@ -1,10 +1,7 @@
 import asyncio
-<<<<<<< HEAD
-import os
-=======
->>>>>>> ab9b70e (linting)
 import random
 import re
+import os
 import time
 from typing import Dict, List, Optional, Tuple, Union
 
