@@ -8,6 +8,7 @@ Uses VR-CLI (Verifiable Rewards via Completion Likelihood Improvement) to score
 predictions based on how well the model anticipates action outcomes.
 """
 
+import asyncio
 import logging
 import math
 import os
@@ -30,18 +31,16 @@ from atroposlib.envs.base import (
 )
 from atroposlib.type_definitions import Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+from atroposlib.utils.tokenizers.qwen_fixed_tokenizer import QwenFixedTokenizer
 from atroposlib.utils.tool_call_parser import parse_tool_call
-from environments.game_environments.textworld_env.agents.atropos_agent import (
+from environments.game_environments.agents.atropos_agent import (
     AtroposAgent,
     AtroposAgentConfig,
     _convert_messages_for_api,
 )
-from environments.game_environments.textworld_env.agents.atropos_memory_manager import (
+from environments.game_environments.agents.atropos_memory_manager import (
     MEMORY_SYSTEM_PREREQUISITES_AVAILABLE,
     AtroposMemoryManager,
-)
-from environments.game_environments.textworld_env.generation_utils import (
-    generate_textworld_game,
 )
 from environments.game_environments.textworld_env.scoring.entropy_calculator import (
     confidence_score,
@@ -49,7 +48,6 @@ from environments.game_environments.textworld_env.scoring.entropy_calculator imp
 from environments.game_environments.textworld_env.textworld_registry import (
     create_textworld_registry,
 )
-from atroposlib.utils.tokenizers.qwen_fixed_tokenizer import QwenFixedTokenizer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -64,10 +62,14 @@ class TextWorldEnvConfig(BaseEnvConfig):
     max_num_workers: int = 16
     total_steps: int = 500
     max_steps: int = 20  # prevent infinite loops
-    challenge_name: str = "tw-simple"
-    challenge_rewards: str = "sparse"  # Changed to sparse for VR-CLI
-    challenge_goal: str = "detailed"
-    challenge_test_mode: bool = False
+    # Challenge setup (align with minimal env)
+    challenge_names: List[str] = [
+        "tw-simple",
+        "tw-cooking",
+        "tw-coin_collector",
+        "tw-treasure_hunter",
+    ]
+    randomize_challenge_settings: bool = True
 
     # Top-k/bottom-k selection
     use_topk_bottomk_selection: bool = True
@@ -132,42 +134,7 @@ class TextWorldEnvConfig(BaseEnvConfig):
         description="Scale factor for token length penalty (penalty per token over baseline)",
     )
 
-    # Custom challenge generation parameters, kinda buggy, not using rn
-    game_generation_params: Dict[str, Any] = Field(
-        default_factory=lambda: {
-            "max_score": 10,
-            "nb_rooms": 5,
-            "nb_objects": 10,
-            "quest_length": 3,
-            "quest_breadth": 2,
-            "include_take_action": True,
-            "include_open_action": True,
-            "include_drop_action": True,
-            "include_go_action": True,
-            "include_examine_action": True,
-            "include_inventory_action": True,
-            "include_look_action": True,
-        }
-    )
-    game_file_path: Optional[str] = None
-
-    # Registry configuration
-    use_registry: bool = Field(
-        default=True, description="Whether to use the registry for game selection"
-    )
-    registry_mode: str = Field(
-        default="challenge", description="Registry mode: random, generated, challenge"
-    )
-    registry_generation_ratio: float = Field(
-        default=0.0, description="Ratio of generated games vs pre-built (0.0 to 1.0)"
-    )
-    registry_difficulty: Optional[str] = Field(
-        default="random", description="Difficulty: easy, medium, hard, expert, random"
-    )
-    registry_game_type: Optional[str] = Field(
-        default=None,
-        description="Game type: quest, puzzle, navigation, mixed (None for random)",
-    )
+    # Deprecated/unused fields from older variant removed
 
     default_server_config: APIServerConfig = Field(
         default_factory=lambda: APIServerConfig(
@@ -262,11 +229,11 @@ class TextWorldEnv(BaseEnv):
                 f"Detected Qwen model, using QwenFixedTokenizer for {config.tokenizer_name}"
             )
             self.tokenizer = QwenFixedTokenizer(config.tokenizer_name)
-        # No longer using temp dir - using tw_generated_games instead
-        logger.info("TextWorldEnv initialized, using tw_generated_games directory")
-        print(
-            "TextWorldEnv initialized, using tw_generated_games directory", flush=True
-        )
+        # Track generated game files for cleanup and create a temp dir
+        self._generated_files: set[str] = set()
+        import tempfile
+
+        self._temp_dir = tempfile.mkdtemp(prefix="textworld_rlpr_")
 
         # Memory manager will be created per-agent in _create_agent_for_episode()
         # Define TextWorld command execution tool with outcome prediction
@@ -385,13 +352,60 @@ class TextWorldEnv(BaseEnv):
         # Store agent configuration for later use in creating episode-specific agents
         self.agent_config = agent_cfg
 
-        # Initialize registry if enabled
-        self.registry = None
-        if self.config.use_registry:
-            self.registry = create_textworld_registry(
-                generation_ratio=self.config.registry_generation_ratio,
-                seed=self.config.seed if hasattr(self.config, "seed") else None,
+        # Initialize challenge registry (same as minimal env)
+        self.challenge_registry = create_textworld_registry(
+            seed=getattr(self.config, "seed", None)
+        )
+
+    def _create_game(self, challenge_name: str, settings: Dict[str, Any]) -> str:
+        """Create a TextWorld game using TextWorld challenges (mirrors minimal env)."""
+        options = textworld.GameOptions()
+        options.seeds = settings.get("seed", random.randint(0, 1000000))
+
+        if challenge_name == "tw-simple":
+            game_settings = {
+                "rewards": settings.get("rewards", "balanced"),
+                "goal": settings.get("goal", "detailed"),
+                "test": str(settings.get("test", False)).lower(),
+            }
+            game = textworld.challenges.simple.make(game_settings, options=options)
+        elif challenge_name == "tw-cooking":
+            game_settings = {
+                "recipe": settings.get("recipe", 1),
+                "take": settings.get("take", 1),
+                "cook": settings.get("cook", False),
+                "open": settings.get("open", False),
+                "drop": settings.get("drop", False),
+                "go": settings.get("go", 1),
+                "recipe_seed": settings.get(
+                    "recipe-seed",
+                    settings.get("recipe_seed", random.randint(0, 1000000)),
+                ),
+                "split": "train",
+            }
+            game = textworld.challenges.cooking.make(game_settings, options=options)
+        elif challenge_name == "tw-coin_collector":
+            game_settings = {"level": settings.get("level", 1)}
+            game = textworld.challenges.coin_collector.make(
+                game_settings, options=options
             )
+        elif challenge_name == "tw-treasure_hunter":
+            game_settings = {"level": settings.get("level", 1)}
+            game = textworld.challenges.treasure_hunter.make(
+                game_settings, options=options
+            )
+        else:
+            raise ValueError(f"Unknown challenge: {challenge_name}")
+
+        game_file = os.path.join(
+            self._temp_dir,
+            f"{challenge_name}_{settings.get('seed', random.randint(0, 1000000))}.z8",
+        )
+        options.path = game_file
+        options.file_ext = ".z8"
+        game_file = textworld.generator.compile_game(game, options)
+        self._generated_files.add(game_file)
+        return game_file
 
     def _create_agent_for_episode(self) -> AtroposAgent:
         """Create a new agent instance for an episode with its own memory manager."""
@@ -471,82 +485,27 @@ class TextWorldEnv(BaseEnv):
         return formatted_obs.strip()
 
     async def _get_or_create_episode(
-        self, episode_seed: Optional[int] = None
+        self,
+        challenge_name: Optional[str] = None,
+        settings: Optional[Dict[str, Any]] = None,
     ) -> Optional[TextWorldEpisodeState]:
-        """Generate a new TextWorld game and initialize episode state."""
+        """Create a new TextWorld episode using the simplified challenge flow."""
         episode_id = f"textworld-episode-{uuid.uuid4().hex}"
-        current_game_seed = (
-            episode_seed if episode_seed is not None else random.randint(0, 0xFFFFFFFF)
-        )
+        # Pick a challenge if not provided
+        if challenge_name is None or settings is None:
+            challenge_name, settings = self.challenge_registry.get_challenge(
+                random.choice(self.config.challenge_names),
+                randomize_settings=self.config.randomize_challenge_settings,
+            )
         logger.info(
-            f"[Episode: {episode_id}] Using game seed: {current_game_seed} (passed seed: {episode_seed})"
+            f"[Episode: {episode_id}] Challenge: {challenge_name} | Settings: {settings}"
         )
 
-        # Generate or select game using registry if enabled
-        if self.config.use_registry and self.registry:
-            try:
-                game_file_path, game_config = self.registry.get_environment(
-                    mode=self.config.registry_mode,
-                    difficulty=self.config.registry_difficulty,
-                    game_type=self.config.registry_game_type,
-                )
-
-                if not game_file_path or not os.path.exists(game_file_path):
-                    logger.error(
-                        f"Registry failed to generate game for episode {episode_id}"
-                    )
-                    return None
-
-                logger.info(f"Generated game from registry: {game_config}")
-
-            except Exception as e:
-                logger.error(f"Error using registry for game generation: {e}")
-                return None
-        else:
-            # Use original generation logic
-            options = textworld.GameOptions()
-            options.seeds = current_game_seed
-            options.nb_rooms = self.config.nb_rooms
-            options.nb_objects = self.config.nb_objects
-            options.chaining.min_length = self.config.quest_min_length
-            options.chaining.max_length = self.config.quest_max_length
-            options.chaining.max_depth = self.config.quest_max_depth
-            options.grammar.theme = self.config.grammar_theme
-            options.grammar.include_adj = self.config.grammar_include_adj
-
-            challenge_settings = {
-                "seed": current_game_seed,
-                "rewards": self.config.challenge_rewards,
-                "goal": self.config.challenge_goal,
-                "test": self.config.challenge_test_mode,
-            }
-
-            try:
-                output_folder = (
-                    "/home/maxpaperclips/atropos/environments/game_environments"
-                    "/textworld_env/tw_generated_games"
-                )
-                os.makedirs(output_folder, exist_ok=True)
-
-                game_file_path, game_object = generate_textworld_game(
-                    challenge_name=self.config.challenge_name,
-                    settings=challenge_settings,
-                    options=options,
-                    output_folder=output_folder,
-                    filename_prefix=f"{self.config.challenge_name}_ep{current_game_seed}",
-                )
-
-                if not game_file_path or not os.path.exists(game_file_path):
-                    logger.error(
-                        f"Failed to generate game file for episode {episode_id}"
-                    )
-                    return None
-
-            except Exception as e:
-                logger.error(
-                    f"Error generating game for {self.config.challenge_name} challenge: {e}"
-                )
-                return None
+        try:
+            game_file_path = self._create_game(challenge_name, settings)
+        except Exception as e:
+            logger.error(f"Failed to create game for episode {episode_id}: {e}")
+            return None
 
         requested_infos = textworld.EnvInfos(
             description=True,
@@ -599,10 +558,13 @@ class TextWorldEnv(BaseEnv):
             return None
 
     async def get_next_item(self) -> Optional[Dict[str, Any]]:
-        """Provide a new, initialized TextWorldEpisodeState for trajectory collection."""
-        episode_state = await self._get_or_create_episode(
-            episode_seed=self.config.game_seed
+        """Create and return a new initialized TextWorldEpisodeState for trajectory collection."""
+        # Select a challenge via the registry (same as minimal env)
+        challenge_name = random.choice(self.config.challenge_names)
+        challenge_name, settings = self.challenge_registry.get_challenge(
+            challenge_name, randomize_settings=self.config.randomize_challenge_settings
         )
+        episode_state = await self._get_or_create_episode(challenge_name, settings)
         if episode_state is None:
             logger.error("Failed to create new TextWorld episode.")
             return None
@@ -641,7 +603,7 @@ class TextWorldEnv(BaseEnv):
     ) -> float:
         """Calculate perplexity using logprobs from the inference server."""
         # Import AtroposAgent to access TOOLS constant
-        from environments.game_environments.textworld_env.agents.atropos_agent import (
+        from environments.game_environments.agents.atropos_agent import (
             AtroposAgent,
         )
 
@@ -702,7 +664,7 @@ class TextWorldEnv(BaseEnv):
     ) -> List[float]:
         """Get logprobs for assistant response using echo mode from the inference server."""
         # Import AtroposAgent to access TOOLS constant
-        from environments.game_environments.textworld_env.agents.atropos_agent import (
+        from environments.game_environments.agents.atropos_agent import (
             AtroposAgent,
         )
 
@@ -858,7 +820,8 @@ class TextWorldEnv(BaseEnv):
 
         # Parse the response into structured components and always return partial score
         _, structure_score = self._validate_response_structure(response_text)
-
+        # length score
+        # length_scores = [math.tanh((length_mean - len(tok)) / length_mean) / 2.0 for tok in scores['tokens']]
         # Return partial score even if structure is considered "invalid"
         return structure_score
 
@@ -1795,21 +1758,16 @@ class TextWorldEnv(BaseEnv):
                 )
 
         # Clean up game file
-        if ep_state.game_file:
-            if self.registry:
-                # Use registry cleanup which also handles JSON files
-                self.registry.cleanup_game_file(ep_state.game_file)
-            elif os.path.exists(ep_state.game_file):
-                try:
-                    os.remove(ep_state.game_file)
-                    # Also remove JSON file if it exists
-                    json_file = ep_state.game_file.replace(".z8", ".json")
-                    if os.path.exists(json_file):
-                        os.remove(json_file)
-                except OSError as e:
-                    logger.warning(
-                        f"[Episode: {ep_state.episode_id}] Error removing game files: {e}"
-                    )
+        if ep_state.game_file and os.path.exists(ep_state.game_file):
+            try:
+                os.remove(ep_state.game_file)
+                json_file = ep_state.game_file.replace(".z8", ".json")
+                if os.path.exists(json_file):
+                    os.remove(json_file)
+            except OSError as e:
+                logger.warning(
+                    f"[Episode: {ep_state.episode_id}] Error removing game files: {e}"
+                )
 
     async def postprocess_histories(
         self,
@@ -1968,17 +1926,33 @@ class TextWorldEnv(BaseEnv):
         pass
 
     async def cleanup(self):
-        """Clean up resources."""
-        # Clean up any remaining registry files
-        if self.registry:
-            self.registry.cleanup_all()
-
-        # No temp dir to clean up anymore
+        """Clean up resources and temporary files."""
+        # Remove generated game files
+        for fp in list(self._generated_files):
+            try:
+                if os.path.exists(fp):
+                    os.remove(fp)
+            except Exception:
+                pass
+            finally:
+                self._generated_files.discard(fp)
+        # Remove temp dir if empty
+        try:
+            if os.path.isdir(self._temp_dir) and not os.listdir(self._temp_dir):
+                os.rmdir(self._temp_dir)
+        except Exception:
+            pass
 
     def __del__(self):
-        """Ensure cleanup runs even if explicit cleanup isn't called."""
-        # No temp dir to clean up anymore
-        pass
+        """Best-effort cleanup of temp files."""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(self.cleanup())
+            else:
+                loop.run_until_complete(self.cleanup())
+        except Exception:
+            pass
 
     @classmethod
     def config_init(cls) -> Tuple[TextWorldEnvConfig, List[APIServerConfig]]:
