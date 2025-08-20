@@ -1,10 +1,13 @@
-import json
+import asyncio
+import math
 import random
 import re
-from typing import Dict, List, Optional, Tuple
+import time
+from typing import Dict, List, Optional, Tuple, Union
 
 import wandb
 from datasets import load_dataset
+from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
@@ -17,636 +20,1225 @@ from atroposlib.envs.base import (
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
-# Thinking-enabled system prompt
-thinking_system_prompt = (
-    "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the "
-    "problem and deliberate with yourself via systematic reasoning processes to help come to a correct "
-    "solution prior to answering. You should enclose your thoughts and internal monologue inside <think> "
-    "</think> tags, and then provide your solution or response to the problem."
-)
 
+class TextReversalConfig(BaseEnvConfig):
+    """Configuration for TextReversalEnv with thinking mode and configurable options."""
 
-class TextReversalEnvConfig(BaseEnvConfig):
-    """Config for TextReversalEnv.
+    thinking_mode: bool = Field(
+        default=False,
+        description="Whether to enable thinking mode with <think></think> tags.",
+    )
 
-    - use_thinking: if True, we prepend a thinking system message; otherwise, no system message is used
-      and the model should answer directly without thinking.
-    - dataset_name: allows overriding the dataset, defaults to PrimeIntellect/Reverse-Text-SFT
-    - eval_dataset_name: if provided, use this dataset as a static eval set; otherwise sample from train
-    - test_set_size: number of held-out examples for eval (used only when eval_dataset_name is None)
-    - max_train_token_length: max tokens for training generation
-    - max_eval_token_length: max tokens for eval generation
-    """
+    custom_base_system_prompt: Optional[str] = Field(
+        default=None,
+        description="Custom thinking prompt. If None, uses the default thinking prompt.",
+    )
+    
+    custom_thinking_prompt: Optional[str] = Field(
+        default=None,
+        description="Custom thinking prompt. If None, uses the default thinking prompt.",
+    )
 
-    # Whether to include the thinking system prompt
-    use_thinking: bool = False
+    eval_temperature: float = Field(
+        default=0.6,
+        description="Temperature for evaluation completions.",
+    )
 
-    # Dataset name and splitting behavior
-    dataset_name: str = "PrimeIntellect/Reverse-Text-SFT"
-    eval_dataset_name: Optional[str] = None
-    test_set_size: int = 100
+    rollout_temperature: float = Field(
+        default=1.0,
+        description="Temperature for training rollout completions.",
+    )
 
-    # Separate max token lengths for train and eval
-    max_train_token_length: int = 1024 * 16
-    max_eval_token_length: int = 1024 * 32
+    eval_max_tokens: int = Field(
+        default=1024 * 16,
+        description="Maximum tokens for evaluation completions.",
+    )
 
-    # Optional CoT length penalty for correct rollouts (applied within groups only)
-    length_penalty_enabled: bool = True
-    penalty_deadband_tokens: int = 5
-    penalty_alpha: float = 0.5
-    penalty_power: float = 2.0
-    penalty_min_score: float = 0.2
+    train_max_tokens: int = Field(
+        default=1024 * 7,
+        description="Maximum tokens for training completions.",
+    )
 
-    # Curriculum: single-epoch + hard-item retries
-    curriculum_one_epoch_enabled: bool = True
-    hard_retry_max_attempts: int = 3
+    # Retry configuration
+    max_retries: int = Field(
+        default=3,
+        ge=1,
+        description="Maximum number of retries for failed API calls.",
+    )
+
+    retry_delay: float = Field(
+        default=1.0,
+        ge=0.0,
+        description="Delay in seconds between retry attempts.",
+    )
+
+    min_response_length: int = Field(
+        default=5,
+        ge=1,
+        description="Minimum response length to consider valid (filters out EOS-only responses).",
+    )
+
+    # Dataset configuration
+    train_dataset: str = Field(
+        default="NousResearch/TextReversalDataset",
+        description="Training dataset name (HuggingFace) or path to local JSONL file.",
+    )
+
+    eval_dataset: str = Field(
+        default="NousResearch/TextReversalDataset",
+        description="Evaluation dataset name (HuggingFace) or path to local JSONL file.",
+    )
+
+    train_split: str = Field(
+        default="train",
+        description="Split to use for training dataset (only for HuggingFace datasets).",
+    )
+
+    eval_split: str = Field(
+        default="test",
+        description="Split to use for evaluation dataset (only for HuggingFace datasets).",
+    )
+
+    # Debug configuration
+    full_debug: bool = Field(
+        default=False,
+        description="Enable full debug mode - logs every API request and response with truncated content.",
+    )
 
 
 class TextReversalEnv(BaseEnv):
-    env_config_cls = TextReversalEnvConfig
+    name = "text_reversal"
+    env_config_cls = TextReversalConfig
 
     def __init__(
         self,
-        config: TextReversalEnvConfig,
+        config: TextReversalConfig,
         server_configs: List[APIServerConfig],
-        slurm: bool = True,
-        testing: bool = False,
+        slurm=True,
+        testing=False,
     ):
         super().__init__(config, server_configs, slurm, testing)
-        self.percent_correct_buffer: List[float] = []
-        self.eval_metrics: List[Tuple[str, float]] = []
-        self.rollouts_for_wandb: List[List[Tuple[str, float, str]]] = []
+        self.config: TextReversalConfig = config
+        self.percent_correct_buffer = []
+        self.eval_metrics = []
 
-        # Internal dataset storage after processing
-        self.train = None
-        self.test = None
-        self.iter = 0
-        # Curriculum state
-        self.first_pass_queue: List[Dict] = []
-        self.retry_pool_ids: set = set()
-        self.retry_queue: List[Dict] = []
-        self.retry_attempt_counts: Dict[str, int] = {}
-        self.in_retry_phase: bool = False
-        self.training_completed: bool = False
-        self._prompt_to_raw: Dict[Tuple[frozenset, ...], Dict] = {}
+        # Tracking for training metrics
+        self.successful_reversals = 0
+        self.failed_reversals = 0
+        self.format_errors = 0  # Failed to follow format
+        self.total_attempts = 0
+        self.rollouts_for_wandb = []
+
+        # Pre-compile regex patterns for performance
+        self._think_pattern = re.compile(r"<think>")
+        self._think_close_pattern = re.compile(r"</think>")
+        self._think_content_pattern = re.compile(r"</think>\s*(.*)", re.DOTALL)
+        self._thinking_extract_pattern = re.compile(r"<think>(.*?)</think>", re.DOTALL)
+        self._reversed_text_pattern = re.compile(
+            r"<reversed_text>\s*(.*?)\s*</reversed_text>", re.DOTALL
+        )
+
+        # System prompts (use custom thinking prompt if provided, otherwise default)
+        self.thinking_system_prompt = self._get_thinking_prompt()
+        self.base_system_prompt = self.config.custom_base_system_prompt or ""
+
+    def _get_thinking_prompt(self) -> str:
+        """Get thinking system prompt."""
+        return (
+            self.config.custom_thinking_prompt
+            if self.config.custom_thinking_prompt
+            else "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the "
+            "problem and deliberate with yourself via systematic reasoning processes to help come to a correct "
+            "solution prior to answering. You should enclose your thoughts and internal monologue inside <think> "
+            "</think> tags, and then provide your solution or response to the problem."
+        )
+
+    def _format_debug_text(self, text: str, label: str) -> str:
+        """Format text for debug output (first 100 + last 100 chars)."""
+        if not text:
+            return f"{label}: <empty>"
+
+        text_clean = text.strip()
+        if len(text_clean) <= 200:
+            return f"{label}: '{text_clean}'"
+
+        first_100 = text_clean[:100]
+        last_100 = text_clean[-100:]
+        return f"{label}: '{first_100}...{last_100}' (total {len(text_clean)} chars)"
+
+    def _log_full_debug_request(
+        self,
+        messages: List[Dict],
+        params: Dict,
+        context: str = "",
+        item_id: str = "unknown",
+    ):
+        """Log full debug information for API requests."""
+        if not self.config.full_debug:
+            return
+
+        print(f"\n🔍 FULL DEBUG - API REQUEST [{context}]")
+        print(f"   Item ID: {item_id}")
+        print(f"   Parameters: {params}")
+
+        for i, message in enumerate(messages):
+            role = message.get("role", "unknown")
+            content = message.get("content", "")
+            print(
+                f"   Message {i+1} ({role}): {self._format_debug_text(content, 'Content')}"
+            )
+
+    def _log_full_debug_response(self, completion, context: str = ""):
+        """Log full debug information for API responses."""
+        if not self.config.full_debug:
+            return
+
+        print(f"\n🔍 FULL DEBUG - API RESPONSE [{context}]")
+
+        if hasattr(completion, "usage"):
+            print(f"   Usage: {completion.usage}")
+
+        if hasattr(completion, "choices") and completion.choices:
+            for i, choice in enumerate(completion.choices):
+                content = choice.message.content if hasattr(choice, "message") else ""
+                finish_reason = (
+                    choice.finish_reason
+                    if hasattr(choice, "finish_reason")
+                    else "unknown"
+                )
+                print(
+                    f"   Choice {i+1}: {self._format_debug_text(content, 'Response')}"
+                )
+                print(f"   Finish reason: {finish_reason}")
+        else:
+            print("   No choices in response")
+            print(f"   Completion object: {completion}")
+
+    def _reset_metrics(self) -> None:
+        """Reset training metrics."""
+        self.percent_correct_buffer = []
+        self.successful_reversals = 0
+        self.failed_reversals = 0
+        self.format_errors = 0
+        self.total_attempts = 0
+
+    def _create_system_content(self) -> str:
+        """Create system message content based on thinking mode."""
+        if self.config.thinking_mode:
+            return f"{self.thinking_system_prompt}\n\n{self.base_system_prompt}"
+        return self.base_system_prompt
 
     @classmethod
-    def config_init(
-        cls,
-    ) -> Tuple[TextReversalEnvConfig, List[APIServerConfig]]:
-        env_config = TextReversalEnvConfig(
+    def config_init(cls) -> Tuple[TextReversalConfig, List[APIServerConfig]]:
+        env_config = TextReversalConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
-            group_size=16,
+            group_size=8,
             use_wandb=True,
-            max_num_workers_per_node=16,
+            max_num_workers_per_node=8,
             rollout_server_url="http://localhost:8000",
-            total_steps=1000,
+            total_steps=2000,
             batch_size=1024,
             steps_per_eval=25,
-            max_token_length=1024 * 16,
+            train_max_tokens=1024 * 7,
+            eval_max_tokens=1024 * 8,
             inference_weight=1.0,
-            wandb_name="text_reversal_env",
+            wandb_name="text_reversal",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
             min_batch_allocation=0.1,
-            # Env-specific
-            use_thinking=False,
-            dataset_name="PrimeIntellect/Reverse-Text-SFT",
-            # eval_dataset_name=None,
-            test_set_size=100,
-            eval_dataset_name=None,
-            max_train_token_length=1024 * 16,
-            max_eval_token_length=1024 * 32,
-            # CoT length penalty
-            length_penalty_enabled=True,
-            penalty_deadband_tokens=5,
-            penalty_alpha=0.5,
-            penalty_power=2.0,
-            penalty_min_score=0.2,
-            curriculum_one_epoch_enabled=True,
-            hard_retry_max_attempts=3,
+            thinking_mode=True,
+            custom_base_system_prompt=None,
+            # Debug and retry configuration
+            full_debug=False,  # Set to True to enable detailed API request/response logging
+            max_retries=3,
+            retry_delay=1.0,
+            min_response_length=5,
         )
-
         server_configs = [
             APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9004/v1",
-                api_key="x",
-                num_max_requests_at_once=32,
-                num_requests_for_eval=256,
-            )
+                api_key="x"
+            ),
         ]
-
         return env_config, server_configs
 
-    async def create_rollout_table(self, wandb_metrics: Dict):
-        if len(self.rollouts_for_wandb) > 0:
-            table = wandb.Table(columns=["text", "score", "expected_output"])
-            for group in self.rollouts_for_wandb:
-                for text, score, expected in group:
-                    table.add_data(text, score, expected)
-            wandb_metrics["train/rollouts"] = table
+    async def setup(self) -> None:
+        """Set up the environment by loading datasets."""
+        # Load training dataset
+        try:
+            self.train = self._load_dataset(
+                self.config.train_dataset, self.config.train_split
+            )
+            # Shuffle training dataset for reproducibility
+            if hasattr(self.train, "shuffle"):
+                self.train = self.train.shuffle(seed=42)
+            else:
+                # For list-like objects, convert to list and shuffle
+                train_list = list(self.train)
+                random.seed(42)
+                random.shuffle(train_list)
+                self.train = train_list
+        except Exception as e:
+            print(f"Error loading training dataset '{self.config.train_dataset}': {e}")
+            # Create minimal fallback data in expected format
+            self.train = [
+                {"text": "Hello world"},
+                {"text": "Python programming"},
+                {"text": "Machine learning"},
+                {"text": "Artificial intelligence"},
+                {"text": "Deep learning models"},
+            ] * 20  # 100 examples
+            print(f"Using fallback training data with {len(self.train)} examples")
+
+        # Load evaluation dataset
+        try:
+            self.test = self._load_dataset(
+                self.config.eval_dataset, self.config.eval_split
+            )
+        except Exception as e:
+            print(f"Error loading evaluation dataset '{self.config.eval_dataset}': {e}")
+            raise  # Evaluation dataset must work
+
+        # Analyze training dataset composition
+        if hasattr(self.train, "__iter__"):
+            total_train_items = len(self.train)
+            print(f"\nTraining dataset analysis ({total_train_items} total items):")
+            
+            # Show some sample text lengths
+            text_lengths = []
+            for item in list(self.train)[:100]:  # Sample first 100 items
+                text = item.get("text", "")
+                text_lengths.append(len(text))
+            
+            if text_lengths:
+                avg_length = sum(text_lengths) / len(text_lengths)
+                min_length = min(text_lengths)
+                max_length = max(text_lengths)
+                print(f"  - Sample text lengths: avg={avg_length:.1f}, min={min_length}, max={max_length}")
+
+        # Analyze evaluation dataset composition
+        if hasattr(self.test, "__iter__"):
+            total_eval_items = len(self.test)
+            print(f"\nEvaluation dataset analysis ({total_eval_items} total items):")
+            
+            # Show some sample text lengths
+            text_lengths = []
+            for item in list(self.test)[:100]:  # Sample first 100 items
+                text = item.get("text", "")
+                text_lengths.append(len(text))
+            
+            if text_lengths:
+                avg_length = sum(text_lengths) / len(text_lengths)
+                min_length = min(text_lengths)
+                max_length = max(text_lengths)
+                print(f"  - Sample text lengths: avg={avg_length:.1f}, min={min_length}, max={max_length}")
+
+        # Show configuration info
+        print("\nText Reversal Configuration:")
+        print(
+            f"  - Training dataset: {self.config.train_dataset} (split: {self.config.train_split})"
+        )
+        print(
+            f"  - Evaluation dataset: {self.config.eval_dataset} (split: {self.config.eval_split})"
+        )
+        print(f"  - Thinking mode: {self.config.thinking_mode}")
+        print(f"  - Eval temperature: {self.config.eval_temperature}")
+
+        # Show sample training item structure
+        if len(self.train) > 0:
+            try:
+                sample_train_item = self.train[0]
+                print("\nSample training item structure:")
+                print(f"- Available keys: {list(sample_train_item.keys())}")
+                if "text" in sample_train_item:
+                    print(f"- Text: {sample_train_item['text'][:100]}...")
+            except Exception as e:
+                print(f"Warning: Could not display sample training item structure: {e}")
+
+        # Show debug mode status
+        if self.config.full_debug:
+            print(
+                "\n🔍 FULL DEBUG MODE ENABLED - Will log all API requests and responses"
+            )
+            print(
+                "   📊 Will show: first/last 100 chars of prompts and responses"
+            )
+            print(
+                f"   ⚙️  Retry settings: max_retries={self.config.max_retries}, retry_delay={self.config.retry_delay}s"
+            )
+            print(f"   📏 Min response length: {self.config.min_response_length} chars")
+        else:
+            print(
+                "\n🔍 Full debug mode disabled - Use full_debug=True to enable detailed logging"
+            )
+
+        self.iter = 0
+
+    def _load_dataset(self, dataset_path: str, split: str = None) -> List[Dict]:
+        """
+        Load dataset using HuggingFace load_dataset (supports both HF datasets and local files).
+
+        Args:
+            dataset_path: Either HuggingFace dataset name or path to local file
+            split: Split to use
+
+        Returns:
+            List of dataset items
+        """
+        import os
+
+        try:
+            # Check if it's a local file
+            if os.path.exists(dataset_path):
+                # Local file - use appropriate loader based on extension
+                if dataset_path.endswith(".jsonl") or dataset_path.endswith(".json"):
+                    dataset = load_dataset(
+                        "json",
+                        data_files=dataset_path,
+                        split=split or "train"
+                    )
+                elif dataset_path.endswith(".csv"):
+                    dataset = load_dataset(
+                        "csv",
+                        data_files=dataset_path,
+                        split=split or "train"
+                    )
+                elif dataset_path.endswith(".parquet"):
+                    dataset = load_dataset(
+                        "parquet",
+                        data_files=dataset_path,
+                        split=split or "train"
+                    )
+                else:
+                    # Try JSON as default
+                    dataset = load_dataset(
+                        "json",
+                        data_files=dataset_path,
+                        split=split or "train"
+                    )
+
+                print(
+                    f"Loaded local dataset from {dataset_path} with {len(dataset)} examples"
+                )
+
+            else:
+                # HuggingFace dataset
+                if split:
+                    dataset = load_dataset(
+                        dataset_path, split=split
+                    )
+                else:
+                    dataset_dict = load_dataset(dataset_path)
+                    # If no split specified, try to get the first available split
+                    if hasattr(dataset_dict, "keys"):
+                        available_splits = list(dataset_dict.keys())
+                        if available_splits:
+                            dataset = dataset_dict[available_splits[0]]
+                            print(
+                                f"No split specified, using '{available_splits[0]}' split"
+                            )
+                        else:
+                            dataset = dataset_dict
+                    else:
+                        dataset = dataset_dict
+
+                print(
+                    f"Loaded HuggingFace dataset {dataset_path} with {len(dataset)} examples"
+                )
+
+            return dataset
+
+        except Exception as e:
+            print(f"Error loading dataset {dataset_path}: {e}")
+            raise
+
+    def save_checkpoint(self, step: int, data: Optional[Dict] = None) -> None:
+        """Save checkpoint including iteration state."""
+        if data is None:
+            data = {}
+        data["iter"] = self.iter
+        super().save_checkpoint(step, data)
+
+    def _extract_reversed_text(self, response: str) -> Optional[str]:
+        """
+        Extract text from within <reversed_text> tags.
+        
+        Args:
+            response: Model response text
+            
+        Returns:
+            Extracted text or None if not found or multiple blocks found
+        """
+        if self.config.thinking_mode:
+            # Check for exactly one pair of think tags
+            think_open_count = len(self._think_pattern.findall(response))
+            think_close_count = len(self._think_close_pattern.findall(response))
+
+            if think_open_count != 1 or think_close_count != 1:
+                return None
+
+            # Parse only content after </think> tags
+            match = self._think_content_pattern.search(response)
+            if match:
+                response = match.group(1)
+            else:
+                return None
+
+        # Find all content between <reversed_text> tags
+        matches = self._reversed_text_pattern.findall(response)
+        
+        # Must have exactly one reversed_text block
+        if len(matches) != 1:
+            return None
+            
+        return matches[0].strip()
+
+    def _create_reversal_prompt(self, text: str) -> str:
+        """Create the user prompt for text reversal task."""
+        return (
+            "Please reverse the characters of the following text and wrap your reversed text in "
+            "<reversed_text> </reversed_text> tags.\n\n"
+            f"The text to reverse:\n{text}"
+        )
+
+    async def get_next_item(self) -> Item:
+        """Generate next training item with text reversal task."""
+        self.iter += 1
+
+        # Get next training example sequentially
+        example = self.train[self.iter % len(self.train)]
+
+        # Extract text from training data
+        original_text = example.get("text", "")
+        if not original_text:
+            # Fallback if text field is missing
+            original_text = "Hello"
+
+        # Create the expected reversed text (ground truth)
+        expected_reversed = original_text[::-1]
+
+        # Create system message
+        system_content = self._create_system_content()
+
+        # Create user prompt
+        user_content = self._create_reversal_prompt(original_text)
+
+        prompt = tuple(
+            [
+                frozenset({"role": "system", "content": system_content}.items()),
+                frozenset({"role": "user", "content": user_content}.items()),
+            ]
+        )
+
+        return (prompt, expected_reversed)
+
+    def prepare_eval_item(self, item: dict) -> Tuple[Optional[Tuple], Optional[str]]:
+        """
+        Prepare an evaluation item from the text reversal dataset.
+        """
+        try:
+            original_text = item.get("text", "")
+            
+            # Validate required fields
+            if not original_text:
+                return None, None
+
+            # Create the expected reversed text (ground truth)
+            expected_reversed = original_text[::-1]
+
+            # Create system message
+            system_content = self._create_system_content()
+
+            # Create user prompt
+            user_content = self._create_reversal_prompt(original_text)
+
+            prompt = tuple(
+                [
+                    frozenset({"role": "system", "content": system_content}.items()),
+                    frozenset({"role": "user", "content": user_content}.items()),
+                ]
+            )
+
+            return prompt, expected_reversed
+
+        except Exception as e:
+            print(f"Error preparing evaluation item: {e}")
+            print(f"DEBUG: Exception type: {type(e)}")
+            print(f"DEBUG: item keys: {list(item.keys()) if item else 'item is None'}")
+            return None, None
+
+    async def collect_trajectories(self, item: Item) -> Tuple[ScoredDataGroup, List]:
+        """Collect and score model trajectories."""
+        messages = self._convert_messages_to_list(item[0])
+        completion_params = self._get_train_completion_params()
+
+        # Retry logic for training trajectories
+        max_retries = self.config.max_retries
+        retry_delay = self.config.retry_delay
+
+        # Get item info for debug logging
+        item_id = f"train_{self.iter if hasattr(self, 'iter') else 'unknown'}"
+
+        for attempt in range(max_retries):
+            try:
+                # Log full debug request
+                self._log_full_debug_request(
+                    messages,
+                    completion_params,
+                    f"TRAINING attempt {attempt + 1}/{max_retries}",
+                    item_id,
+                )
+
+                completions = await self.server.chat_completion(
+                    messages=messages, **completion_params
+                )
+
+                # Log full debug response
+                self._log_full_debug_response(
+                    completions, f"TRAINING attempt {attempt + 1}/{max_retries}"
+                )
+
+                # Check if we got valid completions
+                if not completions.choices:
+                    if attempt < max_retries - 1:
+                        print(
+                            f"DEBUG: No choices in collect_trajectories (attempt {attempt + 1}/{max_retries})"
+                        )
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    else:
+                        print(
+                            f"DEBUG: No choices in collect_trajectories after {max_retries} attempts"
+                        )
+                        return None, []
+
+                # Check if any completion has None content
+                valid_completions = []
+                for completion_choice in completions.choices:
+                    if (
+                        completion_choice.message.content is not None
+                        and isinstance(completion_choice.message.content, str)
+                        and len(completion_choice.message.content.strip())
+                        >= self.config.min_response_length
+                    ):
+                        valid_completions.append(completion_choice)
+
+                # If we don't have enough valid completions, retry
+                if (
+                    len(valid_completions) < len(completions.choices) // 2
+                ):  # If less than half are valid
+                    if attempt < max_retries - 1:
+                        print(
+                            f"DEBUG: Only {len(valid_completions)}/{len(completions.choices)} valid completions (attempt {attempt + 1}/{max_retries})"
+                        )
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    else:
+                        print(
+                            f"DEBUG: Only {len(valid_completions)}/{len(completions.choices)} valid completions after {max_retries} attempts"
+                        )
+                        # Continue with what we have
+
+                # Build trajectories using valid completions
+                to_score = []
+                for completion_choice in valid_completions:
+                    # Add assistant response to existing messages
+                    trajectory_messages = messages + [
+                        {
+                            "role": "assistant",
+                            "content": completion_choice.message.content,
+                        }
+                    ]
+                    to_score.append((tuple(trajectory_messages), item[1]))
+
+                # Success - we got at least some valid trajectories
+                break
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(
+                        f"DEBUG: collect_trajectories API call failed (attempt {attempt + 1}/{max_retries}): {e}"
+                    )
+                    await asyncio.sleep(retry_delay)
+                    continue
+                else:
+                    print(
+                        f"DEBUG: collect_trajectories API call failed after {max_retries} attempts: {e}"
+                    )
+                    return None, []
+
+        scored_data = await self.score(to_score)
+
+        # Add rollouts for wandb visualization
+        if scored_data is not None:
+            await self.add_rollouts_for_wandb(scored_data, item)
+
+        return scored_data, []
+
+    def _convert_messages_to_list(self, prompt_tuple: Tuple) -> List[Dict]:
+        """Convert frozenset message format to list format."""
+        messages = []
+        for role_dict in prompt_tuple:
+            messages.append(dict(role_dict))
+        return messages
+
+    def _get_train_completion_params(self) -> Dict:
+        """Get completion parameters for training rollouts."""
+        return {
+            "n": self.config.group_size,
+            "max_tokens": self.config.train_max_tokens,
+            "temperature": self.config.rollout_temperature,
+        }
+
+    def _get_eval_completion_params(self) -> Dict:
+        """Get completion parameters for evaluation."""
+        return {
+            "n": 1,
+            "max_tokens": self.config.eval_max_tokens,
+            "temperature": self.config.eval_temperature,
+            "split": "eval",
+        }
+
+    async def score(self, rollout_group_data: List[Tuple]) -> Optional[ScoredDataGroup]:
+        """Score a group of rollout data."""
+        if not rollout_group_data:
+            return None
+
+        try:
+            scores = ScoredDataGroup()
+            scores["tokens"] = []
+            scores["masks"] = []
+            scores["scores"] = []
+
+            random.shuffle(rollout_group_data)
+
+            for item in rollout_group_data:
+                # Simplified validation
+                if not item or len(item) < 2 or not item[0]:
+                    continue
+
+                model_response = item[0][-1]["content"]
+                expected_reversed = item[1]
+
+                # Extract reversed text from model response
+                extracted_reversed = self._extract_reversed_text(model_response)
+                
+                # Score 1.0 if exact match, 0.0 otherwise
+                reward = 1.0 if extracted_reversed == expected_reversed else 0.0
+
+                # Track metrics
+                self.total_attempts += 1
+                if reward == 1.0:
+                    self.successful_reversals += 1
+                else:
+                    self.failed_reversals += 1
+                    if extracted_reversed is None:
+                        self.format_errors += 1
+
+                # Tokenize the conversation for learning
+                out_dict = tokenize_for_trainer(self.tokenizer, item[0])
+                tokens = out_dict["tokens"]
+                masks = out_dict["masks"]
+
+                # Skip obviously bad examples
+                if len([1 for mask in masks if mask != -100]) < 10:
+                    continue
+
+                scores["tokens"].append(tokens)
+                scores["masks"].append(masks)
+                scores["scores"].append(reward)
+
+                if len(scores["tokens"]) >= self.config.group_size:
+                    break
+
+            if not scores["tokens"]:
+                return None
+
+            # Group-level logging after scoring is complete
+            group_successes = sum(1 for score in scores["scores"] if score == 1.0)
+            group_size = len(scores["scores"])
+            any_success = group_successes > 0
+            success_indicator = "✅" if any_success else "❌"
+            
+            # Calculate running totals
+            total_success_rate = (self.successful_reversals / self.total_attempts * 100) if self.total_attempts > 0 else 0.0
+            
+            print(f"{success_indicator} Group scored: {group_successes}/{group_size} successful reversals | "
+                  f"Total success rate: {self.successful_reversals}/{self.total_attempts} ({total_success_rate:.1f}%)")
+
+            # Update percent correct buffer
+            for score in scores["scores"]:
+                self.percent_correct_buffer.append(max(score, 0))
+
+            # Return None if all scores are the same (no learning signal)
+            if len(set(scores["scores"])) == 1:
+                return None
+
+            return scores
+
+        except Exception as e:
+            print(f"Error in score method: {e}")
+            print(f"DEBUG: Exception type: {type(e)}")
+            print(
+                f"DEBUG: rollout_group_data length: {len(rollout_group_data) if rollout_group_data else 'None'}"
+            )
+            if rollout_group_data:
+                print(f"DEBUG: first item type: {type(rollout_group_data[0])}")
+                print(
+                    f"DEBUG: first item length: {len(rollout_group_data[0]) if rollout_group_data[0] else 'None'}"
+                )
+            return None
+
+    async def rollout_and_score_eval(self, test_item: dict) -> dict:
+        """Rollout and score evaluation."""
+        try:
+            prompt, expected_reversed = self.prepare_eval_item(test_item)
+            if prompt is None:
+                return {"score": 0.0, "sample": None}
+
+            messages = self._convert_messages_to_list(prompt)
+            completion_params = self._get_eval_completion_params()
+
+            # Retry logic for failed API calls
+            max_retries = self.config.max_retries
+            retry_delay = self.config.retry_delay
+
+            # Get item info for debug logging
+            item_id = test_item.get("id", f"eval_{hash(test_item.get('text', ''))}")
+
+            for attempt in range(max_retries):
+                try:
+                    # Log full debug request
+                    self._log_full_debug_request(
+                        messages,
+                        completion_params,
+                        f"EVAL attempt {attempt + 1}/{max_retries}",
+                        item_id,
+                    )
+
+                    completion = await self.server.chat_completion(
+                        messages=messages, **completion_params
+                    )
+
+                    # Log full debug response
+                    self._log_full_debug_response(
+                        completion, f"EVAL attempt {attempt + 1}/{max_retries}"
+                    )
+
+                    if not completion.choices:
+                        if attempt < max_retries - 1:
+                            print(
+                                f"DEBUG: No choices in completion (attempt {attempt + 1}/{max_retries})"
+                            )
+                            await asyncio.sleep(retry_delay)
+                            continue
+                        else:
+                            print(f"DEBUG: No choices after {max_retries} attempts")
+                            return {"score": 0.0, "sample": None}
+
+                    model_response = completion.choices[0].message.content
+
+                    # Check for None content or very short responses
+                    if model_response is None:
+                        if attempt < max_retries - 1:
+                            print(
+                                f"DEBUG: model_response is None (attempt {attempt + 1}/{max_retries})"
+                            )
+                            await asyncio.sleep(retry_delay)
+                            continue
+                        else:
+                            print(
+                                f"DEBUG: model_response is None after {max_retries} attempts"
+                            )
+                            return {"score": 0.0, "sample": None}
+
+                    if not isinstance(model_response, str):
+                        if attempt < max_retries - 1:
+                            print(
+                                f"DEBUG: model_response is not a string. Type: {type(model_response)} (attempt {attempt + 1}/{max_retries})"
+                            )
+                            await asyncio.sleep(retry_delay)
+                            continue
+                        else:
+                            print(
+                                f"DEBUG: model_response is not a string after {max_retries} attempts. Type: {type(model_response)}"
+                            )
+                            return {"score": 0.0, "sample": None}
+
+                    # Check for very short responses (likely just EOS token)
+                    if len(model_response.strip()) < self.config.min_response_length:
+                        if attempt < max_retries - 1:
+                            print(
+                                f"DEBUG: Very short response (likely EOS token only): '{model_response}' (attempt {attempt + 1}/{max_retries})"
+                            )
+                            await asyncio.sleep(retry_delay)
+                            continue
+                        else:
+                            print(
+                                f"DEBUG: Very short response after {max_retries} attempts: '{model_response}'"
+                            )
+                            return {"score": 0.0, "sample": None}
+
+                    # Success - we got a valid response
+                    break
+
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        print(
+                            f"DEBUG: API call failed (attempt {attempt + 1}/{max_retries}): {e}"
+                        )
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    else:
+                        print(
+                            f"DEBUG: API call failed after {max_retries} attempts: {e}"
+                        )
+                        raise
+
+            # Extract reversed text from model response
+            extracted_reversed = self._extract_reversed_text(model_response)
+            
+            # Score 1.0 if exact match, 0.0 otherwise
+            score = 1.0 if extracted_reversed == expected_reversed else 0.0
+
+            # Get original text from the user message
+            original_text = test_item.get("text", "")
+
+            # Add full conversation including model response
+            full_messages = messages + [
+                {"role": "assistant", "content": model_response}
+            ]
+
+            sample = {
+                "messages": full_messages,
+                "original_text": original_text,
+                "expected_reversed": expected_reversed,
+                "extracted_reversed": extracted_reversed,
+                "score": int(score),
+                "correct": bool(score),
+                "finish_reason": completion.choices[0].finish_reason,
+                "thinking_mode": self.config.thinking_mode,
+                "format_compliant": extracted_reversed is not None,
+                "dataset_item_id": item_id,
+            }
+
+            # Add thinking-specific parsing info
+            if self.config.thinking_mode:
+                if "</think>" in model_response:
+                    sample["response_after_think"] = model_response.split("</think>")[
+                        -1
+                    ].strip()
+                    sample["thinking_content"] = self._thinking_extract_pattern.search(
+                        model_response
+                    )
+                    if sample["thinking_content"]:
+                        sample["thinking_content"] = (
+                            sample["thinking_content"].group(1).strip()
+                        )
+                else:
+                    sample["response_after_think"] = model_response
+                    sample["thinking_content"] = None
+
+            return {"score": score, "sample": sample}
+
+        except Exception as e:
+            print(f"Error in evaluation: {e}")
+            print(f"DEBUG: Exception type: {type(e)}")
+            print(
+                f"DEBUG: test_item keys: {list(test_item.keys()) if test_item else 'test_item is None'}"
+            )
+            return {"score": 0.0, "sample": None}
+
+    async def evaluate(self, *args, **kwargs) -> None:
+        """Evaluate the model on the test dataset."""
+        start_time = time.time()
+
+        try:
+            eval_tasks = [
+                self.rollout_and_score_eval(test_item)
+                for test_item in self.test
+            ]
+            results = await tqdm_asyncio.gather(*eval_tasks)
+
+            # Filter valid results
+            valid_results = [
+                result
+                for result in results
+                if not isinstance(result, Exception)
+                and result
+                and result.get("sample") is not None
+            ]
+
+            if not valid_results:
+                print("Warning: No valid evaluation results obtained")
+                return
+
+        except Exception as e:
+            print(f"Error during evaluation: {e}")
+            return
+
+        # Extract scores and samples from valid results
+        scores = [result["score"] for result in valid_results]
+        samples = [result["sample"] for result in valid_results]
+        valid_scores = [s for s in scores if s is not None]
+
+        if not valid_scores:
+            print("Warning: No valid scores found during evaluation")
+            return
+
+        percent_correct = sum(valid_scores) / len(valid_scores)
+        self.eval_metrics.append(("eval/percent_correct", percent_correct))
+
+        # Calculate additional metrics
+        format_compliant = sum(
+            1 for sample in samples if sample.get("format_compliant", False)
+        )
+        
+        thinking_mode_used = self.config.thinking_mode
+
+        # Get response metrics
+        response_lengths = []
+        thinking_utilization = 0
+
+        for sample in samples:
+            if not sample:
+                continue
+
+            # Track response length
+            messages = sample.get("messages", [])
+            if messages:
+                assistant_msg = messages[-1].get("content", "")
+                response_lengths.append(len(assistant_msg))
+
+            # Track thinking utilization in thinking mode
+            if thinking_mode_used:
+                thinking_content = sample.get("thinking_content")
+                if thinking_content:
+                    thinking_utilization += 1
+
+        # Response length metrics
+        if response_lengths:
+            avg_response_length = sum(response_lengths) / len(response_lengths)
+            response_length_std = (
+                sum((x - avg_response_length) ** 2 for x in response_lengths)
+                / len(response_lengths)
+            ) ** 0.5
+            self.eval_metrics.append(("eval/avg_response_length", avg_response_length))
+            self.eval_metrics.append(("eval/response_length_std", response_length_std))
+
+        # Thinking utilization rate
+        if thinking_mode_used and samples:
+            thinking_utilization_rate = thinking_utilization / len(samples)
+            self.eval_metrics.append(
+                ("eval/thinking_utilization_rate", thinking_utilization_rate)
+            )
+
+        # Add overall dataset statistics
+        total_dataset_items = len(self.test) if hasattr(self, "test") else 0
+        evaluated_items = len(samples)
+        self.eval_metrics.append(("eval/total_dataset_items", total_dataset_items))
+        self.eval_metrics.append(("eval/evaluated_items", evaluated_items))
+        self.eval_metrics.append(("eval/valid_scores", len(valid_scores)))
+        self.eval_metrics.append(
+            (
+                "eval/format_compliance_rate",
+                format_compliant / len(samples) if samples else 0.0,
+            )
+        )
+
+        end_time = time.time()
+
+        # Build evaluation metrics dict
+        eval_metrics = {
+            "eval/percent_correct": percent_correct,
+            "eval/total_samples": len(samples),
+            "eval/correct_samples": sum(valid_scores),
+            "eval/format_compliance_rate": (
+                format_compliant / len(samples) if samples else 0.0
+            ),
+        }
+
+        # Add response length metrics
+        if response_lengths:
+            eval_metrics["eval/avg_response_length"] = avg_response_length
+            eval_metrics["eval/response_length_std"] = response_length_std
+
+        # Add thinking utilization
+        if thinking_mode_used and samples:
+            eval_metrics["eval/thinking_utilization_rate"] = thinking_utilization_rate
+
+        try:
+            await self.evaluate_log(
+                metrics=eval_metrics,
+                samples=samples,
+                start_time=start_time,
+                end_time=end_time,
+                generation_parameters={
+                    "temperature": self.config.eval_temperature,
+                    "max_tokens": self.config.eval_max_tokens,
+                    "thinking_mode": thinking_mode_used,
+                },
+            )
+        except Exception as e:
+            print(f"Error logging evaluation results: {e}")
+
+    async def add_rollouts_for_wandb(
+        self,
+        scored_data: Union[ScoredDataGroup, List[ScoredDataGroup]],
+        item: Item = None,
+    ) -> None:
+        """Add rollouts to wandb for visualization."""
+        if item is None or scored_data is None or not scored_data.get("tokens"):
+            return
+
+        # Extract ground truth
+        expected_reversed = item[1]
+
+        # Extract original text from the item prompt
+        original_text = "unknown_text"
+        try:
+            # The item[0] contains the prompt tuple with system and user messages
+            for role_dict in item[0]:
+                role_dict_converted = dict(role_dict)
+                if role_dict_converted.get("role") == "user":
+                    user_content = role_dict_converted.get("content", "")
+                    # Extract original text from the user message
+                    lines = user_content.split('\n')
+                    for line in lines:
+                        if line.strip() and not line.startswith("Please reverse") and not line.startswith("The text to reverse:"):
+                            original_text = line.strip()
+                            break
+                    break
+        except Exception as e:
+            print(
+                f"DEBUG: Exception in add_rollouts_for_wandb text extraction: {e}"
+            )
+            original_text = "extraction_failed"
+
+        # Keep a reasonable number of rollouts
+        num_keep = self.config.num_rollouts_per_group_for_logging
+        if num_keep == -1:
+            num_keep = self.config.group_size
+
+        num_keep = min(num_keep, len(scored_data["tokens"]))
+
+        current_rollouts = []
+        mode = "thinking" if self.config.thinking_mode else "direct"
+
+        for i in range(num_keep):
+            # Decode the full trajectory
+            full_text = self.tokenizer.decode(
+                scored_data["tokens"][i], skip_special_tokens=True
+            )
+            score_val = scored_data["scores"][i]
+
+            # Extract the model's reversed text
+            extracted_reversed = "unknown"
+            try:
+                # Try to get model response from messages or decode from tokens
+                messages = scored_data.get("messages", [])
+                if i < len(messages) and isinstance(messages[i], list) and messages[i]:
+                    model_response = messages[i][-1].get("content", "")
+                else:
+                    # Fallback to decoding tokens
+                    model_response = full_text
+
+                extracted_reversed = self._extract_reversed_text(model_response) or "format_error"
+            except Exception as e:
+                print(
+                    f"DEBUG: Exception in add_rollouts_for_wandb reversal parsing: {e}"
+                )
+                extracted_reversed = "parse_error"
+
+            current_rollouts.append(
+                (
+                    full_text,
+                    score_val,
+                    expected_reversed,
+                    extracted_reversed,
+                    original_text,
+                    mode,
+                )
+            )
+
+        self.rollouts_for_wandb.append(current_rollouts)
+
+        # Keep only recent rollouts
+        if len(self.rollouts_for_wandb) > self.config.num_rollouts_to_keep:
+            self.rollouts_for_wandb.pop(0)
+
+    async def create_rollout_table(self, wandb_metrics: Dict) -> Dict:
+        """Create wandb table for rollout visualization."""
+        if not self.rollouts_for_wandb:
+            return wandb_metrics
+
+        table = wandb.Table(
+            columns=[
+                "full_text",
+                "score",
+                "expected_reversed",
+                "extracted_reversed",
+                "original_text",
+                "mode",
+            ]
+        )
+
+        for group_rollouts in self.rollouts_for_wandb:
+            for rollout_tuple in group_rollouts:
+                if len(rollout_tuple) == 6:
+                    table.add_data(*rollout_tuple)
+
+        wandb_metrics["train/rollouts"] = table
         self.rollouts_for_wandb = []
         return wandb_metrics
 
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
+        """Log metrics to wandb."""
         if wandb_metrics is None:
             wandb_metrics = {}
 
-        try:
+        # Basic accuracy metrics
+        if self.percent_correct_buffer:
             wandb_metrics["train/percent_correct"] = sum(
                 self.percent_correct_buffer
-            ) / max(1, len(self.percent_correct_buffer))
-        except ZeroDivisionError:
-            pass
+            ) / len(self.percent_correct_buffer)
 
-        self.percent_correct_buffer = []
-        for item in self.eval_metrics:
-            wandb_metrics[item[0]] = item[1]
+        # Reversal-specific metrics
+        if self.total_attempts > 0:
+            wandb_metrics["train/success_rate"] = self.successful_reversals / self.total_attempts
+            wandb_metrics["train/failure_rate"] = self.failed_reversals / self.total_attempts
+            wandb_metrics["train/format_error_rate"] = self.format_errors / self.total_attempts
+            wandb_metrics["train/format_compliance_rate"] = 1.0 - (self.format_errors / self.total_attempts)
+
+        # Configuration metrics
+        wandb_metrics.update(
+            {
+                "train/thinking_mode_enabled": (
+                    1.0 if self.config.thinking_mode else 0.0
+                ),
+                "train/total_attempts": self.total_attempts,
+                "train/successful_reversals": self.successful_reversals,
+                "train/failed_reversals": self.failed_reversals,
+                "train/format_errors": self.format_errors,
+                "config/group_size": self.config.group_size,
+                "config/train_max_tokens": self.config.train_max_tokens,
+                "config/eval_max_tokens": self.config.eval_max_tokens,
+            }
+        )
+
+        # Reset training metrics
+        self._reset_metrics()
+
+        # Add evaluation metrics
+        for metric_name, metric_value in self.eval_metrics:
+            wandb_metrics[metric_name] = metric_value
         self.eval_metrics = []
+
+        # Add rollout table
+        wandb_metrics = await self.create_rollout_table(wandb_metrics)
+
         await super().wandb_log(wandb_metrics)
-
-    async def setup(self):
-        """Load `PrimeIntellect/Reverse-Text-SFT` and produce train/test splits.
-
-        Each dataset entry is expected to contain:
-          - prompt: list of messages including a system and a user message
-          - completion: list with a single assistant message containing the reversed text
-
-        We preprocess into a list of dicts with keys:
-          - system_content
-          - user_content
-          - expected_assistant
-        """
-        dataset_name = getattr(
-            self.config, "dataset_name", "PrimeIntellect/Reverse-Text-SFT"
-        )
-        eval_dataset_name = getattr(self.config, "eval_dataset_name", None)
-        try:
-            full_dataset = load_dataset(dataset_name, split="train")
-        except Exception as e:
-            raise RuntimeError(f"Failed to load dataset '{dataset_name}': {e}")
-
-        # Convert to plain list of dicts for simple handling
-        processed_items: List[Dict[str, str]] = []
-        for idx, row in enumerate(full_dataset):
-            try:
-                system_text, user_text, expected_text = self._extract_fields(row)
-                if not user_text or not expected_text:
-                    continue
-                processed_items.append(
-                    {
-                        "system_content": system_text or "",
-                        "user_content": user_text,
-                        "expected_assistant": expected_text,
-                    }
-                )
-            except Exception:
-                # Skip malformed entries
-                continue
-
-        if len(processed_items) == 0:
-            raise RuntimeError(
-                "No valid items parsed from dataset. Verify dataset schema for PrimeIntellect/Reverse-Text-SFT."
-            )
-
-        random.Random(42).shuffle(processed_items)
-
-        # Build train and test according to presence of a static eval dataset
-        if eval_dataset_name:
-            # Use full processed_items as train
-            self.train = processed_items
-
-            # Load eval dataset separately
-            try:
-                eval_raw = load_dataset(eval_dataset_name, split="train")
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to load eval dataset '{eval_dataset_name}': {e}"
-                )
-
-            eval_items: List[Dict[str, str]] = []
-            for row in eval_raw:
-                try:
-                    sys_t, usr_t, exp_t = self._extract_fields(row)
-                    if not usr_t or not exp_t:
-                        continue
-                    eval_items.append(
-                        {
-                            "system_content": sys_t or "",
-                            "user_content": usr_t,
-                            "expected_assistant": exp_t,
-                        }
-                    )
-                except Exception:
-                    continue
-
-            if not eval_items:
-                raise RuntimeError(
-                    f"No valid items parsed from eval dataset '{eval_dataset_name}'."
-                )
-            self.test = eval_items
-        else:
-            # Sample a fixed-size eval set from the primary dataset
-            test_size = min(self.config.test_set_size, max(1, len(processed_items)))
-            if len(processed_items) <= 1:
-                self.train = processed_items
-                self.test = processed_items
-            else:
-                self.test = processed_items[:test_size]
-                self.train = processed_items[test_size:]
-
-        self.iter = 0
-        # Initialize curriculum queues
-        self.first_pass_queue = list(self.train)
-        self.retry_pool_ids = set()
-        self.retry_queue = []
-        self.retry_attempt_counts = {}
-        self.in_retry_phase = False
-        self.training_completed = False
-        self._prompt_to_raw = {}
-
-    def _extract_fields(
-        self, row: Dict
-    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-        """Extract (system_text, user_text, expected_text) from a raw dataset row.
-
-        Expected forms:
-          - row["prompt"]: list of {role, content} dicts including system and user
-          - row["completion"]: list with one assistant dict {role: "assistant", content: ...}
-
-        We tolerate dict or list forms for both for robustness.
-        """
-
-        system_text: Optional[str] = None
-        user_text: Optional[str] = None
-        expected_text: Optional[str] = None
-
-        prompt_field = row.get("prompt")
-        if isinstance(prompt_field, list):
-            for m in prompt_field:
-                if not isinstance(m, dict):
-                    continue
-                role = m.get("role")
-                content = m.get("content", "")
-                if role == "system" and system_text is None:
-                    system_text = content
-                elif role == "user" and user_text is None:
-                    user_text = content
-        elif isinstance(prompt_field, dict):
-            # Some data might represent a single message for system, with user elsewhere
-            if prompt_field.get("role") == "system":
-                system_text = prompt_field.get("content", "")
-
-        # Expected completion
-        completion_field = row.get("completion")
-        if isinstance(completion_field, list):
-            for m in completion_field:
-                if isinstance(m, dict) and m.get("role") == "assistant":
-                    expected_text = m.get("content", "")
-                    break
-        elif isinstance(completion_field, dict):
-            if completion_field.get("role") == "assistant":
-                expected_text = completion_field.get("content", "")
-
-        return system_text, user_text, expected_text
-
-    def _build_messages(self, system_text: str, user_text: str) -> List[Dict[str, str]]:
-        """Construct chat messages according to the requirement:
-        - If thinking is enabled, include a system message with thinking instructions.
-        - Do NOT use dataset system message as system; instead, prepend it to the user
-          content followed by two newlines, then the dataset user content.
-        """
-        messages: List[Dict[str, str]] = []
-        if getattr(self.config, "use_thinking", False):
-            messages.append({"role": "system", "content": thinking_system_prompt})
-
-        combined_user_content = (system_text or "").strip()
-        if combined_user_content:
-            combined_user_content = f"{combined_user_content}\n\n{user_text}"
-        else:
-            combined_user_content = user_text
-
-        messages.append({"role": "user", "content": combined_user_content})
-        return messages
-
-    @staticmethod
-    def _strip_think_and_trailing(text: str) -> str:
-        """Return content after the first closing </think> tag if present; otherwise the full text.
-        Trims surrounding whitespace.
-        """
-        if not text:
-            return ""
-        close_match = re.search(r"</think>", text, flags=re.IGNORECASE)
-        if close_match:
-            return text[close_match.end() :].strip()
-        return text.strip()
-
-    @staticmethod
-    def _extract_think_content(text: str) -> Optional[str]:
-        """Extract content inside the first <think>...</think> block (case-insensitive).
-        Returns None if not found or malformed.
-        """
-        if not text:
-            return None
-        open_match = re.search(r"<think>", text, flags=re.IGNORECASE)
-        close_match = re.search(r"</think>", text, flags=re.IGNORECASE)
-        if not open_match or not close_match:
-            return None
-        if open_match.start() >= close_match.start():
-            return None
-        return text[open_match.end() : close_match.start()].strip()
-
-    async def rollout_and_score_eval(self, test_item: Dict) -> float:
-        messages = self._build_messages(
-            test_item.get("system_content", ""), test_item.get("user_content", "")
-        )
-
-        prompt = self.tokenizer.apply_chat_template(
-            messages, add_generation_prompt=True, tokenize=False
-        )
-
-        completion = await self.server.completion(
-            prompt=prompt,
-            n=1,
-            max_tokens=getattr(
-                self.config, "max_eval_token_length", self.config.max_token_length
-            ),
-            temperature=0.2,
-            split="eval",
-        )
-
-        model_text = completion.choices[0].text
-        model_answer = self._strip_think_and_trailing(model_text)
-        expected = (test_item.get("expected_assistant", "") or "").strip()
-        return 1.0 if model_answer == expected else 0.0
-
-    async def evaluate(self, *args, **kwargs):
-        if not self.test or len(self.test) == 0:
-            self.eval_metrics.append(("eval/percent_correct", 0.0))
-            return
-
-        eval_tasks = [self.rollout_and_score_eval(item) for item in self.test]
-        scores = await tqdm_asyncio.gather(*eval_tasks)
-        percent_correct = sum(scores) / len(scores) if scores else 0.0
-        self.eval_metrics.append(("eval/percent_correct", percent_correct))
-
-    async def collect_trajectories(
-        self, item: Item
-    ) -> Tuple[Optional[ScoredDataGroup], List]:
-        # item: (prompt_messages_tuple, expected_text_string)
-        prompt_messages_list = [dict(m) for m in item[0]]
-
-        prompt = self.tokenizer.apply_chat_template(
-            prompt_messages_list, add_generation_prompt=True, tokenize=False
-        )
-
-        completions = await self.server.completion(
-            prompt=prompt,
-            n=self.config.group_size,
-            max_tokens=getattr(
-                self.config, "max_train_token_length", self.config.max_token_length
-            ),
-            temperature=0.8,
-        )
-
-        to_score: List[Tuple[Tuple[Dict, ...], str]] = []
-        for choice in completions.choices:
-            trajectory_messages = [dict(m) for m in item[0]]
-            trajectory_messages.append({"role": "assistant", "content": choice.text})
-            to_score.append((tuple(trajectory_messages), item[1]))
-
-        # Determine correctness-only (pre-penalty) for curriculum handling
-        any_correct = False
-        expected_text_for_group = item[1]
-        for trajectory_messages, _ in to_score:
-            model_response_text = trajectory_messages[-1]["content"]
-            model_answer_text = self._strip_think_and_trailing(model_response_text)
-            if (model_answer_text or "").strip() == (
-                expected_text_for_group or ""
-            ).strip():
-                any_correct = True
-                break
-
-        scored = await self.score(to_score)
-
-        # Update curriculum after group outcome
-        if getattr(self.config, "curriculum_one_epoch_enabled", True):
-            await self._update_curriculum_after_group(item, any_correct)
-
-        return scored, []
-
-    async def _update_curriculum_after_group(self, item: Item, any_correct: bool):
-        """Update curriculum state for one-epoch + retries.
-
-        First pass:
-          - If any_correct: mark solved (do nothing further)
-          - If none correct: add to retry pool for later
-        Retry phase:
-          - If any_correct: solved (do not requeue)
-          - Else: requeue until attempts reach max, then drop
-        """
-        prompt_tuple = item[0]
-        raw_item = self._prompt_to_raw.get(prompt_tuple)
-        if raw_item is None:
-            return
-        item_id = f"{hash(str(raw_item))}"
-
-        if not self.in_retry_phase:
-            if any_correct:
-                return
-            if item_id not in self.retry_pool_ids:
-                self.retry_pool_ids.add(item_id)
-            return
-        else:
-            if any_correct:
-                return
-            current_attempts = self.retry_attempt_counts.get(item_id, 0)
-            max_attempts = int(getattr(self.config, "hard_retry_max_attempts", 3))
-            if current_attempts < max_attempts:
-                self.retry_queue.append(raw_item)
-
-    async def score(
-        self, rollout_group_data: List[Tuple[Tuple[Dict, ...], str]]
-    ) -> Optional[ScoredDataGroup]:
-        scores = ScoredDataGroup()
-        scores["tokens"] = []
-        scores["masks"] = []
-        scores["scores"] = []
-
-        if not rollout_group_data:
-            return None
-
-        expected_text = rollout_group_data[0][1]
-        if expected_text is None:
-            return None
-
-        random.shuffle(rollout_group_data)
-
-        think_lengths: List[Optional[int]] = []
-        correct_flags: List[float] = []
-
-        for trajectory, expected in rollout_group_data:
-            model_response = trajectory[-1]["content"]
-            model_answer = self._strip_think_and_trailing(model_response)
-            reward = 1.0 if (model_answer.strip() == (expected or "").strip()) else 0.0
-
-            out = tokenize_for_trainer(self.tokenizer, [dict(m) for m in trajectory])
-            tokens = out["tokens"]
-            masks = out["masks"]
-
-            if sum(1 for m in masks if m != -100) < 10:
-                continue
-
-            scores["tokens"].append(tokens)
-            scores["masks"].append(masks)
-            scores["scores"].append(reward)
-
-            # Track correctness separately for logging
-            correct_flags.append(1.0 if reward == 1.0 else 0.0)
-
-            # Extract CoT think length (tokens) for penalty purposes
-            think_text = self._extract_think_content(model_response)
-            if think_text is not None and reward == 1.0:
-                try:
-                    # Use tokenizer to count tokens of the CoT content
-                    think_token_ids = self.tokenizer.encode(think_text)
-                    think_lengths.append(len(think_token_ids))
-                except Exception:
-                    think_lengths.append(None)
-            else:
-                think_lengths.append(None)
-
-            if len(scores["tokens"]) >= self.config.group_size:
-                break
-
-        # Apply CoT length penalty within-group for correct rollouts if enabled
-        if getattr(self.config, "length_penalty_enabled", True):
-            # Compute baseline from correct rollouts with valid think lengths
-            indices_with_think = [
-                i
-                for i, (r, L) in enumerate(zip(scores["scores"], think_lengths))
-                if r == 1.0 and L is not None
-            ]
-            if len(indices_with_think) > 1:
-                lengths = [think_lengths[i] for i in indices_with_think]
-                baseline = sum(lengths) / len(lengths) if lengths else None
-                if baseline is not None and baseline > 0:
-                    delta = max(
-                        0, int(getattr(self.config, "penalty_deadband_tokens", 5))
-                    )
-                    alpha = float(getattr(self.config, "penalty_alpha", 0.5))
-                    power = float(getattr(self.config, "penalty_power", 2.0))
-                    min_score = float(getattr(self.config, "penalty_min_score", 0.2))
-
-                    threshold = baseline + delta
-                    denom = max(baseline, 1.0)
-
-                    for i in indices_with_think:
-                        L_i = float(think_lengths[i])
-                        if L_i > threshold:
-                            r_excess = max(0.0, (L_i - threshold) / denom)
-                            penalized = 1.0 - alpha * (r_excess**power)
-                            penalized = max(min_score, min(1.0, penalized))
-                            scores["scores"][i] = penalized
-
-        # Record success metrics based on correctness (not penalized score)
-        for flag in correct_flags:
-            self.percent_correct_buffer.append(flag)
-
-        if not scores["tokens"]:
-            return None
-
-        # If all scores are identical, skip to keep learning signal
-        if len(set(scores["scores"])) <= 1 and len(scores["scores"]) > 1:
-            return None
-
-        return scores
-
-    async def get_next_item(self) -> Item:
-        if not self.train:
-            raise RuntimeError("Training data not initialized")
-
-        if getattr(self.config, "curriculum_one_epoch_enabled", True):
-            if self.training_completed:
-                raise RuntimeError("Training completed: no more items to process")
-
-            selected_item: Optional[Dict] = None
-
-            if not self.in_retry_phase:
-                if len(self.first_pass_queue) > 0:
-                    selected_item = self.first_pass_queue.pop(0)
-                else:
-                    # enter retry phase
-                    self.in_retry_phase = True
-                    # Build retry queue preserving original order
-                    self.retry_queue = [
-                        ri
-                        for ri in self.train
-                        if f"{hash(str(ri))}" in self.retry_pool_ids
-                    ]
-                    self.retry_attempt_counts = {
-                        f"{hash(str(ri))}": 0 for ri in self.retry_queue
-                    }
-
-            if self.in_retry_phase:
-                while selected_item is None:
-                    if len(self.retry_queue) == 0:
-                        self.training_completed = True
-                        raise RuntimeError("Training completed: retry pool exhausted")
-                    candidate = self.retry_queue.pop(0)
-                    cand_id = f"{hash(str(candidate))}"
-                    attempts = self.retry_attempt_counts.get(cand_id, 0)
-                    max_attempts = int(
-                        getattr(self.config, "hard_retry_max_attempts", 3)
-                    )
-                    if attempts >= max_attempts:
-                        continue
-                    self.retry_attempt_counts[cand_id] = attempts + 1
-                    selected_item = candidate
-
-            item = selected_item
-            messages = self._build_messages(
-                item.get("system_content", ""), item.get("user_content", "")
-            )
-            prompt_tuple = tuple(frozenset(m.items()) for m in messages)
-            answer_text = item.get("expected_assistant", "")
-            # Map prompt to raw for curriculum updates
-            self._prompt_to_raw[prompt_tuple] = item
-            self.iter += 1
-            return (prompt_tuple, answer_text)
-        else:
-            item = self.train[self.iter % len(self.train)]
-            self.iter += 1
-            messages = self._build_messages(
-                item.get("system_content", ""), item.get("user_content", "")
-            )
-            prompt_tuple = tuple(frozenset(m.items()) for m in messages)
-            answer_text = item.get("expected_assistant", "")
-            self._prompt_to_raw[prompt_tuple] = item
-            return (prompt_tuple, answer_text)
-
-    async def add_rollouts_for_wandb(
-        self,
-        scored_data: ScoredDataGroup,
-        item: Item = None,
-    ):
-        num_keep = self.config.num_rollouts_per_group_for_logging
-        if num_keep == -1:
-            num_keep = len(scored_data["tokens"])
-
-        expected_text = item[1] if item else ""
-        group_rows = []
-        for i in range(min(num_keep, len(scored_data["tokens"]))):
-            decoded = self.tokenizer.decode(
-                scored_data["tokens"][i], skip_special_tokens=False
-            )
-            score_val = scored_data["scores"][i]
-            group_rows.append((decoded, score_val, expected_text))
-
-        self.rollouts_for_wandb.append(group_rows)
-        if len(self.rollouts_for_wandb) > self.config.num_rollouts_to_keep:
-            self.rollouts_for_wandb.pop(0)
 
 
 if __name__ == "__main__":
