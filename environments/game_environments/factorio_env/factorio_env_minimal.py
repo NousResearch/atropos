@@ -79,7 +79,7 @@ class FactorioEnvConfig(BaseEnvConfig):
         "automation_science_pack_throughput",
     ]
     randomize_task_selection: bool = True
-    max_steps_per_episode: int = 50  # Limit episode length
+    max_steps_per_episode: int = 5  # Limit episode length (reduced for testing)
 
     # Factorio server settings
     factorio_host: str = "localhost"
@@ -94,7 +94,7 @@ class FactorioEnvConfig(BaseEnvConfig):
     max_goals: int = 10  # Maximum number of self-managed goals
 
     # Training settings
-    group_size: int = 16  # 16 trajectories for GRPO training
+    group_size: int = 8  # 8 trajectories for GRPO training
     max_num_workers: int = 1  # 1 worker * 16 group_size = 16 containers (testing with single worker)
     total_steps: int = 100
     max_token_length: int = 32768
@@ -356,6 +356,8 @@ class FactorioEnv(BaseEnv):
             "500 electric poles.\n"
             "\nYou have access to tools. When you want to use one, emit exactly one XML block of the form:"
             "\n<tool_call>{'name': '<tool_name>', 'arguments': { ... }}</tool_call>\n"
+            "\nCRITICAL: Inside <tool_call> tags, you MUST output ONLY valid JSON - no thinking, no explanations, no text. "
+            "The content must be a valid Python dictionary starting with { and ending with }.\n"
             "\n\nIMPORTANT DISTINCTIONS:\n"
             "- RESOURCES are natural materials you harvest: Coal, IronOre, CopperOre, Stone, Wood (trees), "
             "Water, CrudeOil, UraniumOre\n"
@@ -830,7 +832,7 @@ class FactorioEnv(BaseEnv):
                         )
                         break
 
-                    messages.append({"role": "assistant", "content": "<tool_call>"})
+                    messages.append({"role": "assistant", "content": "<tool_call>{"})
                     # Get LLM action
                     try:
                         logger.warning(f"[DEBUG] {trajectory_id} Step {steps+1}: Calling LLM with {len(messages)} messages")
@@ -840,9 +842,22 @@ class FactorioEnv(BaseEnv):
                             max_tokens=300,
                             temperature=0.7,
                         )
-                        action_text = (
-                            "<tool_call>" + response.choices[0].message.content.strip()
-                        )
+                        # Clean up the response - strip duplicate <tool_call> tag if present
+                        llm_response = response.choices[0].message.content.strip()
+                        if llm_response.startswith("<tool_call>"):
+                            llm_response = llm_response[11:]  # Remove "<tool_call>"
+                        
+                        # Handle nested tool_call structure: {"tool_call": {...}} -> {...}
+                        if llm_response.startswith('{"tool_call":'):
+                            try:
+                                import json
+                                parsed = json.loads(llm_response)
+                                if "tool_call" in parsed:
+                                    llm_response = json.dumps(parsed["tool_call"])
+                            except:
+                                pass  # Keep original if parsing fails
+                        
+                        action_text = "<tool_call>{" + llm_response
                         logger.warning(
                             f"[DEBUG] {trajectory_id} Step {steps+1} - LLM response: {action_text[:150]}..."
                         )
@@ -1047,7 +1062,7 @@ class FactorioEnv(BaseEnv):
         """Initialize default configuration."""
         env_config = FactorioEnvConfig(
             tokenizer_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
-            group_size=16,  # 16 alternatives for GRPO training (more diversity)
+            group_size=8,  # 8 alternatives for GRPO training
             max_num_workers=1,  # 1 worker * 16 group_size = 16 containers (testing with single worker)
             use_wandb=True,
             wandb_name=cls.name,
