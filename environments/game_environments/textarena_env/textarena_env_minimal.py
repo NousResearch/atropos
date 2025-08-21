@@ -349,13 +349,13 @@ class TextArenaEnvMinimal(BaseEnv):
                             logger.warning(
                                 f"[Training Agent] Sending messages to server: {obs_str}"
                             )
-                            for i, msg in enumerate(messages):
+                            for i, msg in enumerate(player_messages[current_player]):
                                 logger.warning(
                                     f"  Message {i}: role={msg['role']}, content={msg['content'][:200]}..."
                                 )
 
                             response = await server.chat_completion(
-                                messages=messages,
+                                messages=player_messages[current_player],
                                 n=1,
                                 max_tokens=self.config.opponent_max_tokens,
                                 temperature=0.7,
@@ -455,7 +455,8 @@ class TextArenaEnvMinimal(BaseEnv):
 
                     if self.config.debug_rollout_logging:
                         logger.info(
-                            f"[Traj {trajectory_idx}] Step {step_count} | Done={done} | TotalReward={total_reward}"
+                            f"[Traj {trajectory_idx}] Step {step_count} | Done={done} "
+                            f"| TotalReward={player_rewards[current_player]}"
                         )
 
                 except Exception as e:
