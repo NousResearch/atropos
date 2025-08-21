@@ -175,7 +175,7 @@ class TextArenaEnvMinimal(BaseEnv):
         self, item: Item
     ) -> Tuple[List[ScoredDataGroup], List[Item]]:
         """Collect parallel trajectories from the same game.
-        
+
         Returns a list of ScoredDataGroups, one for each player across all games.
         """
         env_id = item["env_id"]
@@ -213,12 +213,12 @@ class TextArenaEnvMinimal(BaseEnv):
         # Organize by player across all games
         # Create one ScoredDataGroup per player
         player_groups = {}
-        
+
         for game_result in all_game_results:
             for player_id, scored_item in game_result.items():
                 if scored_item is None:
                     continue
-                    
+
                 if player_id not in player_groups:
                     player_groups[player_id] = ScoredDataGroup(
                         tokens=[],
@@ -231,7 +231,7 @@ class TextArenaEnvMinimal(BaseEnv):
                         overrides=None,
                         images=None,
                     )
-                
+
                 player_groups[player_id]["tokens"].append(scored_item["tokens"])
                 player_groups[player_id]["masks"].append(scored_item["masks"])
                 player_groups[player_id]["scores"].append(scored_item["scores"])
@@ -240,7 +240,7 @@ class TextArenaEnvMinimal(BaseEnv):
 
         # Convert to list of ScoredDataGroups
         scored_data_groups = list(player_groups.values())
-        
+
         logger.info(
             f"Collected {len(all_game_results)} games for {env_id} "
             f"with {len(scored_data_groups)} player groups"
@@ -256,7 +256,7 @@ class TextArenaEnvMinimal(BaseEnv):
         metadata: Dict[str, Any],
     ) -> Dict[int, Optional[ScoredDataItem]]:
         """Collect trajectories for all players in a single game.
-        
+
         Returns a dictionary mapping player_index -> ScoredDataItem.
         """
         # Initialize message lists for each player
@@ -338,8 +338,10 @@ class TextArenaEnvMinimal(BaseEnv):
                     )
 
                 # Add observation to current player's messages
-                player_messages[current_player].append({"role": "user", "content": obs_text})
-                
+                player_messages[current_player].append(
+                    {"role": "user", "content": obs_text}
+                )
+
                 if current_player == self.config.training_player_index:
 
                     async with self.server.dedicated_server() as server:
@@ -396,7 +398,9 @@ class TextArenaEnvMinimal(BaseEnv):
                                 f"[Traj {trajectory_idx}] Step {step_count} | Training action: {action}"
                             )
 
-                    player_messages[current_player].append({"role": "assistant", "content": action})
+                    player_messages[current_player].append(
+                        {"role": "assistant", "content": action}
+                    )
                     player_turns[current_player] += 1
 
                 else:
@@ -405,9 +409,11 @@ class TextArenaEnvMinimal(BaseEnv):
                         obs_text, current_player, trajectory_idx
                     )
                     # Track opponent's action in their message history
-                    player_messages[current_player].append({"role": "assistant", "content": action})
+                    player_messages[current_player].append(
+                        {"role": "assistant", "content": action}
+                    )
                     player_turns[current_player] += 1
-                    
+
                     if self.config.debug_rollout_logging:
                         logger.info(
                             f"[Traj {trajectory_idx}] Step {step_count} | Opponent {current_player} action: {action}"
@@ -429,7 +435,9 @@ class TextArenaEnvMinimal(BaseEnv):
                         else:
                             # Single player reward
                             if current_player in player_rewards:
-                                player_rewards[current_player] += rewards if rewards else 0
+                                player_rewards[current_player] += (
+                                    rewards if rewards else 0
+                                )
                     elif isinstance(info, dict) and "rewards" in info:
                         rewards = info["rewards"]
                         if isinstance(rewards, dict):
@@ -439,7 +447,9 @@ class TextArenaEnvMinimal(BaseEnv):
                         else:
                             # Single player reward
                             if current_player in player_rewards:
-                                player_rewards[current_player] += rewards if rewards else 0
+                                player_rewards[current_player] += (
+                                    rewards if rewards else 0
+                                )
 
                     step_count += 1
 
@@ -497,7 +507,7 @@ class TextArenaEnvMinimal(BaseEnv):
                 if player_turns[player_id] == 0:
                     logger.warning(f"Player {player_id} never got a turn in {env_id}")
                     continue
-                    
+
                 tokenization_result = tokenize_for_trainer(
                     tokenizer=self.tokenizer,
                     chat=player_messages[player_id],
@@ -509,7 +519,11 @@ class TextArenaEnvMinimal(BaseEnv):
                 final_score = player_rewards[player_id] + win_bonus
 
                 player_scored_items[player_id] = ScoredDataItem(
-                    messages=player_messages[player_id] if self.config.include_messages else None,
+                    messages=(
+                        player_messages[player_id]
+                        if self.config.include_messages
+                        else None
+                    ),
                     tokens=tokenization_result["tokens"],
                     masks=tokenization_result["masks"],
                     scores=final_score,
@@ -533,7 +547,7 @@ class TextArenaEnvMinimal(BaseEnv):
                         f"masks={len(player_scored_items[player_id]['masks'])} | "
                         f"messages={len(player_messages[player_id])}"
                     )
-            
+
             return player_scored_items
 
         except Exception as e:

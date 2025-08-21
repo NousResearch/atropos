@@ -137,29 +137,33 @@ async def main():
             logger.info(f"Training player index: {env.config.training_player_index}")
 
             scored_data_groups, _ = await env.collect_trajectories(item)
-            
+
             if scored_data_groups:
                 # Aggregate stats across all player groups
                 all_scores = []
                 total_tokens = 0
-                
+
                 for player_idx, sdg in enumerate(scored_data_groups):
                     if sdg and sdg["scores"]:
                         all_scores.extend(sdg["scores"])
-                        total_tokens += sum(len(t) for t in sdg["tokens"]) if sdg["tokens"] else 0
+                        total_tokens += (
+                            sum(len(t) for t in sdg["tokens"]) if sdg["tokens"] else 0
+                        )
                         logger.info(
                             f"Player {player_idx} SDG: "
                             f"items={len(sdg['scores'])}, "
                             f"scores={sdg['scores']}"
                         )
-                
+
                 if all_scores:
                     avg_score = sum(all_scores) / len(all_scores)
                     logger.info(f"\nResults for {env_id}:")
                     logger.info(f"  Player groups collected: {len(scored_data_groups)}")
                     logger.info(f"  Total trajectories: {len(all_scores)}")
                     logger.info(f"  Average score: {avg_score:.2f}")
-                    logger.info(f"  Score range: [{min(all_scores):.2f}, {max(all_scores):.2f}]")
+                    logger.info(
+                        f"  Score range: [{min(all_scores):.2f}, {max(all_scores):.2f}]"
+                    )
                     logger.info(f"  Total tokens: {total_tokens}")
 
                     if env.episode_outcomes_buffer:
