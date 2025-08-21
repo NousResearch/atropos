@@ -173,8 +173,11 @@ class TextArenaEnvMinimal(BaseEnv):
 
     async def collect_trajectories(
         self, item: Item
-    ) -> Tuple[ScoredDataGroup, List[Item]]:
-        """Collect parallel trajectories from the same game."""
+    ) -> Tuple[List[ScoredDataGroup], List[Item]]:
+        """Collect parallel trajectories from the same game.
+        
+        Returns a list of ScoredDataGroups, one for each player across all games.
+        """
         env_id = item["env_id"]
         num_players = item["num_players"]
         metadata = item["metadata"]
@@ -184,7 +187,9 @@ class TextArenaEnvMinimal(BaseEnv):
             f"with {num_players} players"
         )
 
-        scored_items = []
+        # Collect player trajectories from all games
+        # Structure: game_idx -> player_id -> ScoredDataItem
+        all_game_results = []
 
         tasks = []
         for i in range(self.config.group_size):
@@ -195,50 +200,53 @@ class TextArenaEnvMinimal(BaseEnv):
 
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.error(f"Trajectory {i} failed: {result}")
+                logger.error(f"Game {i} failed: {result}")
                 continue
-            if result:
-                scored_items.append(result)
+            if result and isinstance(result, dict):
+                all_game_results.append(result)
 
-        if not scored_items:
-            logger.error("No valid trajectories collected")
-            return (
-                ScoredDataGroup(
-                    tokens=[],
-                    masks=[],
-                    scores=[],
-                    messages=[],
-                    advantages=None,
-                    ref_logprobs=None,
-                    group_overrides={},
-                    overrides=None,
-                    images=None,
-                ),
-                [],
-            )
+        if not all_game_results:
+            logger.error("No valid games completed")
+            # Return empty ScoredDataGroup list
+            return [], []
 
-        sdg = ScoredDataGroup(
-            tokens=[],
-            masks=[],
-            scores=[],
-            messages=[],
-            advantages=None,
-            ref_logprobs=None,
-            group_overrides={},
-            overrides=None,
-            images=None,
+        # Organize by player across all games
+        # Create one ScoredDataGroup per player
+        player_groups = {}
+        
+        for game_result in all_game_results:
+            for player_id, scored_item in game_result.items():
+                if scored_item is None:
+                    continue
+                    
+                if player_id not in player_groups:
+                    player_groups[player_id] = ScoredDataGroup(
+                        tokens=[],
+                        masks=[],
+                        scores=[],
+                        messages=[],
+                        advantages=None,
+                        ref_logprobs=None,
+                        group_overrides={},
+                        overrides=None,
+                        images=None,
+                    )
+                
+                player_groups[player_id]["tokens"].append(scored_item["tokens"])
+                player_groups[player_id]["masks"].append(scored_item["masks"])
+                player_groups[player_id]["scores"].append(scored_item["scores"])
+                if self.config.include_messages and scored_item.get("messages"):
+                    player_groups[player_id]["messages"].append(scored_item["messages"])
+
+        # Convert to list of ScoredDataGroups
+        scored_data_groups = list(player_groups.values())
+        
+        logger.info(
+            f"Collected {len(all_game_results)} games for {env_id} "
+            f"with {len(scored_data_groups)} player groups"
         )
 
-        for scored_item in scored_items:
-            sdg["tokens"].append(scored_item["tokens"])
-            sdg["masks"].append(scored_item["masks"])
-            sdg["scores"].append(scored_item["scores"])
-            if self.config.include_messages and scored_item.get("messages"):
-                sdg["messages"].append(scored_item["messages"])
-
-        logger.info(f"Collected {len(scored_items)} trajectories for {env_id}")
-
-        return sdg, []
+        return scored_data_groups, []
 
     async def _collect_single_trajectory(
         self,
@@ -246,9 +254,15 @@ class TextArenaEnvMinimal(BaseEnv):
         num_players: int,
         trajectory_idx: int,
         metadata: Dict[str, Any],
-    ) -> Optional[ScoredDataItem]:
-        """Collect a single trajectory for the game."""
-        messages: List[Message] = []
+    ) -> Dict[int, Optional[ScoredDataItem]]:
+        """Collect trajectories for all players in a single game.
+        
+        Returns a dictionary mapping player_index -> ScoredDataItem.
+        """
+        # Initialize message lists for each player
+        player_messages: Dict[int, List[Message]] = {}
+        for i in range(num_players):
+            player_messages[i] = [{"role": "system", "content": self.system_prompt}]
 
         try:
             env = ta.make(env_id)
@@ -268,14 +282,12 @@ class TextArenaEnvMinimal(BaseEnv):
             initial_obs = env.get_observation()
             if initial_obs is None or len(initial_obs) < 2:
                 logger.error(f"Failed to get initial observation for {env_id}")
-                return None
-
-            messages.append({"role": "system", "content": self.system_prompt})
+                return {}
 
             done = False
-            total_reward = 0.0
+            player_rewards = {i: 0.0 for i in range(num_players)}
             step_count = 0
-            training_agent_turns = 0
+            player_turns = {i: 0 for i in range(num_players)}
 
             while not done and step_count < self.config.max_steps:
                 if num_players == 1:
@@ -325,8 +337,10 @@ class TextArenaEnvMinimal(BaseEnv):
                         f"[Traj {trajectory_idx}] Step {step_count} | Player {current_player} | Obs: {_obs_preview}..."
                     )
 
+                # Add observation to current player's messages
+                player_messages[current_player].append({"role": "user", "content": obs_text})
+                
                 if current_player == self.config.training_player_index:
-                    messages.append({"role": "user", "content": obs_text})
 
                     async with self.server.dedicated_server() as server:
                         try:
@@ -382,14 +396,18 @@ class TextArenaEnvMinimal(BaseEnv):
                                 f"[Traj {trajectory_idx}] Step {step_count} | Training action: {action}"
                             )
 
-                    messages.append({"role": "assistant", "content": action})
-                    training_agent_turns += 1
+                    player_messages[current_player].append({"role": "assistant", "content": action})
+                    player_turns[current_player] += 1
 
                 else:
                     # Opponent's turn
                     action = await self._get_opponent_action(
                         obs_text, current_player, trajectory_idx
                     )
+                    # Track opponent's action in their message history
+                    player_messages[current_player].append({"role": "assistant", "content": action})
+                    player_turns[current_player] += 1
+                    
                     if self.config.debug_rollout_logging:
                         logger.info(
                             f"[Traj {trajectory_idx}] Step {step_count} | Opponent {current_player} action: {action}"
@@ -401,23 +419,27 @@ class TextArenaEnvMinimal(BaseEnv):
                     step_result = env.step(action)
                     done, info = self._parse_step_result(step_result)
 
-                    # Get rewards from state or info
+                    # Get rewards from state or info for all players
                     if hasattr(env, "state") and hasattr(env.state, "rewards"):
                         rewards = env.state.rewards
                         if isinstance(rewards, dict):
-                            total_reward += rewards.get(
-                                self.config.training_player_index, 0
-                            )
-                        elif current_player == self.config.training_player_index:
-                            total_reward += rewards if rewards else 0
+                            for player_id, reward in rewards.items():
+                                if player_id in player_rewards:
+                                    player_rewards[player_id] += reward
+                        else:
+                            # Single player reward
+                            if current_player in player_rewards:
+                                player_rewards[current_player] += rewards if rewards else 0
                     elif isinstance(info, dict) and "rewards" in info:
                         rewards = info["rewards"]
                         if isinstance(rewards, dict):
-                            total_reward += rewards.get(
-                                self.config.training_player_index, 0
-                            )
-                        elif current_player == self.config.training_player_index:
-                            total_reward += rewards if rewards else 0
+                            for player_id, reward in rewards.items():
+                                if player_id in player_rewards:
+                                    player_rewards[player_id] += reward
+                        else:
+                            # Single player reward
+                            if current_player in player_rewards:
+                                player_rewards[current_player] += rewards if rewards else 0
 
                     step_count += 1
 
@@ -432,81 +454,92 @@ class TextArenaEnvMinimal(BaseEnv):
 
             env.close()
 
-            # Determine final outcome
-            # Check if game actually completed or just hit max steps
+            # Determine outcome for each player
+            player_outcomes = {}
             if done and isinstance(info, dict):
                 winner = info.get("winner", None)
-                if winner == self.config.training_player_index:
-                    outcome = 1.0
-                elif winner is None:
-                    outcome = 0.0  # Draw
-                else:
-                    outcome = -1.0  # Loss
+                for player_id in range(num_players):
+                    if winner == player_id:
+                        player_outcomes[player_id] = 1.0
+                    elif winner is None:
+                        player_outcomes[player_id] = 0.0  # Draw
+                    else:
+                        player_outcomes[player_id] = -1.0  # Loss
             elif step_count >= self.config.max_steps:
                 # Episode ended due to max steps - treat as draw
-                outcome = 0.0
+                for player_id in range(num_players):
+                    player_outcomes[player_id] = 0.0
                 logger.warning(
                     f"Episode hit max_steps ({self.config.max_steps}), treating as draw"
                 )
             else:
-                outcome = 0.0
+                for player_id in range(num_players):
+                    player_outcomes[player_id] = 0.0
                 logger.warning(
                     f"Episode ended unexpectedly: done={done}, steps={step_count}"
                 )
 
             logger.warning(
-                f"[Episode Complete] Game: {env_id}, Total Reward: {total_reward},"
-                f" Outcome: {outcome}, Steps: {step_count}, Done: {done}"
+                f"[Episode Complete] Game: {env_id}, Steps: {step_count}, Done: {done}"
             )
 
-            self.episode_outcomes_buffer.append(outcome)
-            self.episode_rewards_buffer.append(total_reward)
+            # Track training player stats
+            training_outcome = player_outcomes[self.config.training_player_index]
+            training_reward = player_rewards[self.config.training_player_index]
+            self.episode_outcomes_buffer.append(training_outcome)
+            self.episode_rewards_buffer.append(training_reward)
             self.episode_steps_buffer.append(step_count)
             self.episode_game_types.append(metadata["game_type"])
 
-            if training_agent_turns == 0:
-                logger.warning(f"Training agent never got a turn in {env_id}")
-                return None
-
-            tokenization_result = tokenize_for_trainer(
-                tokenizer=self.tokenizer,
-                chat=messages,
-                train_on_all_assistant_turns=True,
-            )
-
-            # Calculate final score: actual rewards + bonus for wins
-            win_bonus = 1.0 if outcome == 1.0 else 0.0
-            final_score = total_reward + win_bonus
-
-            scored = ScoredDataItem(
-                messages=messages if self.config.include_messages else None,
-                tokens=tokenization_result["tokens"],
-                masks=tokenization_result["masks"],
-                scores=final_score,
-                metadata={
-                    "trajectory_idx": trajectory_idx,
-                    "env_id": env_id,
-                    "num_players": num_players,
-                    "outcome": outcome,
-                    "total_reward": total_reward,
-                    "steps": step_count,
-                    "training_turns": training_agent_turns,
-                },
-            )
-
-            if self.config.debug_rollout_logging:
-                logger.info(
-                    f"[Traj {trajectory_idx}] Finished | steps={step_count} | "
-                    f"outcome={outcome} | total_reward={total_reward} | "
-                    f"tokens={len(scored['tokens'])} | masks={len(scored['masks'])} | "
-                    f"messages={len(messages)}"
+            # Create ScoredDataItems for each player
+            player_scored_items = {}
+            for player_id in range(num_players):
+                if player_turns[player_id] == 0:
+                    logger.warning(f"Player {player_id} never got a turn in {env_id}")
+                    continue
+                    
+                tokenization_result = tokenize_for_trainer(
+                    tokenizer=self.tokenizer,
+                    chat=player_messages[player_id],
+                    train_on_all_assistant_turns=True,
                 )
-            return scored
+
+                # Calculate final score: actual rewards + bonus for wins
+                win_bonus = 1.0 if player_outcomes[player_id] == 1.0 else 0.0
+                final_score = player_rewards[player_id] + win_bonus
+
+                player_scored_items[player_id] = ScoredDataItem(
+                    messages=player_messages[player_id] if self.config.include_messages else None,
+                    tokens=tokenization_result["tokens"],
+                    masks=tokenization_result["masks"],
+                    scores=final_score,
+                    metadata={
+                        "trajectory_idx": trajectory_idx,
+                        "env_id": env_id,
+                        "num_players": num_players,
+                        "player_id": player_id,
+                        "outcome": player_outcomes[player_id],
+                        "total_reward": player_rewards[player_id],
+                        "steps": step_count,
+                        "player_turns": player_turns[player_id],
+                    },
+                )
+
+                if self.config.debug_rollout_logging:
+                    logger.info(
+                        f"[Traj {trajectory_idx}] Player {player_id} Finished | steps={step_count} | "
+                        f"outcome={player_outcomes[player_id]} | total_reward={player_rewards[player_id]} | "
+                        f"tokens={len(player_scored_items[player_id]['tokens'])} | "
+                        f"masks={len(player_scored_items[player_id]['masks'])} | "
+                        f"messages={len(player_messages[player_id])}"
+                    )
+            
+            return player_scored_items
 
         except Exception as e:
             logger.error(f"Trajectory {trajectory_idx} fatal error: {e}")
             logger.error(traceback.format_exc())
-            return None
+            return {}
 
     async def _get_opponent_action(
         self, observation: str, player_id: int, trajectory_idx: int

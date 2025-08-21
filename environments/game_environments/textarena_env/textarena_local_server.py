@@ -136,52 +136,66 @@ async def main():
             logger.info(f"Type: {game_type} ({num_players} players)")
             logger.info(f"Training player index: {env.config.training_player_index}")
 
-            scored_data_group, _ = await env.collect_trajectories(item)
-            num_tokens = (
-                sum(len(t) for t in scored_data_group["tokens"])
-                if scored_data_group["tokens"]
-                else 0
-            )
-            try:
-                logger.info(
-                    f"SDG summary: tokens={num_tokens}, "
-                    f"items={len(scored_data_group['scores']) if scored_data_group['scores'] else 0}, "
-                    f"scores={scored_data_group['scores']}"
-                )
-            except Exception:
-                pass
+            scored_data_groups, _ = await env.collect_trajectories(item)
+            
+            if scored_data_groups:
+                # Aggregate stats across all player groups
+                all_scores = []
+                total_tokens = 0
+                
+                for player_idx, sdg in enumerate(scored_data_groups):
+                    if sdg and sdg["scores"]:
+                        all_scores.extend(sdg["scores"])
+                        total_tokens += sum(len(t) for t in sdg["tokens"]) if sdg["tokens"] else 0
+                        logger.info(
+                            f"Player {player_idx} SDG: "
+                            f"items={len(sdg['scores'])}, "
+                            f"scores={sdg['scores']}"
+                        )
+                
+                if all_scores:
+                    avg_score = sum(all_scores) / len(all_scores)
+                    logger.info(f"\nResults for {env_id}:")
+                    logger.info(f"  Player groups collected: {len(scored_data_groups)}")
+                    logger.info(f"  Total trajectories: {len(all_scores)}")
+                    logger.info(f"  Average score: {avg_score:.2f}")
+                    logger.info(f"  Score range: [{min(all_scores):.2f}, {max(all_scores):.2f}]")
+                    logger.info(f"  Total tokens: {total_tokens}")
 
-            if scored_data_group and scored_data_group["scores"]:
-                scores = scored_data_group["scores"]
-                avg_score = sum(scores) / len(scores)
+                    if env.episode_outcomes_buffer:
+                        recent_outcomes = env.episode_outcomes_buffer[
+                            -env.config.group_size :
+                        ]
+                        wins = sum(1 for o in recent_outcomes if o > 0)
+                        losses = sum(1 for o in recent_outcomes if o < 0)
+                        draws = sum(1 for o in recent_outcomes if o == 0)
 
-                logger.info(f"\nResults for {env_id}:")
-                logger.info(f"  Trajectories collected: {len(scores)}")
-                logger.info(f"  Average score: {avg_score:.2f}")
-                logger.info(f"  Score range: [{min(scores):.2f}, {max(scores):.2f}]")
+                        logger.info(
+                            f"  Training player outcomes: {wins} wins, {losses} losses, {draws} draws"
+                        )
 
-                if env.episode_outcomes_buffer:
-                    recent_outcomes = env.episode_outcomes_buffer[
-                        -env.config.group_size :
-                    ]
-                    wins = sum(1 for o in recent_outcomes if o > 0)
-                    losses = sum(1 for o in recent_outcomes if o < 0)
-                    draws = sum(1 for o in recent_outcomes if o == 0)
-
-                    logger.info(
-                        f"  Outcomes: {wins} wins, {losses} losses, {draws} draws"
+                    episode_results.append(
+                        {
+                            "episode": episode_num + 1,
+                            "game": env_id,
+                            "game_type": game_type,
+                            "num_players": num_players,
+                            "avg_score": avg_score,
+                            "num_trajectories": len(all_scores),
+                        }
                     )
-
-                episode_results.append(
-                    {
-                        "episode": episode_num + 1,
-                        "game": env_id,
-                        "game_type": game_type,
-                        "num_players": num_players,
-                        "avg_score": avg_score,
-                        "num_trajectories": len(scores),
-                    }
-                )
+                else:
+                    logger.warning(f"No scores collected for {env_id}")
+                    episode_results.append(
+                        {
+                            "episode": episode_num + 1,
+                            "game": env_id,
+                            "game_type": game_type,
+                            "num_players": num_players,
+                            "avg_score": 0.0,
+                            "num_trajectories": 0,
+                        }
+                    )
             else:
                 logger.error(f"Failed to collect trajectories for {env_id}")
                 episode_results.append(
