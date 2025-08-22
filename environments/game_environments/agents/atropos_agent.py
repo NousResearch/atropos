@@ -1,5 +1,7 @@
 import logging
+import os
 import re
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field
@@ -153,6 +155,17 @@ class AtroposAgent:
         self.server_client = server_client
         self.tokenizer = tokenizer
         self.system_prompt_content = self.config.system_prompt
+
+        # DEBUG: Log tokenizer configuration details
+        tokenizer_type = type(self.tokenizer).__name__
+        tokenizer_name = getattr(self.tokenizer, 'name_or_path', 'unknown')
+        vocab_size = getattr(self.tokenizer, 'vocab_size', 'unknown')
+        logger.info(
+            f"AtroposAgent[{self.config.player_id_for_logging}] "
+            f"Tokenizer initialized: type={tokenizer_type}, "
+            f"name_or_path={tokenizer_name}, vocab_size={vocab_size}, "
+            f"model_id={self.model_id}"
+        )
 
         self.game_log: AtroposAgentActionLog = AtroposAgentActionLog(turn=[])
 
@@ -362,6 +375,32 @@ class AtroposAgent:
                 tokenize=False,
             )
 
+            # DEBUG: Log the full prompt being sent to server
+            logger.info(
+                f"AtroposAgent[{self.config.player_id_for_logging}] (generate_action) "
+                f"FULL PROMPT BEING SENT TO SERVER:\n"
+                f"{'='*50}\n{prompt}\n{'='*50}"
+            )
+
+            # DEBUG: Save prompt to file if debug mode enabled
+            if os.getenv("ATROPOS_DEBUG_SAVE_PROMPTS", "0") == "1":
+                try:
+                    debug_dir = Path("debug_prompts")
+                    debug_dir.mkdir(exist_ok=True)
+                    import time
+                    timestamp = int(time.time())
+                    prompt_file = debug_dir / f"prompt_{timestamp}_{self.config.player_id_for_logging}.txt"
+                    with open(prompt_file, "w", encoding="utf-8") as f:
+                        f.write(f"Model ID: {self.model_id}\n")
+                        f.write(f"Tokenizer: {type(self.tokenizer).__name__}\n")
+                        f.write(f"Tokenizer Name: {getattr(self.tokenizer, 'name_or_path', 'unknown')}\n")
+                        f.write(f"Timestamp: {timestamp}\n")
+                        f.write("="*80 + "\n")
+                        f.write(prompt)
+                    logger.info(f"Saved prompt to {prompt_file}")
+                except Exception as e:
+                    logger.warning(f"Failed to save debug prompt: {e}")
+
             # Count tokens and warn if approaching limits
             try:
                 prompt_tokens = len(self.tokenizer.encode(prompt))
@@ -404,6 +443,18 @@ class AtroposAgent:
                 top_p=0.9,
                 stop=["</tool_call>", "<|im_end|>", "<|endoftext|>"],
             )
+
+            # DEBUG: Log the raw response from server
+            logger.info(
+                f"AtroposAgent[{self.config.player_id_for_logging}] (generate_action) "
+                f"RAW SERVER RESPONSE: {completions}"
+            )
+            if completions and hasattr(completions, 'choices') and completions.choices:
+                for choice_idx, choice in enumerate(completions.choices):
+                    logger.info(
+                        f"AtroposAgent[{self.config.player_id_for_logging}] (generate_action) "
+                        f"RAW CHOICE {choice_idx}: {choice.text if hasattr(choice, 'text') else 'NO TEXT ATTR'}"
+                    )
 
             if completions and completions.choices:
                 for choice_idx, choice in enumerate(completions.choices):

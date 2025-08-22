@@ -30,10 +30,9 @@ async def main():
     logger.info("Starting RLPR TextWorld environment local debug runner")
 
     # Keep the config light for local tests
-    tokenizer_name = os.getenv(
-        "TOKENIZER_NAME",
-        os.getenv("HF_TOKENIZER", "NousResearch/DeepHermes-3-Mistral-24B-Preview"),
-    )
+    tokenizer_name = "NousResearch/Hermes-4-Qwen3-14B-1-e3"
+    model_name = os.getenv("TEST_MODEL", "models/hermes-qwen3-14b-4bit")
+    
     env_config = TextWorldEnvRLPRConfig(
         tokenizer_name=tokenizer_name,
         group_size=2,  # keep small for local testing
@@ -52,6 +51,12 @@ async def main():
         max_steps=3,
         # For debugging, include messages in SDGs for inspection
         include_messages=True,
+        # Override default server config with correct model name
+        default_server_config=APIServerConfig(
+            model_name=model_name,
+            base_url=os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/v1"),
+            api_key=os.getenv("OPENAI_API_KEY", ""),
+        ),
     )
 
     # Tighten agent generation for faster local runs
@@ -64,8 +69,8 @@ async def main():
     mock_mode = os.getenv("MOCK_SERVER", "0") == "1"
     server_configs = [
         APIServerConfig(
-            model_name=os.getenv("TEST_MODEL", "DeepHermes-3-Mistral-24B-Preview-q8"),
-            base_url=os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8080/v1"),
+            model_name=os.getenv("TEST_MODEL", "models/hermes-qwen3-14b-4bit"),
+            base_url=os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/v1"),
             api_key=os.getenv("OPENAI_API_KEY", ""),
             num_requests_for_eval=0,
         )
