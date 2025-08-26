@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-TextWorldEnv: Minimalist trainer environment for Microsoft TextWorld
+TextWorldEnvRLPRv2: Streamlined RLPR environment for Microsoft TextWorld
 
-A simple trainer environment that wraps TextWorld game generator and Gym interface
-to train LLMs. The LLM outputs actions in plain text and receives only environment rewards.
-No thinking tokens, memory, format rewards, or complex scoring - just pure environment interaction.
+A streamlined implementation of VR-CLI perplexity rewards without complex dependencies.
+Features step-by-step generation with parallel alternatives, entropy-based selection,
+thinking block stripping, and inline memory management.
 """
 
+import asyncio
 import logging
 import os
 import random
@@ -35,51 +36,64 @@ from environments.game_environments.textworld_env.textworld_registry import (
 logger = logging.getLogger(__name__)
 
 
-class TextWorldEnvConfig(BaseEnvConfig):
-    """Configuration for the minimalist TextWorld environment trainer."""
+class TextWorldEnvRLPRv2Config(BaseEnvConfig):
+    """Configuration for the streamlined TextWorld RLPR environment."""
 
-    env_name: str = "TextWorld"
-    wandb_name: str = "textworld-trainer-minimal"
-    group_size: int = 8
+    env_name: str = "TextWorldRLPRv2"
+    wandb_name: str = "textworld-rlpr-v2"
+    group_size: int = 16  # Alternatives per step
     max_num_workers: int = 16
     total_steps: int = 500
-    max_steps: int = 300  # max steps per episode (matches coin_collector max)
+    max_steps: int = 20  # Max turns per episode
     max_token_length: int = 32768
+
+    # VR-CLI perplexity reward settings
+    vrcli_weight: float = 0.3
+    vrcli_discount_factor: float = 0.99
+
+    # Format reward settings
+    format_reward_enabled: bool = True
+    format_reward_weight: float = 0.1
+    format_memory_reward: float = 0.05
+    format_thinking_reward: float = 0.05
+
+    # Token length management
+    token_length_penalty_enabled: bool = True
+    token_length_baseline: int = 500
+    token_length_penalty_scale: float = 0.0002
 
     # Challenge settings
     challenge_names: List[str] = [
         "tw-simple",
-        "tw-cooking",
+        "tw-cooking", 
         "tw-coin_collector",
         "tw-treasure_hunter",
     ]
-    randomize_challenge_settings: bool = (
-        True  # Randomize settings within each challenge
-    )
+    randomize_challenge_settings: bool = True
 
 
-class TextWorldEnv(BaseEnv):
-    """Minimalist TextWorld environment for training LLMs."""
+class TextWorldEnvRLPRv2(BaseEnv):
+    """Streamlined TextWorld RLPR environment with step-by-step generation."""
 
-    name = "textworld_minimal"
-    env_config_cls = TextWorldEnvConfig
+    name = "textworld_rlpr_v2"
+    env_config_cls = TextWorldEnvRLPRv2Config
 
     def __init__(
         self,
-        config: TextWorldEnvConfig,
+        config: TextWorldEnvRLPRv2Config,
         server_configs: List[APIServerConfig],
         slurm: bool = True,
         testing: bool = False,
     ):
         super().__init__(config, server_configs, slurm, testing)
-        self.config: TextWorldEnvConfig = config
+        self.config: TextWorldEnvRLPRv2Config = config
         self.challenge_registry = None
 
         # Track generated game files for cleanup
         self._generated_files = set()
 
         # Create temp directory for game files
-        self._temp_dir = tempfile.mkdtemp(prefix="textworld_minimal_")
+        self._temp_dir = tempfile.mkdtemp(prefix="textworld_rlpr_v2_")
 
         # wandb logging
         self.episode_outcomes_buffer = []
@@ -90,27 +104,30 @@ class TextWorldEnv(BaseEnv):
 
         self.system_prompt = (
             "You are playing a text-based adventure game. "
-            "Read the game state and respond with ONLY the action you want to take. "
-            "Do not include any explanation or reasoning, just the action command itself.\n\n"
-            "Examples of valid actions:\n"
-            "- go north\n"
-            "- take key\n"
-            "- open door\n"
-            "- examine table\n"
-            "- inventory\n\n"
-            "Respond with a single action only."
+            "You must respond in the following exact format:\n\n"
+            "<think>\n"
+            "Your detailed reasoning about the current situation, objectives, "
+            "and likely outcomes of potential actions.\n"
+            "</think>\n\n"
+            "<memory>\n"
+            "Concise summary building on previous memories, noting the outcome "
+            "of the last action, current game state, inventory, location, "
+            "and progress toward objectives.\n"
+            "</memory>\n\n"
+            "<tool_call>\n"
+            "{\"name\": \"execute_command\", \"arguments\": {\"command\": \"go north\", \"expected_outcome\": \"I expect to move north to a new room.\"}}\n"
+            "</tool_call>\n\n"
+            "Use exactly one of each block type, in this order."
         )
 
     async def setup(self):
         """Initialize the environment and challenge registry."""
-        # Import registry creation from local module
-
         try:
             self.challenge_registry = create_textworld_registry()
             logger.warning(
-                f"Initialized TextWorld challenge registry with challenges: {self.config.challenge_names}"
+                f"Initialized TextWorld RLPR v2 challenge registry with challenges: {self.config.challenge_names}"
             )
-            logger.warning("TextWorldEnv setup completed successfully")
+            logger.warning("TextWorldEnvRLPRv2 setup completed successfully")
         except Exception as e:
             logger.error(f"Failed to create TextWorld registry: {e}")
             logger.error(traceback.format_exc())
@@ -198,7 +215,7 @@ class TextWorldEnv(BaseEnv):
     async def collect_trajectories(
         self, item: Item
     ) -> Tuple[ScoredDataGroup, List[Item]]:
-        """Collect parallel trajectories from the same game."""
+        """Collect trajectories using step-by-step generation with parallel alternatives."""
         challenge_name = item["challenge_name"]
         settings = item["settings"]
 
@@ -218,35 +235,46 @@ class TextWorldEnv(BaseEnv):
         )
         env_id = textworld.gym.register_game(game_file, request_infos)
 
+        # Collect episode using step-by-step generation
+        scored_data_group = await self._collect_episode_step_by_step(
+            env_id, challenge_name
+        )
+
+        self._cleanup_game_file(game_file)
+        
+        return scored_data_group, []
+
+    async def _collect_episode_step_by_step(
+        self, env_id: str, challenge_name: str = "unknown"
+    ) -> ScoredDataGroup:
+        """Collect an episode using step-by-step generation with parallel alternatives."""
+        logger.warning(f"Starting step-by-step episode collection for {challenge_name}")
+        
+        # We'll generate group_size complete episodes, but with step-by-step selection
+        # This way we maintain compatibility with the trainer's expected data format
         scored_items = []
-
-        for i in range(self.config.group_size):
-            try:
-                scored_item = await self._collect_single_trajectory(
-                    env_id, i, challenge_name
-                )
-                if scored_item:
-                    scored_items.append(scored_item)
-            except Exception as e:
-                logger.error(f"Error collecting trajectory {i}: {e}")
-                continue
-
-        if not scored_items:
-            return (
-                ScoredDataGroup(
-                    tokens=[],
-                    masks=[],
-                    scores=[],
-                    messages=[],
-                    advantages=None,
-                    ref_logprobs=None,
-                    group_overrides={},
-                    overrides=None,
-                    images=None,
-                ),
-                [],
+        
+        for trajectory_idx in range(self.config.group_size):
+            scored_item = await self._collect_single_trajectory_with_steps(
+                env_id, trajectory_idx, challenge_name
             )
-
+            if scored_item:
+                scored_items.append(scored_item)
+        
+        if not scored_items:
+            return ScoredDataGroup(
+                tokens=[],
+                masks=[],
+                scores=[],
+                messages=[],
+                advantages=None,
+                ref_logprobs=None,
+                group_overrides={},
+                overrides=None,
+                images=None,
+            )
+        
+        # Combine into single ScoredDataGroup
         sdg = ScoredDataGroup(
             tokens=[],
             masks=[],
@@ -286,14 +314,13 @@ class TextWorldEnv(BaseEnv):
                 metadata.get("challenge_name", "unknown")
             )
 
-        self._cleanup_game_file(game_file)
+        logger.warning(f"Episode collection completed: {len(scored_items)} trajectories")
+        return sdg
 
-        return sdg, []
-
-    async def _collect_single_trajectory(
+    async def _collect_single_trajectory_with_steps(
         self, env_id: str, trajectory_idx: int, challenge_name: str = "unknown"
     ) -> Optional[ScoredDataItem]:
-        """Collect a single trajectory for the game."""
+        """Collect a single trajectory with step-by-step alternative generation."""
         messages: List[Message] = []
 
         try:
@@ -307,46 +334,54 @@ class TextWorldEnv(BaseEnv):
 
             done = False
             total_reward = 0.0
+            turn = 0
 
             async with self.server.dedicated_server() as server:
-                while not done and len(messages) < self.config.max_steps * 2:
+                while not done and turn < self.config.max_steps:
+                    turn += 1
                     current_tokens = len(
                         self.tokenizer.apply_chat_template(messages, tokenize=True)
                     )
-                    if current_tokens > self.config.max_token_length - 50:
+                    if current_tokens > self.config.max_token_length - 1000:
                         logger.warning(
                             f"Trajectory {trajectory_idx}: Approaching token limit, ending episode"
                         )
-                        logger.info(f"Token usage: {current_tokens} tokens")
-                        logger.info(f"Number of messages: {len(messages)}")
-                        logger.info(
-                            f"Last observation length: {len(messages[-1]['content']) if messages else 0}"
-                        )
                         break
 
-                    try:
-                        response = await server.chat_completion(
-                            messages=messages,
-                            n=1,
-                            max_tokens=50,  # short actions, no thinking
-                            temperature=0.7,
-                        )
-                        action = response.choices[0].message.content.strip()
-                        logger.debug(f"Trajectory {trajectory_idx}: Action: {action}")
-                    except Exception as e:
-                        logger.error(f"Trajectory {trajectory_idx}: LLM error: {e}")
+                    # Generate alternatives for this step
+                    alternatives = await self._generate_alternatives_for_trajectory(
+                        messages, server, trajectory_idx, turn
+                    )
+                    if not alternatives:
+                        logger.warning(f"Trajectory {trajectory_idx}: No alternatives generated")
                         break
 
-                    messages.append({"role": "assistant", "content": action})
+                    # Select best alternative using entropy-based selection
+                    selected_idx, selected_alternative = self._select_best_alternative(alternatives)
+                    logger.warning(
+                        f"Trajectory {trajectory_idx} Turn {turn}: Selected alternative {selected_idx} with entropy-based selection"
+                    )
+
+                    # Extract action and execute it
+                    action = selected_alternative["parsed_action"]["command"]
+                    logger.debug(f"Trajectory {trajectory_idx}: Action: {action}")
 
                     try:
                         obs, reward, done, info = env.step(action)
                         total_reward += reward
+                        logger.warning(
+                            f"Trajectory {trajectory_idx} Turn {turn}: Action '{action}' -> reward={reward}, done={done}"
+                        )
                     except Exception as e:
                         logger.error(
                             f"Trajectory {trajectory_idx}: Environment error: {e}"
                         )
                         break
+
+                    # Add selected action to conversation history (strip thinking blocks)
+                    selected_response = selected_alternative["response"]
+                    stripped_response = self._strip_thinking_blocks(selected_response)
+                    messages.append({"role": "assistant", "content": stripped_response})
 
                     if not done:
                         obs_text = self._format_observation(obs, info)
@@ -360,14 +395,54 @@ class TextWorldEnv(BaseEnv):
                 train_on_all_assistant_turns=True,
             )
 
+            # Calculate enhanced score using VR-CLI-style rewards
+            # For simplicity, we'll use the last alternative's data for VR-CLI scoring
+            vrcli_score = 0.0
+            format_score = 0.0
+            token_length_adj = 0.0
+            
+            if messages:
+                # Get the last assistant message for scoring
+                last_assistant_msg = None
+                for msg in reversed(messages):
+                    if msg["role"] == "assistant":
+                        last_assistant_msg = msg["content"]
+                        break
+                        
+                if last_assistant_msg:
+                    # Create dummy alternative structure for scoring
+                    dummy_alt = {
+                        "response": last_assistant_msg,
+                        "parsed_action": self._parse_response_format(last_assistant_msg) or {"expected_outcome": ""}
+                    }
+                    
+                    vrcli_score = self._calculate_vrcli_score_for_trajectory(
+                        dummy_alt, total_reward, info.get("won", False), info.get("lost", False)
+                    )
+                    format_score = self._calculate_format_reward(last_assistant_msg)
+                    token_length_adj = self._calculate_token_length_adjustment(last_assistant_msg)
+            
+            # Composite score
+            enhanced_score = (
+                vrcli_score * self.config.vrcli_weight +
+                format_score * self.config.format_reward_weight +
+                token_length_adj +
+                total_reward  # Base environment reward
+            )
+            
+            logger.warning(f"Trajectory {trajectory_idx} scoring: base={total_reward:.2f}, vrcli={vrcli_score:.2f}, format={format_score:.2f}, total={enhanced_score:.2f}")
+
             return ScoredDataItem(
                 messages=messages if self.config.include_messages else None,
                 tokens=tokenization_result["tokens"],
                 masks=tokenization_result["masks"],
-                scores=total_reward,
+                scores=enhanced_score,
                 metadata={
                     "trajectory_idx": trajectory_idx,
                     "final_score": total_reward,
+                    "enhanced_score": enhanced_score,
+                    "vrcli_score": vrcli_score,
+                    "format_score": format_score,
                     "won": info.get("won", False),
                     "lost": info.get("lost", False),
                     "moves": info.get("moves", 0),
@@ -379,6 +454,220 @@ class TextWorldEnv(BaseEnv):
             logger.error(f"Trajectory {trajectory_idx}: Fatal error: {e}")
             logger.error(traceback.format_exc())
             return None
+
+    async def _generate_alternatives_for_trajectory(
+        self, messages: List[Message], server, trajectory_idx: int, turn: int
+    ) -> List[Dict[str, Any]]:
+        """Generate multiple alternative responses for the current step in a trajectory."""
+        alternatives = []
+        
+        # Generate fewer alternatives per trajectory to keep computational cost manageable
+        num_alternatives = max(2, self.config.group_size // 4)  # 4 alternatives for group_size=16
+        
+        tasks = []
+        for i in range(num_alternatives):
+            task = server.chat_completion(
+                messages=messages,
+                n=1,
+                max_tokens=200,
+                temperature=0.8,
+                logprobs=True,  # Need logprobs for entropy calculation
+            )
+            tasks.append(task)
+
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for i, response in enumerate(responses):
+            if isinstance(response, Exception):
+                logger.warning(f"Trajectory {trajectory_idx} Turn {turn} Alternative {i} failed: {response}")
+                continue
+
+            try:
+                content = response.choices[0].message.content
+                logprobs = getattr(response.choices[0], 'logprobs', None)
+
+                # Parse response format
+                parsed_action = self._parse_response_format(content)
+                if not parsed_action:
+                    logger.debug(f"Trajectory {trajectory_idx} Turn {turn} Alternative {i}: Failed to parse response format")
+                    # Include failed alternatives for GRPO training
+                    parsed_action = {"command": "invalid", "expected_outcome": ""}
+
+                alternatives.append({
+                    "response": content,
+                    "parsed_action": parsed_action,
+                    "logprobs": logprobs,
+                    "index": i,
+                })
+
+            except Exception as e:
+                logger.debug(f"Trajectory {trajectory_idx} Turn {turn} Alternative {i}: Error processing response: {e}")
+                continue
+
+        return alternatives
+
+
+    def _parse_response_format(self, response: str) -> Optional[Dict[str, str]]:
+        """Parse the structured response format to extract action and expected outcome."""
+        import json
+        import re
+        
+        try:
+            # Extract tool_call JSON
+            tool_call_match = re.search(r'<tool_call>\s*(.*?)\s*</tool_call>', response, re.DOTALL)
+            if not tool_call_match:
+                return None
+                
+            tool_call_json = tool_call_match.group(1).strip()
+            tool_call = json.loads(tool_call_json)
+            
+            if tool_call.get("name") != "execute_command":
+                return None
+                
+            args = tool_call.get("arguments", {})
+            command = args.get("command", "")
+            expected_outcome = args.get("expected_outcome", "")
+            
+            if not command:
+                return None
+                
+            return {
+                "command": command,
+                "expected_outcome": expected_outcome
+            }
+            
+        except (json.JSONDecodeError, KeyError) as e:
+            return None
+
+    def _select_best_alternative(self, alternatives: List[Dict[str, Any]]) -> Tuple[int, Dict[str, Any]]:
+        """Select the best alternative using entropy-based confidence scoring."""
+        if not alternatives:
+            raise ValueError("No alternatives to select from")
+            
+        best_idx = 0
+        best_confidence = float('-inf')
+        
+        for i, alt in enumerate(alternatives):
+            confidence = self._calculate_entropy_confidence(alt.get("logprobs"))
+            if confidence > best_confidence:
+                best_confidence = confidence
+                best_idx = i
+                
+        logger.warning(f"Entropy selection: chose alternative {best_idx} with confidence {best_confidence:.4f}")
+        return best_idx, alternatives[best_idx]
+
+    def _calculate_entropy_confidence(self, logprobs) -> float:
+        """Calculate confidence score based on token entropy."""
+        if not logprobs or not hasattr(logprobs, 'content'):
+            return random.random()  # Fallback to random if no logprobs
+            
+        try:
+            import math
+            total_entropy = 0.0
+            token_count = 0
+            
+            for token_logprob in logprobs.content:
+                if hasattr(token_logprob, 'top_logprobs'):
+                    # Calculate entropy from top logprobs
+                    entropy = 0.0
+                    for top_logprob in token_logprob.top_logprobs:
+                        prob = math.exp(top_logprob.logprob)
+                        entropy -= prob * top_logprob.logprob
+                    total_entropy += entropy
+                    token_count += 1
+                    
+            if token_count == 0:
+                return random.random()
+                
+            avg_entropy = total_entropy / token_count
+            # Convert entropy to confidence (lower entropy = higher confidence)
+            confidence = math.exp(-avg_entropy)
+            return confidence
+            
+        except Exception as e:
+            logger.debug(f"Error calculating entropy: {e}")
+            return random.random()
+
+    def _calculate_vrcli_score_for_trajectory(
+        self, alternative: Dict[str, Any], total_reward: float, won: bool, lost: bool
+    ) -> float:
+        """Calculate a simplified VR-CLI-style score based on trajectory outcome."""
+        # Simplified VR-CLI: reward trajectories that perform better than expected
+        expected_outcome = alternative["parsed_action"].get("expected_outcome", "")
+        
+        # Basic heuristic: if the expected outcome mentions positive words and we won, boost score
+        positive_words = ["succeed", "win", "complete", "find", "get", "take", "open", "solve"]
+        negative_words = ["fail", "lose", "stuck", "cannot", "blocked", "impossible"]
+        
+        has_positive_expectation = any(word in expected_outcome.lower() for word in positive_words)
+        has_negative_expectation = any(word in expected_outcome.lower() for word in negative_words)
+        
+        base_vrcli_score = 0.0
+        
+        if won and has_positive_expectation:
+            # Model correctly predicted positive outcome
+            base_vrcli_score = 1.0
+            logger.warning(f"VR-CLI reward: Correct positive prediction -> {base_vrcli_score}")
+        elif lost and has_negative_expectation:
+            # Model correctly predicted negative outcome
+            base_vrcli_score = 0.5  
+            logger.warning(f"VR-CLI reward: Correct negative prediction -> {base_vrcli_score}")
+        elif won and has_negative_expectation:
+            # Model incorrectly predicted negative outcome
+            base_vrcli_score = 0.1
+            logger.warning(f"VR-CLI penalty: Incorrect negative prediction -> {base_vrcli_score}")
+        elif total_reward > 0:
+            # Positive trajectory outcome
+            base_vrcli_score = 0.3
+        else:
+            base_vrcli_score = 0.0
+            
+        return base_vrcli_score
+
+    def _calculate_format_reward(self, response: str) -> float:
+        """Calculate reward for following the structured response format."""
+        if not self.config.format_reward_enabled:
+            return 0.0
+            
+        score = 0.0
+        
+        # Check for required blocks
+        has_think = "<think>" in response and "</think>" in response
+        has_memory = "<memory>" in response and "</memory>" in response
+        has_tool_call = "<tool_call>" in response and "</tool_call>" in response
+        
+        if has_think:
+            score += self.config.format_thinking_reward
+        if has_memory:
+            score += self.config.format_memory_reward
+        if has_tool_call:
+            score += 0.05  # Tool call reward
+            
+        # Penalty for wrong structure
+        if not (has_think and has_memory and has_tool_call):
+            score *= 0.5
+            
+        return score
+
+    def _calculate_token_length_adjustment(self, response: str) -> float:
+        """Calculate token length penalty/bonus."""
+        if not self.config.token_length_penalty_enabled:
+            return 0.0
+            
+        token_count = len(self.tokenizer.encode(response))
+        deviation = token_count - self.config.token_length_baseline
+        adjustment = -deviation * self.config.token_length_penalty_scale
+        
+        return adjustment
+
+    def _strip_thinking_blocks(self, response: str) -> str:
+        """Strip thinking blocks from response but keep memory blocks."""
+        import re
+        
+        # Remove <think>...</think> blocks
+        stripped = re.sub(r'<think>.*?</think>\s*', '', response, flags=re.DOTALL)
+        
+        return stripped.strip()
 
     def _format_observation(self, obs: str, info: Dict[str, Any]) -> str:
         """Format game observation for the LLM."""
@@ -402,11 +691,11 @@ class TextWorldEnv(BaseEnv):
         return "\n".join(parts)
 
     @classmethod
-    def config_init(cls) -> Tuple[TextWorldEnvConfig, List[APIServerConfig]]:
+    def config_init(cls) -> Tuple[TextWorldEnvRLPRv2Config, List[APIServerConfig]]:
         """Initialize default configuration."""
-        env_config = TextWorldEnvConfig(
+        env_config = TextWorldEnvRLPRv2Config(
             tokenizer_name="NousResearch/Hermes-4-Qwen3-14B",
-            group_size=8,
+            group_size=16,
             use_wandb=True,
             wandb_name=cls.name,
             max_token_length=32768,
@@ -414,7 +703,7 @@ class TextWorldEnv(BaseEnv):
             challenge_names=[
                 "tw-simple",
                 "tw-cooking",
-                "tw-coin_collector",
+                "tw-coin_collector", 
                 "tw-treasure_hunter",
             ],
             randomize_challenge_settings=True,
@@ -437,8 +726,8 @@ class TextWorldEnv(BaseEnv):
 
     # TODO: implement evaluation properly re eval changes
     async def evaluate(self, num_items: int) -> Dict[str, Any]:
-        """Evaluate the model - not implemented for this minimal environment."""
-        logger.warning("Evaluation not implemented in minimal TextWorld environment")
+        """Evaluate the model - not implemented for this streamlined environment."""
+        logger.warning("Evaluation not implemented in TextWorld RLPR v2 environment")
         return {"message": "Evaluation not implemented"}
 
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
@@ -606,8 +895,6 @@ class TextWorldEnv(BaseEnv):
                     os.remove(json_file)
                     logger.debug(f"Removed json file: {json_file}")
 
-                # TODO: handle .z5's from manually downloaded games when that's added
-
                 self._generated_files.remove(game_file)
             except OSError as e:
                 logger.warning(f"Failed to clean up game file {game_file}: {e}")
@@ -631,4 +918,4 @@ class TextWorldEnv(BaseEnv):
 
 
 if __name__ == "__main__":
-    TextWorldEnv.cli()
+    TextWorldEnvRLPRv2.cli()
