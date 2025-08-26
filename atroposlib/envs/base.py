@@ -889,7 +889,8 @@ class BaseEnv(ABC):
         # do a rollout with item
         try:
             to_postprocess, to_backlog = await self.collect_trajectories(item)
-        except Exception:
+        except Exception as e:
+            logging.error(f"Error in collect_trajectories: {e}")
             to_postprocess = None
             to_backlog = []
         # add the items to the queue
@@ -911,7 +912,10 @@ class BaseEnv(ABC):
             self.task_successful.append(1)
             self.succeeded_task_duration.append(duration)
             logger.debug(f"handle_env: Collected {len(to_postprocess)} trajectories")
-            await self.handle_send_to_api(to_postprocess, item)
+            try:
+                await self.handle_send_to_api(to_postprocess, item)
+            except Exception as e:
+                logger.error(f"Error in handle_send_to_api: {e}")
         else:
             self.task_successful.append(0)
             self.failed_task_duration.append(duration)
