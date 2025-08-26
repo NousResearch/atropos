@@ -30,12 +30,12 @@ async def main():
     logger.info("Starting RLPR TextWorld environment local debug runner")
 
     # Keep the config light for local tests
-    tokenizer_name = "NousResearch/Hermes-4-Qwen3-14B-1-e3"
-    model_name = os.getenv("TEST_MODEL", "models/hermes-qwen3-14b-4bit")
+    tokenizer_name = "NousResearch/Hermes-4-Qwen3-14B"
+    model_name = os.getenv("TEST_MODEL", "NousResearch/Hermes-4-Qwen3-14B")
     
     env_config = TextWorldEnvRLPRConfig(
         tokenizer_name=tokenizer_name,
-        group_size=2,  # keep small for local testing
+        group_size=4,  # Increased slightly for better testing of selection logic
         use_wandb=False,
         wandb_name="textworld_rlpr_local_debug",
         max_num_workers=1,
@@ -48,9 +48,14 @@ async def main():
         data_path_to_save_groups=None,
         eval_handling=EvalHandlingEnum.NONE,
         eval_limit_ratio=0.0,
-        max_steps=3,
+        max_steps=5,  # Slightly longer episodes for better testing
         # For debugging, include messages in SDGs for inspection
         include_messages=True,
+        # Enhanced debugging settings
+        vrcli_weight=0.3,  # Standard VR-CLI weight
+        format_reward_enabled=True,  # Test format rewards
+        format_reward_weight=0.1,
+        token_length_penalty_enabled=True,  # Test token length penalties
         # Override default server config with correct model name
         default_server_config=APIServerConfig(
             model_name=model_name,
@@ -59,17 +64,19 @@ async def main():
         ),
     )
 
-    # Tighten agent generation for faster local runs
+    # Agent configuration for testing - longer responses to test structure
     env_config.atropos_agent_config = AtroposAgentConfig(
-        max_tokens_per_completion=128,
+        max_tokens_per_completion=512,  # Longer to test think/memory blocks
         temperature=0.7,
+        enable_memory=True,  # Test memory system
+        memory_top_k=3,  # Test memory retrieval
     )
 
     # Single server config: you can swap to local SGLang/OpenAI-compatible server
     mock_mode = os.getenv("MOCK_SERVER", "0") == "1"
     server_configs = [
         APIServerConfig(
-            model_name=os.getenv("TEST_MODEL", "models/hermes-qwen3-14b-4bit"),
+            model_name=os.getenv("TEST_MODEL", "NousResearch/Hermes-4-Qwen3-14B"),
             base_url=os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/v1"),
             api_key=os.getenv("OPENAI_API_KEY", ""),
             num_requests_for_eval=0,

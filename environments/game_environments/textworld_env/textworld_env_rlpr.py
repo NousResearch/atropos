@@ -28,6 +28,7 @@ from atroposlib.envs.base import (
     BaseEnv,
     BaseEnvConfig,
     ScoredDataGroup,
+    ServerBaseline,
 )
 from atroposlib.type_definitions import Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
@@ -51,6 +52,59 @@ from environments.game_environments.textworld_env.textworld_registry import (
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Debug helper functions
+def log_model_input(messages: List[Dict[str, str]], context: str = ""):
+    """Log model input with token count estimation."""
+    if logger.isEnabledFor(logging.INFO):
+        total_chars = sum(len(msg.get("content", "")) for msg in messages)
+        estimated_tokens = total_chars // 4  # Rough estimate
+        logger.info(f"🔍 MODEL_INPUT [{context}] - Messages: {len(messages)}, Est. tokens: {estimated_tokens}")
+        for i, msg in enumerate(messages[-2:]):  # Log last 2 messages for context
+            content_preview = (msg.get("content", "")[:100] + "...") if len(msg.get("content", "")) > 100 else msg.get("content", "")
+            logger.info(f"    [{i}] {msg.get('role', 'unknown')}: {content_preview}")
+
+def log_model_output(response_text: str, context: str = ""):
+    """Log model output with parsing details."""
+    if logger.isEnabledFor(logging.INFO):
+        preview = (response_text[:200] + "...") if len(response_text) > 200 else response_text
+        logger.info(f"🔍 MODEL_OUTPUT [{context}] - Length: {len(response_text)} chars")
+        logger.info(f"    Preview: {preview}")
+        
+        # Check for expected structure
+        has_think = "<think>" in response_text.lower()
+        has_memory = "<memory>" in response_text.lower()
+        has_tool_call = "<tool_call>" in response_text.lower()
+        logger.info(f"    Structure: think={has_think}, memory={has_memory}, tool_call={has_tool_call}")
+
+def log_entropy_scoring(alternatives: List, confidence_scores: List[float], selected_idx: int, context: str = ""):
+    """Log entropy-based confidence scoring details."""
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(f"🎯 ENTROPY_SCORING [{context}] - Alternatives: {len(alternatives)}")
+        for i, score in enumerate(confidence_scores):
+            status = "SELECTED" if i == selected_idx else "rejected"
+            logger.info(f"    Alt[{i}]: confidence={score:.4f} ({status})")
+        
+        if confidence_scores:
+            best_score = max(confidence_scores)
+            worst_score = min(confidence_scores)
+            logger.info(f"    Range: {worst_score:.4f} - {best_score:.4f}, Selected: {confidence_scores[selected_idx]:.4f}")
+
+def log_vrcli_calculation(predicted_outcome: str, actual_outcome: str, base_ppl: float, pred_ppl: float, improvement: float, reward: float, context: str = ""):
+    """Log VR-CLI perplexity calculation details."""
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(f"🧠 VR-CLI_CALCULATION [{context}]")
+        logger.info(f"    Predicted: {predicted_outcome[:50]}...")
+        logger.info(f"    Actual: {actual_outcome[:50]}...")
+        logger.info(f"    Base PPL: {base_ppl:.3f}, Pred PPL: {pred_ppl:.3f}")
+        logger.info(f"    Improvement: {improvement:.2f}%, Reward: {reward:.3f}")
+
+def log_parsed_action(action: str, prediction: str, context: str = ""):
+    """Log parsed action and prediction."""
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(f"⚡ PARSED_ACTION [{context}]")
+        logger.info(f"    Action: '{action}'")
+        logger.info(f"    Prediction: '{prediction[:100]}...' [{len(prediction)} chars]")
 
 
 class TextWorldEnvConfig(BaseEnvConfig):
@@ -134,11 +188,10 @@ class TextWorldEnvConfig(BaseEnvConfig):
         description="Scale factor for token length penalty (penalty per token over baseline)",
     )
 
-    # Deprecated/unused fields from older variant removed
 
     default_server_config: APIServerConfig = Field(
         default_factory=lambda: APIServerConfig(
-            server_type="openai", model_name="gpt-3.5-turbo"
+            server_type="openai", model_name="NousResearch/Hermes-4-Qwen3-14B"
         )
     )
     policy_agent_server_config: Optional[APIServerConfig] = None
@@ -428,6 +481,9 @@ class TextWorldEnv(BaseEnv):
         return agent
 
     async def setup(self):
+        """Setup environment and wait for inference servers to be ready."""
+        logger.info("Setting up TextWorld RLPR environment...")
+        
         for i, server in enumerate(self.server.servers):
             if hasattr(server, "config"):
                 logger.info(
@@ -436,6 +492,52 @@ class TextWorldEnv(BaseEnv):
                 )
             else:
                 logger.info(f"  Server {i}: {type(server).__name__}")
+        
+        # Wait for SGLang servers to be ready (important for distributed training)
+        logger.info("Waiting for SGLang inference servers to initialize...")
+        import asyncio
+        import aiohttp
+        
+        async def check_server_health(base_url: str, timeout: int = 600) -> bool:
+            """Check if a single SGLang server is ready."""
+            health_url = f"{base_url.rstrip('/')}/health"
+            start_time = asyncio.get_event_loop().time()
+            
+            while (asyncio.get_event_loop().time() - start_time) < timeout:
+                try:
+                    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+                        async with session.get(health_url) as response:
+                            if response.status == 200:
+                                logger.info(f"✅ Server {base_url} is ready")
+                                return True
+                except Exception:
+                    # Server not ready yet, continue waiting
+                    pass
+                    
+                await asyncio.sleep(5)  # Check every 5 seconds
+                
+            logger.warning(f"⚠️  Server {base_url} not ready after {timeout}s")
+            return False
+        
+        # Check all servers in parallel
+        health_check_tasks = []
+        for server in self.server.servers:
+            if hasattr(server, "config") and server.config.base_url:
+                task = check_server_health(server.config.base_url)
+                health_check_tasks.append(task)
+        
+        if health_check_tasks:
+            logger.info(f"Checking health of {len(health_check_tasks)} SGLang servers...")
+            results = await asyncio.gather(*health_check_tasks, return_exceptions=True)
+            ready_count = sum(1 for result in results if result is True)
+            logger.info(f"✅ {ready_count}/{len(health_check_tasks)} SGLang servers are ready")
+            
+            if ready_count == 0:
+                raise RuntimeError("No SGLang servers are ready - cannot proceed with training")
+            elif ready_count < len(health_check_tasks):
+                logger.warning(f"Only {ready_count}/{len(health_check_tasks)} servers ready - training may be slower")
+        
+        logger.info("🚀 TextWorld RLPR environment setup complete!")
 
     async def register_env(self):
         """Register environment with rollout server."""
@@ -577,6 +679,9 @@ class TextWorldEnv(BaseEnv):
         """Parse agent response to extract TextWorld command and expected outcome from tool call."""
         if not agent_response_text:
             return None, None
+        
+        # Debug log the raw response
+        log_model_output(agent_response_text, "action_parsing")
 
         tool_name, arguments, is_error = parse_tool_call(
             response=agent_response_text, preferred_tags=["tool_call"]
@@ -594,6 +699,13 @@ class TextWorldEnv(BaseEnv):
         parsed_command = parsed_command.strip()
         expected_outcome = (
             expected_outcome.strip() if isinstance(expected_outcome, str) else ""
+        )
+        
+        # Debug log the parsed result
+        log_parsed_action(
+            parsed_command if parsed_command else "None", 
+            expected_outcome, 
+            "final_parse"
         )
 
         return (parsed_command if parsed_command else None), expected_outcome
@@ -799,6 +911,13 @@ class TextWorldEnv(BaseEnv):
             reward = 1.0  # Significant improvement
 
         logger.debug(f"VR-CLI final reward: {reward} (improvement: {improvement:.2f}%)")
+        
+        # Comprehensive debug logging
+        log_vrcli_calculation(
+            predicted_outcome, actual_outcome, base_ppl, pred_ppl, 
+            improvement, reward, f"action={actual_action[:20]}"
+        )
+        
         return reward
 
     def _calculate_format_reward(self, response_text: str) -> float:
@@ -996,6 +1115,12 @@ class TextWorldEnv(BaseEnv):
         logger.info(
             f"[Episode: {ep_state.episode_id}] Selected alternative {selected_idx} with action '{selected_action}' "
             f"(confidence: {confidence_value:.3f})"
+        )
+        
+        # Enhanced entropy scoring debug logging
+        log_entropy_scoring(
+            candidates, confidence_scores, selected_idx, 
+            f"ep={ep_state.episode_id}"
         )
 
         # Step 3: Execute selected action in main environment
@@ -1958,22 +2083,21 @@ class TextWorldEnv(BaseEnv):
     def config_init(cls) -> Tuple[TextWorldEnvConfig, List[APIServerConfig]]:
         """Initialize default configuration for TextWorldEnv."""
         config = TextWorldEnvConfig(
-            tokenizer_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+            tokenizer_name="NousResearch/Hermes-4-Qwen3-14B",
             wandb_name="textworld-qwen3-14b",
         )
-        # When running with SLURM, configure to use SGLang servers on ports 9004-9007
+        # Use standard multinode port 9001 for SGLang server
         server_configs = [
             APIServerConfig(
                 api_key="x",  # SGLang requires non-empty API key
-                base_url=f"http://localhost:{port}/v1",  # Add /v1 for OpenAI API compatibility
-                model_name="NousResearch/Hermes-4-Qwen3-14B-1-e3",
+                base_url="http://localhost:9001/v1",
+                model_name="NousResearch/Hermes-4-Qwen3-14B",
                 server_type="openai",  # SGLang is OpenAI API compatible
                 timeout=1200,
                 num_max_requests_at_once=512,
                 num_requests_for_eval=64,
                 health_check=True,
             )
-            for port in [9004, 9005, 9006, 9007]
         ]
         return config, server_configs
 
