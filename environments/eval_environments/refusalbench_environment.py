@@ -184,7 +184,7 @@ class RefusalBenchConfig(BaseEnvConfig):
     eval_runs_for_average: int = Field(
         default=1,
         ge=1,
-        description="Number of evaluation runs to perform for averaging. If > 1, will run evaluation N times and compute averages.",
+        description="Number of evaluation runs to perform for averaging.",
     )
 
 
@@ -495,25 +495,6 @@ class RefusalBenchEnv(BaseEnv):
                 f"   Message {i+1} ({role}): {self._format_debug_text(content, 'Content')}"
             )
 
-    def _log_full_debug_response(self, completion, context: str = ""):
-        """Log full debug information for API responses."""
-        if not self.config.full_debug:
-            return
-
-        if hasattr(completion, "usage"):
-            print(f"   Usage: {completion.usage}")
-
-        if hasattr(completion, "choices") and completion.choices:
-            for i, choice in enumerate(completion.choices):
-                content = choice.message.content if hasattr(choice, "message") else ""
-                finish_reason = (
-                    choice.finish_reason
-                    if hasattr(choice, "finish_reason")
-                    else "unknown"
-                )
-        else:
-            print("   No choices in response")
-
     def _reset_metrics(self) -> None:
         """Reset training metrics."""
         self.percent_correct_buffer = []
@@ -718,9 +699,6 @@ Your answer:"""
 
             completion = await self._rate_limited_judge_call(messages)
 
-            # Log full debug response for judge
-            self._log_full_debug_response(completion, "JUDGE_REFUSAL")
-
             if not completion.choices or not completion.choices[0].message.content:
                 print("WARNING: Empty judge response, using fallback")
                 if self.config.use_fallback_scoring:
@@ -833,11 +811,6 @@ Your answer:"""
 
                 completions = await self.server.chat_completion(
                     messages=messages, **completion_params
-                )
-
-                # Log full debug response
-                self._log_full_debug_response(
-                    completions, f"TRAINING attempt {attempt + 1}/{max_retries}"
                 )
 
                 # Check if we got valid completions
@@ -1042,14 +1015,7 @@ Your answer:"""
                     completion = await self.server.chat_completion(
                         messages=messages, **completion_params
                     )
-
-                    print(f"✅ Got completion response!")
-
-                    # Log full debug response
-                    self._log_full_debug_response(
-                        completion, f"EVAL attempt {attempt + 1}/{max_retries}"
-                    )
-
+                    print("✅ Got completion response!")
                     if (
                         not completion.choices
                         or not completion.choices[0].message.content
@@ -1087,14 +1053,14 @@ Your answer:"""
 
                     # Print full traceback for debugging
                     import traceback
-                    print(f"   Full traceback:")
+                    print("   Full traceback:")
                     traceback.print_exc()
 
                     if attempt < max_retries - 1:
                         await asyncio.sleep(retry_delay)
                         continue
                     else:
-                        print(f"All retry attempts failed, giving up")
+                        print("All retry attempts failed, giving up")
                         raise
 
             # Validate thinking format if enabled
