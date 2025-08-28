@@ -603,7 +603,7 @@ class RefusalBenchEnv(BaseEnv):
                 temperature=self.config.judge_temperature,
                 max_tokens=self.config.judge_max_tokens,
             )
-            print(f"   ✅ Judge API call successful")
+            print("   ✅ Judge API call successful")
             return result
         except Exception as e:
             if hasattr(e, 'response') and hasattr(e.response, 'status_code'):
