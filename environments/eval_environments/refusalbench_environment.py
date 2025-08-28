@@ -1318,30 +1318,32 @@ Your answer:"""
 
         end_time = time.time()
 
-        # Build evaluation metrics dict
-        eval_metrics = {
-            "eval/overall_refusal_rate": overall_refusal_rate,
-            "eval/total_samples": len(samples),
-            "eval/format_compliance_rate": format_compliance_rate,
-        }
+        # Build evaluation metrics dict - ordered with most important metrics first
+        eval_metrics = {}
+        
+        # 🔝 TOP PRIORITY: Overall and aggregated refusal rates
+        eval_metrics["eval/overall_refusal_rate"] = overall_refusal_rate
+        if normal_refusal_rates:
+            eval_metrics["eval/normal_categories_refusal_rate"] = avg_normal_refusal_rate
+        if inverted_refusal_rates:
+            eval_metrics["eval/inverted_categories_refusal_rate"] = avg_inverted_refusal_rate
+        
+        # 📊 SUMMARY METRICS: Basic counts and compliance
+        eval_metrics["eval/total_samples"] = len(samples)
+        eval_metrics["eval/format_compliance_rate"] = format_compliance_rate
 
-        # Add category-specific metrics
+        # 📋 CATEGORY-SPECIFIC METRICS: Sorted alphabetically for consistency
+        category_metrics = {}
         for category, rates in category_refusal_rates.items():
             if rates:
                 avg_refusal_rate = sum(rates) / len(rates)
-                eval_metrics[
+                category_metrics[
                     f"eval/refusal_rate_{category.replace(' ', '_').replace('&', 'and')}"
                 ] = avg_refusal_rate
-
-        # Add inverted vs normal metrics
-        if inverted_refusal_rates:
-            eval_metrics["eval/inverted_categories_refusal_rate"] = (
-                avg_inverted_refusal_rate
-            )
-        if normal_refusal_rates:
-            eval_metrics["eval/normal_categories_refusal_rate"] = (
-                avg_normal_refusal_rate
-            )
+        
+        # Add category metrics in sorted order for consistent display
+        for key in sorted(category_metrics.keys()):
+            eval_metrics[key] = category_metrics[key]
 
         # Return evaluation results for averaging
         return {
@@ -1443,13 +1445,46 @@ Your answer:"""
                 sample["run_number"] = result["run_number"]
             all_samples.extend(result["samples"])
         
-        # Compute averaged metrics
+        # Compute averaged metrics with ordered display
         averaged_metrics = {}
         metric_keys = set()
         for metrics in all_metrics:
             metric_keys.update(metrics.keys())
         
-        for key in metric_keys:
+        # Define priority order for metrics display
+        priority_metrics = [
+            "eval/overall_refusal_rate",
+            "eval/normal_categories_refusal_rate", 
+            "eval/inverted_categories_refusal_rate",
+            "eval/total_samples",
+            "eval/format_compliance_rate"
+        ]
+        
+        # Add priority metrics first
+        for key in priority_metrics:
+            if key in metric_keys:
+                values = []
+                for metrics in all_metrics:
+                    if key in metrics and metrics[key] is not None:
+                        values.append(metrics[key])
+                
+                if values:
+                    if key == "eval/total_samples":
+                        # For total samples, sum across runs
+                        averaged_metrics[key] = sum(values)
+                    else:
+                        # For rates and other metrics, compute average
+                        averaged_metrics[key] = sum(values) / len(values)
+                        # Also add standard deviation for variability insight
+                        if len(values) > 1:
+                            import statistics
+                            averaged_metrics[f"{key}_std"] = statistics.stdev(values)
+                            averaged_metrics[f"{key}_min"] = min(values)
+                            averaged_metrics[f"{key}_max"] = max(values)
+        
+        # Add remaining metrics (category-specific) in sorted order
+        remaining_keys = sorted([k for k in metric_keys if k not in priority_metrics])
+        for key in remaining_keys:
             values = []
             for metrics in all_metrics:
                 if key in metrics and metrics[key] is not None:
