@@ -67,6 +67,7 @@ import logging
 import os
 import random
 import re
+import time
 import uuid
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
@@ -278,6 +279,21 @@ class AnswerFormat(Enum):
 
 class AnswerFormatEnvConfig(BaseEnvConfig):
     """Custom config class for AnswerFormatEnv with additional parameters."""
+
+    dataset: str = Field(
+        default="NousResearch/answer_format",
+        description="HuggingFace dataset to use for training and evaluation",
+    )
+
+    max_eval_samples: Optional[int] = Field(
+        default=None,
+        description="Maximum number of samples to use for evaluation. If None, use all samples.",
+    )
+
+    eval_sample_seed: int = Field(
+        default=42,
+        description="Random seed for sampling evaluation data when max_eval_samples is set",
+    )
 
     dataset_configs: List[Dict[str, Any]] = Field(
         default=[
@@ -3255,154 +3271,226 @@ class AnswerFormatEnv(BaseEnv):
 
         return human_msg, assistant_msg
 
+    def _load_hf_dataset(self):
+        """Load data from HuggingFace dataset."""
+        if self.debug_logging:
+            self.logger.info(f"Loading HuggingFace dataset: {self.config.dataset}")
+
+        try:
+            # Load train and test splits
+            train_dataset = load_dataset(self.config.dataset, split="train")
+            test_dataset = load_dataset(self.config.dataset, split="test")
+
+            # Convert to list format expected by the environment
+            train_items = []
+            for item in train_dataset:
+                train_items.append(
+                    {
+                        "prompt": item.get("prompt", item.get("question", "")),
+                        "answer": item.get("answer", item.get("response", "")),
+                        "metadata": item.get("metadata", {}),
+                        "dataset_type": item.get("dataset_type", "generic"),
+                    }
+                )
+
+            test_items = []
+            for item in test_dataset:
+                test_items.append(
+                    {
+                        "prompt": item.get("prompt", item.get("question", "")),
+                        "answer": item.get("answer", item.get("response", "")),
+                        "metadata": item.get("metadata", {}),
+                        "dataset_type": item.get("dataset_type", "generic"),
+                    }
+                )
+
+            # Apply max_eval_samples if specified
+            if (
+                self.config.max_eval_samples
+                and len(test_items) > self.config.max_eval_samples
+            ):
+                random.seed(self.config.eval_sample_seed)
+                test_items = random.sample(test_items, self.config.max_eval_samples)
+
+            return train_items, test_items
+
+        except Exception as e:
+            if self.debug_logging:
+                self.logger.warning(
+                    f"Failed to load HuggingFace dataset: {e}. Falling back to dataset_configs."
+                )
+            return None, None
+
     async def setup(self):
         """Load and combine datasets."""
         if self.debug_logging:
             self.logger.info("Starting environment setup")
 
-        all_datasets = []
+        # Try to load from HuggingFace dataset first
+        train_items, test_items = self._load_hf_dataset()
 
-        for dataset_config in self.config.dataset_configs:
-            try:
-                dataset_name = dataset_config["name"]
-                split = dataset_config.get("split", "train")
-                sample_size = dataset_config.get("sample_size", None)
+        if train_items and test_items:
+            self.train_items = train_items
+            self.test_items = test_items
+            self.dataset_items = train_items + test_items
 
-                if self.debug_logging:
-                    self.logger.info(f"Loading dataset: {dataset_name}, split: {split}")
+            if self.debug_logging:
+                self.logger.info(
+                    f"Loaded {len(self.train_items)} train and {len(self.test_items)} test items from HuggingFace dataset"  # noqa: E501
+                )
+        else:
+            # Fall back to original dataset_configs loading
+            all_datasets = []
 
-                # Load dataset with error handling
+            for dataset_config in self.config.dataset_configs:
                 try:
-                    if dataset_name == "gsm8k":
-                        # Special handling for GSM8K dataset
-                        dataset = load_dataset("gsm8k", "main", split=split)
-                    else:
-                        dataset = load_dataset(dataset_name, split=split)
-                except Exception as dataset_load_error:
+                    dataset_name = dataset_config["name"]
+                    split = dataset_config.get("split", "train")
+                    sample_size = dataset_config.get("sample_size", None)
+
                     if self.debug_logging:
-                        self.logger.error(
-                            f"Failed to load dataset {dataset_name}: {dataset_load_error}"
+                        self.logger.info(
+                            f"Loading dataset: {dataset_name}, split: {split}"
                         )
-                    continue  # Skip this dataset and try the next one
 
-                if sample_size and len(dataset) > sample_size:
-                    dataset = dataset.shuffle(seed=self.seed).select(range(sample_size))
-
-                # Convert to our standard format
-                processed_items = []
-                for item in dataset:
-                    prompt = None
-                    answer = None
-                    metadata = {}
-
-                    # Extract prompt and answer based on field configuration
-                    prompt_field = dataset_config.get("prompt_field", "prompt")
-                    answer_field = dataset_config.get("answer_field", "answer")
-
-                    if (
-                        prompt_field == "conversations"
-                        and answer_field == "conversations"
-                    ):
-                        # Handle conversation format
-                        conversations = item.get("conversations", [])
-                        prompt, answer = (
-                            self._extract_prompt_and_answer_from_conversations(
-                                conversations
-                            )
-                        )
-                    elif dataset_name == "gsm8k":
-                        # Special handling for GSM8K dataset
-                        prompt = item.get(prompt_field)
-                        raw_answer = item.get(answer_field)
-                        # Extract the final numerical answer from GSM8K format
-                        if raw_answer and "####" in raw_answer:
-                            # GSM8K uses #### to separate explanation from final answer
-                            answer = (
-                                raw_answer.split("####")[-1].strip().replace(",", "")
-                            )
-                        elif raw_answer and "#" in raw_answer:
-                            # Fallback for other # patterns
-                            answer = raw_answer.split("#")[-1].strip().replace(",", "")
+                    # Load dataset with error handling
+                    try:
+                        if dataset_name == "gsm8k":
+                            # Special handling for GSM8K dataset
+                            dataset = load_dataset("gsm8k", "main", split=split)
                         else:
-                            answer = raw_answer
-                    elif dataset_name == "NousResearch/AcademicMCQA":
-                        # Special handling for AcademicMCQA dataset
-                        prompt = item.get(prompt_field)  # "prompt" field
-                        correct_answer_index = item.get(
-                            "answer"
-                        )  # Index of correct answer
-                        ground_truth_letter = item.get(
-                            "ground_truth"
-                        )  # Letter (A, B, C, D)
-                        options = item.get("options", [])  # List of answer options
+                            dataset = load_dataset(dataset_name, split=split)
+                    except Exception as dataset_load_error:
+                        if self.debug_logging:
+                            self.logger.error(
+                                f"Failed to load dataset {dataset_name}: {dataset_load_error}"
+                            )
+                        continue  # Skip this dataset and try the next one
 
-                        # Use the ground truth letter as the answer for format training
-                        # The format environment will train on generating the letter in various formats
-                        answer = ground_truth_letter
-
-                        # Store additional metadata for MCQA
-                        metadata["correct_answer_index"] = correct_answer_index
-                        metadata["ground_truth_letter"] = ground_truth_letter
-                        metadata["options"] = options
-                        if (
-                            correct_answer_index is not None
-                            and correct_answer_index < len(options)
-                        ):
-                            metadata["correct_answer_text"] = options[
-                                correct_answer_index
-                            ]
-                    else:
-                        # Handle direct field access
-                        prompt = item.get(prompt_field)
-                        answer = item.get(answer_field)
-
-                    # Extract metadata
-                    metadata_fields = dataset_config.get("metadata_fields", [])
-                    for field in metadata_fields:
-                        if field in item:
-                            metadata[field] = item[field]
-
-                    metadata["dataset_name"] = dataset_name
-
-                    # Get dataset type (default to "generic" if not specified)
-                    dataset_type = dataset_config.get("dataset_type", "generic")
-
-                    if prompt and answer:
-                        processed_items.append(
-                            {
-                                "prompt": prompt,
-                                "answer": answer,
-                                "metadata": metadata,
-                                "dataset_type": dataset_type,
-                            }
+                    if sample_size and len(dataset) > sample_size:
+                        dataset = dataset.shuffle(seed=self.seed).select(
+                            range(sample_size)
                         )
 
-                if self.debug_logging:
-                    self.logger.info(
-                        f"Processed {len(processed_items)} items from {dataset_name}"
-                    )
+                    # Convert to our standard format
+                    processed_items = []
+                    for item in dataset:
+                        prompt = None
+                        answer = None
+                        metadata = {}
 
-                all_datasets.extend(processed_items)
+                        # Extract prompt and answer based on field configuration
+                        prompt_field = dataset_config.get("prompt_field", "prompt")
+                        answer_field = dataset_config.get("answer_field", "answer")
 
-            except Exception as e:
-                error_msg = f"Error loading dataset {dataset_config.get('name', 'unknown')}: {e}"
-                if self.debug_logging:
-                    self.logger.error(error_msg)
-                print(error_msg)
+                        if (
+                            prompt_field == "conversations"
+                            and answer_field == "conversations"
+                        ):
+                            # Handle conversation format
+                            conversations = item.get("conversations", [])
+                            prompt, answer = (
+                                self._extract_prompt_and_answer_from_conversations(
+                                    conversations
+                                )
+                            )
+                        elif dataset_name == "gsm8k":
+                            # Special handling for GSM8K dataset
+                            prompt = item.get(prompt_field)
+                            raw_answer = item.get(answer_field)
+                            # Extract the final numerical answer from GSM8K format
+                            if raw_answer and "####" in raw_answer:
+                                # GSM8K uses #### to separate explanation from final answer
+                                answer = (
+                                    raw_answer.split("####")[-1]
+                                    .strip()
+                                    .replace(",", "")
+                                )
+                            elif raw_answer and "#" in raw_answer:
+                                # Fallback for other # patterns
+                                answer = (
+                                    raw_answer.split("#")[-1].strip().replace(",", "")
+                                )
+                            else:
+                                answer = raw_answer
+                        elif dataset_name == "NousResearch/AcademicMCQA":
+                            # Special handling for AcademicMCQA dataset
+                            prompt = item.get(prompt_field)  # "prompt" field
+                            correct_answer_index = item.get(
+                                "answer"
+                            )  # Index of correct answer
+                            ground_truth_letter = item.get(
+                                "ground_truth"
+                            )  # Letter (A, B, C, D)
+                            options = item.get("options", [])  # List of answer options
 
-        if not all_datasets:
-            raise ValueError("No datasets could be loaded successfully")
+                            # Use the ground truth letter as the answer for format training
+                            # The format environment will train on generating the letter in various formats
+                            answer = ground_truth_letter
 
-        # Shuffle all items together
-        random.shuffle(all_datasets)
-        self.dataset_items = all_datasets
+                            # Store additional metadata for MCQA
+                            metadata["correct_answer_index"] = correct_answer_index
+                            metadata["ground_truth_letter"] = ground_truth_letter
+                            metadata["options"] = options
+                            if (
+                                correct_answer_index is not None
+                                and correct_answer_index < len(options)
+                            ):
+                                metadata["correct_answer_text"] = options[
+                                    correct_answer_index
+                                ]
+                        else:
+                            # Handle direct field access
+                            prompt = item.get(prompt_field)
+                            answer = item.get(answer_field)
 
-        # Split into train and test
-        split_idx = int(
-            len(self.dataset_items) * (1.0 - self.config.eval_set_percentage)
-        )
-        self.train_items = self.dataset_items[:split_idx]
-        self.test_items = self.dataset_items[split_idx:]
+                        # Extract metadata
+                        metadata_fields = dataset_config.get("metadata_fields", [])
+                        for field in metadata_fields:
+                            if field in item:
+                                metadata[field] = item[field]
+
+                        metadata["dataset_name"] = dataset_name
+
+                        # Get dataset type (default to "generic" if not specified)
+                        dataset_type = dataset_config.get("dataset_type", "generic")
+
+                        if prompt and answer:
+                            processed_items.append(
+                                {
+                                    "prompt": prompt,
+                                    "answer": answer,
+                                    "metadata": metadata,
+                                    "dataset_type": dataset_type,
+                                }
+                            )
+
+                    if self.debug_logging:
+                        self.logger.info(
+                            f"Processed {len(processed_items)} items from {dataset_name}"
+                        )
+
+                    all_datasets.extend(processed_items)
+
+                except Exception as e:
+                    error_msg = f"Error loading dataset {dataset_config.get('name', 'unknown')}: {e}"
+                    if self.debug_logging:
+                        self.logger.error(error_msg)
+                    print(error_msg)
+
+            if not all_datasets:
+                raise ValueError("No datasets could be loaded successfully")
+
+            # Shuffle all items together
+            random.shuffle(all_datasets)
+            self.dataset_items = all_datasets
+
+            # Split into train and test
+            split_idx = int(
+                len(self.dataset_items) * (1.0 - self.config.eval_set_percentage)
+            )
+            self.train_items = self.dataset_items[:split_idx]
+            self.test_items = self.dataset_items[split_idx:]
 
         self.iter = 0
 
@@ -3928,7 +4016,7 @@ class AnswerFormatEnv(BaseEnv):
                     f"An unexpected error occurred while saving failed rollouts to {file_path}: {e}"
                 )
 
-    async def rollout_and_score_eval(self, test_item: Dict[str, Any]) -> float:
+    async def rollout_and_score_eval(self, test_item: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate a single test item."""
         # Get appropriate formats for this dataset type
         dataset_type = test_item.get("dataset_type", "generic")
@@ -3953,12 +4041,12 @@ class AnswerFormatEnv(BaseEnv):
             messages, add_generation_prompt=True, tokenize=False
         )
 
+        eval_temperature = 0.1
         completion = await self.server.completion(
             prompt=prompt,
             n=1,
             max_tokens=self.config.max_token_length,
-            temperature=0.1,
-            split="eval",
+            temperature=eval_temperature,
         )
 
         model_response = completion.choices[0].text
@@ -3966,7 +4054,26 @@ class AnswerFormatEnv(BaseEnv):
             model_response, selected_format
         )
 
-        return 1.0 if extracted_content is not None else 0.0
+        score = 1.0 if extracted_content is not None else 0.0
+
+        # Create sample data
+        sample = {
+            "messages": messages + [{"role": "assistant", "content": model_response}],
+            "prompt": test_item["prompt"],
+            "selected_format": (
+                selected_format.value
+                if hasattr(selected_format, "value")
+                else str(selected_format)
+            ),
+            "dataset_type": dataset_type,
+            "model_response": model_response,
+            "extracted_content": extracted_content,
+            "score": float(score),
+            "correct": bool(score > 0),
+            "finish_reason": completion.choices[0].finish_reason,
+        }
+
+        return {"score": score, "sample": sample}
 
     async def evaluate(self, *args, **kwargs):
         """Run evaluation on the test set."""
@@ -3977,22 +4084,48 @@ class AnswerFormatEnv(BaseEnv):
             self.eval_metrics.append(("eval/percent_correct", 0.0))
             return
 
+        start_time = time.time()
+        eval_temperature = 0.1
+
         # Use subset for faster evaluation
         items_to_eval = self.test_items[: min(len(self.test_items), 50)]
 
-        eval_results = await tqdm_asyncio.gather(
+        results = await tqdm_asyncio.gather(
             *[self.rollout_and_score_eval(item) for item in items_to_eval]
         )
 
-        if eval_results:
-            avg_score = sum(eval_results) / len(eval_results)
+        # Extract scores and samples
+        scores = [result["score"] for result in results]
+        samples = [result["sample"] for result in results]
+
+        if scores:
+            avg_score = sum(scores) / len(scores)
         else:
             avg_score = 0.0
 
+        end_time = time.time()
+
+        # Add to existing metrics for wandb
         self.eval_metrics.append(("eval/percent_correct", avg_score))
 
         if self.debug_logging:
             self.logger.info(f"Evaluation complete: avg_score={avg_score:.3f}")
+
+        # Log evaluation results
+        eval_metrics = {
+            "eval/percent_correct": avg_score,
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "temperature": eval_temperature,
+                "max_tokens": self.config.max_token_length,
+            },
+        )
 
     async def add_rollouts_for_wandb(
         self,
