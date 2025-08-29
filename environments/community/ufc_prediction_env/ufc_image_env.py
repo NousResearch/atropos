@@ -3,6 +3,7 @@ import csv
 import io
 import os
 import random
+import re
 import sys
 import traceback
 from typing import List, Optional, Tuple
@@ -286,8 +287,6 @@ class UFCImageEnv(BaseEnv):
                 ground_truth_color = ground_truth.replace("answer:", "").strip()
 
                 # Extract color from \boxed{color} format
-                import re
-
                 boxed_match = re.search(r"\\boxed{([^}]+)}", reply)
                 if boxed_match:
                     prediction = boxed_match.group(1).strip().lower()
