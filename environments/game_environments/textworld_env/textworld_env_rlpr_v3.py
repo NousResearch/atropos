@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-TextWorldEnvRLPRv2: Streamlined RLPR environment for Microsoft TextWorld
+TextWorldEnvRLPRv3: Per-step ScoredDataGroup returns with credit assignment
 
-A streamlined implementation of VR-CLI perplexity rewards without complex dependencies.
-Features step-by-step generation with parallel alternatives, entropy-based selection,
-thinking block stripping, and inline memory management.
+This version returns one ScoredDataGroup per step instead of merging them for the whole episode.
+Each step's ScoredDataGroup contains all alternatives generated for that step, with appropriate
+credit assignment based on which alternatives produced the same action as the selected one.
 """
 
 import asyncio
 import logging
+import math
 import os
 import random
 import tempfile
@@ -36,15 +37,15 @@ from environments.game_environments.textworld_env.textworld_registry import (
 logger = logging.getLogger(__name__)
 
 
-class TextWorldEnvRLPRv2Config(BaseEnvConfig):
-    """Configuration for the streamlined TextWorld RLPR environment."""
+class TextWorldEnvRLPRv3Config(BaseEnvConfig):
+    """Configuration for the TextWorld RLPR v3 environment."""
 
-    env_name: str = "TextWorldRLPRv2"
-    wandb_name: str = "textworld-rlpr-v2"
+    env_name: str = "TextWorldRLPRv3"
+    wandb_name: str = "textworld-rlpr-v3"
     group_size: int = 16  # Alternatives per step
     max_num_workers: int = 16
     total_steps: int = 500
-    max_steps: int = 20  # Max turns per episode
+    max_steps: int = 10  # Max turns per episode - reduced for debugging
     max_token_length: int = 32768
 
     # VR-CLI perplexity reward settings
@@ -62,38 +63,38 @@ class TextWorldEnvRLPRv2Config(BaseEnvConfig):
     token_length_baseline: int = 500
     token_length_penalty_scale: float = 0.0002
 
-    # Challenge settings
+    # Challenge settings - Start with simple for debugging
     challenge_names: List[str] = [
         "tw-simple",
-        "tw-cooking", 
-        "tw-coin_collector",
-        "tw-treasure_hunter",
+        # "tw-cooking", 
+        # "tw-coin_collector",
+        # "tw-treasure_hunter",
     ]
-    randomize_challenge_settings: bool = True
+    randomize_challenge_settings: bool = False  # Use fixed settings for debugging
 
 
-class TextWorldEnvRLPRv2(BaseEnv):
-    """Streamlined TextWorld RLPR environment with step-by-step generation."""
+class TextWorldEnvRLPRv3(BaseEnv):
+    """TextWorld RLPR v3 environment with per-step ScoredDataGroup returns."""
 
-    name = "textworld_rlpr_v2"
-    env_config_cls = TextWorldEnvRLPRv2Config
+    name = "textworld_rlpr_v3"
+    env_config_cls = TextWorldEnvRLPRv3Config
 
     def __init__(
         self,
-        config: TextWorldEnvRLPRv2Config,
+        config: TextWorldEnvRLPRv3Config,
         server_configs: List[APIServerConfig],
         slurm: bool = True,
         testing: bool = False,
     ):
         super().__init__(config, server_configs, slurm, testing)
-        self.config: TextWorldEnvRLPRv2Config = config
+        self.config: TextWorldEnvRLPRv3Config = config
         self.challenge_registry = None
 
         # Track generated game files for cleanup
         self._generated_files = set()
 
         # Create temp directory for game files
-        self._temp_dir = tempfile.mkdtemp(prefix="textworld_rlpr_v2_")
+        self._temp_dir = tempfile.mkdtemp(prefix="textworld_rlpr_v3_")
 
         # wandb logging
         self.episode_outcomes_buffer = []
@@ -115,7 +116,7 @@ class TextWorldEnvRLPRv2(BaseEnv):
             "and progress toward objectives.\n"
             "</memory>\n\n"
             "<tool_call>\n"
-            "{\"name\": \"execute_command\", \"arguments\": {\"command\": \"go north\", \"expected_outcome\": \"I expect to move north to a new room.\"}}\n"
+            '{"name": "execute_command", "arguments": {"command": "go north", "expected_outcome": "I expect to move north to a new room."}}\n'
             "</tool_call>\n\n"
             "Use exactly one of each block type, in this order."
         )
@@ -125,9 +126,9 @@ class TextWorldEnvRLPRv2(BaseEnv):
         try:
             self.challenge_registry = create_textworld_registry()
             logger.warning(
-                f"Initialized TextWorld RLPR v2 challenge registry with challenges: {self.config.challenge_names}"
+                f"Initialized TextWorld RLPR v3 challenge registry with challenges: {self.config.challenge_names}"
             )
-            logger.warning("TextWorldEnvRLPRv2 setup completed successfully")
+            logger.warning("TextWorldEnvRLPRv3 setup completed successfully")
         except Exception as e:
             logger.error(f"Failed to create TextWorld registry: {e}")
             logger.error(traceback.format_exc())
@@ -214,8 +215,12 @@ class TextWorldEnvRLPRv2(BaseEnv):
 
     async def collect_trajectories(
         self, item: Item
-    ) -> Tuple[ScoredDataGroup, List[Item]]:
-        """Collect trajectories using step-by-step generation with parallel alternatives."""
+    ) -> Tuple[List[ScoredDataGroup], List[Item]]:
+        """Collect trajectories using per-step ScoredDataGroup generation.
+        
+        Returns:
+            A list of ScoredDataGroups, one for each step in the episode.
+        """
         challenge_name = item["challenge_name"]
         settings = item["settings"]
 
@@ -235,242 +240,150 @@ class TextWorldEnvRLPRv2(BaseEnv):
         )
         env_id = textworld.gym.register_game(game_file, request_infos)
 
-        # Collect episode using step-by-step generation
-        scored_data_group = await self._collect_episode_step_by_step(
+        # Collect episode using step-by-step generation with per-step ScoredDataGroups
+        scored_data_groups = await self._collect_episode_step_by_step(
             env_id, challenge_name
         )
 
         self._cleanup_game_file(game_file)
         
-        return scored_data_group, []
+        # Return list of ScoredDataGroups (one per step)
+        return scored_data_groups, []
 
     async def _collect_episode_step_by_step(
         self, env_id: str, challenge_name: str = "unknown"
-    ) -> ScoredDataGroup:
-        """Collect an episode using step-by-step generation with parallel alternatives."""
-        logger.warning(f"Starting step-by-step episode collection for {challenge_name}")
+    ) -> List[ScoredDataGroup]:
+        """Collect an episode returning one ScoredDataGroup per step."""
+        logger.warning(f"Starting per-step episode collection for {challenge_name}")
         
-        # We'll generate group_size complete episodes, but with step-by-step selection
-        # This way we maintain compatibility with the trainer's expected data format
-        scored_items = []
+        scored_data_groups = []
         
-        for trajectory_idx in range(self.config.group_size):
-            scored_item = await self._collect_single_trajectory_with_steps(
-                env_id, trajectory_idx, challenge_name
-            )
-            if scored_item:
-                scored_items.append(scored_item)
-        
-        if not scored_items:
-            return ScoredDataGroup(
-                tokens=[],
-                masks=[],
-                scores=[],
-                messages=[],
-                advantages=None,
-                ref_logprobs=None,
-                group_overrides={},
-                overrides=None,
-                images=None,
-            )
-        
-        # Combine into single ScoredDataGroup
-        sdg = ScoredDataGroup(
-            tokens=[],
-            masks=[],
-            scores=[],
-            messages=[],
-            advantages=None,
-            ref_logprobs=None,
-            group_overrides={},
-            overrides=None,
-            images=None,
-        )
-
-        for scored_item in scored_items:
-            sdg["tokens"].append(scored_item["tokens"])
-            sdg["masks"].append(scored_item["masks"])
-            sdg["scores"].append(scored_item["scores"])
-            if self.config.include_messages and scored_item.get("messages"):
-                sdg["messages"].append(scored_item["messages"])
-
-            metadata = scored_item.get("metadata", {})
-            final_score = metadata.get("final_score", 0)
-            won = metadata.get("won", False)
-            lost = metadata.get("lost", False)
-            moves = metadata.get("moves", 0)
-
-            if won:
-                outcome = 1.0
-            elif lost:
-                outcome = -1.0
-            else:
-                outcome = 0.0
-
-            self.episode_outcomes_buffer.append(outcome)
-            self.episode_rewards_buffer.append(final_score)
-            self.episode_steps_buffer.append(moves)
-            self.episode_challenge_types.append(
-                metadata.get("challenge_name", "unknown")
-            )
-
-        logger.warning(f"Episode collection completed: {len(scored_items)} trajectories")
-        return sdg
-
-    async def _collect_single_trajectory_with_steps(
-        self, env_id: str, trajectory_idx: int, challenge_name: str = "unknown"
-    ) -> Optional[ScoredDataItem]:
-        """Collect a single trajectory with step-by-step alternative generation."""
-        messages: List[Message] = []
-
         try:
             env = textworld.gym.make(env_id)
             obs, info = env.reset()
 
-            messages.append({"role": "system", "content": self.system_prompt})
-
+            # Initialize conversation with system prompt
+            messages: List[Message] = [
+                {"role": "system", "content": self.system_prompt}
+            ]
+            
             obs_text = self._format_observation(obs, info)
             messages.append({"role": "user", "content": obs_text})
 
             done = False
             total_reward = 0.0
             turn = 0
+            cumulative_vrcli = 0.0
 
-            while not done and turn < self.config.max_steps:
-                turn += 1
-                current_tokens = len(
-                    self.tokenizer.apply_chat_template(messages, tokenize=True)
-                )
-                if current_tokens > self.config.max_token_length - 1000:
+            async with self.server.dedicated_server() as server:
+                while not done and turn < self.config.max_steps:
+                    turn += 1
+                    
+                    # Check token limit
+                    current_tokens = len(
+                        self.tokenizer.apply_chat_template(messages, tokenize=True)
+                    )
+                    if current_tokens > self.config.max_token_length - 1000:
+                        logger.warning(
+                            f"Step {turn}: Approaching token limit, ending episode"
+                        )
+                        break
+
+                    # Generate alternatives for this step
+                    alternatives = await self._generate_step_alternatives(
+                        messages, server, turn
+                    )
+                    if not alternatives:
+                        logger.warning(f"Step {turn}: No alternatives generated")
+                        break
+
+                    # TODO: Restore entropy-based selection instead of random
+                    # For now, randomly select one alternative
+                    selected_idx = random.randint(0, len(alternatives) - 1)
+                    selected_alternative = alternatives[selected_idx]
                     logger.warning(
-                        f"Trajectory {trajectory_idx}: Approaching token limit, ending episode"
+                        f"Step {turn}: Randomly selected alternative {selected_idx} (TODO: restore entropy selection)"
                     )
-                    break
 
-                # Generate alternatives for this step
-                alternatives = await self._generate_alternatives_for_trajectory(
-                    messages, self.server, trajectory_idx, turn
-                )
-                if not alternatives:
-                    logger.warning(f"Trajectory {trajectory_idx}: No alternatives generated")
-                    break
+                    # Extract action from selected alternative
+                    selected_action = selected_alternative["parsed_action"]["command"]
+                    logger.debug(f"Step {turn}: Selected action: {selected_action}")
 
-                # Select best alternative using entropy-based selection
-                selected_idx, selected_alternative = self._select_best_alternative(alternatives)
-                logger.warning(
-                    f"Trajectory {trajectory_idx} Turn {turn}: Selected alternative {selected_idx} with entropy-based selection"
-                )
+                    # Execute action in environment
+                    try:
+                        obs, reward, done, info = env.step(selected_action)
+                        total_reward += reward
+                        logger.warning(
+                            f"Step {turn}: Action '{selected_action}' -> reward={reward}, done={done}"
+                        )
+                    except Exception as e:
+                        logger.error(f"Step {turn}: Environment error: {e}")
+                        # Still create ScoredDataGroup for failed step
+                        reward = 0.0
+                        done = True
 
-                # Extract action and execute it
-                action = selected_alternative["parsed_action"]["command"]
-                logger.debug(f"Trajectory {trajectory_idx}: Action: {action}")
-
-                try:
-                    obs, reward, done, info = env.step(action)
-                    total_reward += reward
-                    logger.warning(
-                        f"Trajectory {trajectory_idx} Turn {turn}: Action '{action}' -> reward={reward}, done={done}"
+                    # Create ScoredDataGroup for this step with credit assignment
+                    step_sdg = await self._create_step_scored_data_group(
+                        messages=messages.copy(),  # Current conversation state
+                        alternatives=alternatives,
+                        selected_idx=selected_idx,
+                        selected_action=selected_action,
+                        step_reward=reward,
+                        cumulative_reward=total_reward,
+                        done=done,
+                        won=info.get("won", False),
+                        lost=info.get("lost", False),
+                        turn=turn,
                     )
-                except Exception as e:
-                    logger.error(
-                        f"Trajectory {trajectory_idx}: Environment error: {e}"
-                    )
-                    break
+                    
+                    if step_sdg:
+                        scored_data_groups.append(step_sdg)
+                    
+                    # Add selected response to conversation (strip thinking blocks)
+                    selected_response = selected_alternative["response"]
+                    stripped_response = self._strip_thinking_blocks(selected_response)
+                    messages.append({"role": "assistant", "content": stripped_response})
 
-                # Add selected action to conversation history (strip thinking blocks)
-                selected_response = selected_alternative["response"]
-                stripped_response = self._strip_thinking_blocks(selected_response)
-                messages.append({"role": "assistant", "content": stripped_response})
-
-                if not done:
-                    obs_text = self._format_observation(obs, info)
-                    messages.append({"role": "user", "content": obs_text})
+                    # Add next observation if not done
+                    if not done:
+                        obs_text = self._format_observation(obs, info)
+                        messages.append({"role": "user", "content": obs_text})
 
             env.close()
 
-            tokenization_result = tokenize_for_trainer(
-                tokenizer=self.tokenizer,
-                chat=messages,
-                train_on_all_assistant_turns=True,
+            # Log episode statistics
+            self.episode_outcomes_buffer.append(
+                1.0 if info.get("won", False) else (-1.0 if info.get("lost", False) else 0.0)
             )
+            self.episode_rewards_buffer.append(total_reward)
+            self.episode_steps_buffer.append(turn)
+            self.episode_challenge_types.append(challenge_name)
 
-            # Calculate enhanced score using VR-CLI-style rewards
-            # For simplicity, we'll use the last alternative's data for VR-CLI scoring
-            vrcli_score = 0.0
-            format_score = 0.0
-            token_length_adj = 0.0
-            
-            if messages:
-                # Get the last assistant message for scoring
-                last_assistant_msg = None
-                for msg in reversed(messages):
-                    if msg["role"] == "assistant":
-                        last_assistant_msg = msg["content"]
-                        break
-                        
-                if last_assistant_msg:
-                    # Create dummy alternative structure for scoring
-                    dummy_alt = {
-                        "response": last_assistant_msg,
-                        "parsed_action": self._parse_response_format(last_assistant_msg) or {"expected_outcome": ""}
-                    }
-                    
-                    vrcli_score = self._calculate_vrcli_score_for_trajectory(
-                        dummy_alt, total_reward, info.get("won", False), info.get("lost", False)
-                    )
-                    format_score = self._calculate_format_reward(last_assistant_msg)
-                    token_length_adj = self._calculate_token_length_adjustment(last_assistant_msg)
-            
-            # Composite score
-            enhanced_score = (
-                vrcli_score * self.config.vrcli_weight +
-                format_score * self.config.format_reward_weight +
-                token_length_adj +
-                total_reward  # Base environment reward
+            logger.warning(
+                f"Episode completed: {len(scored_data_groups)} steps, total_reward={total_reward:.2f}"
             )
-            
-            logger.warning(f"Trajectory {trajectory_idx} scoring: base={total_reward:.2f}, vrcli={vrcli_score:.2f}, format={format_score:.2f}, total={enhanced_score:.2f}")
-
-            return ScoredDataItem(
-                messages=messages if self.config.include_messages else None,
-                tokens=tokenization_result["tokens"],
-                masks=tokenization_result["masks"],
-                scores=enhanced_score,
-                metadata={
-                    "trajectory_idx": trajectory_idx,
-                    "final_score": total_reward,
-                    "enhanced_score": enhanced_score,
-                    "vrcli_score": vrcli_score,
-                    "format_score": format_score,
-                    "won": info.get("won", False),
-                    "lost": info.get("lost", False),
-                    "moves": info.get("moves", 0),
-                    "challenge_name": challenge_name,
-                },
-            )
+            return scored_data_groups
 
         except Exception as e:
-            logger.error(f"Trajectory {trajectory_idx}: Fatal error: {e}")
+            logger.error(f"Fatal error in episode collection: {e}")
             logger.error(traceback.format_exc())
-            return None
+            return scored_data_groups
 
-    async def _generate_alternatives_for_trajectory(
-        self, messages: List[Message], server, trajectory_idx: int, turn: int
+    async def _generate_step_alternatives(
+        self, messages: List[Message], server, turn: int
     ) -> List[Dict[str, Any]]:
-        """Generate multiple alternative responses for the current step in a trajectory."""
+        """Generate group_size alternatives for the current step."""
         alternatives = []
         
-        # Generate fewer alternatives per trajectory to keep computational cost manageable
-        num_alternatives = max(2, self.config.group_size // 4)  # 4 alternatives for group_size=16
-        
+        # Generate group_size alternatives in parallel
         tasks = []
-        for i in range(num_alternatives):
+        for i in range(self.config.group_size):
             task = server.chat_completion(
                 messages=messages,
                 n=1,
                 max_tokens=200,
                 temperature=0.8,
-                logprobs=True,  # Need logprobs for entropy calculation
+                logprobs=True,  # Need logprobs for future entropy calculation
             )
             tasks.append(task)
 
@@ -478,7 +391,15 @@ class TextWorldEnvRLPRv2(BaseEnv):
 
         for i, response in enumerate(responses):
             if isinstance(response, Exception):
-                logger.warning(f"Trajectory {trajectory_idx} Turn {turn} Alternative {i} failed: {response}")
+                logger.warning(f"Step {turn} Alternative {i} failed: {response}")
+                # Still include failed alternatives for GRPO training
+                alternatives.append({
+                    "response": "",
+                    "parsed_action": {"command": "invalid", "expected_outcome": ""},
+                    "logprobs": None,
+                    "index": i,
+                    "failed": True,
+                })
                 continue
 
             try:
@@ -488,8 +409,8 @@ class TextWorldEnvRLPRv2(BaseEnv):
                 # Parse response format
                 parsed_action = self._parse_response_format(content)
                 if not parsed_action:
-                    logger.debug(f"Trajectory {trajectory_idx} Turn {turn} Alternative {i}: Failed to parse response format")
-                    # Include failed alternatives for GRPO training
+                    logger.debug(f"Step {turn} Alternative {i}: Failed to parse response format")
+                    # Include with invalid action for GRPO
                     parsed_action = {"command": "invalid", "expected_outcome": ""}
 
                 alternatives.append({
@@ -497,131 +418,224 @@ class TextWorldEnvRLPRv2(BaseEnv):
                     "parsed_action": parsed_action,
                     "logprobs": logprobs,
                     "index": i,
+                    "failed": False,
                 })
 
             except Exception as e:
-                logger.debug(f"Trajectory {trajectory_idx} Turn {turn} Alternative {i}: Error processing response: {e}")
-                continue
+                logger.debug(f"Step {turn} Alternative {i}: Error processing response: {e}")
+                alternatives.append({
+                    "response": "",
+                    "parsed_action": {"command": "invalid", "expected_outcome": ""},
+                    "logprobs": None,
+                    "index": i,
+                    "failed": True,
+                })
 
         return alternatives
 
-
-    def _parse_response_format(self, response: str) -> Optional[Dict[str, str]]:
-        """Parse the structured response format to extract action and expected outcome."""
-        import json
-        import re
+    async def _create_step_scored_data_group(
+        self,
+        messages: List[Message],
+        alternatives: List[Dict[str, Any]],
+        selected_idx: int,
+        selected_action: str,
+        step_reward: float,
+        cumulative_reward: float,
+        done: bool,
+        won: bool,
+        lost: bool,
+        turn: int,
+    ) -> Optional[ScoredDataGroup]:
+        """Create a ScoredDataGroup for a single step with credit assignment.
         
-        try:
-            # Extract tool_call JSON
-            tool_call_match = re.search(r'<tool_call>\s*(.*?)\s*</tool_call>', response, re.DOTALL)
-            if not tool_call_match:
-                return None
-                
-            tool_call_json = tool_call_match.group(1).strip()
-            tool_call = json.loads(tool_call_json)
-            
-            if tool_call.get("name") != "execute_command":
-                return None
-                
-            args = tool_call.get("arguments", {})
-            command = args.get("command", "")
-            expected_outcome = args.get("expected_outcome", "")
-            
-            if not command:
-                return None
-                
-            return {
-                "command": command,
-                "expected_outcome": expected_outcome
-            }
-            
-        except (json.JSONDecodeError, KeyError) as e:
-            return None
-
-    def _select_best_alternative(self, alternatives: List[Dict[str, Any]]) -> Tuple[int, Dict[str, Any]]:
-        """Select the best alternative using entropy-based confidence scoring."""
+        Credit assignment strategy:
+        - The selected alternative (canonical) gets the full reward
+        - Other alternatives that produced the same action also get credit
+        - Alternatives with invalid/different actions get negative/zero credit
+        """
         if not alternatives:
-            raise ValueError("No alternatives to select from")
+            return None
             
-        best_idx = 0
-        best_confidence = float('-inf')
+        scored_items = []
         
         for i, alt in enumerate(alternatives):
-            confidence = self._calculate_entropy_confidence(alt.get("logprobs"))
-            if confidence > best_confidence:
-                best_confidence = confidence
-                best_idx = i
-                
-        logger.warning(f"Entropy selection: chose alternative {best_idx} with confidence {best_confidence:.4f}")
-        return best_idx, alternatives[best_idx]
+            # Create messages for this alternative
+            alt_messages = messages.copy()
+            
+            # Only add non-empty responses
+            if alt["response"]:
+                stripped_response = self._strip_thinking_blocks(alt["response"])
+                alt_messages.append({"role": "assistant", "content": stripped_response})
+            else:
+                # Failed alternative - add placeholder
+                alt_messages.append({"role": "assistant", "content": "invalid"})
+            
+            # Tokenize the conversation
+            tokenization_result = tokenize_for_trainer(
+                tokenizer=self.tokenizer,
+                chat=alt_messages,
+                train_on_all_assistant_turns=True,
+            )
+            
+            # Calculate score for this alternative
+            alt_score = self._calculate_alternative_score(
+                alternative=alt,
+                is_selected=(i == selected_idx),
+                selected_action=selected_action,
+                step_reward=step_reward,
+                cumulative_reward=cumulative_reward,
+                done=done,
+                won=won,
+                lost=lost,
+            )
+            
+            scored_items.append(ScoredDataItem(
+                messages=alt_messages if self.config.include_messages else None,
+                tokens=tokenization_result["tokens"],
+                masks=tokenization_result["masks"],
+                scores=alt_score,
+                metadata={
+                    "step": turn,
+                    "alternative_idx": i,
+                    "is_selected": (i == selected_idx),
+                    "action": alt["parsed_action"]["command"],
+                    "selected_action": selected_action,
+                    "step_reward": step_reward,
+                    "alternative_score": alt_score,
+                }
+            ))
+        
+        # Apply token length-based diversity scoring to encourage efficiency
+        if len(scored_items) > 1:
+            # Get token lengths for all alternatives
+            token_lengths = [len(item["tokens"]) for item in scored_items]
+            length_mean = sum(token_lengths) / len(token_lengths)
+            
+            # Calculate length-based adjustments using tanh penalty
+            length_adjustments = [
+                math.tanh((length_mean - tok_len) / length_mean) / 2.0 
+                for tok_len in token_lengths
+            ]
+            
+            # Apply adjustments to scores
+            for i, adjustment in enumerate(length_adjustments):
+                original_score = scored_items[i]["scores"]
+                scored_items[i]["scores"] = original_score + adjustment
+                # Update metadata to track the adjustment
+                scored_items[i]["metadata"]["length_adjustment"] = adjustment
+                scored_items[i]["metadata"]["token_length"] = token_lengths[i]
+                scored_items[i]["metadata"]["length_mean"] = length_mean
+        
+        # Create ScoredDataGroup from all alternatives
+        sdg = ScoredDataGroup(
+            tokens=[item["tokens"] for item in scored_items],
+            masks=[item["masks"] for item in scored_items],
+            scores=[item["scores"] for item in scored_items],
+            messages=[item.get("messages", []) for item in scored_items] if self.config.include_messages else [],
+            advantages=None,
+            ref_logprobs=None,
+            group_overrides={},
+            overrides=None,
+            images=None,
+        )
+        
+        logger.warning(
+            f"Step {turn}: Created ScoredDataGroup with {len(scored_items)} alternatives, "
+            f"selected={selected_idx}, reward={step_reward:.2f}"
+        )
+        
+        return sdg
 
-    def _calculate_entropy_confidence(self, logprobs) -> float:
-        """Calculate confidence score based on token entropy."""
-        if not logprobs or not hasattr(logprobs, 'content'):
-            return random.random()  # Fallback to random if no logprobs
-            
-        try:
-            import math
-            total_entropy = 0.0
-            token_count = 0
-            
-            for token_logprob in logprobs.content:
-                if hasattr(token_logprob, 'top_logprobs'):
-                    # Calculate entropy from top logprobs
-                    entropy = 0.0
-                    for top_logprob in token_logprob.top_logprobs:
-                        prob = math.exp(top_logprob.logprob)
-                        entropy -= prob * top_logprob.logprob
-                    total_entropy += entropy
-                    token_count += 1
-                    
-            if token_count == 0:
-                return random.random()
-                
-            avg_entropy = total_entropy / token_count
-            # Convert entropy to confidence (lower entropy = higher confidence)
-            confidence = math.exp(-avg_entropy)
-            return confidence
-            
-        except Exception as e:
-            logger.debug(f"Error calculating entropy: {e}")
-            return random.random()
-
-    def _calculate_vrcli_score_for_trajectory(
-        self, alternative: Dict[str, Any], total_reward: float, won: bool, lost: bool
+    def _calculate_alternative_score(
+        self,
+        alternative: Dict[str, Any],
+        is_selected: bool,
+        selected_action: str,
+        step_reward: float,
+        cumulative_reward: float,
+        done: bool,
+        won: bool,
+        lost: bool,
     ) -> float:
-        """Calculate a simplified VR-CLI-style score based on trajectory outcome."""
-        # Simplified VR-CLI: reward trajectories that perform better than expected
+        """Calculate score for a single alternative with credit assignment."""
+        
+        # Base score depends on whether this alternative matches the selected action
+        alt_action = alternative["parsed_action"]["command"]
+        
+        if alternative.get("failed", False) or alt_action == "invalid":
+            # Failed to generate or parse - negative score
+            base_score = -0.5
+        elif alt_action == selected_action:
+            # This alternative produced the same action as selected - gets credit
+            base_score = step_reward
+        else:
+            # Different action - small negative score
+            base_score = -0.1
+        
+        # Add VR-CLI style rewards
+        vrcli_score = self._calculate_vrcli_score_for_alternative(
+            alternative, step_reward, cumulative_reward, won, lost
+        )
+        
+        # Add format rewards
+        format_score = 0.0
+        if alternative["response"]:
+            format_score = self._calculate_format_reward(alternative["response"])
+        
+        # Token length adjustment
+        token_adj = 0.0
+        if alternative["response"] and self.config.token_length_penalty_enabled:
+            token_adj = self._calculate_token_length_adjustment(alternative["response"])
+        
+        # Composite score
+        final_score = (
+            base_score +
+            vrcli_score * self.config.vrcli_weight +
+            format_score * self.config.format_reward_weight +
+            token_adj
+        )
+        
+        # Boost score if this was the selected alternative and it succeeded
+        if is_selected and step_reward > 0:
+            final_score *= 1.2
+        
+        return final_score
+
+    def _calculate_vrcli_score_for_alternative(
+        self, alternative: Dict[str, Any], step_reward: float, cumulative_reward: float, won: bool, lost: bool
+    ) -> float:
+        """Calculate VR-CLI-style score for an alternative."""
         expected_outcome = alternative["parsed_action"].get("expected_outcome", "")
         
-        # Basic heuristic: if the expected outcome mentions positive words and we won, boost score
+        # Simplified VR-CLI: reward based on outcome prediction accuracy
         positive_words = ["succeed", "win", "complete", "find", "get", "take", "open", "solve"]
         negative_words = ["fail", "lose", "stuck", "cannot", "blocked", "impossible"]
         
         has_positive_expectation = any(word in expected_outcome.lower() for word in positive_words)
         has_negative_expectation = any(word in expected_outcome.lower() for word in negative_words)
         
-        base_vrcli_score = 0.0
+        vrcli_score = 0.0
         
-        if won and has_positive_expectation:
-            # Model correctly predicted positive outcome
-            base_vrcli_score = 1.0
-            logger.warning(f"VR-CLI reward: Correct positive prediction -> {base_vrcli_score}")
-        elif lost and has_negative_expectation:
-            # Model correctly predicted negative outcome
-            base_vrcli_score = 0.5  
-            logger.warning(f"VR-CLI reward: Correct negative prediction -> {base_vrcli_score}")
-        elif won and has_negative_expectation:
-            # Model incorrectly predicted negative outcome
-            base_vrcli_score = 0.1
-            logger.warning(f"VR-CLI penalty: Incorrect negative prediction -> {base_vrcli_score}")
-        elif total_reward > 0:
-            # Positive trajectory outcome
-            base_vrcli_score = 0.3
-        else:
-            base_vrcli_score = 0.0
+        if step_reward > 0 and has_positive_expectation:
+            # Correctly predicted positive outcome for this step
+            vrcli_score = 0.5
+        elif step_reward < 0 and has_negative_expectation:
+            # Correctly predicted negative outcome
+            vrcli_score = 0.2
+        elif step_reward > 0 and has_negative_expectation:
+            # Incorrectly predicted negative when positive happened
+            vrcli_score = -0.2
+        elif step_reward < 0 and has_positive_expectation:
+            # Incorrectly predicted positive when negative happened  
+            vrcli_score = -0.2
             
-        return base_vrcli_score
+        # Apply discount based on overall trajectory outcome if episode is done
+        if won:
+            vrcli_score *= 1.5
+        elif lost:
+            vrcli_score *= 0.5
+            
+        return vrcli_score
 
     def _calculate_format_reward(self, response: str) -> float:
         """Calculate reward for following the structured response format."""
@@ -659,6 +673,38 @@ class TextWorldEnvRLPRv2(BaseEnv):
         
         return adjustment
 
+    def _parse_response_format(self, response: str) -> Optional[Dict[str, str]]:
+        """Parse the structured response format to extract action and expected outcome."""
+        import json
+        import re
+        
+        try:
+            # Extract tool_call JSON
+            tool_call_match = re.search(r'<tool_call>\s*(.*?)\s*</tool_call>', response, re.DOTALL)
+            if not tool_call_match:
+                return None
+                
+            tool_call_json = tool_call_match.group(1).strip()
+            tool_call = json.loads(tool_call_json)
+            
+            if tool_call.get("name") != "execute_command":
+                return None
+                
+            args = tool_call.get("arguments", {})
+            command = args.get("command", "")
+            expected_outcome = args.get("expected_outcome", "")
+            
+            if not command:
+                return None
+                
+            return {
+                "command": command,
+                "expected_outcome": expected_outcome
+            }
+            
+        except (json.JSONDecodeError, KeyError) as e:
+            return None
+
     def _strip_thinking_blocks(self, response: str) -> str:
         """Strip thinking blocks from response but keep memory blocks."""
         import re
@@ -690,9 +736,9 @@ class TextWorldEnvRLPRv2(BaseEnv):
         return "\n".join(parts)
 
     @classmethod
-    def config_init(cls) -> Tuple[TextWorldEnvRLPRv2Config, List[APIServerConfig]]:
+    def config_init(cls) -> Tuple[TextWorldEnvRLPRv3Config, List[APIServerConfig]]:
         """Initialize default configuration."""
-        env_config = TextWorldEnvRLPRv2Config(
+        env_config = TextWorldEnvRLPRv3Config(
             tokenizer_name="NousResearch/Hermes-4-Qwen3-14B",
             group_size=16,
             use_wandb=True,
@@ -701,11 +747,9 @@ class TextWorldEnvRLPRv2(BaseEnv):
             total_steps=500,
             challenge_names=[
                 "tw-simple",
-                "tw-cooking",
-                "tw-coin_collector", 
-                "tw-treasure_hunter",
             ],
-            randomize_challenge_settings=True,
+            randomize_challenge_settings=False,
+            max_steps=10,
         )
 
         server_configs = [
@@ -725,8 +769,8 @@ class TextWorldEnvRLPRv2(BaseEnv):
 
     # TODO: implement evaluation properly re eval changes
     async def evaluate(self, num_items: int) -> Dict[str, Any]:
-        """Evaluate the model - not implemented for this streamlined environment."""
-        logger.warning("Evaluation not implemented in TextWorld RLPR v2 environment")
+        """Evaluate the model - not implemented for this environment."""
+        logger.warning("Evaluation not implemented in TextWorld RLPR v3 environment")
         return {"message": "Evaluation not implemented"}
 
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
@@ -917,4 +961,4 @@ class TextWorldEnvRLPRv2(BaseEnv):
 
 
 if __name__ == "__main__":
-    TextWorldEnvRLPRv2.cli()
+    TextWorldEnvRLPRv3.cli()
