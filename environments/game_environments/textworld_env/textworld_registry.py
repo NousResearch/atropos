@@ -53,27 +53,29 @@ class TextWorldChallengeRegistry:
         return list(self._challenges.keys())
 
     def get_random_challenge(
-        self, randomize_settings: bool = True
+        self, randomize_settings: bool = True, seed: Optional[int] = None
     ) -> Tuple[str, Dict[str, Any]]:
         """Get a random challenge with optionally randomized settings.
 
         Args:
             randomize_settings: Whether to randomize settings from available options
+            seed: Optional seed for this specific challenge generation
 
         Returns:
             Tuple of (challenge_name, settings_dict)
         """
         challenge_name = self.rng.choice(self.list_challenges())
-        return self.get_challenge(challenge_name, randomize_settings)
+        return self.get_challenge(challenge_name, randomize_settings, seed)
 
     def get_challenge(
-        self, name: str, randomize_settings: bool = True
+        self, name: str, randomize_settings: bool = True, seed: Optional[int] = None
     ) -> Tuple[str, Dict[str, Any]]:
         """Get challenge name and settings (optionally randomized).
 
         Args:
             name: Challenge name
             randomize_settings: Whether to randomize settings from available options
+            seed: Optional seed for this specific challenge generation
 
         Returns:
             Tuple of (challenge_name, settings_dict)
@@ -83,13 +85,19 @@ class TextWorldChallengeRegistry:
                 f"Unknown challenge: {name}. Available: {self.list_challenges()}"
             )
 
+        # Create a local Random instance if seed is provided
+        if seed is not None:
+            rng = random.Random(seed)
+        else:
+            rng = self.rng  # Fall back to singleton's RNG for backward compatibility
+
         settings_ranges = self._challenges[name]
         settings = {}
 
         for key, options in settings_ranges.items():
             if randomize_settings and len(options) > 1:
                 # Randomly select from available options
-                settings[key] = self.rng.choice(options)
+                settings[key] = rng.choice(options)
             else:
                 # Use first (default) option
                 settings[key] = options[0]
@@ -102,15 +110,15 @@ class TextWorldChallengeRegistry:
                 t for t in settings_ranges["take"] if t <= recipe_value
             ]
             settings["take"] = (
-                self.rng.choice(valid_take_values) if valid_take_values else 1
+                rng.choice(valid_take_values) if valid_take_values else 1
             )
 
         # Generate a seed for this specific game instance
-        settings["seed"] = self.rng.randint(0, 0xFFFFFFFF)
+        settings["seed"] = rng.randint(0, 0xFFFFFFFF)
 
         # For tw-cooking, add recipe-seed
         if name == "tw-cooking":
-            settings["recipe-seed"] = self.rng.randint(0, 0xFFFFFFFF)
+            settings["recipe-seed"] = rng.randint(0, 0xFFFFFFFF)
 
         return name, settings
 

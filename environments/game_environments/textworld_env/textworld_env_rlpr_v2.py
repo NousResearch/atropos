@@ -29,6 +29,9 @@ from atroposlib.envs.base import (
 )
 from atroposlib.type_definitions import Item, Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+from environments.game_environments.textworld_env.scoring.entropy_calculator import (
+    confidence_score,
+)
 from environments.game_environments.textworld_env.textworld_registry import (
     create_textworld_registry,
 )  # noqa: F401
@@ -103,21 +106,73 @@ class TextWorldEnvRLPRv2(BaseEnv):
         self.eval_metrics_custom = []
 
         self.system_prompt = (
-            "You are playing a text-based adventure game. "
-            "You must respond in the following exact format:\n\n"
+            "You are an AI agent playing a text-based adventure game who uses extreme long chains of thought "
+            "to carefully plan your actions and predict their outcomes. Your goal is to follow the objective "
+            "described at the start of the game. You interact with the world by providing text commands and "
+            "predicting their outcomes."
+            "\n\n"
+            "You should:\n"
+            "1. Enclose your thoughts and internal monologue inside <think> </think> tags. Use extremely "
+            "long chains of thought to carefully consider the game state, your objectives, and the likely "
+            "outcomes of your actions.\n"
+            "2. Generate a memory summary inside <memory> </memory> tags that captures key information from "
+            "this turn. Your memory should:\n"
+            "   - Build upon previous memories shown in 'Relevant Memories' if present\n"
+            "   - Note the outcome of your last action (did it match your prediction?)\n"
+            "   - Update your understanding of the game state, location, and inventory\n"
+            "   - Track progress toward objectives and any multi-step plans\n"
+            "   - Be concise but comprehensive (1-3 sentences)\n"
+            "3. Provide your action using the execute_command function call."
+            "\n\n"
+            "For your function call, return a JSON object with function name and arguments "
+            "within <tool_call> </tool_call> tags with the following schema:\n"
+            '<tool_call>\n{"name": "execute_command", "arguments": {"command": "go north", '
+            '"expected_outcome": "I move north to a new room"}}\n</tool_call>\n\n'
+            "EXAMPLE RESPONSE 1:\n"
             "<think>\n"
-            "Your detailed reasoning about the current situation, objectives, "
-            "and likely outcomes of potential actions.\n"
-            "</think>\n\n"
+            "I'm in the kitchen. I see a stove and a fridge. The objective says to cook something. "
+            "Let me check what's in the fridge first to see what ingredients are available."
+            "\n</think>\n"
             "<memory>\n"
-            "Concise summary building on previous memories, noting the outcome "
-            "of the last action, current game state, inventory, location, "
-            "and progress toward objectives.\n"
-            "</memory>\n\n"
+            "Kitchen has stove and fridge. Main objective is cooking. Need to find ingredients."
+            "\n</memory>\n"
             "<tool_call>\n"
-            "{\"name\": \"execute_command\", \"arguments\": {\"command\": \"go north\", \"expected_outcome\": \"I expect to move north to a new room.\"}}\n"
-            "</tool_call>\n\n"
-            "Use exactly one of each block type, in this order."
+            '{"name": "execute_command", "arguments": {"command": "open fridge", '
+            '"expected_outcome": "The fridge opens, revealing its contents. I expect to see various '
+            'food items or ingredients inside that I can take and use for cooking."}}'
+            "\n</tool_call>\n\n"
+            "EXAMPLE RESPONSE 2 (with previous memories):\n"
+            "<think>\n"
+            "Looking at my previous memories, I was exploring the kitchen to find cooking ingredients. "
+            "I successfully opened the fridge and found eggs, milk, and flour. My goal is still to "
+            "cook something. Now I need to take these ingredients and find a recipe or mixing bowl. "
+            "The previous action of opening the fridge worked as expected."
+            "\n</think>\n"
+            "<memory>\n"
+            "Found eggs, milk, and flour in kitchen fridge. Still need mixing bowl or recipe to cook. "
+            "Previous exploration of kitchen successful - have stove and ingredients located."
+            "\n</memory>\n"
+            "<tool_call>\n"
+            '{"name": "execute_command", "arguments": {"command": "take eggs", '
+            '"expected_outcome": "I take the eggs from the fridge and add them to my inventory"}}'
+            "\n</tool_call>\n\n"
+            "EXAMPLE RESPONSE 3:\n"
+            "<think>\n"
+            "There's a locked door here and I have a key in my inventory. I should try using the key "
+            "on the door."
+            "\n</think>\n"
+            "<memory>\n"
+            "Found locked door in current room. Have key in inventory that might open it."
+            "\n</memory>\n"
+            "<tool_call>\n"
+            '{"name": "execute_command", "arguments": {"command": "unlock door with key", '
+            '"expected_outcome": "The key turns in the lock and the door unlocks. I should now be '
+            'able to open the door and go through it."}}'
+            "\n</tool_call>\n\n"
+            "Remember: Your entire response must be exactly three XML blocks: <think>...</think> "
+            "followed by <memory>...</memory> followed by <tool_call>...</tool_call>\n\n"
+            "FINAL REMINDER: After your <think> block and <memory> block, you MUST wrap your JSON "
+            "function call in <tool_call> tags. The JSON goes INSIDE the <tool_call> tags, not after them."
         )
 
     async def setup(self):
@@ -135,15 +190,22 @@ class TextWorldEnvRLPRv2(BaseEnv):
 
     async def get_next_item(self) -> Item:
         """Get the next game configuration."""
+        import time
+        
+        # Generate a unique seed for this game instance
+        unique_seed = int(time.time() * 1000000) + random.randint(0, 1000000)
+        
         # Randomly select a challenge
         if len(self.config.challenge_names) == 1:
             challenge_name = self.config.challenge_names[0]
         else:
             challenge_name = random.choice(self.config.challenge_names)
 
-        # Get challenge settings
+        # Get challenge settings with unique seed
         challenge_name, settings = self.challenge_registry.get_challenge(
-            challenge_name, randomize_settings=self.config.randomize_challenge_settings
+            challenge_name, 
+            randomize_settings=self.config.randomize_challenge_settings,
+            seed=unique_seed
         )
 
         return {
@@ -272,12 +334,27 @@ class TextWorldEnvRLPRv2(BaseEnv):
             
             while not done and turn < self.config.max_steps:
                 turn += 1
-                current_tokens = len(
-                    self.tokenizer.apply_chat_template(messages, tokenize=True)
-                )
-                if current_tokens > self.config.max_token_length - 1000:
-                    logger.warning(f"Approaching token limit at turn {turn}, ending episode")
-                    break
+                
+                # Implement sliding window for token management
+                MAX_GENERATION_TOKENS = 16384
+                available_budget = self.config.max_token_length - MAX_GENERATION_TOKENS
+                
+                current_tokens = self._count_tokens(messages)
+                
+                if current_tokens > available_budget:
+                    logger.warning(f"Turn {turn}: Token count {current_tokens} exceeds budget {available_budget}, applying sliding window")
+                    
+                    # Keep system prompt (messages[0]) and recent context
+                    # Drop oldest messages until under budget
+                    while len(messages) > 3 and current_tokens > available_budget:
+                        # Remove the second message (keeping system prompt at index 0)
+                        dropped_msg = messages.pop(1)
+                        logger.debug(f"Dropped message: {dropped_msg['role']} - {dropped_msg['content'][:50]}...")
+                        
+                        # Recalculate tokens
+                        current_tokens = self._count_tokens(messages)
+                    
+                    logger.warning(f"After sliding window: {len(messages)} messages, {current_tokens} tokens")
                 
                 # Generate group_size alternatives for this step
                 alternatives = await self._generate_alternatives_for_step(
@@ -341,46 +418,73 @@ class TextWorldEnvRLPRv2(BaseEnv):
         """
         alternatives = []
         
-        # Generate exactly group_size alternatives for this step
-        tasks = []
-        for i in range(self.config.group_size):
-            task = self.server.chat_completion(
-                messages=messages,
-                n=1,
-                max_tokens=200,
+        # Convert messages to prompt format for completions endpoint
+        # This avoids SGLang's tool execution behavior
+        prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+        
+        # Add prefill to guide response format
+        prefill = "<think>\n"
+        prompt = prompt + prefill
+        
+        # Generate exactly group_size alternatives in a single call
+        try:
+            response = await self.server.completion(
+                prompt=prompt,
+                n=self.config.group_size,  # Get all alternatives at once
+                max_tokens=16384,  # Match model's 16k training context
                 temperature=0.8,
-                logprobs=True,  # Need logprobs for entropy calculation
+                top_p=0.95,
+                logprobs=5,  # Get top 5 logprobs for entropy calculation
+                stop=["</tool_call>", "<|im_end|>", "<|endoftext|>"],
             )
-            tasks.append(task)
+            
+            # Process each choice/alternative
+            for i, choice in enumerate(response.choices):
+                try:
+                    # Get the generated text and prepend the prefill
+                    generated_text = choice.text.strip()
+                    content = prefill + generated_text
+                    
+                    # Extract logprobs if available
+                    logprobs = getattr(choice, 'logprobs', None)
+                    
+                    # Debug: Log first few alternatives' content
+                    if i < 3:
+                        logger.warning(f"Turn {turn} Alt {i} response preview: {content[:200]}...")
+                        if logprobs:
+                            logger.warning(f"Turn {turn} Alt {i} has logprobs: {logprobs is not None}")
+                        else:
+                            logger.warning(f"Turn {turn} Alt {i} has NO logprobs data")
 
-        responses = await asyncio.gather(*tasks, return_exceptions=True)
+                    # Parse response format
+                    parsed_action = self._parse_response_format(content)
+                    if not parsed_action:
+                        if i < 3:  # Debug first few parse failures
+                            logger.warning(f"Turn {turn} Alternative {i}: Failed to parse response format from: {content[:150]}...")
+                        # Include failed alternatives for GRPO training
+                        parsed_action = {"command": "invalid", "expected_outcome": ""}
+                    else:
+                        if i < 3:  # Debug successful parses
+                            logger.warning(f"Turn {turn} Alt {i} parsed action: {parsed_action['command']}")
 
-        for i, response in enumerate(responses):
-            if isinstance(response, Exception):
-                logger.warning(f"Turn {turn} Alternative {i} failed: {response}")
-                continue
+                    alternatives.append({
+                        "response": content,
+                        "parsed_action": parsed_action,
+                        "logprobs": logprobs,
+                        "index": i,
+                    })
 
-            try:
-                content = response.choices[0].message.content
-                logprobs = getattr(response.choices[0], 'logprobs', None)
-
-                # Parse response format
-                parsed_action = self._parse_response_format(content)
-                if not parsed_action:
-                    logger.debug(f"Turn {turn} Alternative {i}: Failed to parse response format")
-                    # Include failed alternatives for GRPO training
-                    parsed_action = {"command": "invalid", "expected_outcome": ""}
-
-                alternatives.append({
-                    "response": content,
-                    "parsed_action": parsed_action,
-                    "logprobs": logprobs,
-                    "index": i,
-                })
-
-            except Exception as e:
-                logger.debug(f"Turn {turn} Alternative {i}: Error processing response: {e}")
-                continue
+                except Exception as e:
+                    logger.debug(f"Turn {turn} Alternative {i}: Error processing response: {e}")
+                    continue
+                    
+        except Exception as e:
+            logger.warning(f"Turn {turn}: Failed to generate alternatives: {e}")
+            return []
 
         return alternatives
 
@@ -394,12 +498,18 @@ class TextWorldEnvRLPRv2(BaseEnv):
             # Extract tool_call JSON
             tool_call_match = re.search(r'<tool_call>\s*(.*?)\s*</tool_call>', response, re.DOTALL)
             if not tool_call_match:
+                # Debug: Log if no tool_call tags found
+                if "<tool_call>" not in response:
+                    logger.debug(f"Parse fail: No <tool_call> tags in response")
                 return None
                 
             tool_call_json = tool_call_match.group(1).strip()
+            logger.debug(f"Extracted tool_call JSON: {tool_call_json[:100]}...")
+            
             tool_call = json.loads(tool_call_json)
             
             if tool_call.get("name") != "execute_command":
+                logger.debug(f"Parse fail: Tool name is '{tool_call.get('name')}', not 'execute_command'")
                 return None
                 
             args = tool_call.get("arguments", {})
@@ -407,14 +517,17 @@ class TextWorldEnvRLPRv2(BaseEnv):
             expected_outcome = args.get("expected_outcome", "")
             
             if not command:
+                logger.debug(f"Parse fail: Empty command")
                 return None
                 
+            logger.debug(f"Parse success: command='{command}', expected_outcome='{expected_outcome[:50]}...'")
             return {
                 "command": command,
                 "expected_outcome": expected_outcome
             }
             
         except (json.JSONDecodeError, KeyError) as e:
+            logger.debug(f"Parse fail: JSON decode error: {e}")
             return None
 
     async def _create_step_scored_group(
@@ -436,6 +549,7 @@ class TextWorldEnvRLPRv2(BaseEnv):
         scores_list = []
         messages_list = [] if self.config.include_messages else None
         
+        # First pass: tokenize all alternatives
         for alt in alternatives:
             # Create messages with this alternative's response
             alt_messages = messages.copy()
@@ -454,14 +568,34 @@ class TextWorldEnvRLPRv2(BaseEnv):
             if self.config.include_messages:
                 messages_list.append(alt_messages)
         
-        # Calculate length penalty to encourage concise thinking
+        # Calculate length penalty
         token_lengths = [len(tokens) for tokens in tokens_list]
         length_mean = sum(token_lengths) / len(token_lengths) if token_lengths else 1.0
         
-        # Apply tanh-based length penalty
+        # Combine length penalty, confidence score, and format reward
         for i, tok_len in enumerate(token_lengths):
+            # Length penalty component (encourages conciseness)
             length_penalty = math.tanh((length_mean - tok_len) / length_mean) / 2.0
-            scores_list.append(length_penalty)
+            
+            # Confidence score component (value estimate)
+            conf_score = alternatives[i].get("confidence_score", 0.0)
+            
+            # Format reward component (encourages proper structure)
+            format_score = self._calculate_format_reward(alternatives[i]["response"])
+            
+            # Debug format scoring for first alternative
+            if i == 0:
+                logger.debug(f"Turn {turn} Alt {i} format score: {format_score:.4f}")
+            
+            # Combine scores with proper weighting
+            # Weights: 0.1 for format, 0.3 for length, 0.6 for confidence
+            combined_score = (
+                self.config.format_reward_weight * format_score +
+                0.3 * length_penalty + 
+                (0.7 - self.config.format_reward_weight) * conf_score
+            )
+            
+            scores_list.append(combined_score)
         
         return ScoredDataGroup(
             tokens=tokens_list,
@@ -475,67 +609,121 @@ class TextWorldEnvRLPRv2(BaseEnv):
             images=None,
         )
     
-    def _select_best_alternative_idx(self, alternatives: List[Dict[str, Any]]) -> int:
-        """Select the best alternative index. For now, random selection.
+    def _transform_logprobs_for_confidence(self, logprobs) -> Optional[List[Dict[str, Any]]]:
+        """Transform completion logprobs to format expected by confidence_score."""
+        if not logprobs:
+            return None
         
-        TODO: Implement value function-based selection once we have a value model.
-        """
-        if not alternatives:
-            raise ValueError("No alternatives to select from")
+        logprobs_data = []
         
-        # For now, random selection
-        import random
-        selected_idx = random.randint(0, len(alternatives) - 1)
-        return selected_idx
+        # Handle OpenAI/SGLang completion Logprobs object
+        # It has attributes: tokens, token_logprobs, top_logprobs
+        if hasattr(logprobs, 'tokens') and hasattr(logprobs, 'token_logprobs'):
+            tokens = logprobs.tokens or []
+            token_logprobs_list = logprobs.token_logprobs or []
+            top_logprobs_list = logprobs.top_logprobs or []
+            
+            for i in range(len(tokens)):
+                token_data = {
+                    "token": tokens[i] if i < len(tokens) else "",
+                    "logprob": token_logprobs_list[i] if i < len(token_logprobs_list) else 0.0,
+                    "top_logprobs": []
+                }
+                
+                # Add top logprobs if available
+                if i < len(top_logprobs_list) and top_logprobs_list[i]:
+                    top_probs = top_logprobs_list[i]
+                    if isinstance(top_probs, dict):
+                        # Convert dict format to list format
+                        for token, logprob in top_probs.items():
+                            token_data["top_logprobs"].append({
+                                "token": token,
+                                "logprob": logprob
+                            })
+                
+                logprobs_data.append(token_data)
+            
+            return logprobs_data if logprobs_data else None
+        
+        # Handle SGLang's ChatCompletionTokenLogprob format (for chat_completion compatibility)
+        elif hasattr(logprobs, 'content'):
+            for token_logprob in logprobs.content:
+                token_data = {
+                    "token": getattr(token_logprob, 'token', ''),
+                    "logprob": getattr(token_logprob, 'logprob', 0.0),
+                    "top_logprobs": []
+                }
+                
+                # Add top logprobs if available
+                if hasattr(token_logprob, 'top_logprobs') and token_logprob.top_logprobs:
+                    for top in token_logprob.top_logprobs:
+                        token_data["top_logprobs"].append({
+                            "token": getattr(top, 'token', ''),
+                            "logprob": getattr(top, 'logprob', 0.0)
+                        })
+                
+                logprobs_data.append(token_data)
+            
+            return logprobs_data if logprobs_data else None
+        
+        return None
     
-    def _select_best_alternative(self, alternatives: List[Dict[str, Any]]) -> Tuple[int, Dict[str, Any]]:
+    def _select_best_alternative_idx(self, alternatives: List[Dict[str, Any]]) -> int:
         """Select the best alternative using entropy-based confidence scoring."""
         if not alternatives:
             raise ValueError("No alternatives to select from")
-            
+        
         best_idx = 0
         best_confidence = float('-inf')
+        confidence_scores = []
         
         for i, alt in enumerate(alternatives):
-            confidence = self._calculate_entropy_confidence(alt.get("logprobs"))
-            if confidence > best_confidence:
-                best_confidence = confidence
-                best_idx = i
-                
-        logger.warning(f"Entropy selection: chose alternative {best_idx} with confidence {best_confidence:.4f}")
-        return best_idx, alternatives[best_idx]
-
-    def _calculate_entropy_confidence(self, logprobs) -> float:
-        """Calculate confidence score based on token entropy."""
-        if not logprobs or not hasattr(logprobs, 'content'):
-            return random.random()  # Fallback to random if no logprobs
+            # Transform logprobs to expected format
+            logprobs_data = self._transform_logprobs_for_confidence(alt.get("logprobs"))
             
-        try:
-            import math
-            total_entropy = 0.0
-            token_count = 0
-            
-            for token_logprob in logprobs.content:
-                if hasattr(token_logprob, 'top_logprobs'):
-                    # Calculate entropy from top logprobs
-                    entropy = 0.0
-                    for top_logprob in token_logprob.top_logprobs:
-                        prob = math.exp(top_logprob.logprob)
-                        entropy -= prob * top_logprob.logprob
-                    total_entropy += entropy
-                    token_count += 1
+            # Debug logprobs transformation
+            if i == 0:
+                raw_logprobs = alt.get("logprobs")
+                if raw_logprobs:
+                    logger.warning(f"Debug: Alt {i} raw logprobs type: {type(raw_logprobs)}")
+                    if isinstance(raw_logprobs, dict):
+                        logger.warning(f"Debug: Alt {i} logprobs keys: {raw_logprobs.keys()}")
+                        if 'tokens' in raw_logprobs:
+                            logger.warning(f"Debug: Alt {i} has {len(raw_logprobs['tokens'])} tokens")
+                        if 'top_logprobs' in raw_logprobs and raw_logprobs['top_logprobs']:
+                            first_top = raw_logprobs['top_logprobs'][0] if raw_logprobs['top_logprobs'] else None
+                            logger.warning(f"Debug: Alt {i} first top_logprobs: {first_top}")
                     
-            if token_count == 0:
-                return random.random()
-                
-            avg_entropy = total_entropy / token_count
-            # Convert entropy to confidence (lower entropy = higher confidence)
-            confidence = math.exp(-avg_entropy)
-            return confidence
+                if logprobs_data:
+                    logger.warning(f"Debug: Alt {i} transformed logprobs has {len(logprobs_data)} tokens")
+                    if logprobs_data:
+                        first_token = logprobs_data[0]
+                        logger.warning(f"Debug: First token has top_logprobs: {len(first_token.get('top_logprobs', []))} items")
+                        if first_token.get('top_logprobs'):
+                            logger.warning(f"Debug: First top_logprob: {first_token['top_logprobs'][0]}")
             
-        except Exception as e:
-            logger.debug(f"Error calculating entropy: {e}")
-            return random.random()
+            # Calculate confidence score
+            if logprobs_data:
+                conf_score = confidence_score(logprobs_data)
+            else:
+                # Fallback to small random value if no logprobs
+                conf_score = random.random() * 0.1
+                logger.warning(f"Debug: Alt {i} has no logprobs_data, using random score")
+            
+            confidence_scores.append(conf_score)
+            
+            if conf_score > best_confidence:
+                best_confidence = conf_score
+                best_idx = i
+        
+        # Store confidence scores for use in scoring
+        for i, alt in enumerate(alternatives):
+            alt["confidence_score"] = confidence_scores[i]
+        
+        logger.warning(f"Entropy selection: chose alternative {best_idx} with confidence {best_confidence:.4f}")
+        logger.warning(f"Debug: All confidence scores: {[f'{s:.4f}' for s in confidence_scores]}")
+        
+        return best_idx
 
     def _calculate_vrcli_score_for_trajectory(
         self, alternative: Dict[str, Any], total_reward: float, won: bool, lost: bool
@@ -590,7 +778,7 @@ class TextWorldEnvRLPRv2(BaseEnv):
         if has_memory:
             score += self.config.format_memory_reward
         if has_tool_call:
-            score += 0.05  # Tool call reward
+            score += self.config.format_thinking_reward  # Tool call gets same reward as thinking block
             
         # Penalty for wrong structure
         if not (has_think and has_memory and has_tool_call):
@@ -609,6 +797,10 @@ class TextWorldEnvRLPRv2(BaseEnv):
         
         return adjustment
 
+    def _count_tokens(self, messages: List[Message]) -> int:
+        """Count tokens in a message list."""
+        return len(self.tokenizer.apply_chat_template(messages, tokenize=True))
+    
     def _strip_thinking_blocks(self, response: str) -> str:
         """Strip thinking blocks from response but keep memory blocks."""
         import re

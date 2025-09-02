@@ -861,7 +861,6 @@ class TextWorldEnv(BaseEnv):
                 "role": "user",
                 "content": (
                     f"Current state:\n{current_obs}\n\n"
-                    f"Action Taken: {actual_action}\n\n"
                     "What happens next?"
                 ),
             },
