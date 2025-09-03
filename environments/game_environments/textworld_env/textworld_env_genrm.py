@@ -8,13 +8,13 @@ thinking block stripping, and inline memory management.
 """
 
 import asyncio
-import json
 import logging
 import os
 import random
 import tempfile
 import traceback
 from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
 
 import gymnasium as gym  # noqa: F401
 import textworld
@@ -30,9 +30,7 @@ from atroposlib.envs.base import (
 )
 from atroposlib.type_definitions import Item, Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
-from environments.game_environments.textworld_env.scoring.entropy_calculator import (
-    confidence_score,
-)
+# No longer using entropy-based scoring - using LLM-as-judge instead
 from environments.game_environments.textworld_env.textworld_registry import (
     create_textworld_registry,
 )  # noqa: F401
@@ -40,15 +38,21 @@ from environments.game_environments.textworld_env.textworld_registry import (
 logger = logging.getLogger(__name__)
 
 
-class TextWorldEnvRLPRv2Config(BaseEnvConfig):
-    """Configuration for the streamlined TextWorld RLPR environment."""
+class TextWorldEnvGenRMConfig(BaseEnvConfig):
+    """Configuration for the TextWorld GenRM environment with LLM-as-judge."""
 
-    env_name: str = "TextWorldRLPRv2"
-    wandb_name: str = "textworld-rlpr-v2"
+    env_name: str = "TextWorldGenRM"
+    wandb_name: str = "textworld-genrm"
+    
+    # Judge configuration
+    judge_model_name: str = "Hermes-4-405B"
+    judge_group_size: int = 3  # Number of judges for consensus
+    judge_temperature: float = 0.7
+    use_same_model_for_judge: bool = False
     group_size: int = 16  # Alternatives per step
     max_num_workers: int = 16
-    total_steps: int = 500
-    max_steps: int = 20  # Max turns per episode
+    total_steps: int = 100  # Collect 100 winning episodes
+    max_steps: int = 20  # Reduced to avoid getting stuck too long  # Max turns per episode
     max_token_length: int = 65536  # Support 32k output + context
 
     # VR-CLI perplexity reward settings
@@ -75,26 +79,38 @@ class TextWorldEnvRLPRv2Config(BaseEnvConfig):
     ]
     randomize_challenge_settings: bool = True
     
-    # Data saving settings
-    data_path_to_save_groups: Optional[str] = None  # Path to save winning episodes
-    save_only_winning_episodes: bool = True  # Only save episodes that win
+    # Data saving
+    data_path_to_save_groups: Optional[str] = None
 
 
-class TextWorldEnvRLPRv2(BaseEnv):
-    """Streamlined TextWorld RLPR environment with step-by-step generation."""
+class TextWorldEnvGenRM(BaseEnv):
+    """TextWorld GenRM environment with LLM-as-judge scoring."""
 
-    name = "textworld_rlpr_v2"
-    env_config_cls = TextWorldEnvRLPRv2Config
+    name = "textworld_genrm"
+    env_config_cls = TextWorldEnvGenRMConfig
 
     def __init__(
         self,
-        config: TextWorldEnvRLPRv2Config,
+        config: TextWorldEnvGenRMConfig,
         server_configs: List[APIServerConfig],
         slurm: bool = True,
         testing: bool = False,
     ):
+        # Override server configs for Hermes-405B API access
+        if config.judge_model_name == "Hermes-4-405B" or "Hermes-4-405B" in str(config):
+            import os
+            api_key = os.getenv("HERMES_API_KEY", "sk-CRs4gcGL5Jai3ojQ2BKxxA")
+            server_configs = [
+                APIServerConfig(
+                    model_name="Hermes-4-405B",
+                    base_url="https://inference-api.nousresearch.com/v1",
+                    api_key=api_key,
+                    num_requests_for_eval=128,
+                )
+            ]
+        
         super().__init__(config, server_configs, slurm, testing)
-        self.config: TextWorldEnvRLPRv2Config = config
+        self.config: TextWorldEnvGenRMConfig = config
         self.challenge_registry = None
 
         # Track generated game files for cleanup
@@ -359,6 +375,7 @@ class TextWorldEnvRLPRv2(BaseEnv):
             scored_data_groups = []  # One ScoredDataGroup per step
             step_rewards = []  # Track rewards for each step
             selected_indices = []  # Track selected alternative for each step
+            episode_data = []  # Track data for saving
             
             while not done and turn < self.config.max_steps:
                 turn += 1
@@ -401,6 +418,23 @@ class TextWorldEnvRLPRv2(BaseEnv):
                     
                     # Select best alternative to continue the episode
                     selected_idx = self._select_best_alternative_idx(alternatives)
+                    
+                    # Save data for this step if configured
+                    if self.config.data_path_to_save_groups:
+                        step_data = {
+                            "turn": turn,
+                            "messages": messages.copy() if self.config.include_messages else None,
+                            "alternatives": [
+                                {
+                                    "response": alt["response"],
+                                    "judge_score": alt.get("judge_score", 0.0),
+                                    "parsed_action": alt.get("parsed_action", {})
+                                }
+                                for alt in alternatives
+                            ],
+                            "selected_idx": selected_idx,
+                        }
+                        episode_data.append(step_data)
                     selected_alt = alternatives[selected_idx]
                     
                     # Execute the selected action
@@ -432,24 +466,21 @@ class TextWorldEnvRLPRv2(BaseEnv):
             self.episode_challenge_types.append(challenge_name)
             
             # Apply credit assignment to scored data groups
-            won = info.get("won", False)
-            lost = info.get("lost", False)
             self._apply_credit_assignment(
                 scored_data_groups, 
                 step_rewards, 
                 selected_indices,
-                won,
-                lost
+                info.get("won", False),
+                info.get("lost", False)
             )
             
             logger.warning(f"Episode completed: {len(scored_data_groups)} steps, total_reward={total_reward:.2f}")
             
-            # Save episode data if configured and episode won
-            if self.config.data_path_to_save_groups and won and self.config.save_only_winning_episodes:
+            # Save episode data only if we won
+            won = info.get("won", False)
+            if self.config.data_path_to_save_groups and won and scored_data_groups:
                 self._save_winning_episode(scored_data_groups, challenge_name, total_reward)
-            elif self.config.data_path_to_save_groups and not self.config.save_only_winning_episodes:
-                self._save_episode(scored_data_groups, challenge_name, total_reward, won)
-                
+            
             return scored_data_groups
             
         except Exception as e:
@@ -622,31 +653,38 @@ class TextWorldEnvRLPRv2(BaseEnv):
             if self.config.include_messages:
                 messages_list.append(alt_messages)
         
+        # Get judge scores for all alternatives
+        judge_scores = await self._score_actions_with_llm_judge(alternatives, messages, turn)
+        
+        # Store judge scores in alternatives for selection
+        for i, alt in enumerate(alternatives):
+            alt["judge_score"] = judge_scores[i] if i < len(judge_scores) else 0.0
+        
         # Calculate length penalty
         token_lengths = [len(tokens) for tokens in tokens_list]
         length_mean = sum(token_lengths) / len(token_lengths) if token_lengths else 1.0
         
-        # Combine length penalty, confidence score, and format reward
+        # Combine length penalty, judge score, and format reward
         for i, tok_len in enumerate(token_lengths):
             # Length penalty component (encourages conciseness)
             length_penalty = math.tanh((length_mean - tok_len) / length_mean) / 2.0
             
-            # Confidence score component (value estimate)
-            conf_score = alternatives[i].get("confidence_score", 0.0)
+            # Judge score component (LLM-as-judge ranking)
+            judge_score = alternatives[i].get("judge_score", 0.0)
             
             # Format reward component (encourages proper structure)
             format_score = self._calculate_format_reward(alternatives[i]["response"])
             
             # Debug format scoring for first alternative
             if i == 0:
-                logger.debug(f"Turn {turn} Alt {i} format score: {format_score:.4f}")
+                logger.debug(f"Turn {turn} Alt {i} format score: {format_score:.4f}, judge score: {judge_score:.4f}")
             
             # Combine scores with proper weighting
-            # Weights: 0.1 for format, 0.3 for length, 0.6 for confidence
+            # Weights: 0.1 for format, 0.3 for length, 0.6 for judge score
             combined_score = (
                 self.config.format_reward_weight * format_score +
                 0.3 * length_penalty + 
-                (0.7 - self.config.format_reward_weight) * conf_score
+                (0.7 - self.config.format_reward_weight) * judge_score
             )
             
             scores_list.append(combined_score)
@@ -662,6 +700,246 @@ class TextWorldEnvRLPRv2(BaseEnv):
             overrides=None,
             images=None,
         )
+    
+    async def _score_actions_with_llm_judge(
+        self, alternatives: List[Dict[str, Any]], messages: List[Message], turn: int
+    ) -> List[float]:
+        """Score actions using LLM-as-judge with consensus from multiple judges.
+        
+        Args:
+            alternatives: List of alternative actions with parsed_action field
+            messages: Context messages leading to this decision point
+            turn: Current turn number
+            
+        Returns:
+            List of scores for each alternative (0.0 to 1.0)
+        """
+        # Extract just the actions (no thinking blocks)
+        actions = []
+        for i, alt in enumerate(alternatives):
+            action = alt.get("parsed_action", {}).get("action", "")
+            if not action:
+                # Fallback to extracting from response if parsing failed
+                response = alt.get("response", "")
+                if "<tool_call>" in response and "</tool_call>" in response:
+                    start = response.find("<tool_call>") + len("<tool_call>")
+                    end = response.find("</tool_call>")
+                    action = response[start:end].strip()
+                else:
+                    action = "[Invalid action]"
+            actions.append(action)
+        
+        # Create judge prompt
+        context = messages[-1]["content"] if messages else ""  # Last observation
+        judge_prompt = self._create_judge_prompt(context, actions)
+        
+        # Get rankings from multiple judges
+        all_rankings = []
+        for judge_idx in range(self.config.judge_group_size):
+            ranking = await self._get_single_judge_ranking(judge_prompt, len(actions), judge_idx)
+            if ranking:
+                all_rankings.append(ranking)
+                logger.debug(f"Judge {judge_idx} ranking: {ranking}")
+        
+        # Calculate consensus scores
+        scores = self._calculate_consensus_scores(all_rankings, len(actions))
+        
+        logger.warning(f"Turn {turn}: Judge consensus scores: {[f'{s:.3f}' for s in scores]}")
+        
+        return scores
+    
+    def _create_judge_prompt(self, context: str, actions: List[str]) -> str:
+        """Create prompt for the judge to rank actions."""
+        prompt = f"""You are evaluating actions in a text-based game.
+
+Current situation:
+{context}
+
+Possible actions to evaluate:
+"""
+        for i, action in enumerate(actions):
+            prompt += f"\n{i+1}. {action}"
+        
+        prompt += """\n\nRank these actions from best to worst based on:
+1. Likelihood of progressing toward the game objective
+2. Safety (avoiding actions that might cause game failure)
+3. Efficiency (direct progress vs unnecessary exploration)
+
+Provide your ranking as a comma-separated list of numbers (e.g., "3,1,4,2" means action 3 is best, then 1, then 4, then 2).
+
+Ranking:"""
+        
+        return prompt
+    
+    async def _get_single_judge_ranking(self, prompt: str, num_actions: int, judge_idx: int) -> Optional[List[int]]:
+        """Get ranking from a single judge."""
+        try:
+            # Check if we're using Hermes-405B as judge (external API)
+            if self.config.judge_model_name == "Hermes-4-405B":
+                # Use Nous API directly for Hermes-405B
+                import aiohttp
+                import os
+                
+                api_key = os.getenv("NOUS_API_KEY") or os.getenv("HERMES_API_KEY")
+                if not api_key:
+                    logger.warning("No NOUS_API_KEY or HERMES_API_KEY found for Hermes-405B judge")
+                    return None
+                
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                payload = {
+                    "model": "Hermes-4-405B",
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ],
+                    "max_tokens": 50,
+                    "temperature": self.config.judge_temperature,
+                }
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        "https://inference-api.nousresearch.com/v1/chat/completions",
+                        headers=headers,
+                        json=payload
+                    ) as resp:
+                        if resp.status == 200:
+                            result = await resp.json()
+                            response = result["choices"][0]["message"]["content"]
+                        else:
+                            logger.warning(f"Hermes-405B API error: {resp.status}")
+                            return None
+            else:
+                # Use regular SGLang servers for other models
+                if self.config.use_same_model_for_judge:
+                    server_idx = judge_idx % len(self.server_configs)
+                else:
+                    # Use different servers for diversity
+                    server_idx = judge_idx % len(self.server_configs)
+                
+                response = await self.call_llm_api(
+                    prompt,
+                    max_tokens=50,
+                    temperature=self.config.judge_temperature,
+                    server_config_idx=server_idx,
+                    model_override=self.config.judge_model_name if not self.config.use_same_model_for_judge else None,
+                )
+            
+            # Parse ranking from response
+            ranking_text = response.strip()
+            ranking = self._parse_ranking(ranking_text, num_actions)
+            
+            return ranking
+            
+        except Exception as e:
+            logger.warning(f"Judge {judge_idx} failed: {e}")
+            return None
+    
+    def _parse_ranking(self, ranking_text: str, num_actions: int) -> Optional[List[int]]:
+        """Parse ranking text into list of indices."""
+        try:
+            # Extract just numbers from the response
+            import re
+            numbers = re.findall(r'\d+', ranking_text)
+            
+            if not numbers:
+                return None
+            
+            ranking = [int(n) - 1 for n in numbers]  # Convert to 0-indexed
+            
+            # Validate ranking
+            if len(ranking) != num_actions:
+                logger.debug(f"Invalid ranking length: expected {num_actions}, got {len(ranking)}")
+                return None
+            
+            if set(ranking) != set(range(num_actions)):
+                logger.debug(f"Invalid ranking indices: {ranking}")
+                return None
+            
+            return ranking
+            
+        except Exception as e:
+            logger.debug(f"Failed to parse ranking '{ranking_text}': {e}")
+            return None
+    
+    def _calculate_consensus_scores(self, all_rankings: List[List[int]], num_actions: int) -> List[float]:
+        """Calculate consensus scores from multiple judge rankings.
+        
+        Uses Borda count: each action gets points based on its position in each ranking.
+        """
+        if not all_rankings:
+            # No valid rankings, return uniform scores
+            return [0.5] * num_actions
+        
+        # Borda count scoring
+        scores = [0.0] * num_actions
+        
+        for ranking in all_rankings:
+            for position, action_idx in enumerate(ranking):
+                # Higher score for better positions
+                points = num_actions - position
+                scores[action_idx] += points
+        
+        # Normalize scores to [0, 1]
+        max_possible = num_actions * len(all_rankings)
+        if max_possible > 0:
+            scores = [s / max_possible for s in scores]
+        
+        return scores
+    
+    def _save_winning_episode(self, scored_data_groups: List[ScoredDataGroup], challenge_name: str, total_reward: float):
+        """Save winning episode as JSON array of ScoredDataGroups to JSONL file."""
+        import json
+        import os
+        
+        if not self.config.data_path_to_save_groups:
+            return
+        
+        # Create directory if needed  
+        os.makedirs(os.path.dirname(self.config.data_path_to_save_groups), exist_ok=True)
+        
+        # Convert ScoredDataGroups to serializable format, excluding tokens and mask
+        # Each episode is a list of ScoredDataGroups (one per step)
+        episode_array = []
+        for sdg in scored_data_groups:
+            # ScoredDataGroup is a TypedDict, so treat as dict
+            clean_sdg = dict(sdg).copy()
+            
+            # Remove tokens and masks at top level
+            clean_sdg.pop('tokens', None)
+            clean_sdg.pop('masks', None)  # Note: it's 'masks' not 'mask'
+            clean_sdg.pop('mask', None)   # Just in case
+            
+            # Also clean the scored_data list inside if it exists
+            if 'scored_data' in clean_sdg and isinstance(clean_sdg['scored_data'], list):
+                cleaned_scored_data = []
+                for item in clean_sdg['scored_data']:
+                    clean_item = dict(item).copy() if item else {}
+                    
+                    # Remove tokens and mask from each scored data item
+                    clean_item.pop('tokens', None)
+                    clean_item.pop('masks', None)
+                    clean_item.pop('mask', None)
+                    cleaned_scored_data.append(clean_item)
+                
+                clean_sdg['scored_data'] = cleaned_scored_data
+            
+            episode_array.append(clean_sdg)
+        
+        # Write episode as single line JSON array
+        with open(self.config.data_path_to_save_groups, "a") as f:
+            f.write(json.dumps(episode_array) + "\n")
+        
+        # Count total saved episodes
+        try:
+            with open(self.config.data_path_to_save_groups, "r") as f:
+                num_episodes = sum(1 for _ in f)
+        except:
+            num_episodes = 1
+        
+        logger.warning(f"Saved WINNING episode #{num_episodes}: {challenge_name}, reward={total_reward:.2f}, steps={len(scored_data_groups)}")
     
     def _transform_logprobs_for_confidence(self, logprobs) -> Optional[List[Dict[str, Any]]]:
         """Transform completion logprobs to format expected by confidence_score."""
@@ -723,59 +1001,25 @@ class TextWorldEnvRLPRv2(BaseEnv):
         return None
     
     def _select_best_alternative_idx(self, alternatives: List[Dict[str, Any]]) -> int:
-        """Select the best alternative using entropy-based confidence scoring."""
+        """Select the best alternative using judge scores."""
         if not alternatives:
             raise ValueError("No alternatives to select from")
         
         best_idx = 0
-        best_confidence = float('-inf')
-        confidence_scores = []
+        best_score = float('-inf')
+        judge_scores = []
         
         for i, alt in enumerate(alternatives):
-            # Transform logprobs to expected format
-            logprobs_data = self._transform_logprobs_for_confidence(alt.get("logprobs"))
+            # Use judge score if available
+            score = alt.get("judge_score", 0.0)
+            judge_scores.append(score)
             
-            # Debug logprobs transformation
-            if i == 0:
-                raw_logprobs = alt.get("logprobs")
-                if raw_logprobs:
-                    logger.warning(f"Debug: Alt {i} raw logprobs type: {type(raw_logprobs)}")
-                    if isinstance(raw_logprobs, dict):
-                        logger.warning(f"Debug: Alt {i} logprobs keys: {raw_logprobs.keys()}")
-                        if 'tokens' in raw_logprobs:
-                            logger.warning(f"Debug: Alt {i} has {len(raw_logprobs['tokens'])} tokens")
-                        if 'top_logprobs' in raw_logprobs and raw_logprobs['top_logprobs']:
-                            first_top = raw_logprobs['top_logprobs'][0] if raw_logprobs['top_logprobs'] else None
-                            logger.warning(f"Debug: Alt {i} first top_logprobs: {first_top}")
-                    
-                if logprobs_data:
-                    logger.warning(f"Debug: Alt {i} transformed logprobs has {len(logprobs_data)} tokens")
-                    if logprobs_data:
-                        first_token = logprobs_data[0]
-                        logger.warning(f"Debug: First token has top_logprobs: {len(first_token.get('top_logprobs', []))} items")
-                        if first_token.get('top_logprobs'):
-                            logger.warning(f"Debug: First top_logprob: {first_token['top_logprobs'][0]}")
-            
-            # Calculate confidence score
-            if logprobs_data:
-                conf_score = confidence_score(logprobs_data)
-            else:
-                # Fallback to small random value if no logprobs
-                conf_score = random.random() * 0.1
-                logger.warning(f"Debug: Alt {i} has no logprobs_data, using random score")
-            
-            confidence_scores.append(conf_score)
-            
-            if conf_score > best_confidence:
-                best_confidence = conf_score
+            if score > best_score:
+                best_score = score
                 best_idx = i
         
-        # Store confidence scores for use in scoring
-        for i, alt in enumerate(alternatives):
-            alt["confidence_score"] = confidence_scores[i]
-        
-        logger.warning(f"Entropy selection: chose alternative {best_idx} with confidence {best_confidence:.4f}")
-        logger.warning(f"Debug: All confidence scores: {[f'{s:.4f}' for s in confidence_scores]}")
+        logger.warning(f"Judge selection: chose alternative {best_idx} with score {best_score:.4f}")
+        logger.warning(f"All judge scores: {[f'{s:.4f}' for s in judge_scores]}")
         
         return best_idx
 
@@ -814,6 +1058,94 @@ class TextWorldEnvRLPRv2(BaseEnv):
             base_vrcli_score = 0.0
             
         return base_vrcli_score
+
+    def _apply_credit_assignment(
+        self,
+        scored_data_groups: List[ScoredDataGroup],
+        step_rewards: List[float],
+        selected_indices: List[int],
+        won: bool,
+        lost: bool
+    ) -> None:
+        """Apply credit assignment for sparse rewards using discounted returns.
+        
+        Updates scores in scored_data_groups based on future rewards.
+        """
+        if not scored_data_groups or not step_rewards:
+            return
+            
+        # Calculate final outcome reward
+        final_outcome_reward = 0.0
+        if won:
+            final_outcome_reward = 1.0
+        elif lost:
+            final_outcome_reward = -1.0
+            
+        num_steps = len(step_rewards)
+        if len(scored_data_groups) != num_steps or len(selected_indices) != num_steps:
+            logger.warning(f"Mismatch in step counts for credit assignment")
+            return
+            
+        # Calculate discounted returns backwards (Monte Carlo returns)
+        discounted_return = final_outcome_reward
+        for t in range(num_steps - 1, -1, -1):
+            immediate_reward = step_rewards[t]
+            
+            # Update discounted return
+            discounted_return = (
+                immediate_reward + self.config.vrcli_discount_factor * discounted_return
+            )
+            
+            sdg = scored_data_groups[t]
+            chosen_idx = selected_indices[t]
+            
+            if 0 <= chosen_idx < len(sdg["scores"]):
+                # Calculate future return (excluding immediate reward)
+                future_return = self.config.vrcli_discount_factor * (
+                    discounted_return - immediate_reward
+                )
+                
+                # Apply credit assignment weight
+                weighted_future_return = self.config.vrcli_weight * future_return
+                
+                # Update scores with future returns
+                new_scores = list(sdg["scores"])
+                new_scores[chosen_idx] += weighted_future_return
+                
+                # Also credit alternatives that produced the same action
+                if "messages" in sdg and sdg["messages"] is not None:
+                    chosen_messages = sdg["messages"][chosen_idx]
+                    if chosen_messages and chosen_messages[-1]["role"] == "assistant":
+                        chosen_response = chosen_messages[-1]["content"]
+                        # Extract action from response using existing method
+                        parsed_action = self._parse_response_format(chosen_response)
+                        chosen_action = parsed_action.get("command", "invalid") if parsed_action else "invalid"
+                        
+                        if chosen_action and chosen_action != "invalid":
+                            # Check other alternatives for same action
+                            for alt_idx in range(len(sdg["messages"])):
+                                if alt_idx != chosen_idx and alt_idx < len(new_scores):
+                                    alt_messages = sdg["messages"][alt_idx]
+                                    if alt_messages and alt_messages[-1]["role"] == "assistant":
+                                        alt_response = alt_messages[-1]["content"]
+                                        # Extract action from response using existing method
+                                        parsed_alt = self._parse_response_format(alt_response)
+                                        alt_action = parsed_alt.get("command", "invalid") if parsed_alt else "invalid"
+                                        if alt_action == chosen_action:
+                                            # This alternative would have led to the same outcome
+                                            new_scores[alt_idx] += weighted_future_return
+                                            logger.debug(
+                                                f"Turn {t}: Alternative {alt_idx} also gets future return "
+                                                f"for same action '{chosen_action}'"
+                                            )
+                
+                sdg["scores"] = new_scores
+                
+                logger.debug(
+                    f"Turn {t}: immediate_reward={immediate_reward:.3f}, "
+                    f"future_return={weighted_future_return:.3f}, "
+                    f"total_score={new_scores[chosen_idx]:.3f}"
+                )
 
     def _calculate_format_reward(self, response: str) -> float:
         """Calculate reward for following the structured response format."""
@@ -886,9 +1218,9 @@ class TextWorldEnvRLPRv2(BaseEnv):
         return "\n".join(parts)
 
     @classmethod
-    def config_init(cls) -> Tuple[TextWorldEnvRLPRv2Config, List[APIServerConfig]]:
+    def config_init(cls) -> Tuple[TextWorldEnvGenRMConfig, List[APIServerConfig]]:
         """Initialize default configuration."""
-        env_config = TextWorldEnvRLPRv2Config(
+        env_config = TextWorldEnvGenRMConfig(
             tokenizer_name="NousResearch/Hermes-4-Qwen3-14B",
             group_size=16,
             use_wandb=True,
@@ -1094,101 +1426,6 @@ class TextWorldEnvRLPRv2(BaseEnv):
             except OSError as e:
                 logger.warning(f"Failed to clean up game file {game_file}: {e}")
 
-    def _apply_credit_assignment(self, scored_data_groups, step_rewards, selected_indices, won, lost):
-        """Apply credit assignment using Monte Carlo returns with discounting."""
-        if not scored_data_groups or not self.config.vrcli_weight:
-            return
-        
-        num_steps = len(scored_data_groups)
-        
-        # Determine final outcome reward
-        if won:
-            final_outcome_reward = 1.0
-        elif lost:
-            final_outcome_reward = -1.0
-        else:
-            final_outcome_reward = 0.0
-        
-        # Calculate discounted returns backwards (Monte Carlo returns)
-        discounted_return = final_outcome_reward
-        
-        for t in range(num_steps - 1, -1, -1):
-            sdg = scored_data_groups[t]
-            chosen_idx = selected_indices[t] if t < len(selected_indices) else 0
-            
-            # Get immediate reward for this step
-            immediate_reward = step_rewards[t] if t < len(step_rewards) else 0.0
-            
-            # Update discounted return
-            if t < num_steps - 1:
-                discounted_return = immediate_reward + self.config.vrcli_discount_factor * discounted_return
-            else:
-                discounted_return = immediate_reward + self.config.vrcli_discount_factor * final_outcome_reward
-            
-            # Apply weighted future return to the chosen action's score
-            future_return = discounted_return - immediate_reward
-            weighted_future_return = self.config.vrcli_weight * future_return
-            
-            # Update scores in the ScoredDataGroup
-            if hasattr(sdg, 'scores') and sdg.scores is not None:
-                new_scores = list(sdg.scores)
-                if 0 <= chosen_idx < len(new_scores):
-                    new_scores[chosen_idx] += weighted_future_return
-                    sdg.scores = new_scores
-                    
-                    logger.debug(f"Step {t}: Applied credit assignment +{weighted_future_return:.4f} to action {chosen_idx}")
-    
-    def _save_winning_episode(self, scored_data_groups, challenge_name, total_reward):
-        """Save a winning episode to the data file."""
-        if not self.config.data_path_to_save_groups:
-            return
-        
-        try:
-            # Create episode array without tokens/mask fields
-            episode_array = []
-            for sdg in scored_data_groups:
-                # Convert ScoredDataGroup to dict and clean it
-                clean_sdg = sdg.dict() if hasattr(sdg, 'dict') else dict(sdg)
-                
-                # Remove tokens and mask fields to avoid bloat
-                if 'tokens' in clean_sdg:
-                    del clean_sdg['tokens']
-                if 'mask' in clean_sdg:
-                    del clean_sdg['mask']
-                    
-                # Also clean from individual scored_data items
-                if 'scored_data' in clean_sdg:
-                    for item in clean_sdg['scored_data']:
-                        if 'tokens' in item:
-                            del item['tokens']
-                        if 'mask' in item:
-                            del item['mask']
-                
-                episode_array.append(clean_sdg)
-            
-            # Save as JSON array (one episode per line)
-            with open(self.config.data_path_to_save_groups, 'a') as f:
-                f.write(json.dumps(episode_array) + '\n')
-            
-            logger.info(f"Saved winning episode from {challenge_name} with reward {total_reward:.2f}")
-            
-        except Exception as e:
-            logger.error(f"Failed to save winning episode: {e}")
-    
-    def _save_episode(self, scored_data_groups, challenge_name, total_reward, won):
-        """Save any episode (used when save_only_winning_episodes is False)."""
-        if not self.config.data_path_to_save_groups:
-            return
-        
-        if self.config.save_only_winning_episodes and not won:
-            return
-        
-        if won:
-            self._save_winning_episode(scored_data_groups, challenge_name, total_reward)
-        else:
-            # Could implement saving of non-winning episodes if needed
-            pass
-
     def __del__(self):
         """Ensure cleanup on deletion."""
         # Clean up any remaining game files
@@ -1208,4 +1445,4 @@ class TextWorldEnvRLPRv2(BaseEnv):
 
 
 if __name__ == "__main__":
-    TextWorldEnvRLPRv2.cli()
+    TextWorldEnvGenRM.cli()

@@ -31,7 +31,7 @@ class TextWorldChallengeRegistry:
             "go": [1, 6, 9, 12],  # Number of locations
         },
         "tw-coin_collector": {
-            "level": list(range(1, 301)),  # Levels 1-300 (full range)
+            "level": list(range(1, 31)),  # Levels 1-30 (prevent Z-machine overflow)
         },
         "tw-treasure_hunter": {
             "level": list(range(1, 31)),  # Levels 1-30 (full range)
