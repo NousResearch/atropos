@@ -270,7 +270,7 @@ def get_num_rows(
     if there are more than these 4 parameter with different values,
     we want to put that in separate rows instead of aggregating over them.
     returning: the number of rows (atleast 1) and the names of the cols"""
-    necesarry_rows = 0
+    necessary_rows = 0
 
     # the user might specify a value for the groups that we should split on in <split_groups>
     whitelisted_cols: list[str] | Literal["all"] = (
@@ -299,11 +299,11 @@ def get_num_rows(
             log_debug(f"adding {col} since there are {nunique} unique values")
             for unique_hp in dataframe[col].unique():
                 columns_with_non_unique_values.append(f"{col}={unique_hp}")
-            necesarry_rows += (
+            necessary_rows += (
                 nunique  # each unique parameter should be an individual plot
             )
 
-    rows_number = max(necesarry_rows, 1)
+    rows_number = max(necessary_rows, 1)
     col_names = columns_with_non_unique_values
     log_debug(f"{rows_number=}")
     log_debug(f"{col_names=}")
