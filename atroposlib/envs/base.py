@@ -175,6 +175,26 @@ class BaseEnvConfig(BaseModel):
         default=600,
         description="Timeout for a a task, in seconds, if -1, no timeout",
     )
+    eval_temperature: Optional[float] = Field(
+        default=None,
+        description="Temperature parameter for evaluation sampling (0.0-2.0)",
+    )
+    eval_top_p: Optional[float] = Field(
+        default=None,
+        description="Top-p (nucleus) sampling parameter for evaluation (0.0-1.0)",
+    )
+    eval_top_k: Optional[int] = Field(
+        default=None,
+        description="Top-k sampling parameter for evaluation",
+    )
+    eval_min_p: Optional[float] = Field(
+        default=None,
+        description="Minimum probability for token sampling in evaluation",
+    )
+    eval_max_tokens: Optional[int] = Field(
+        default=None,
+        description="Maximum number of tokens to generate during evaluation",
+    )
 
 
 class BaseEnv(ABC):
