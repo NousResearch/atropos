@@ -8,11 +8,11 @@ from datasets import load_dataset
 from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
+    APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
     EvalHandlingEnum,
     Item,
-    OpenaiConfig,
     ScoredDataGroup,
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
@@ -29,7 +29,7 @@ class SingleToolCallingEnv(BaseEnv):
     def __init__(
         self,
         config: BaseEnvConfig,
-        server_configs: List[OpenaiConfig],
+        server_configs: List[APIServerConfig],
         slurm=True,
         testing=False,
     ):
@@ -41,32 +41,27 @@ class SingleToolCallingEnv(BaseEnv):
         self.completion_lengths = []
 
     @classmethod
-    def config_init(self) -> Tuple[BaseEnvConfig, List[OpenaiConfig]]:
+    def config_init(self) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         env_config = BaseEnvConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
-            group_size=32,
+            group_size=16,
             use_wandb=True,
+            max_num_workers_per_node=16,
             rollout_server_url="http://localhost:8000",
             total_steps=2000,
             batch_size=1024,
-            steps_per_eval=20,
+            steps_per_eval=25,
             max_token_length=1024 * 16,
             inference_weight=1.0,
             wandb_name="toolcall_think",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
+            min_batch_allocation=0.1,
         )
         server_configs = [
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 base_url="http://localhost:9004/v1",
-                api_key="x",
-                num_max_requests_at_once=32,
-                num_requests_for_eval=256,
-            ),
-            OpenaiConfig(
-                model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
-                base_url="http://localhost:9005/v1",
                 api_key="x",
                 num_max_requests_at_once=32,
                 num_requests_for_eval=256,
@@ -120,7 +115,7 @@ class SingleToolCallingEnv(BaseEnv):
         full_dataset = full_dataset.shuffle(seed=42)
 
         # Create train/test split on the fly (e.g., 95% train, 5% test)
-        split_dataset = full_dataset.train_test_split(test_size=0.02, seed=42)
+        split_dataset = full_dataset.train_test_split(test_size=100, seed=42)
 
         # Keep the splits as is - no need to reformat
         self.train = split_dataset["train"]
@@ -301,7 +296,6 @@ class SingleToolCallingEnv(BaseEnv):
             max_tokens=1024 * 15,
             temperature=0.8,  # Using temperature to get diverse responses
         )
-
         to_score = list()
 
         for i, completion_choice in enumerate(completions.choices):

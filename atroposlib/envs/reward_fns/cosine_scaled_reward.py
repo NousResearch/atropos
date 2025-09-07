@@ -4,7 +4,17 @@ import logging
 from typing import Any, List, Optional, Union
 
 import scipy
-import torch
+
+try:
+    import torch
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(
+        "torch not installed, please install atroposlib[rewardfns] to use this reward function"
+    )
+    raise e
+
+
 from transformers import AutoModel, AutoTokenizer
 
 from .registry import registry

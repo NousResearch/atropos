@@ -6,9 +6,10 @@ import os
 
 from dotenv import load_dotenv
 
-from atroposlib.envs.base import OpenaiConfig
+from atroposlib.envs.base import APIServerConfig
 from atroposlib.envs.reward_fns import registry
-from atroposlib.utils.config_handler import ConfigHandler
+
+# from atroposlib.utils.config_handler import ConfigHandler
 from environments.dataset_environment.dataset_env import DatasetEnv, DatasetEnvConfig
 
 load_dotenv()
@@ -23,7 +24,8 @@ def parse_arguments():
         "--config",
         type=str,
         default="dataset_local",
-        help="Configuration file name (without .yaml extension) relative to environments/dataset_environment/configs/, or full path to a YAML file.",
+        help="Configuration file name (without .yaml extension) relative to environments/dataset_environment/configs/,"
+        " or full path to a YAML file.",
     )
     return parser.parse_args()
 
@@ -35,7 +37,7 @@ async def main():
     args = parse_arguments()
 
     # Initialize config handler
-    config_handler = ConfigHandler()
+    # config_handler = ConfigHandler()
 
     # Determine config path
     if (
@@ -131,7 +133,7 @@ async def main():
                 api_key = os.environ.get(env_var, "")
 
             server_configs.append(
-                OpenaiConfig(
+                APIServerConfig(
                     model_name=server_config.get("model_name", "gpt-4.1-nano"),
                     base_url=server_config.get("base_url", None),
                     api_key=api_key,
@@ -144,7 +146,7 @@ async def main():
             "No 'server_configs' found in config. Using default OpenAI config."
         )
         server_configs.append(
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="gpt-4.1-nano",
                 base_url=None,
                 api_key=os.environ.get("OPENAI_API_KEY"),

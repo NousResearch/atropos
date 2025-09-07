@@ -14,9 +14,15 @@ def get_prefixed_pydantic_model(base_model: BaseModel, prefix: str) -> BaseModel
         if hasattr(field, "description") and field.description is not None:
             field_kwargs["description"] = field.description
 
+        # Handle both default and default_factory
+        if field.default_factory is not None:
+            field_kwargs["default_factory"] = field.default_factory
+        else:
+            field_kwargs["default"] = field.default
+
         fields[new_name] = (
             field.annotation,
-            Field(default=field.default, **field_kwargs),
+            Field(**field_kwargs),
         )
 
     return create_model(f"{prefix.capitalize()}{base_model.__name__}", **fields)
@@ -113,9 +119,16 @@ def adjust_model_defaults(
             ):
                 field_kwargs["description"] = field_info.description
 
+            # If the original field had a default_factory and we're not explicitly overriding with a value,
+            # preserve the default_factory
+            if field_info.default_factory is not None and defaults_dict[name] is None:
+                field_kwargs["default_factory"] = field_info.default_factory
+            else:
+                field_kwargs["default"] = defaults_dict[name]
+
             overridden[name] = (
                 field_info.annotation,
-                Field(default=defaults_dict[name], **field_kwargs),
+                Field(**field_kwargs),
             )
 
     new_name = f"{model_class.__name__}WithDefaults"
@@ -156,24 +169,41 @@ def get_double_dash_flags() -> Dict[str, Any]:
 
         # Remove '--' prefix
         key_part = arg[2:]
+        key = ""
+        value_str = (
+            None  # Variable to hold the string value before potential conversion
+        )
 
         # Check for '--key=value' format
         if "=" in key_part:
-            key, value = key_part.split("=", 1)
-            if key:  # Ensure key is not empty (e.g. --=value)
-                flags_dict[key] = value
+            key, value_str = key_part.split("=", 1)
+            if not key:  # Ensure key is not empty (e.g. --=value)
+                i += 1
+                continue  # Skip if key is empty
+
+            # Process value: Convert "None" string to None object
+            if value_str == "None":
+                flags_dict[key] = None
+            else:
+                flags_dict[key] = value_str
             i += 1
         # Check if next argument exists and is a value (doesn't start with '-')
         elif i + 1 < len(args) and not args[i + 1].startswith("-"):
             key = key_part
-            value = args[i + 1]
-            flags_dict[key] = value
+            value_str = args[i + 1]
+
+            # Process value: Convert "None" string to None object
+            if value_str == "None":
+                flags_dict[key] = None
+            else:
+                flags_dict[key] = value_str
             # Skip the next argument since we've consumed it as a value
             i += 2
         # Otherwise, treat as a boolean flag
         else:
             key = key_part
-            flags_dict[key] = True
+            if key:  # Ensure key is not empty (e.g. just '--')
+                flags_dict[key] = True
             i += 1
 
     return flags_dict

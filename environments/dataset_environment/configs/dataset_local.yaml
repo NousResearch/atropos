@@ -49,4 +49,4 @@ dataset:
 server_configs:
   - model_name: "gpt-4.1-nano"
     api_key: ${OPENAI_API_KEY}
-    timeout: 600 
+    timeout: 600

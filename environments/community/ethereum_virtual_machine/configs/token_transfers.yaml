@@ -1,0 +1,109 @@
+# Anvil Configuration
+
+# ============================================================================
+# ANVIL NETWORK CONFIGURATION
+# ============================================================================
+network:
+  port: 8545
+  fork_url: "https://reth-ethereum.ithaca.xyz/rpc"
+  log_file: "anvil.log"
+
+# ============================================================================
+# TIMEOUT CONFIGURATION
+# ============================================================================
+timeouts:
+  # Subprocess timeout for cast commands (seconds)
+  cast_command: 30
+
+  # RPC request timeout (seconds)
+  rpc: 30
+
+  # Anvil startup timeout (number of output lines to read)
+  anvil_startup_lines: 100
+
+  # Anvil shutdown timeout (seconds)
+  anvil_shutdown: 5
+
+  # Buffer time between operations (seconds)
+  operation_buffer: 2
+  wallet_setup_buffer: 3
+
+  # Transaction deadline offset (seconds from now)
+  transaction_deadline_offset: 3600  # 1 hour
+
+# ============================================================================
+# WALLET SEED FUNDING
+# ============================================================================
+funding:
+  # Anvil seed account (Available Account 0) - used for funding custom wallet
+  anvil_account_0: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  anvil_private_key_0: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+  custom_wallet: "0xcA4B9c26111Aacf982d85c4DE1bEBB7AeD2ffaa7"
+  initial_funding_amount: "1000000000000000000000" # 1000 ETH
+
+# ============================================================================
+# WHITELISTED TOKENS
+# ============================================================================
+whitelisted_tokens:
+  USDC:
+    address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+    decimals: 6
+  USDT:
+    address: "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+    decimals: 6
+  WBTC:
+    address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"
+    decimals: 8
+  DAI:
+    address: "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+    decimals: 18
+  LINK:
+    address: "0x514910771AF9Ca656af840dff83E8264EcF986CA"
+    decimals: 18
+  CRV:
+    address: "0xD533a949740bb3306d119CC777fa900bA034cd52"
+    decimals: 18
+  UNI:
+    address: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984"
+    decimals: 18
+  LDO:
+    address: "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32"
+    decimals: 18
+
+# ============================================================================
+# DEFI PROTOCOL ADDRESSES
+# ============================================================================
+defi:
+  # Uniswap V3 Router address
+  uniswap_v3_router: "0xE592427A0AEce92De3Edee1F18E0157C05861564"
+
+  # WETH address
+  weth_address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+
+  # Default Uniswap fee tier (0.3%)
+  default_uniswap_fee: 3000
+
+# ============================================================================
+# SWAP CONFIGURATION
+# ============================================================================
+swaps:
+  # Amount to swap for each token during initial setup (10 ETH in wei)
+  initial_swap_amount: "10000000000000000000"
+
+  # Function selector for Uniswap V3 exactInputSingle
+  uniswap_exact_input_single_selector: "0x414bf389"
+
+# ============================================================================
+# EVM ENVIRONMENT CONFIGURATION
+# ============================================================================
+# These values override the defaults in evm_config.py
+
+# Question generation LLM settings
+question_generation_model: "gpt-4o-mini"
+question_generation_temperature: 0.6
+question_generation_max_tokens: 256
+question_generation_n: 3
+
+# Question selection strategy
+weak_performance_threshold: 0.9
+weak_area_focus_ratio: 0.8

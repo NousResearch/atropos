@@ -8,6 +8,8 @@ import jsonlines
 from tqdm.asyncio import tqdm  # Import tqdm for async
 from transformers import AutoTokenizer
 
+from atroposlib.utils.io import parse_http_response
+
 
 def find_common_prefix(strings):
     """
@@ -80,7 +82,7 @@ async def check_for_batch(api_url):
     while True:
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{api_url}/batch") as response:
-                data = await response.json()
+                data = await parse_http_response(response)
                 if data["batch"] is not None:
                     return data["batch"]
                 await asyncio.sleep(1)  # Wait before polling again
