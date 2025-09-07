@@ -442,13 +442,13 @@ class MCQAThinkingEnv(BaseEnv):
         # Initialize rollouts_for_wandb if not exists
         if not hasattr(self, "rollouts_for_wandb"):
             self.rollouts_for_wandb = []
-            
+
         # Get number of examples to keep
         num_keep = getattr(self.config, "num_rollouts_per_group_for_logging", -1)
-        
+
         if num_keep == -1:
             num_keep = self.config.group_size
-            
+
         self.rollouts_for_wandb.append(
             [
                 (
@@ -460,7 +460,7 @@ class MCQAThinkingEnv(BaseEnv):
                 for i in range(min(num_keep, len(scored_data["tokens"])))
             ]
         )
-        
+
         # Keep buffer size limited
         max_rollouts = getattr(self.config, "num_rollouts_to_keep", 10)
         if len(self.rollouts_for_wandb) > max_rollouts:
@@ -468,22 +468,19 @@ class MCQAThinkingEnv(BaseEnv):
 
     async def create_rollout_table(self, wandb_metrics):
         if hasattr(self, "rollouts_for_wandb") and len(self.rollouts_for_wandb) > 0:
-            table = wandb.Table(columns=[
-                "text", 
-                "score", 
-                "answer_letter", 
-                "answer_text"
-            ])
-            
+            table = wandb.Table(
+                columns=["text", "score", "answer_letter", "answer_text"]
+            )
+
             for group in self.rollouts_for_wandb:
                 for item in group:
                     table.add_data(item[0], item[1], item[2], item[3])
-                    
+
             wandb_metrics["train/rollouts"] = table
-            
+
         # Clear rollouts after logging
         self.rollouts_for_wandb = []
-        
+
         return wandb_metrics
 
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
