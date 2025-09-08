@@ -47,8 +47,8 @@ class TextWorldEnvRLPRv2Config(BaseEnvConfig):
     wandb_name: str = "textworld-rlpr-v2"
     group_size: int = 16  # Alternatives per step
     max_num_workers: int = 16
-    total_steps: int = 500
-    max_steps: int = 20  # Max turns per episode
+    total_steps: int = 1000  # Collect 1000 episodes
+    max_steps: int = 100  # Max turns per episode
     max_token_length: int = 65536  # Support 32k output + context
 
     # VR-CLI perplexity reward settings
@@ -78,6 +78,7 @@ class TextWorldEnvRLPRv2Config(BaseEnvConfig):
     # Data saving settings
     data_path_to_save_groups: Optional[str] = None  # Path to save winning episodes
     save_only_winning_episodes: bool = True  # Only save episodes that win
+    output_path: Optional[str] = None  # Path to save episodes (overrides data_path_to_save_groups)
 
 
 class TextWorldEnvRLPRv2(BaseEnv):
@@ -225,80 +226,98 @@ class TextWorldEnvRLPRv2(BaseEnv):
         Returns:
             Path to the saved game file (.z8)
         """
-        # Create default options
-        options = textworld.GameOptions()
-        options.seeds = settings.get("seed", random.randint(0, 1000000))
-
-        if challenge_name == "tw-simple":
-            game_settings = {
-                "rewards": settings.get("rewards", "balanced"),
-                "goal": settings.get("goal", "detailed"),
-                "test": str(settings.get("test", False)).lower(),
-            }
-            game = textworld.challenges.simple.make(game_settings, options=options)
-        elif challenge_name == "tw-cooking":
-            game_settings = {
-                "recipe": settings.get("recipe", 1),  # Number of ingredients
-                "take": settings.get("take", 1),  # Number to find
-                "cook": settings.get("cook", False),  # Whether to cook
-                "open": settings.get("open", False),  # Whether to open containers
-                "drop": settings.get("drop", False),  # Whether limited inventory
-                "go": settings.get("go", 1),  # Number of locations
-                "recipe_seed": settings.get(
-                    "recipe-seed",
-                    settings.get("recipe_seed", random.randint(0, 1000000)),
-                ),
-                "split": "train",
-            }
-            logger.debug(f"Cooking game settings: {game_settings}")
-            game = textworld.challenges.cooking.make(game_settings, options=options)
-        elif challenge_name == "tw-coin_collector":
-            game_settings = {"level": settings.get("level", 1)}
-            game = textworld.challenges.coin_collector.make(
-                game_settings, options=options
-            )
-        elif challenge_name == "tw-treasure_hunter":
-            game_settings = {"level": settings.get("level", 1)}
-            game = textworld.challenges.treasure_hunter.make(
-                game_settings, options=options
-            )
-        else:
-            raise ValueError(f"Unknown challenge: {challenge_name}")
-
-        # Save gamefile
-        game_file = os.path.join(
-            self._temp_dir,
-            f"{challenge_name}_{settings.get('seed', random.randint(0, 1000000))}.z8",
-        )
-        options.path = game_file
-        options.file_ext = ".z8"
+        from textworld.generator.chaining import QuestGenerationError
         
-        try:
-            game_file = textworld.generator.compile_game(game, options)
-        except Exception as e:
-            logger.error(f"Failed to compile game {challenge_name} with settings {settings}: {e}")
-            # If it's a size overflow error for coin_collector or treasure_hunter, retry with lower level
-            if "exceeds version-8 limit" in str(e) and challenge_name in ["tw-coin_collector", "tw-treasure_hunter"]:
-                logger.warning(f"Retrying {challenge_name} with level 10 instead of {settings.get('level', 'unknown')}")
-                settings["level"] = 10
-                if challenge_name == "tw-coin_collector":
-                    game_settings = {"level": 10}
+        # Retry up to 10 times with different seeds for quest generation failures
+        max_retries = 10
+        original_seed = settings.get("seed", random.randint(0, 1000000))
+        
+        for retry_count in range(max_retries):
+            try:
+                # Create default options with current seed
+                options = textworld.GameOptions()
+                current_seed = original_seed + retry_count * 1000  # Use different seeds for retries
+                options.seeds = current_seed
+
+                if challenge_name == "tw-simple":
+                    game_settings = {
+                        "rewards": settings["rewards"],
+                        "goal": settings["goal"],
+                        "test": str(settings["test"]).lower(),
+                    }
+                    game = textworld.challenges.simple.make(game_settings, options=options)
+                elif challenge_name == "tw-cooking":
+                    game_settings = {
+                        "recipe": settings["recipe"],  # Number of ingredients
+                        "take": settings["take"],  # Number to find
+                        "cook": settings["cook"],  # Whether to cook
+                        "open": settings["open"],  # Whether to open containers
+                        "drop": settings["drop"],  # Whether limited inventory
+                        "go": settings["go"],  # Number of locations
+                        "recipe_seed": settings.get("recipe-seed", settings.get("recipe_seed", random.randint(0, 1000000))),
+                        "split": "train",
+                    }
+                    logger.debug(f"Cooking game settings: {game_settings}")
+                    game = textworld.challenges.cooking.make(game_settings, options=options)
+                elif challenge_name == "tw-coin_collector":
+                    game_settings = {"level": settings["level"]}
                     game = textworld.challenges.coin_collector.make(
                         game_settings, options=options
                     )
                 elif challenge_name == "tw-treasure_hunter":
-                    game_settings = {"level": 10}
+                    game_settings = {"level": settings["level"]}
                     game = textworld.challenges.treasure_hunter.make(
                         game_settings, options=options
                     )
-                game_file = textworld.generator.compile_game(game, options)
-            else:
-                raise
+                else:
+                    raise ValueError(f"Unknown challenge: {challenge_name}")
 
-        # Track for cleanup
-        self._generated_files.add(game_file)
+                # Save gamefile
+                game_file = os.path.join(
+                    self._temp_dir,
+                    f"{challenge_name}_{current_seed}.z8",
+                )
+                options.path = game_file
+                options.file_ext = ".z8"
+                
+                try:
+                    game_file = textworld.generator.compile_game(game, options)
+                except Exception as e:
+                    logger.error(f"Failed to compile game {challenge_name} with settings {settings}: {e}")
+                    # If it's a size overflow error for coin_collector or treasure_hunter, retry with lower level
+                    if "exceeds version-8 limit" in str(e) and challenge_name in ["tw-coin_collector", "tw-treasure_hunter"]:
+                        logger.warning(f"Retrying {challenge_name} with level 10 instead of {settings.get('level', 'unknown')}")
+                        settings["level"] = 10
+                        if challenge_name == "tw-coin_collector":
+                            game_settings = {"level": 10}
+                            game = textworld.challenges.coin_collector.make(
+                                game_settings, options=options
+                            )
+                        elif challenge_name == "tw-treasure_hunter":
+                            game_settings = {"level": 10}
+                            game = textworld.challenges.treasure_hunter.make(
+                                game_settings, options=options
+                            )
+                        game_file = textworld.generator.compile_game(game, options)
+                    else:
+                        raise
 
-        return game_file
+                # Track for cleanup
+                self._generated_files.add(game_file)
+
+                return game_file
+                
+            except QuestGenerationError as e:
+                # Quest generation failed, retry with different seed
+                if retry_count < max_retries - 1:
+                    logger.warning(f"Quest generation failed with seed {current_seed}: {e}, retrying with different seed...")
+                    continue
+                else:
+                    logger.error(f"Failed to generate quest after {max_retries} attempts")
+                    raise
+        
+        # Should never reach here
+        raise RuntimeError(f"Failed to create game after {max_retries} attempts")
 
     async def collect_trajectories(
         self, item: Item
@@ -1140,7 +1159,9 @@ class TextWorldEnvRLPRv2(BaseEnv):
     
     def _save_winning_episode(self, scored_data_groups, challenge_name, total_reward):
         """Save a winning episode to the data file."""
-        if not self.config.data_path_to_save_groups:
+        # Use output_path if provided, otherwise fall back to data_path_to_save_groups
+        save_path = self.config.output_path or self.config.data_path_to_save_groups
+        if not save_path:
             return
         
         try:
@@ -1167,7 +1188,7 @@ class TextWorldEnvRLPRv2(BaseEnv):
                 episode_array.append(clean_sdg)
             
             # Save as JSON array (one episode per line)
-            with open(self.config.data_path_to_save_groups, 'a') as f:
+            with open(save_path, 'a') as f:
                 f.write(json.dumps(episode_array) + '\n')
             
             logger.info(f"Saved winning episode from {challenge_name} with reward {total_reward:.2f}")
@@ -1177,7 +1198,9 @@ class TextWorldEnvRLPRv2(BaseEnv):
     
     def _save_episode(self, scored_data_groups, challenge_name, total_reward, won):
         """Save any episode (used when save_only_winning_episodes is False)."""
-        if not self.config.data_path_to_save_groups:
+        # Use output_path if provided, otherwise fall back to data_path_to_save_groups
+        save_path = self.config.output_path or self.config.data_path_to_save_groups
+        if not save_path:
             return
         
         if self.config.save_only_winning_episodes and not won:
