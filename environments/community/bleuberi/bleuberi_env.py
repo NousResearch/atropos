@@ -169,10 +169,10 @@ class BLEUBERIEnv(BaseEnv):
             dataset_split="train",
             reward_funcs=["bleu"],
             ref_models=["gold"],
-            max_train_examples=2,
-            max_test_examples=1,
-            max_num_workers=2,
-            max_eval_workers=1,
+            max_train_examples=20,  # 10x increase from 2 to 20
+            max_test_examples=10,  # 10x increase from 1 to 10
+            max_num_workers=4,  # Increased workers to handle more examples
+            max_eval_workers=2,  # Increased eval workers
             data_path_to_save_groups="bleuberi_openai_test.jsonl",
         )
 
@@ -182,9 +182,9 @@ class BLEUBERIEnv(BaseEnv):
                 model_name="gpt-4.1-nano",
                 base_url="https://api.openai.com/v1",
                 api_key=api_key,
-                timeout=60,
-                num_max_requests_at_once=4,
-                num_requests_for_eval=4,
+                timeout=120,  # Increased timeout to handle more requests
+                num_max_requests_at_once=8,  # Increased from 4 to 8 for more parallelism
+                num_requests_for_eval=8,  # Increased from 4 to 8
             ),
         ]
 

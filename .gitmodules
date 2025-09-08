@@ -7,6 +7,6 @@
 [submodule "environments/game_environments/diplomacy_environment/AI_Diplomacy"]
 	path = environments/game_environments/diplomacy_environment/AI_Diplomacy
 	url = https://github.com/GoodStartLabs/AI_Diplomacy.git
-[submodule "environments/bleuberi/bleuberi-repo"]
-	path = environments/bleuberi/bleuberi-repo
+[submodule "environments/community/bleuberi/bleuberi-repo"]
+	path = environments/community/bleuberi/bleuberi-repo
 	url = https://github.com/lilakk/BLEUBERI.git

@@ -8,6 +8,13 @@ env:
     - "gold"
   # Use a tokenizer that's compatible with OpenAI models
   tokenizer_name: "gpt2"
+  # Process more examples
+  max_train_examples: 20
+  max_test_examples: 10
+  group_size: 4
+  max_num_workers: 4
+  max_eval_workers: 2
+  total_steps: 5
 
 server:
   timeout: 1200
