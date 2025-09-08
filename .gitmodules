@@ -7,3 +7,6 @@
 [submodule "environments/game_environments/diplomacy_environment/AI_Diplomacy"]
 	path = environments/game_environments/diplomacy_environment/AI_Diplomacy
 	url = https://github.com/GoodStartLabs/AI_Diplomacy.git
+[submodule "environments/game_environments/factorio_env/fle"]
+	path = environments/game_environments/factorio_env/fle
+	url = https://github.com/JackHopkins/factorio-learning-environment.git

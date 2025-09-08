@@ -1,0 +1,8 @@
+gymnasium
+numpy
+requests
+pyyaml
+docker
+python-dotenv
+# Install FLE from submodule
+-e ./fle
