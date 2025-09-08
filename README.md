@@ -36,13 +36,7 @@ Atropos encompasses both environments, which are set up as services, and a traje
 
 </div>
 
-Atropos is a robust, scalable framework for **Reinforcement Learning Environments with LLMs**. Key features:
-
-- **Multi-Turn & Asynchronous RL:** Efficiently supports complex, multi-turn, and asynchronous interactions, decoupling environment steps from policy updates.
-- **Inference Agnostic:** Integrates with standard inference APIs (e.g., OpenAI, vLLM, SGLang), enabling easy switching between LLM providers and frameworks.
-- **Trainer Independent:** Offers a standardized training interface for experimenting with different RL algorithms and frameworks without major code changes.
-- **Scalable & Decentralized:** Easily scale by launching more environment instances (locally or across decentralized resources) that contribute rollouts to a central service.
-- **Diverse Environment Integration:** Manages many varied environment types concurrently for heterogeneous, multi-modal training.
+Atropos is a robust, scalable framework for **Reinforcement Learning Environments with LLMs**.
 
 The goal: provide a flexible, scalable, and standardized platform to accelerate LLM-based RL research across diverse, interactive settings.
 
