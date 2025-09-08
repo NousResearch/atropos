@@ -5,6 +5,7 @@ import pkgutil
 import random
 import re
 import sys
+import time
 import uuid
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
@@ -55,6 +56,18 @@ system_prompt = (
 class ReasoningGymEnvConfig(BaseEnvConfig):
     """Extended configuration for ReasoningGymEnv with additional fields."""
 
+    dataset: str = Field(
+        default="NousResearch/reasoning_gym",
+        description="HuggingFace dataset to use for training and evaluation",
+    )
+    max_eval_samples: Optional[int] = Field(
+        default=None,
+        description="Maximum number of samples to use for evaluation. If None, use all samples.",
+    )
+    eval_sample_seed: int = Field(
+        default=42,
+        description="Random seed for sampling evaluation data when max_eval_samples is set",
+    )
     dump_rollouts: bool = Field(
         default=False,
         description="Whether to dump successful rollouts (above threshold) to JSONL files.",
@@ -488,6 +501,42 @@ class ReasoningGymEnv(BaseEnv):
         print(f"Validated {len(valid_tasks)} tasks for use.")
         return valid_tasks
 
+    def _load_hf_test_dataset(self):
+        """Load test data from HuggingFace dataset (test split only for reasoning_gym)."""
+        try:
+            from datasets import load_dataset
+
+            # Load only test split from the dataset (reasoning_gym only has test split)
+            test_dataset = load_dataset(self.config.dataset, split="test")
+
+            # Convert to the format expected by the environment
+            test_items_with_scorers = []
+
+            for item in test_dataset:
+                # For test items, we need to create a scorer
+                # We'll use a simple exact match scorer for now
+                test_items_with_scorers.append(
+                    (item, None)
+                )  # None scorer will be handled later
+
+            # Apply max_eval_samples if specified
+            if (
+                self.config.max_eval_samples
+                and len(test_items_with_scorers) > self.config.max_eval_samples
+            ):
+                random.seed(self.config.eval_sample_seed)
+                test_items_with_scorers = random.sample(
+                    test_items_with_scorers, self.config.max_eval_samples
+                )
+
+            return test_items_with_scorers
+
+        except Exception as e:
+            self.logger.info(
+                f"Failed to load HuggingFace test dataset '{self.config.dataset}': {e}. Falling back to reasoning_gym generation."  # noqa: E501
+            )
+            return None
+
     async def setup(self):
         # The reasoning_gym import is now handled at the top with sys.path modification.
         if reasoning_gym is None:
@@ -498,6 +547,7 @@ class ReasoningGymEnv(BaseEnv):
 
         self.logger.info("Setting up ReasoningGym environment...")
 
+        # Always use procedural generation for training
         self.task_names = (
             self._get_task_names()
         )  # _get_task_names now uses self._validate_discovered_tasks
@@ -516,36 +566,47 @@ class ReasoningGymEnv(BaseEnv):
         self.rng.seed(self.config.seed)
         self.iter = 0
 
-        # Create a fixed test set for evaluation
-        self.logger.info("Generating fixed test set for evaluation...")
-        eval_tasks_sample = self.rng.sample(
-            self.task_names, min(len(self.task_names), 20)
-        )  # Sample 20 tasks for eval
+        # Try to load test set from HuggingFace dataset first
+        hf_test_items = self._load_hf_test_dataset()
 
-        for task_name in tqdm_asyncio(eval_tasks_sample, desc="Creating eval dataset"):
-            try:
-                # Each task gets its own dataset instance for evaluation
-                # Using a fixed seed for reproducibility of the test set
-                dataset = reasoning_gym.create_dataset(
-                    task_name,
-                    size=self.config.num_eval_samples_per_task,
-                    seed=self.config.eval_seed,
-                )
-                for item in dataset:
-                    self.test_items_with_scorers.append((item, dataset))
-            except Exception as e:
-                self.logger.warning(
-                    f"Could not create eval dataset for task '{task_name}': {e}"
-                )
-
-        if not self.test_items_with_scorers:
-            self.logger.warning(
-                "No evaluation items could be generated. Evaluation might be skipped or fail."
+        if hf_test_items is not None:
+            self.test_items_with_scorers = hf_test_items
+            self.logger.info(
+                f"Loaded {len(hf_test_items)} test items from HuggingFace dataset '{self.config.dataset}'"
             )
         else:
-            self.logger.info(
-                f"Generated {len(self.test_items_with_scorers)} items for the evaluation test set."
-            )
+            # Fall back to generating test set using reasoning_gym
+            self.logger.info("Generating fixed test set for evaluation...")
+            eval_tasks_sample = self.rng.sample(
+                self.task_names, min(len(self.task_names), 20)
+            )  # Sample 20 tasks for eval
+
+            for task_name in tqdm_asyncio(
+                eval_tasks_sample, desc="Creating eval dataset"
+            ):
+                try:
+                    # Each task gets its own dataset instance for evaluation
+                    # Using a fixed seed for reproducibility of the test set
+                    dataset = reasoning_gym.create_dataset(
+                        task_name,
+                        size=self.config.num_eval_samples_per_task,
+                        seed=self.config.eval_seed,
+                    )
+                    for item in dataset:
+                        self.test_items_with_scorers.append((item, dataset))
+                except Exception as e:
+                    self.logger.warning(
+                        f"Could not create eval dataset for task '{task_name}': {e}"
+                    )
+
+            if not self.test_items_with_scorers:
+                self.logger.warning(
+                    "No evaluation items could be generated. Evaluation might be skipped or fail."
+                )
+            else:
+                self.logger.info(
+                    f"Generated {len(self.test_items_with_scorers)} items for the evaluation test set."
+                )
 
         # Initialize complexity mapping after task names are loaded
         self._initialize_complexity_mapping()
@@ -584,6 +645,7 @@ class ReasoningGymEnv(BaseEnv):
         if not self.task_names:
             return None  # Should not happen if setup is correct
 
+        # Always use procedural generation for training
         selected_task_name = self.rng.choice(self.task_names)
 
         try:
@@ -1155,13 +1217,13 @@ class ReasoningGymEnv(BaseEnv):
 
     async def rollout_and_score_eval(
         self, test_data_tuple: Tuple[Dict[str, Any], Any]
-    ) -> float:
+    ) -> Dict[str, Any]:
         """
         Performs a rollout for a single evaluation item and scores it.
         Args:
             test_data_tuple: A tuple (rg_item, dataset_obj) from self.test_items_with_scorers.
         Returns:
-            Score (1.0 for correct, 0.0 for incorrect/error).
+            Dict with score and sample data.
         """
         rg_item, dataset_obj = test_data_tuple
         question_text = rg_item["question"]
@@ -1179,14 +1241,14 @@ class ReasoningGymEnv(BaseEnv):
         prompt_tokens = len(self.tokenizer.encode(prompt_str))
         max_tokens = (2 * self.config.max_token_length) - prompt_tokens
         if max_tokens < 0:
-            return 0.0
+            return {"score": 0.0, "sample": None}
 
+        eval_temperature = 0.1
         completion = await self.server.completion(
             prompt=prompt_str,
             n=1,
             max_tokens=max_tokens,
-            temperature=0.1,
-            split="eval",
+            temperature=eval_temperature,
         )
 
         model_full_response = completion.choices[0].text
@@ -1199,12 +1261,28 @@ class ReasoningGymEnv(BaseEnv):
                 self.logger.debug(
                     f"Eval - Task {task_name}: Giving 0 score due to failed answer extraction (didn't follow format)"
                 )
-            return 0.0
+            return {"score": 0.0, "sample": None}
 
         # Use our dual-format scoring method for evaluation as well
-        return self._score_answer_with_both_formats(
+        score = self._score_answer_with_both_formats(
             model_answer_to_score, rg_item, dataset_obj
         )
+
+        # Create sample data
+        sample = {
+            "messages": messages
+            + [{"role": "assistant", "content": model_full_response}],
+            "question": question_text,
+            "expected_answer": str(rg_item.get("answer", "")),
+            "model_answer": model_full_response,
+            "extracted_answer": model_answer_to_score,
+            "score": float(score),
+            "correct": bool(score > 0),
+            "finish_reason": completion.choices[0].finish_reason,
+            "task_name": rg_item.get("metadata", {}).get("source_dataset", "unknown"),
+        }
+
+        return {"score": score, "sample": sample}
 
     async def evaluate(self, *args, **kwargs):
         self.logger.info("Starting evaluation...")
@@ -1212,6 +1290,9 @@ class ReasoningGymEnv(BaseEnv):
             self.logger.warning("No test items available for evaluation. Skipping.")
             self.eval_metrics.append(("eval/percent_correct", 0.0))
             return
+
+        start_time = time.time()
+        eval_temperature = 0.1
 
         eval_tasks = [
             self.rollout_and_score_eval(item_tuple)
@@ -1221,15 +1302,42 @@ class ReasoningGymEnv(BaseEnv):
         self.logger.info(
             f"Starting evaluation on {len(self.test_items_with_scorers)} items..."
         )
-        scores = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
+        results = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
+
+        # Extract scores and samples, filtering out invalid ones
+        scores = []
+        samples = []
+        for result in results:
+            if result["sample"] is not None:
+                scores.append(result["score"])
+                samples.append(result["sample"])
 
         if not scores:
             percent_correct = 0.0
         else:
             percent_correct = sum(scores) / len(scores)
 
+        end_time = time.time()
+
+        # Add to existing metrics for wandb
         self.eval_metrics.append(("eval/percent_correct", percent_correct))
         self.logger.info(f"Evaluation finished. Percent correct: {percent_correct:.4f}")
+
+        # Log evaluation results
+        eval_metrics = {
+            "eval/percent_correct": percent_correct,
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "temperature": eval_temperature,
+                "max_tokens": 2 * self.config.max_token_length,
+            },
+        )
 
     async def add_rollouts_for_wandb(
         self,
