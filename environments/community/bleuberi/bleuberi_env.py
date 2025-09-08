@@ -15,11 +15,11 @@ import sys
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import wandb
 from dotenv import load_dotenv
 from pydantic import Field
 from typing_extensions import TypedDict
 
-import wandb
 from atroposlib.envs.base import BaseEnv, BaseEnvConfig, ScoredDataGroup, ScoredDataItem
 from atroposlib.envs.server_handling.openai_server import APIServerConfig
 
