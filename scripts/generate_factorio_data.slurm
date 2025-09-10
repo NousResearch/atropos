@@ -125,11 +125,15 @@ echo "Starting Factorio GenRM data generation..."
 # Use uv to run the environment in process mode for data generation
 # Using the standard CLI argument format: --env.* for environment config, --openai.* for API config
 uv run python environments/game_environments/factorio_env/factorio_env_genrm.py process \
-    --env.total_steps=1000 \
+    --env.total_steps=1 \
     --env.max_num_workers=1 \
-    --env.group_size=4 \
+    --env.group_size=2 \
     --env.max_steps_per_episode=4 \
-    --env.data_path_to_save_groups=/home/maxpaperclips/atropos/data/factorio_genrm_hermes405b.jsonl \
+    --env.action_judge_num_judges=1 \
+    --env.progress_judge_num_judges=1 \
+    --env.outcome_judge_num_judges=1 \
+    --env.data_path_to_save_groups=/dev/null \
+--env.output_path=/home/maxpaperclips/atropos/data/factorio_genrm_episodes.jsonl \
     --openai.model_name=Hermes-4-405B \
     --openai.base_url=https://inference-api.nousresearch.com/v1 \
     --openai.api_key=$HERMES_API_KEY
@@ -140,7 +144,7 @@ if [ $PYTHON_EXIT_CODE -eq 0 ]; then
     echo "Data generation completed successfully!"
     echo "Checking output file..."
     
-    OUTPUT_FILE="/home/maxpaperclips/atropos/data/factorio_genrm_hermes405b.jsonl"
+    OUTPUT_FILE="/home/maxpaperclips/atropos/data/factorio_genrm_episodes.jsonl"
     if [ -f "$OUTPUT_FILE" ]; then
         TRAJECTORY_COUNT=$(wc -l < "$OUTPUT_FILE")
         FILE_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)

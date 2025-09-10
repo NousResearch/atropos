@@ -128,6 +128,7 @@ class FactorioEnvConfig(BaseEnvConfig):
 
     # Data collection
     data_path_to_save_groups: Optional[str] = None  # Path to save ScoredDataGroups
+    output_path: Optional[str] = None  # Path to save lightweight episode data (without tokens/masks)
     
     # Monitoring
     resource_log_interval_seconds: int = 15
@@ -200,16 +201,30 @@ class FactorioEnv(BaseEnv):
             )
         ]
         
-        # Get Factorio-specific tools
+        # Get Factorio-specific tools using the discovery utility
         try:
-            tools = get_agent_tools()
-            for tool in tools:
-                if hasattr(tool, 'get_schema'):
-                    schema = tool.get_schema()
-                    specs_lines.append(f"- {schema}")
+            # Import the discovery utility
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).parent))
+            from fle_tool_discovery import discover_fle_tools, format_tool_for_prompt
+            
+            # Discover all agent tools
+            discovered_tools = discover_fle_tools(tool_categories=["agent"])
+            
+            if discovered_tools:
+                # Add each discovered tool to the specs
+                for tool_name in sorted(discovered_tools.keys()):
+                    tool_info = discovered_tools[tool_name]
+                    formatted = format_tool_for_prompt(tool_info)
+                    specs_lines.append(f"- {formatted}")
+                logger.info(f"Loaded {len(discovered_tools)} FLE tools via discovery")
+            else:
+                raise Exception("No tools discovered")
+                
         except Exception as e:
-            logger.warning(f"Could not load Factorio tools: {e}")
-            # Add basic factory building tools manually
+            logger.warning(f"Could not load Factorio tools via discovery: {e}")
+            # Fallback to hardcoded tools if discovery fails
             specs_lines.extend([
                 "- {'name': 'get_entities', 'description': 'Get entities within radius', 'arguments': {'radius': 'float', 'position': 'Position (optional)', 'entities': 'Prototype filter (optional)'}}",
                 "- {'name': 'place_entity', 'description': 'Place a building/entity', 'arguments': {'entity': 'Prototype.EntityName', 'position': 'Position', 'direction': 'Direction (optional)'}}",
@@ -272,216 +287,7 @@ Remember: Your entire response must be exactly three XML blocks: <think>...</thi
 
 FINAL REMINDER: After your <think> block and <memory> block, you MUST wrap your JSON function call in <tool_call> tags. The JSON goes INSIDE the <tool_call> tags, not after them."""
 
-    async def _collect_scored_data_group(self) -> Tuple[ScoredDataGroup, List[str]]:
-        """Collect a group of scored trajectories with best-of-n generation and judging."""
-        
-        # Select random task
-        task_name = random.choice(self.config.task_names)
-        logger.warning(f"Starting trajectory collection for task: {task_name}")
-        
-        # Create task instance - map task name to JSON file path
-        task_json_path = f"lab_play/{task_name}.json"
-        task = TaskFactory.create_task(task_json_path)
-        
-        # Reserve ports for parallel execution
-        ports = await self._reserve_ports(self.config.group_size)
-        logger.warning(f"Reserved ports: {ports[:5]}..." if len(ports) > 5 else f"Reserved ports: {ports}")
-        
-        try:
-            # Collect one episode with step-by-step best-of-n selection
-            scored_items = await self._run_episode_with_alternatives(task, task_name, ports[0])
-            
-            if not scored_items:
-                logger.error("No scored items collected")
-                return ScoredDataGroup(items=[]), []
-                
-            # scored_items contains ScoredDataGroups (one per step)
-            # Return them as-is, don't wrap in another group
-            
-            # Track metrics
-            if scored_items:
-                self.episode_rewards_buffer.append(total_reward)
-                self.episode_steps_buffer.append(len(scored_items))  # Number of steps
-                self.episode_task_types.append(task_name)
-                
-            logger.warning(f"Collected {len(scored_items)} step groups for task {task_name}")
-            
-            # For the base environment, we return a dummy ScoredDataGroup
-            # since we handle saving ourselves
-            dummy_group = ScoredDataGroup(
-                items=[],  # Empty - we don't want base env to process this
-                scores=[],
-                tokens=[],
-                masks=[]
-            )
-            return dummy_group, []
-            
-        finally:
-            # Release ports
-            await self._release_ports(ports)
 
-    async def _run_episode_with_alternatives(
-        self, task: Any, task_name: str, tcp_port: int
-    ) -> List[ScoredDataGroup]:
-        """Run episode with best-of-n generation at each step.
-        
-        Returns a list of ScoredDataGroups, one per step.
-        """
-        
-        trajectory_id = f"{task_name}_{int(time.time())}"
-        scored_items = []  # This will hold ScoredDataGroups, one per step
-        
-        try:
-            # Create Factorio instance
-            instance = FactorioInstance(
-                address=self.config.factorio_host,
-                tcp_port=tcp_port,
-                fast=self.config.factorio_fast_mode,
-                num_agents=1,
-            )
-            
-            env = FactorioGymEnv(instance=instance, task=task)
-            obs, info = env.reset()
-            
-            # Initialize conversation
-            task_goal = getattr(task, "goal_description", "Complete the factory task")
-            system_prompt = self._build_system_prompt(task_goal)
-            messages = [{"role": "system", "content": system_prompt}]
-            
-            self.current_goals = []
-            done = False
-            total_reward = 0.0
-            step = 0
-            step_rewards = []
-            selected_indices = []
-            
-            logger.warning(f"[Episode {trajectory_id}] Starting with task: {task_goal}")
-            
-            while not done and step < self.config.max_steps_per_episode:
-                # Format current observation
-                obs_text = self._format_observation(obs, info)
-                messages.append({"role": "user", "content": obs_text})
-                
-                # Check token limit
-                current_tokens = len(self.tokenizer.apply_chat_template(messages, tokenize=True))
-                if current_tokens > self.config.max_token_length - 1000:
-                    logger.warning(f"[Episode {trajectory_id}] Token limit reached at step {step}")
-                    break
-                
-                # Generate alternatives for this step
-                alternatives = await self._generate_alternatives(
-                    messages, self.config.group_size, trajectory_id, step
-                )
-                
-                if not alternatives:
-                    logger.error(f"[Episode {trajectory_id}] No alternatives generated at step {step}")
-                    break
-                
-                # Score alternatives with judges
-                logger.warning(f"[Episode {trajectory_id}] Step {step}: About to score {len(alternatives)} alternatives with judges")
-                try:
-                    step_group = await self._score_alternatives_with_judges(
-                        alternatives, obs_text, info, trajectory_id, step, task_goal
-                    )
-                    logger.warning(f"[Episode {trajectory_id}] Step {step}: Scoring complete")
-                except Exception as e:
-                    logger.error(f"[Episode {trajectory_id}] Step {step}: Error in scoring: {e}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-                    break
-                
-                # Select best alternative for execution
-                selected_idx = await self._select_best_alternative(step_group)
-                selected_alt = alternatives[selected_idx]
-                
-                # Execute selected action in environment
-                action, reward = await self._execute_action(
-                    env, selected_alt["parsed_action"], trajectory_id, step
-                )
-                
-                if action is None:
-                    logger.error(f"[Episode {trajectory_id}] Failed to execute action at step {step}")
-                    break
-                
-                # Get new observation
-                try:
-                    obs, reward_env, terminated, truncated, info = env.step(action)
-                    done = terminated or truncated
-                    reward += reward_env  # Combine environment reward
-                    total_reward += reward
-                except Exception as e:
-                    import traceback
-                    logger.error(f"[Episode {trajectory_id}] Environment step failed at step {step}")
-                    logger.error(f"Exception type: {type(e).__name__}")
-                    logger.error(f"Exception message: {str(e)}")
-                    logger.error(f"Action that failed: {action}")
-                    logger.error(f"Full traceback:\n{traceback.format_exc()}")
-                    break
-                
-                # Update step group with actual reward
-                if self.config.outcome_judge_enabled and selected_alt["parsed_action"].get("expected_outcome"):
-                    actual_outcome = self._format_observation(obs, info)
-                    outcome_judge_score = await self._judge_outcome_prediction(
-                        action, 
-                        selected_alt["parsed_action"]["expected_outcome"],
-                        actual_outcome,
-                        trajectory_id,
-                        step
-                    )
-                    
-                    # Update selected alternative's score
-                    original_score = step_group["scores"][selected_idx]
-                    step_group["scores"][selected_idx] = (
-                        (1.0 - self.config.outcome_judge_weight) * original_score +
-                        self.config.outcome_judge_weight * outcome_judge_score
-                    )
-                
-                # Track for credit assignment
-                step_rewards.append(reward)
-                selected_indices.append(selected_idx)
-                
-                # Store this step's ScoredDataGroup
-                scored_items.append(step_group)
-                
-                # Add selected response to conversation
-                stripped_response = self._strip_thinking_blocks(selected_alt["response"])
-                messages.append({"role": "assistant", "content": stripped_response})
-                
-                logger.warning(f"[Episode {trajectory_id}] Step {step}: Selected alt {selected_idx}, reward={reward:.2f}")
-                step += 1
-            
-            env.close()
-            
-            # Apply credit assignment to all step groups
-            if self.config.credit_assignment_enabled and step_rewards:
-                scored_items = await self._apply_credit_assignment(
-                    scored_items, step_rewards, selected_indices, trajectory_id
-                )
-            
-            episode_outcome = 1.0 if info.get("task_completed", False) else 0.0
-            
-            # Log completion with task success/failure
-            if episode_outcome > 0:
-                logger.warning(f"[Episode {trajectory_id}] ✅ TASK COMPLETED! Steps: {step}, Reward: {total_reward:.2f}")
-            else:
-                logger.warning(f"[Episode {trajectory_id}] ❌ Task failed. Steps: {step}, Reward: {total_reward:.2f}")
-            
-            # Save episode data if configured - save ALL episodes for testing
-            if self.config.data_path_to_save_groups and scored_items:
-                await self._save_episode_data(
-                    scored_items,  # These are already ScoredDataGroups (one per step)
-                    trajectory_id,
-                    task_name,
-                    total_reward,
-                    episode_outcome
-                )
-            
-            return scored_items
-            
-        except Exception as e:
-            logger.error(f"[Episode {trajectory_id}] Fatal error: {e}")
-            logger.error(traceback.format_exc())
-            return []
 
     async def _generate_alternatives(
         self, messages: List[Message], num_alternatives: int, trajectory_id: str, step: int
@@ -569,8 +375,8 @@ FINAL REMINDER: After your <think> block and <memory> block, you MUST wrap your 
     async def _score_alternatives_with_judges(
         self, alternatives: List[Dict[str, Any]], obs_text: str, info: Dict,
         trajectory_id: str, step: int, task_goal: str
-    ) -> ScoredDataGroup:
-        """Score alternatives using LLM judges."""
+    ) -> Dict[str, Any]:
+        """Score alternatives using LLM judges. Returns dict with scores to be converted to ScoredDataGroup later."""
         
         logger.warning(f"[Episode {trajectory_id}] Step {step}: ENTERED _score_alternatives_with_judges with {len(alternatives)} alternatives")
         
@@ -626,7 +432,9 @@ FINAL REMINDER: After your <think> block and <memory> block, you MUST wrap your 
             
             logger.warning(f"[Episode {trajectory_id}] Step {step} Alt {alt['alternative_idx']}: score={final_score:.3f} judges={judge_scores}")
         
-        return ScoredDataGroup(items=items, scores=scores)
+        # Return a dict for now - this will be properly converted to ScoredDataGroup
+        # in _create_step_scored_group with tokenization
+        return {"items": items, "scores": scores}
 
     async def _judge_action_quality(
         self, action: Dict[str, Any], obs_text: str, task_goal: str, 
@@ -904,17 +712,23 @@ Respond with just a number 0-10."""
             
             # Handle Factorio game actions
             else:
+                # Remove connection check - it's causing issues and connection seems stable
+                
                 # Convert to FLE Action object
+                logger.warning(f"[Episode {trajectory_id}] Step {step}: Getting GameState...")
                 current_game_state = GameState.from_instance(env.instance)
+                logger.warning(f"[Episode {trajectory_id}] Step {step}: GameState obtained")
                 
                 # Create code representation of the action
                 action_code = self._convert_to_factorio_code(parsed_action)
+                logger.warning(f"[Episode {trajectory_id}] Step {step}: Generated code: {action_code}")
                 
                 action = Action(
                     agent_idx=0,
                     code=action_code,
                     game_state=current_game_state
                 )
+                logger.warning(f"[Episode {trajectory_id}] Step {step}: Action created, returning")
                 
                 return action, 0.0  # Environment will provide reward
                 
@@ -1094,6 +908,54 @@ Respond with just a number 0-10."""
             logger.info(f"Saved episode {trajectory_id} with {len(scored_groups)} steps to {data_path}")
         except Exception as e:
             logger.error(f"Failed to save episode data: {e}")
+    
+    async def _save_lightweight_episode(
+        self, scored_groups: List[ScoredDataGroup], trajectory_id: str,
+        task_name: str, total_reward: float, episode_outcome: float
+    ):
+        """Save episode data without tokens/masks (similar to TextWorld's _save_winning_episode)."""
+        import json
+        import os
+        
+        # Use configured output path
+        data_path = self.config.output_path
+        if not data_path:
+            return
+            
+        # Create directory if needed
+        os.makedirs(os.path.dirname(data_path) if os.path.dirname(data_path) else ".", exist_ok=True)
+        
+        # Convert ScoredDataGroups to serializable format, excluding tokens and masks
+        episode_array = []
+        for sdg in scored_groups:
+            # ScoredDataGroup is a dict, so copy it
+            clean_sdg = dict(sdg).copy()
+            
+            # Remove tokens and masks
+            clean_sdg.pop('tokens', None)
+            clean_sdg.pop('masks', None)
+            
+            # Keep scores, messages, and other metadata
+            episode_array.append(clean_sdg)
+        
+        # Create episode metadata
+        episode_data = {
+            "trajectory_id": trajectory_id,
+            "task_name": task_name,
+            "total_reward": total_reward,
+            "episode_outcome": episode_outcome,
+            "num_steps": len(scored_groups),
+            "success": episode_outcome > 0,
+            "steps": episode_array
+        }
+        
+        # Append to JSONL file
+        try:
+            with open(data_path, "a") as f:
+                f.write(json.dumps(episode_data) + "\n")
+            logger.info(f"Saved lightweight episode {trajectory_id} to {data_path}")
+        except Exception as e:
+            logger.error(f"Failed to save lightweight episode data: {e}")
     
     def _format_observation(self, obs: Dict, info: Dict) -> str:
         """Format Factorio observation for the LLM."""
@@ -1451,6 +1313,36 @@ Respond with just a number 0-10."""
                         scored_data_groups, step_rewards, selected_indices, f"{task_name}_{seed}"
                     )
                 
+                # Calculate episode outcome based on task completion
+                episode_outcome = 1.0 if info.get("task_completed", False) else 0.0
+                
+                # Log completion with task success/failure
+                trajectory_id = f"{task_name}_{seed}"
+                if episode_outcome > 0:
+                    logger.warning(f"[Episode {trajectory_id}] ✅ TASK COMPLETED! Steps: {step}, Reward: {total_reward:.2f}")
+                else:
+                    logger.warning(f"[Episode {trajectory_id}] ❌ Task failed. Steps: {step}, Reward: {total_reward:.2f}")
+                
+                # Save regular data if configured
+                if self.config.data_path_to_save_groups and scored_data_groups:
+                    await self._save_episode_data(
+                        scored_data_groups,
+                        trajectory_id,
+                        task_name,
+                        total_reward,
+                        episode_outcome
+                    )
+                
+                # Save lightweight data without tokens/masks
+                if self.config.output_path and scored_data_groups:
+                    await self._save_lightweight_episode(
+                        scored_data_groups,
+                        trajectory_id,
+                        task_name,
+                        total_reward,
+                        episode_outcome
+                    )
+                
                 logger.warning(f"Episode completed: {step} steps, total_reward={total_reward:.2f}, groups={len(scored_data_groups)}")
                 return scored_data_groups
                 
@@ -1483,6 +1375,7 @@ Respond with just a number 0-10."""
         # Score alternatives using judges
         scores = []
         tokenized_items = []
+        messages_list = []  # Store message history for each alternative
         
         for alt in alternatives:
             # Judge scoring (reuse existing methods)
@@ -1517,6 +1410,9 @@ Respond with just a number 0-10."""
             # Create conversation with this alternative
             step_messages = messages + [{"role": "assistant", "content": alt["response"]}]
             
+            # Store messages for this alternative
+            messages_list.append(step_messages)
+            
             # Tokenize for trainer
             try:
                 tokenization_result = tokenize_for_trainer(
@@ -1536,11 +1432,17 @@ Respond with just a number 0-10."""
                     "masks": [],
                 })
         
-        # Create ScoredDataGroup
+        # Create ScoredDataGroup (matching TextWorld's structure)
         return ScoredDataGroup(
-            items=[item["tokens"] for item in tokenized_items],
+            tokens=[item["tokens"] for item in tokenized_items],
             masks=[item["masks"] for item in tokenized_items], 
             scores=scores,
+            messages=messages_list if self.config.include_messages else None,
+            advantages=None,
+            ref_logprobs=None,
+            group_overrides={},
+            overrides=None,
+            images=None,
         )
 
     def _count_tokens(self, messages: List[Message]) -> int:
