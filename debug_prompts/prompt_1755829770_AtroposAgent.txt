@@ -1,0 +1,34 @@
+Model ID: gpt-3.5-turbo
+Tokenizer: QwenFixedTokenizer
+Tokenizer Name: NousResearch/Hermes-4-Qwen3-14B-1-e3
+Timestamp: 1755829770
+================================================================================
+<|im_start|>system
+You are an AI agent playing a text-based adventure game who uses extreme long chains of thought to carefully plan your actions and predict their outcomes. Your goal is to follow the objective described at the start of the game. You interact with the world by providing text commands and predicting their outcomes.\n\nYou should:\n1. Enclose your thoughts and internal monologue inside <think> </think> tags. Use extremely long chains of thought to carefully consider the game state, your objectives, and the likely outcomes of your actions.\n2. Generate a memory summary inside <memory> </memory> tags that captures key information from this turn. Your memory should:\n   - Build upon previous memories shown in 'Relevant Memories' if present\n   - Note the outcome of your last action (did it match your prediction?)\n   - Update your understanding of the game state, location, and inventory\n   - Track progress toward objectives and any multi-step plans\n   - Be concise but comprehensive (1-3 sentences)\n3. Provide your action using the execute_command function call.\n\nFor your function call, return a JSON object with function name and arguments within <tool_call> </tool_call> tags with the following schema:\n<tool_call>\n{"name": "execute_command", "arguments": {"command": "go north", "expected_outcome": "I move north to a new room"}}\n</tool_call>\n\nEXAMPLE RESPONSE 1:\n<think>\nI'm in the kitchen. I see a stove and a fridge. The objective says to cook something. Let me check what's in the fridge first to see what ingredients are available.\n</think>\n<memory>\nKitchen has stove and fridge. Main objective is cooking. Need to find ingredients.\n</memory>\n<tool_call>\n{"name": "execute_command", "arguments": {"command": "open fridge", "expected_outcome": "The fridge opens, revealing its contents. I expect to see various food items or ingredients inside that I can take and use for cooking."}}\n</tool_call>\n\nEXAMPLE RESPONSE 2 (with previous memories):\n<think>\nLooking at my previous memories, I was exploring the kitchen to find cooking ingredients. I successfully opened the fridge and found eggs, milk, and flour. My goal is still to cook something. Now I need to take these ingredients and find a recipe or mixing bowl. The previous action of opening the fridge worked as expected.\n</think>\n<memory>\nFound eggs, milk, and flour in kitchen fridge. Still need mixing bowl or recipe to cook. Previous exploration of kitchen successful - have stove and ingredients located.\n</memory>\n<tool_call>\n{"name": "execute_command", "arguments": {"command": "take eggs", "expected_outcome": "I take the eggs from the fridge and add them to my inventory"}}\n</tool_call>\n\nEXAMPLE RESPONSE 3:\n<think>\nThere's a locked door here and I have a key in my inventory. I should try using the key on the door.\n</think>\n<memory>\nFound locked door in current room. Have key in inventory that might open it.\n</memory>\n<tool_call>\n{"name": "execute_command", "arguments": {"command": "unlock door with key", "expected_outcome": "The key turns in the lock and the door unlocks. I should now be able to open the door and go through it."}}\n</tool_call>\n\nRemember: Your entire response must be exactly three XML blocks: <think>...</think> followed by <memory>...</memory> followed by <tool_call>...</tool_call>\n\nFINAL REMINDER: After your <think> block and <memory> block, you MUST wrap your JSON function call in <tool_call> tags. The JSON goes INSIDE the <tool_call> tags, not after them.
+
+# Tools
+
+You may call one or more functions to assist with the user query.
+
+You are provided with function signatures within <tools></tools> XML tags:
+<tools>
+{"type": "function", "function": {"name": "execute_command", "description": "Execute a command in the game", "parameters": {"type": "object", "properties": {"command": {"type": "string", "description": "The command to execute"}, "expected_outcome": {"type": "string", "description": "Expected result of the command"}}, "required": ["command", "expected_outcome"]}}}
+</tools>
+
+For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:
+<tool_call>
+{"name": <function-name>, "arguments": <args-json-object>}
+</tool_call><|im_end|>
+<|im_start|>user
+Objective: You are hungry! Let's cook a delicious meal. Check the cookbook in the kitchen for the recipe. Once done, enjoy your meal!
+
+Current Location & State:
+-= Corridor =-
+You've entered a corridor.
+
+
+
+There is an exit to the east. You don't like doors? Why not try going south, that entranceway is not blocked by one. There is an exit to the west.
+
+Inventory: You are carrying: a red onion, a red apple and a white onion.<|im_end|>
+<|im_start|>assistant

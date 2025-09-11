@@ -1,0 +1,46 @@
+version: '3'
+
+services:
+  factorio_0:
+    image: factorio
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
+    command: /opt/factorio/bin/x64/factorio --start-server-load-scenario default_lab_scenario
+      --port 34197 --server-settings /opt/factorio/config/server-settings.json --map-gen-settings
+      /opt/factorio/config/map-gen-settings.json --map-settings /opt/factorio/config/map-settings.json
+      --server-banlist /opt/factorio/config/server-banlist.json --rcon-port 27015
+      --rcon-password "factorio" --server-whitelist /opt/factorio/config/server-whitelist.json
+      --use-server-whitelist --server-adminlist /opt/factorio/config/server-adminlist.json
+      --mod-directory /opt/factorio/mods --map-gen-seed 44340
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1024m
+    entrypoint: []
+    environment:
+    - SAVES=/opt/factorio/saves
+    - CONFIG=/opt/factorio/config
+    - MODS=/opt/factorio/mods
+    - SCENARIOS=/opt/factorio/scenarios
+    - PORT=34197
+    - RCON_PORT=27015
+    ports:
+    - 34197:34197/udp
+    - 27000:27015/tcp
+    pull_policy: never
+    restart: unless-stopped
+    user: factorio
+    volumes:
+    - source: ../scenarios/default_lab_scenario
+      target: /opt/factorio/scenarios/default_lab_scenario
+      type: bind
+    - source: ../scenarios/open_world
+      target: /opt/factorio/scenarios/open_world
+      type: bind
+    - source: ~/Applications/Factorio.app/Contents/Resources/mods
+      target: /opt/factorio/mods
+      type: bind
+    - source: ../../data/_screenshots
+      target: /opt/factorio/script-output
+      type: bind
+

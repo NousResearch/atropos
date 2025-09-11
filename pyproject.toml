@@ -26,6 +26,8 @@ dependencies = [
     "jsonlines",
     "pydantic-cli",
     "hf_transfer",
+    "python-dotenv",
+    "textarena",
 ]
 
 [project.scripts]
