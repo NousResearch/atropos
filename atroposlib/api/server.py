@@ -14,7 +14,9 @@ from atroposlib.api.utils import (
 )
 
 # Constants
-MIN_ENV_WEIGHT = 0.01  # Minimum weight to prevent environments from being completely starved
+MIN_ENV_WEIGHT = (
+    0.01  # Minimum weight to prevent environments from being completely starved
+)
 
 # Message import removed - using Dict[str, Any] for more flexible validation
 
@@ -113,7 +115,7 @@ class Info(BaseModel):
 @app.post("/register")
 async def register(registration: Registration):
     # Initialize app state if not already done
-    if not hasattr(app.state, 'queue'):
+    if not hasattr(app.state, "queue"):
         app.state.queue = []
         app.state.group = registration.wandb_group
         app.state.project = registration.wandb_project
@@ -127,11 +129,11 @@ async def register(registration: Registration):
         app.state.started = False
         app.state.envs = []
         app.state.buffer = {}  # Buffer for mixed-size groups per environment
-    
+
     # Initialize requesters list if not already done
-    if not hasattr(app.state, 'requesters'):
+    if not hasattr(app.state, "requesters"):
         app.state.requesters = []
-    
+
     app.state.requesters.append(uuid.uuid4().int)
     return {"uuid": app.state.requesters[-1]}
 
@@ -139,17 +141,17 @@ async def register(registration: Registration):
 @app.post("/register-env")
 async def register_env_url(register_env: RegisterEnv):
     # Check if trainer has started
-    if not hasattr(app.state, 'started') or not app.state.started:
+    if not hasattr(app.state, "started") or not app.state.started:
         return {
             "status": "wait for trainer to start",
         }
-    
+
     # Initialize envs list if not already done
-    if not hasattr(app.state, 'envs'):
+    if not hasattr(app.state, "envs"):
         app.state.envs = []
-    
+
     # Get checkpoint directory safely
-    checkpoint_dir = getattr(app.state, 'checkpoint_dir', "")
+    checkpoint_dir = getattr(app.state, "checkpoint_dir", "")
     real_name = (
         f"{register_env.desired_name}_"
         f"{len([x for x in app.state.envs if x['desired_name'] == register_env.desired_name])}"
