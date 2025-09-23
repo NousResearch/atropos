@@ -1,3 +1,4 @@
+import json
 import random
 import re
 from typing import Dict, List, Optional, Tuple, Union
@@ -18,20 +19,30 @@ from atroposlib.envs.base import (
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 system_prompt = (
-    "You are a chess-puzzle solver. ALWAYS output exactly this format and nothing else:\n\n"
-    "<moves>comma-separated UCI moves</moves>\n"
-    "<think>explain your reasoning here (this may include internal chain-of-thought)</think>[STOP]\n\n"
+    "You are a chess board visualizer. You will be given a list of moves in"
+    "UCI notation starting from the standard chess position. "
+    "Your task is to output the resulting board position after all the moves have been played. "
+    "ALWAYS output exactly this format and nothing else:\n\n"
+    "<board>ASCII board with each square separated by commas; empty squares as '.',"
+    "white pieces as uppercase letters, black pieces as lowercase letters; en passant squares marked with '*'</board>\n"
+    "<think>explain the current position and what is happening"
+    "(include tactical or strategic observations, possible threats,"
+    "and reasoning behind piece placement)</think>[STOP]\n\n"
     "Rules:\n"
-    "1) Do NOT use <tool_call>, <function_call>, JSON, or any other tags — only <moves> and <think>.\n"
-    "2) Close both tags before emitting [STOP].\n"
-    "3) Use chess keywords (fork, skewer, mate in 2, advanced pawn) where applicable inside <think>.\n\n"
+    "1) Output the board from White's perspective (top is Black, bottom is White).\n"
+    "2) Use the following letter notation: K=White King, Q=White Queen, R=White Rook, B=White Bishop,"
+    "N=White Knight, P=White Pawn; lowercase for black pieces.\n"
+    "3) Empty squares must be a dot '.', en passant target squares marked with '*'.\n"
+    "4) Do NOT use <tool_call>, <function_call>, JSON, or any other tags — only <board> and <think>.\n"
+    "5) Close both tags before emitting [STOP].\n\n"
     "Example:\n"
-    "<moves>e2e4,e7e5</moves>\n"
-    "<think>e2e4 opens lines; e7e5 is a standard reply... add more chess reasoning</think>[STOP]\n"
+    "<board>r,n,b,q,k,b,n,r,p,p,p,p,.,.,.,.,.,.,.,.,.,.,.,.,P,P,P,P,R,N,B,Q,K,B,N,R</board>\n"
+    "<think>All pawns are on their initial squares except for ... [describe moves]; pieces are developed according "
+    "to the move sequence; White is ready to castle kingside, Black has yet to move</think>[STOP]\n"
 )
 
 
-class ChessPuzzlesEnv(BaseEnv):
+class ChessBoardVisualizationEnv(BaseEnv):
     def __init__(
         self,
         config: BaseEnvConfig,
@@ -81,8 +92,10 @@ class ChessPuzzlesEnv(BaseEnv):
         Set up the environment by loading and preparing the dataset.
         """
         # Load the full dataset
-        full_dataset = load_dataset(
-            "codingmonster1234/chess_puzzles_dataset", split="train"
+        full_dataset = load_dataset("Thytu/ChessInstruct", split="train")
+
+        full_dataset = full_dataset.filter(
+            lambda example: example["KIND"] == "FIND_NEXT_BEST_MOVE"
         )
 
         full_dataset = full_dataset.shuffle(seed=42)
@@ -109,6 +122,31 @@ class ChessPuzzlesEnv(BaseEnv):
         data["iter"] = self.iter
         super().save_checkpoint(step, data)
 
+    def fen_to_ascii_board(self, fen: str) -> str:
+        """
+        Convert a FEN string into a single-line ASCII board.
+        Pieces: K,Q,R,B,N,P (uppercase for White, lowercase for Black)
+        Empty squares: .
+        En passant square: *
+        Left-to-right, top-to-bottom (from White's perspective)
+        """
+        board = chess.Board(fen)
+
+        result = []
+        for rank in range(8, 0, -1):  # ranks 8 -> 1
+            for file in range(8):  # files a -> h
+                square = chess.square(file, rank - 1)
+                piece = board.piece_at(square)
+                if piece:
+                    letter = piece.symbol()  # uppercase for White, lowercase for Black
+                    result.append(letter)
+                elif board.ep_square == square:
+                    result.append("*")
+                else:
+                    result.append(".")
+
+        return "".join(result)
+
     async def get_next_item(self):
         """
         Get the next training item from the dataset.
@@ -122,59 +160,26 @@ class ChessPuzzlesEnv(BaseEnv):
         self.curr_item = next_item
 
         # Extract question and options from the multiple choice item
-        board = next_item["board"]
-        tags = next_item["tags"].split()
-        moves = next_item["moves"].split()
-        # rating = next_item["rating"]
-        white_kingside_castling_rights = next_item["white_kingside"]
-        white_queenside_castling_rights = next_item["white_queenside"]
-        black_kingside_castling_rights = next_item["black_kingside"]
-        black_queenside_castling_rights = next_item["black_queenside"]
-        turn = next_item["turn"]
-
-        unicode_to_piece = {
-            "♔": "K",
-            "♕": "Q",
-            "♖": "R",
-            "♗": "B",
-            "♘": "N",
-            "♙": "P",
-            "♚": "k",
-            "♛": "q",
-            "♜": "r",
-            "♝": "b",
-            "♞": "n",
-            "♟": "p",
-        }
-
-        # Replace unicode pieces with letters
-        board = "".join(unicode_to_piece.get(c, c) for c in board)
-
-        # Determine the turn text
-        turn_text = "white" if turn == "w" else "black"
-
-        # Create castling rights strings for both white and black
-        white_kingside = "can" if white_kingside_castling_rights else "can't"
-        white_queenside = "can" if white_queenside_castling_rights else "can't"
-        black_kingside = "can" if black_kingside_castling_rights else "can't"
-        black_queenside = "can" if black_queenside_castling_rights else "can't"
-
-        # Format the castling rights text
-        castling_rights_text = (
-            f"Castling Rights: "
-            f"white {white_kingside} castle kingside, "
-            f"white {white_queenside} castle queenside, "
-            f"black {black_kingside} castle kingside, and "
-            f"black {black_queenside} castle queenside"
-        )
+        moves = json.loads(next_item["input"])["moves"]
 
         # Combine all parts into the final question text with instructions
         question_text_with_instruction = (
-            f"Prompt: How to solve this puzzle?\n"
-            f"Turn: {turn_text}\n"
-            f"{castling_rights_text}\n"
-            f"Board:\n{board}"
+            f"Prompt: Internally playout all of these moves below and then"
+            "output the final position in ASCII format and describe what is happening in the final position. "
+            f"Moves: {','.join(str(m) for m in moves)}\n"
         )
+
+        board = chess.Board()
+
+        # Play each move
+        for move_uci in moves:
+            move = chess.Move.from_uci(move_uci)
+            if move in board.legal_moves:
+                board.push(move)
+            else:
+                raise ValueError(f"Illegal move: {move_uci}")
+
+        final_ascii_string = self.fen_to_ascii_board(board.fen())
 
         # Create prompt tuple using frozensets as required
         prompt = []
@@ -189,7 +194,7 @@ class ChessPuzzlesEnv(BaseEnv):
             )
         )
 
-        return (tuple(prompt), moves, tags)
+        return (tuple(prompt), final_ascii_string)
 
     async def collect_trajectories(self, item) -> Tuple[ScoredDataGroup, List]:
         """
@@ -197,7 +202,7 @@ class ChessPuzzlesEnv(BaseEnv):
 
         Args:
                 prompt: tuple(systemprompt, question_with_instruction)
-            item: Input item containing prompt and expected answer: (prompt, moves, tags)
+            item: Input item containing prompt and expected answer: (prompt, moves,)
 
         Returns:
             Tuple of lists containing scored data groups and backlog
@@ -242,8 +247,7 @@ class ChessPuzzlesEnv(BaseEnv):
             to_score.append(
                 (
                     tuple(trajectory_messages),
-                    item[1],  # moves
-                    item[2],  # tags for explanation
+                    item[1],  # final ascii board string
                     completion_choice.finish_reason,  # Add the stop reason
                 )
             )
@@ -254,49 +258,24 @@ class ChessPuzzlesEnv(BaseEnv):
 
         return scored_data, to_backlog
 
-    def stockfish_reward(
-        self,
-        pred_moves,
-        initial_fen,
-        correct_moves,
-        stockfish_path="/home/ubuntu/stockfish/stockfish-ubuntu-x86-64-avx2",
-    ):
-        board = chess.Board(initial_fen)
-        engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
+    def toolcall_to_think(self, text: str) -> str:
+        """
+        Replace <tool_call>... (with or without closing tag) with <think>...</think>.
+        If a [STOP] follows the tool_call content (and no closing tag exists), ensure
+        the [STOP] ends up after the closing </think>.
+        """
+        pattern = re.compile(
+            r"<tool_call\b[^>]*>(.*?)"  # capture content after opening tag
+            r"(?:</tool_call>|(\s*\[STOP\])|$)",  # stop at closing tag, or capture trailing [STOP], or end
+            flags=re.DOTALL | re.IGNORECASE,
+        )
 
-        move_scores = []
-        pred_board = board.copy()
-        for move in pred_moves:
-            try:
-                pred_board.push_uci(move)
-            except ValueError:  # catch only expected errors
-                move_scores.append(0.0)
-                break
+        def _repl(m):
+            content = m.group(1).strip()
+            stopper = m.group(2) or ""
+            return f"<think>{content}</think>{stopper}"
 
-            info = engine.analyse(pred_board, chess.engine.Limit(depth=12))
-            score = info["score"].white().score(mate_score=10000)
-            if score is None:
-                score = 0
-            move_scores.append(score)
-
-        # Final evaluation relative to correct final position
-        correct_board = board.copy()
-        for move in correct_moves:
-            try:
-                correct_board.push_uci(move)
-            except ValueError:
-                print("illegal move in dataset")
-                break
-        info_correct = engine.analyse(correct_board, chess.engine.Limit(depth=12))
-        correct_score = info_correct["score"].white().score(mate_score=10000)
-        if correct_score is None:
-            correct_score = 0
-
-        # Normalize the reward: predicted score / correct score
-        reward = sum(move_scores) / (len(move_scores) * correct_score + 1e-5)
-
-        engine.quit()
-        return max(min(reward, 1.0), 0.0)  # clamp to [0,1]
+        return pattern.sub(_repl, text)
 
     async def score(self, rollout_group_data: List) -> Optional[ScoredDataGroup]:
         """
@@ -316,17 +295,14 @@ class ChessPuzzlesEnv(BaseEnv):
         scores["masks"] = list()
         scores["scores"] = list()
 
-        ground_truth_tags = rollout_group_data[0][
-            2
-        ]  # ground truth tags for explanation
-
         # Shuffle to avoid bias in selection
         random.shuffle(rollout_group_data)
+        ground_truth_ascii_strings = rollout_group_data[0][1]
 
         for item in rollout_group_data:
             # Extract the model's response
             model_response = item[0][-1]["content"]
-            stop_reason = item[3]  # Get the stop reason
+            stop_reason = item[2]  # Get the stop reason
 
             # If the response was cut off due to length, give it a score of 0
             if stop_reason == "length":
@@ -335,49 +311,38 @@ class ChessPuzzlesEnv(BaseEnv):
                 # Extract the answer from the model's response
 
                 text = model_response
-                text = re.sub(
-                    r"<tool_call.*?>(.*?)</tool_call>",
-                    r"<think>\1</think>",
-                    text,
-                    flags=re.DOTALL | re.IGNORECASE,
-                )
-                # If <tool_call> is opened but not closed
-                if "<tool_call" in text and "</tool_call>" not in text:
-                    m = re.search(
-                        r"<tool_call[^>]*>(.*?)(?:\[STOP\]|$)", text, flags=re.DOTALL
-                    )
-                    if m:
-                        inner = m.group(1).strip()
-                        text = re.sub(
-                            r"<tool_call[^>]*>.*",
-                            f"<think>{inner}</think>[STOP]",
-                            text,
-                            flags=re.DOTALL,
-                        )
+                pattern = re.compile(r"</tool_call>(.*?)(\[STOP\])", flags=re.DOTALL)
+                text = pattern.sub(r"<think>\1</think>\2", text)
                 model_response = text
 
-                model_moves, thinking_text = self._extract_model_moves(model_response)
+                model_response = self.toolcall_to_think(model_response)
 
-                move_reward = 0.0
-                if model_moves != 0:
-                    move_reward += 0.1  # little reward for getting the correct format
-                    move_reward = self.stockfish_reward(
-                        model_moves,
-                        self.curr_item["fen"],
-                        self.curr_item["moves"].split(" "),
+                model_board, thinking_text = self._extract_model_board(model_response)
+
+                board_reward = 0.0
+                if model_board != 0:
+                    board_reward += 0.1  # little reward for getting the correct format
+                    model_clean = model_board.replace(",", "")
+                    truth_clean = ground_truth_ascii_strings.replace(",", "")
+
+                    # Make both same length (ground truth is reference)
+                    length = len(truth_clean)
+                    model_clean = model_clean[:length]  # trim if model string is longer
+
+                    matches = sum(
+                        1 for mc, tc in zip(model_clean, truth_clean) if mc == tc
                     )
+                    accuracy = matches / length if length > 0 else 0.0
+                    board_reward = accuracy
 
                 thinking_reward = 0.0
                 if thinking_text != 0:
                     thinking_reward += (
                         0.1  # little reward for getting the correct format
                     )
-                    thinking_reward = sum(
-                        1 for k in ground_truth_tags if k in thinking_text
-                    ) / len(ground_truth_tags)
 
                 # weights are tunable
-                reward = 0.7 * move_reward + 0.3 * thinking_reward
+                reward = 0.95 * board_reward + 0.05 * thinking_reward
 
             # Tokenize the conversation for learning
             out_dict = tokenize_for_trainer(self.tokenizer, item[0])
@@ -387,8 +352,6 @@ class ChessPuzzlesEnv(BaseEnv):
             # Remove examples with insufficient context
             if len([1 for i in masks if i != -100]) < 10:
                 continue
-
-            print("tokens:", len(tokens))
 
             scores["tokens"].append(tokens)
             scores["masks"].append(masks)
@@ -410,9 +373,9 @@ class ChessPuzzlesEnv(BaseEnv):
 
         return scores
 
-    def _extract_model_moves(self, text):
+    def _extract_model_board(self, text):
         """
-        Extract sequence of moves inside </moves> tags and reasoning inside of </think> tags
+        Extract ASCII board inside </board> tags and reasoning inside of </think> tags
         Only allows one valid answer format - multiple answer formats result in a score of 0.
 
         Args:
@@ -437,28 +400,28 @@ class ChessPuzzlesEnv(BaseEnv):
             return 0, 0  # Must have exactly one closing tag
 
         # Check for multiple <moves> tags - score as 0 if found
-        moves_tags = re.findall(r"<moves>", text, re.IGNORECASE)
-        if len(moves_tags) > 1:
+        board_tags = re.findall(r"<board>", text, re.IGNORECASE)
+        if len(board_tags) > 1:
             return 0, 0
 
         # Check if the moves tag is properly opened - we need exactly one opening tag
-        if len(moves_tags) != 1:
+        if len(board_tags) != 1:
             return 0, 0
 
         # Check for </moves> closing tags
-        moves_close_tags = re.findall(r"</moves>", text, re.IGNORECASE)
-        if len(moves_close_tags) != 1:
+        board_close_tags = re.findall(r"</board>", text, re.IGNORECASE)
+        if len(board_close_tags) != 1:
             return 0, 0  # Must have exactly one closing tag
 
         # Check if <think> comes immediately after </moves>
-        tag_sequence_match = re.search(r"</moves>\s*<think>", text)
+        tag_sequence_match = re.search(r"</board>\s*<think>", text)
         if not tag_sequence_match:
             return 0, 0
 
-        moves_section = re.search(r"<moves>(.*?)</moves>", text, re.DOTALL)
-        if moves_section:
-            moves_text = moves_section.group(1).strip()
-            if "," in moves_text:
+        board_section = re.search(r"<board>(.*?)</board>", text, re.DOTALL)
+        if board_section:
+            board_text = board_section.group(1).strip()
+            if "," in board_text:
                 pass
             else:
                 return 0, 0
@@ -471,12 +434,10 @@ class ChessPuzzlesEnv(BaseEnv):
             return 0, 0  # Malformed thinking section
 
         # Check if there are any <think> tags in the answer section (after the first </think>)
-        if "<think>" in moves_section.group():
+        if "<think>" in board_section.group():
             return 0, 0
 
-        return [
-            m.strip() for m in moves_section.group(1).split(",")
-        ], thinking_section.group(1)
+        return board_section.group(1), thinking_section.group(1)
 
     async def rollout_and_score_eval(self, test_item):
         """
@@ -488,10 +449,33 @@ class ChessPuzzlesEnv(BaseEnv):
         Returns:
             Score (1 for correct, 0 for incorrect)
         """
+
+        # Extract question and options from the multiple choice item
+        moves = json.loads(test_item["input"])["moves"]
+
+        # Combine all parts into the final question text with instructions
+        question_text_with_instruction = (
+            f"Prompt: Internally playout all of these moves below and then"
+            "output the final position in ASCII format and describe what is happening in the final position. "
+            f"Moves: {','.join(str(m) for m in moves)}\n"
+        )
+
+        board = chess.Board()
+
+        # Play each move
+        for move_uci in moves:
+            move = chess.Move.from_uci(move_uci)
+            if move in board.legal_moves:
+                board.push(move)
+            else:
+                raise ValueError(f"Illegal move: {move_uci}")
+
+        final_ascii_string = self.fen_to_ascii_board(board.fen())
+
         # Construct messages for the model using system prompt
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": test_item["prompt"]},
+            {"role": "user", "content": question_text_with_instruction},
         ]
 
         # Apply chat template to convert messages to a single string
@@ -511,17 +495,35 @@ class ChessPuzzlesEnv(BaseEnv):
         # Extract the model's response
         model_response = completion.choices[0].text
 
-        # Extract moves and thinking from model response
-        model_moves, thinking_text = self._extract_model_moves(model_response)
+        text = model_response
+        pattern = re.compile(r"</tool_call>(.*?)(\[STOP\])", flags=re.DOTALL)
+        text = pattern.sub(r"<think>\1</think>\2", text)
+        model_response = text
 
-        # Compare with ground truth
-        correct_moves = test_item.get("moves", "").split()
-        if model_moves == 0 or not correct_moves:
-            return 0
+        model_response = self.toolcall_to_think(model_response)
 
-        # Reward using Stockfish evaluation
-        reward = self.stockfish_reward(model_moves, test_item["fen"], correct_moves)
+        model_board, thinking_text = self._extract_model_board(model_response)
 
+        board_reward = 0.0
+        if model_board != 0:
+            board_reward += 0.1  # little reward for getting the correct format
+            model_clean = model_board.replace(",", "")
+            truth_clean = final_ascii_string.replace(",", "")
+
+            # Make both same length (ground truth is reference)
+            length = len(truth_clean)
+            model_clean = model_clean[:length]  # trim if model string is longer
+
+            matches = sum(1 for mc, tc in zip(model_clean, truth_clean) if mc == tc)
+            accuracy = matches / length if length > 0 else 0.0
+            board_reward = accuracy
+
+        thinking_reward = 0.0
+        if thinking_text != 0:
+            thinking_reward += 0.1  # little reward for getting the correct format
+
+        # weights are tunable
+        reward = 0.95 * board_reward + 0.05 * thinking_reward
         return reward
 
     async def evaluate(self, *args, **kwargs):
@@ -591,4 +593,4 @@ class ChessPuzzlesEnv(BaseEnv):
 
 
 if __name__ == "__main__":
-    ChessPuzzlesEnv.cli()
+    ChessBoardVisualizationEnv.cli()

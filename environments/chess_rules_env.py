@@ -18,20 +18,23 @@ from atroposlib.envs.base import (
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 system_prompt = (
-    "You are a chess-puzzle solver. ALWAYS output exactly this format and nothing else:\n\n"
+    "You are a chess rules assistant. You will be given a chess position in FEN format, "
+    "and your task is to output all possible legal moves for the player whose turn it is. "
+    "ALWAYS output exactly this format and nothing else:\n\n"
     "<moves>comma-separated UCI moves</moves>\n"
     "<think>explain your reasoning here (this may include internal chain-of-thought)</think>[STOP]\n\n"
     "Rules:\n"
-    "1) Do NOT use <tool_call>, <function_call>, JSON, or any other tags — only <moves> and <think>.\n"
-    "2) Close both tags before emitting [STOP].\n"
-    "3) Use chess keywords (fork, skewer, mate in 2, advanced pawn) where applicable inside <think>.\n\n"
+    "1) Only output legal moves for the current player; do NOT suggest illegal moves.\n"
+    "2) Do NOT use <tool_call>, <function_call>, JSON, or any other tags — only <moves> and <think>.\n"
+    "3) Close both tags before emitting [STOP].\n"
+    "4) Use chess keywords (check, fork, skewer, promotion, castling) where applicable inside <think>.\n\n"
     "Example:\n"
-    "<moves>e2e4,e7e5</moves>\n"
-    "<think>e2e4 opens lines; e7e5 is a standard reply... add more chess reasoning</think>[STOP]\n"
+    "<moves>e2e4,d2d3,g1f3</moves>\n"
+    "<think>e2e4 opens the center; d2d3 supports the pawn structure; g1f3 develops the knight</think>[STOP]\n"
 )
 
 
-class ChessPuzzlesEnv(BaseEnv):
+class ChessRulesEnv(BaseEnv):
     def __init__(
         self,
         config: BaseEnvConfig,
@@ -170,7 +173,7 @@ class ChessPuzzlesEnv(BaseEnv):
 
         # Combine all parts into the final question text with instructions
         question_text_with_instruction = (
-            f"Prompt: How to solve this puzzle?\n"
+            f"Prompt: What are all the legal moves in the position for the active player?\n"
             f"Turn: {turn_text}\n"
             f"{castling_rights_text}\n"
             f"Board:\n{board}"
@@ -254,50 +257,6 @@ class ChessPuzzlesEnv(BaseEnv):
 
         return scored_data, to_backlog
 
-    def stockfish_reward(
-        self,
-        pred_moves,
-        initial_fen,
-        correct_moves,
-        stockfish_path="/home/ubuntu/stockfish/stockfish-ubuntu-x86-64-avx2",
-    ):
-        board = chess.Board(initial_fen)
-        engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
-
-        move_scores = []
-        pred_board = board.copy()
-        for move in pred_moves:
-            try:
-                pred_board.push_uci(move)
-            except ValueError:  # catch only expected errors
-                move_scores.append(0.0)
-                break
-
-            info = engine.analyse(pred_board, chess.engine.Limit(depth=12))
-            score = info["score"].white().score(mate_score=10000)
-            if score is None:
-                score = 0
-            move_scores.append(score)
-
-        # Final evaluation relative to correct final position
-        correct_board = board.copy()
-        for move in correct_moves:
-            try:
-                correct_board.push_uci(move)
-            except ValueError:
-                print("illegal move in dataset")
-                break
-        info_correct = engine.analyse(correct_board, chess.engine.Limit(depth=12))
-        correct_score = info_correct["score"].white().score(mate_score=10000)
-        if correct_score is None:
-            correct_score = 0
-
-        # Normalize the reward: predicted score / correct score
-        reward = sum(move_scores) / (len(move_scores) * correct_score + 1e-5)
-
-        engine.quit()
-        return max(min(reward, 1.0), 0.0)  # clamp to [0,1]
-
     async def score(self, rollout_group_data: List) -> Optional[ScoredDataGroup]:
         """
         Args:
@@ -316,10 +275,6 @@ class ChessPuzzlesEnv(BaseEnv):
         scores["masks"] = list()
         scores["scores"] = list()
 
-        ground_truth_tags = rollout_group_data[0][
-            2
-        ]  # ground truth tags for explanation
-
         # Shuffle to avoid bias in selection
         random.shuffle(rollout_group_data)
 
@@ -335,25 +290,8 @@ class ChessPuzzlesEnv(BaseEnv):
                 # Extract the answer from the model's response
 
                 text = model_response
-                text = re.sub(
-                    r"<tool_call.*?>(.*?)</tool_call>",
-                    r"<think>\1</think>",
-                    text,
-                    flags=re.DOTALL | re.IGNORECASE,
-                )
-                # If <tool_call> is opened but not closed
-                if "<tool_call" in text and "</tool_call>" not in text:
-                    m = re.search(
-                        r"<tool_call[^>]*>(.*?)(?:\[STOP\]|$)", text, flags=re.DOTALL
-                    )
-                    if m:
-                        inner = m.group(1).strip()
-                        text = re.sub(
-                            r"<tool_call[^>]*>.*",
-                            f"<think>{inner}</think>[STOP]",
-                            text,
-                            flags=re.DOTALL,
-                        )
+                pattern = re.compile(r"</tool_call>(.*?)(\[STOP\])", flags=re.DOTALL)
+                text = pattern.sub(r"<think>\1</think>\2", text)
                 model_response = text
 
                 model_moves, thinking_text = self._extract_model_moves(model_response)
@@ -361,23 +299,29 @@ class ChessPuzzlesEnv(BaseEnv):
                 move_reward = 0.0
                 if model_moves != 0:
                     move_reward += 0.1  # little reward for getting the correct format
-                    move_reward = self.stockfish_reward(
-                        model_moves,
-                        self.curr_item["fen"],
-                        self.curr_item["moves"].split(" "),
-                    )
+
+                    board = chess.Board(self.curr_item["fen"])
+                    correct_legal_moves = [move.uci() for move in board.legal_moves]
+
+                    model_set = set(model_moves)
+                    correct_set = set(correct_legal_moves)
+
+                    # Count how many moves are correct
+                    num_correct = len(model_set & correct_set)  # intersection
+
+                    # Divide by total legal moves
+                    accuracy = num_correct / len(correct_set)
+
+                    move_reward = accuracy
 
                 thinking_reward = 0.0
                 if thinking_text != 0:
                     thinking_reward += (
                         0.1  # little reward for getting the correct format
                     )
-                    thinking_reward = sum(
-                        1 for k in ground_truth_tags if k in thinking_text
-                    ) / len(ground_truth_tags)
 
                 # weights are tunable
-                reward = 0.7 * move_reward + 0.3 * thinking_reward
+                reward = 0.95 * move_reward + 0.05 * thinking_reward
 
             # Tokenize the conversation for learning
             out_dict = tokenize_for_trainer(self.tokenizer, item[0])
@@ -387,8 +331,6 @@ class ChessPuzzlesEnv(BaseEnv):
             # Remove examples with insufficient context
             if len([1 for i in masks if i != -100]) < 10:
                 continue
-
-            print("tokens:", len(tokens))
 
             scores["tokens"].append(tokens)
             scores["masks"].append(masks)
@@ -514,14 +456,28 @@ class ChessPuzzlesEnv(BaseEnv):
         # Extract moves and thinking from model response
         model_moves, thinking_text = self._extract_model_moves(model_response)
 
-        # Compare with ground truth
-        correct_moves = test_item.get("moves", "").split()
-        if model_moves == 0 or not correct_moves:
-            return 0
+        move_reward = 0.0
+        if model_moves != 0:
+            board = chess.Board(test_item["fen"])
+            correct_legal_moves = [move.uci() for move in board.legal_moves]
 
-        # Reward using Stockfish evaluation
-        reward = self.stockfish_reward(model_moves, test_item["fen"], correct_moves)
+            model_set = set(model_moves)
+            correct_set = set(correct_legal_moves)
 
+            # Count how many moves are correct
+            num_correct = len(model_set & correct_set)  # intersection
+
+            # Divide by total legal moves
+            accuracy = num_correct / len(correct_set)
+
+            move_reward = accuracy
+
+        thinking_reward = 0.0
+        if thinking_text != 0:
+            thinking_reward += 0.1  # little reward for getting the correct format
+
+        # weights are tunable
+        reward = 0.95 * move_reward + 0.05 * thinking_reward
         return reward
 
     async def evaluate(self, *args, **kwargs):
@@ -591,4 +547,4 @@ class ChessPuzzlesEnv(BaseEnv):
 
 
 if __name__ == "__main__":
-    ChessPuzzlesEnv.cli()
+    ChessRulesEnv.cli()
