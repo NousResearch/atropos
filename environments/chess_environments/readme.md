@@ -113,7 +113,7 @@ chess_rules_env → chess_board_visualization_env → chess_puzzle_env
 - Puzzle solution quality vs. Stockfish 🏅
 
 ## 🔬 Requirements
-Only the chess library, pip install chess and atropos dependcies
+Only the chess library, pip install chess and atropos dependencies. Also, must download stockfish from: https://stockfishchess.org/download/
 
 
 ## 🔬 Research Applications
