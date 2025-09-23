@@ -1,3 +1,4 @@
+import math
 import random
 import re
 from typing import Dict, List, Optional, Tuple, Union
@@ -259,44 +260,49 @@ class ChessPuzzlesEnv(BaseEnv):
         pred_moves,
         initial_fen,
         correct_moves,
-        stockfish_path="/home/ubuntu/stockfish/stockfish-ubuntu-x86-64-avx2",
+        stockfish_path="stockfish_path",
     ):
         board = chess.Board(initial_fen)
         engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
 
-        move_scores = []
         pred_board = board.copy()
-        for move in pred_moves:
+        cumulative_reward = 0.0
+
+        for step, move in enumerate(pred_moves, start=1):
             try:
                 pred_board.push_uci(move)
             except ValueError:  # catch only expected errors
-                move_scores.append(0.0)
                 break
 
-            info = engine.analyse(pred_board, chess.engine.Limit(depth=12))
-            score = info["score"].white().score(mate_score=10000)
-            if score is None:
-                score = 0
-            move_scores.append(score)
+            # Analyse the predicted board at this step
+            info_pred = engine.analyse(pred_board, chess.engine.Limit(depth=12))
+            pred_score = info_pred["score"].white().score(mate_score=10000)
+            if pred_score is None:
+                pred_score = 0
 
-        # Final evaluation relative to correct final position
-        correct_board = board.copy()
-        for move in correct_moves:
-            try:
-                correct_board.push_uci(move)
-            except ValueError:
-                print("illegal move in dataset")
-                break
-        info_correct = engine.analyse(correct_board, chess.engine.Limit(depth=12))
-        correct_score = info_correct["score"].white().score(mate_score=10000)
-        if correct_score is None:
-            correct_score = 0
+            # Analyse the correct board up to this step
+            correct_board = board.copy()
+            for correct_move in correct_moves[:step]:
+                try:
+                    correct_board.push_uci(correct_move)
+                except ValueError:
+                    break
+            info_correct = engine.analyse(correct_board, chess.engine.Limit(depth=12))
+            correct_score = info_correct["score"].white().score(mate_score=10000)
+            if correct_score is None:
+                correct_score = 0
 
-        # Normalize the reward: predicted score / correct score
-        reward = sum(move_scores) / (len(move_scores) * correct_score + 1e-5)
+            # Step-wise similarity: exponential reward for being close to Stockfish
+            step_reward = math.exp(-abs(pred_score - correct_score) / 100.0)
+            cumulative_reward += step_reward
 
+        # Average across all predicted moves and clamp
+        avg_reward = cumulative_reward / max(len(pred_moves), 1)
         engine.quit()
-        return max(min(reward, 1.0), 0.0)  # clamp to [0,1]
+
+        # Apply a final non-linear transformation
+        final_reward = math.tanh(avg_reward)  # emphasizes high values more
+        return max(min(final_reward, 1.0), 0.0)
 
     async def score(self, rollout_group_data: List) -> Optional[ScoredDataGroup]:
         """
