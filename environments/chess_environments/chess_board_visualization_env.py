@@ -431,26 +431,26 @@ class ChessBoardVisualizationEnv(BaseEnv):
     async def rollout_and_score_eval(self, test_item):
         """
         Generate and score model responses for a single test item.
-    
+
         Args:
             test_item: Test item from dataset
-    
+
         Returns:
             Score (1 for correct, 0 for incorrect)
         """
-    
+
         # Extract question and options from the multiple choice item
         moves = json.loads(test_item["input"])["moves"]
-    
+
         # Combine all parts into the final question text with instructions
         question_text_with_instruction = (
             f"Prompt: Internally playout all of these moves below and then "
             "output the final position in ASCII format and describe what is happening in the final position. "
             f"Moves: {','.join(str(m) for m in moves)}\n"
         )
-    
+
         board = chess.Board()
-    
+
         # Play each move
         for move_uci in moves:
             move = chess.Move.from_uci(move_uci)
@@ -458,20 +458,20 @@ class ChessBoardVisualizationEnv(BaseEnv):
                 board.push(move)
             else:
                 raise ValueError(f"Illegal move: {move_uci}")
-    
+
         final_ascii_string = self.fen_to_ascii_board(board.fen())
-    
+
         # Construct messages for the model using system prompt
         messages = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": question_text_with_instruction},
         ]
-    
+
         # Apply chat template to convert messages to a single string
         prompt = self.tokenizer.apply_chat_template(
             messages, add_generation_prompt=True, tokenize=False
         )
-    
+
         # Get model completion
         completion = await self.server.completion(
             prompt=prompt,
@@ -480,31 +480,31 @@ class ChessBoardVisualizationEnv(BaseEnv):
             temperature=0.5,
             split="eval",
         )
-    
+
         # Extract the model's response
         model_response = completion.choices[0].text
-    
+
         # Extract board and thinking from model response
         model_board, thinking_text = self._extract_model_board(model_response)
-    
+
         board_reward = 0.0
         if model_board != 0:
             board_reward += 0.1  # little reward for getting the correct format
             model_clean = model_board.replace(",", "")
             truth_clean = final_ascii_string.replace(",", "")
-    
+
             # Make both same length (ground truth is reference)
             length = len(truth_clean)
             model_clean = model_clean[:length]  # trim if model string is longer
-    
+
             matches = sum(1 for mc, tc in zip(model_clean, truth_clean) if mc == tc)
             accuracy = matches / length if length > 0 else 0.0
             board_reward = accuracy
-    
+
         thinking_reward = 0.0
         if thinking_text != 0:
             thinking_reward += 0.1  # little reward for getting the correct format
-    
+
         # weights are tunable
         reward = 0.95 * board_reward + 0.05 * thinking_reward
         return reward
@@ -516,11 +516,11 @@ class ChessBoardVisualizationEnv(BaseEnv):
         eval_tasks = []
         for test_item in self.test:
             eval_tasks.append(self.rollout_and_score_eval(test_item))
-    
+
         # Run evaluation
         scores = await tqdm_asyncio.gather(*eval_tasks)
         self.eval_metrics.append(("eval/percent_correct", sum(scores) / len(scores)))
-    
+
     async def add_rollouts_for_wandb(
         self,
         scored_data: Union[ScoredDataGroup, List[ScoredDataGroup]],
@@ -530,38 +530,40 @@ class ChessBoardVisualizationEnv(BaseEnv):
         num_keep = self.config.num_rollouts_per_group_for_logging
         if num_keep == -1:
             num_keep = self.config.group_size
-        
+
         # Extract the ground truth answer from item
         ground_truth_answer = item[1] if item else "N/A"
-        
+
         rollout_group = []
         for i in range(min(num_keep, len(scored_data["tokens"]))):
             # Decode the tokens to get the text
             decoded_text = self.tokenizer.decode(scored_data["tokens"][i])
             score = scored_data["scores"][i]
-            
+
             # Extract just the assistant's response from the decoded text
             # This assumes the decoded text contains the full conversation
-            lines = decoded_text.split('\n')
+            lines = decoded_text.split("\n")
             assistant_response = ""
             for line in lines:
                 if line.strip().startswith("assistant") or "<board>" in line:
                     assistant_response = line
                     break
-            
-            rollout_group.append((
-                assistant_response if assistant_response else decoded_text,
-                score,
-                ground_truth_answer,
-                str(ground_truth_answer)  # string version of answer
-            ))
-        
+
+            rollout_group.append(
+                (
+                    assistant_response if assistant_response else decoded_text,
+                    score,
+                    ground_truth_answer,
+                    str(ground_truth_answer),  # string version of answer
+                )
+            )
+
         self.rollouts_for_wandb.append(rollout_group)
-        
+
         # Keep only the most recent rollouts
         if len(self.rollouts_for_wandb) > self.config.num_rollouts_to_keep:
             self.rollouts_for_wandb.pop(0)
-    
+
     async def create_rollout_table(self, wandb_metrics):
         if len(self.rollouts_for_wandb) > 0:
             table = wandb.Table(columns=["text", "score", "answer", "string_answer"])
@@ -571,11 +573,11 @@ class ChessBoardVisualizationEnv(BaseEnv):
             wandb_metrics["train/rollouts"] = table
         self.rollouts_for_wandb = []
         return wandb_metrics
-    
+
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
         if wandb_metrics is None:
             wandb_metrics = {}
-    
+
         # Try to calculate percent_correct, pass if there's a division by zero
         try:
             wandb_metrics["train/percent_correct"] = sum(
@@ -584,13 +586,14 @@ class ChessBoardVisualizationEnv(BaseEnv):
         except ZeroDivisionError:
             # Skip if buffer is empty
             pass
-    
+
         self.percent_correct_buffer = list()
         for item in self.eval_metrics:
             wandb_metrics[item[0]] = item[1]
         self.eval_metrics = list()
-    
+
         await super().wandb_log(wandb_metrics)
+
 
 if __name__ == "__main__":
     ChessBoardVisualizationEnv.cli()
