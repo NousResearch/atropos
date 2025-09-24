@@ -371,7 +371,9 @@ def train(config: TrainingConfig):
             with torch.no_grad():
                 pos = (advantages > 0).float()
                 neg = (advantages <= 0).float()
-                avg_logp = (logp_per_token * mask).sum(-1) / mask.sum(-1)
+                mask = mask.to(logp_per_token.dtype)
+                mask_sum = mask.sum(dim=-1).clamp_min(1e-8)
+                avg_logp = (logp_per_token * mask).sum(dim=-1) / mask_sum
                 pos_logp = (logp_per_token * pos).mean().item()
                 neg_logp = (logp_per_token * neg).mean().item()
                 total_pos_logp += pos_logp
@@ -535,7 +537,7 @@ if __name__ == "__main__":
     # Example: Create a config and run training
     # Replace "gpt2" with your desired model
     training_config = TrainingConfig(
-        model_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
+        model_name="Qwen/Qwen2.5-1.5B-Instruct",
         training_steps=20,  # Use steps
         vllm_restart_interval=3,  # Example interval
         use_wandb=True,  # Set to True to enable logging
