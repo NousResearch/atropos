@@ -4,11 +4,11 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import chess
 import chess.engine
+import wandb
 from datasets import load_dataset
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
-import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
