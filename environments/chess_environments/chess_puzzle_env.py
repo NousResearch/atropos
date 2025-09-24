@@ -531,24 +531,34 @@ class ChessPuzzlesEnv(BaseEnv):
         black_kingside_castling_rights = test_item["black_kingside"]
         black_queenside_castling_rights = test_item["black_queenside"]
         turn = test_item["turn"]
-    
+
         unicode_to_piece = {
-            "♔": "K", "♕": "Q", "♖": "R", "♗": "B", "♘": "N", "♙": "P",
-            "♚": "k", "♛": "q", "♜": "r", "♝": "b", "♞": "n", "♟": "p",
+            "♔": "K",
+            "♕": "Q",
+            "♖": "R",
+            "♗": "B",
+            "♘": "N",
+            "♙": "P",
+            "♚": "k",
+            "♛": "q",
+            "♜": "r",
+            "♝": "b",
+            "♞": "n",
+            "♟": "p",
         }
-    
+
         # Replace unicode pieces with letters
         board = "".join(unicode_to_piece.get(c, c) for c in board)
-    
+
         # Determine the turn text
         turn_text = "white" if turn == "w" else "black"
-    
+
         # Create castling rights strings
         white_kingside = "can" if white_kingside_castling_rights else "can't"
         white_queenside = "can" if white_queenside_castling_rights else "can't"
         black_kingside = "can" if black_kingside_castling_rights else "can't"
         black_queenside = "can" if black_queenside_castling_rights else "can't"
-    
+
         # Format the castling rights text
         castling_rights_text = (
             f"Castling Rights: "
@@ -557,7 +567,7 @@ class ChessPuzzlesEnv(BaseEnv):
             f"black {black_kingside} castle kingside, and "
             f"black {black_queenside} castle queenside"
         )
-    
+
         # Create the question text
         question_text_with_instruction = (
             f"Prompt: How to solve this puzzle?\n"
@@ -565,18 +575,18 @@ class ChessPuzzlesEnv(BaseEnv):
             f"{castling_rights_text}\n"
             f"Board:\n{board}"
         )
-    
+
         # Construct messages for the model
         messages = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": question_text_with_instruction},
         ]
-    
+
         # Apply chat template to convert messages to a single string
         prompt = self.tokenizer.apply_chat_template(
             messages, add_generation_prompt=True, tokenize=False
         )
-    
+
         # Get model completion
         completion = await self.server.completion(
             prompt=prompt,
@@ -585,67 +595,69 @@ class ChessPuzzlesEnv(BaseEnv):
             temperature=0.1,  # Lower temperature for evaluation
             split="eval",
         )
-    
+
         # Extract the model's response
         model_response = completion.choices[0].text
         stop_reason = completion.choices[0].finish_reason
-    
+
         # If the response was cut off due to length, give it a score of 0
         if stop_reason == "length":
             return 0.0
-    
+
         # Extract moves and thinking from model response
         model_moves, thinking_text = self._extract_model_moves(model_response)
-    
+
         # If extraction failed, return 0
         if model_moves == 0:
             return 0.0
-    
+
         # Calculate reward using Stockfish evaluation
-        move_reward = self.stockfish_reward(
-            model_moves, 
-            test_item["fen"], 
-            moves
-        )
-    
+        move_reward = self.stockfish_reward(model_moves, test_item["fen"], moves)
+
         # Calculate thinking reward if thinking text was extracted
         thinking_reward = 0.0
         if thinking_text != 0:
             thinking_reward = 0.1  # Base reward for correct format
-            thinking_reward += sum(1 for tag in tags if tag in thinking_text) / len(tags)
-    
+            thinking_reward += sum(1 for tag in tags if tag in thinking_text) / len(
+                tags
+            )
+
         # Combined reward (same weights as training)
         reward = 0.7 * move_reward + 0.3 * thinking_reward
         return reward
-    
+
     async def evaluate(self, *args, **kwargs):
         """
         Evaluate the model on test data.
         """
         print(f"Starting evaluation on {len(self.test)} test examples...")
-        
+
         eval_tasks = []
         # Limit evaluation to a reasonable number of examples to avoid timeouts
-        eval_subset = self.test[:min(len(self.test), 100)]
-        
+        eval_subset = self.test[: min(len(self.test), 100)]
+
         for test_item in eval_subset:
             eval_tasks.append(self.rollout_and_score_eval(test_item))
-        
+
         # Run evaluation with progress bar
         scores = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
-        
+
         # Calculate metrics
         avg_score = sum(scores) / len(scores) if scores else 0.0
-        
+
         # Store evaluation metrics
         self.eval_metrics.append(("eval/avg_reward", avg_score))
-        
+
         # Also track binary accuracy (reward > 0.5 as "correct")
-        binary_accuracy = sum(1 for score in scores if score > 0.5) / len(scores) if scores else 0.0
+        binary_accuracy = (
+            sum(1 for score in scores if score > 0.5) / len(scores) if scores else 0.0
+        )
         self.eval_metrics.append(("eval/binary_accuracy", binary_accuracy))
-        
-        print(f"Evaluation complete. Average reward: {avg_score:.3f}, Binary accuracy: {binary_accuracy:.3f}")
-    
+
+        print(
+            f"Evaluation complete. Average reward: {avg_score:.3f}, Binary accuracy: {binary_accuracy:.3f}"
+        )
+
     async def add_rollouts_for_wandb(
         self,
         scored_data: Union[ScoredDataGroup, List[ScoredDataGroup]],
@@ -657,47 +669,57 @@ class ChessPuzzlesEnv(BaseEnv):
             scored_data: Scored data group containing tokens and scores
             item: Original item tuple (prompt, moves, tags)
         """
-        if not hasattr(self.config, 'num_rollouts_per_group_for_logging'):
+        if not hasattr(self.config, "num_rollouts_per_group_for_logging"):
             num_keep = min(self.config.group_size, 3)  # Default to 3 if not specified
         else:
             num_keep = self.config.num_rollouts_per_group_for_logging
             if num_keep == -1:
                 num_keep = self.config.group_size
-    
+
         # Ensure we don't exceed available data
         num_keep = min(num_keep, len(scored_data["tokens"]))
-        
+
         rollout_group = []
         for i in range(num_keep):
             # Decode tokens to text
-            decoded_text = self.tokenizer.decode(scored_data["tokens"][i], skip_special_tokens=True)
+            decoded_text = self.tokenizer.decode(
+                scored_data["tokens"][i], skip_special_tokens=True
+            )
             score = scored_data["scores"][i]
-            
+
             # Extract ground truth info from item
             if item is not None:
                 ground_truth_moves = item[1]  # List of moves
-                ground_truth_tags = item[2]   # List of tags
-                
+                ground_truth_tags = item[2]  # List of tags
+
                 # Convert moves list to string for display
-                moves_str = ",".join(ground_truth_moves) if isinstance(ground_truth_moves, list) else str(ground_truth_moves)
-                tags_str = ",".join(ground_truth_tags) if isinstance(ground_truth_tags, list) else str(ground_truth_tags)
+                moves_str = (
+                    ",".join(ground_truth_moves)
+                    if isinstance(ground_truth_moves, list)
+                    else str(ground_truth_moves)
+                )
+                tags_str = (
+                    ",".join(ground_truth_tags)
+                    if isinstance(ground_truth_tags, list)
+                    else str(ground_truth_tags)
+                )
             else:
                 moves_str = "N/A"
                 tags_str = "N/A"
-            
+
             rollout_group.append((decoded_text, score, moves_str, tags_str))
-        
+
         # Initialize rollouts buffer if it doesn't exist
-        if not hasattr(self, 'rollouts_for_wandb'):
+        if not hasattr(self, "rollouts_for_wandb"):
             self.rollouts_for_wandb = []
-        
+
         self.rollouts_for_wandb.append(rollout_group)
-        
+
         # Maintain buffer size limit
-        max_rollouts = getattr(self.config, 'num_rollouts_to_keep', 10)
+        max_rollouts = getattr(self.config, "num_rollouts_to_keep", 10)
         if len(self.rollouts_for_wandb) > max_rollouts:
             self.rollouts_for_wandb.pop(0)
-    
+
     async def create_rollout_table(self, wandb_metrics):
         """
         Create a wandb table from stored rollouts and add it to metrics.
@@ -706,21 +728,23 @@ class ChessPuzzlesEnv(BaseEnv):
         Returns:
             Updated wandb_metrics dictionary
         """
-        if hasattr(self, 'rollouts_for_wandb') and len(self.rollouts_for_wandb) > 0:
-            table = wandb.Table(columns=["text", "score", "ground_truth_moves", "ground_truth_tags"])
-            
+        if hasattr(self, "rollouts_for_wandb") and len(self.rollouts_for_wandb) > 0:
+            table = wandb.Table(
+                columns=["text", "score", "ground_truth_moves", "ground_truth_tags"]
+            )
+
             for group in self.rollouts_for_wandb:
                 for item in group:
                     # item is (decoded_text, score, moves_str, tags_str)
                     table.add_data(item[0], item[1], item[2], item[3])
-            
+
             wandb_metrics["train/rollouts"] = table
-            
+
             # Clear the buffer after logging
             self.rollouts_for_wandb = []
-        
+
         return wandb_metrics
-    
+
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
         """
         Log metrics to wandb, including training and evaluation metrics.
@@ -729,25 +753,28 @@ class ChessPuzzlesEnv(BaseEnv):
         """
         if wandb_metrics is None:
             wandb_metrics = {}
-        
+
         # Add training percent correct if available
         if len(self.percent_correct_buffer) > 0:
-            wandb_metrics["train/percent_correct"] = sum(self.percent_correct_buffer) / len(self.percent_correct_buffer)
+            wandb_metrics["train/percent_correct"] = sum(
+                self.percent_correct_buffer
+            ) / len(self.percent_correct_buffer)
             # Clear the buffer after logging
             self.percent_correct_buffer = []
-        
+
         # Add evaluation metrics
         for metric_name, metric_value in self.eval_metrics:
             wandb_metrics[metric_name] = metric_value
-        
+
         # Clear evaluation metrics after logging
         self.eval_metrics = []
-        
+
         # Create rollout table if we have rollouts
         wandb_metrics = await self.create_rollout_table(wandb_metrics)
-        
+
         # Call parent class wandb_log method
         await super().wandb_log(wandb_metrics)
-    
+
+
 if __name__ == "__main__":
     ChessPuzzlesEnv.cli()
