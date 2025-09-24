@@ -4,10 +4,11 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import chess
 import chess.engine
-import wandb
 from datasets import load_dataset
+from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
+import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
@@ -17,21 +18,59 @@ from atroposlib.envs.base import (
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
-system_prompt = (
-    "You are a chess rules assistant. You will be given a chess position in FEN format, "
-    "and your task is to output all possible legal moves for the player whose turn it is. "
-    "ALWAYS output exactly this format and nothing else:\n\n"
-    "<moves>comma-separated UCI moves</moves>\n"
-    "<think>explain your reasoning here (this may include internal chain-of-thought)</think>[STOP]\n\n"
-    "Rules:\n"
-    "1) Only output legal moves for the current player; do NOT suggest illegal moves.\n"
-    "2) Do NOT use <tool_call>, <function_call>, JSON, or any other tags — only <moves> and <think>.\n"
-    "3) Close both tags before emitting [STOP].\n"
-    "4) Use chess keywords (check, fork, skewer, promotion, castling) where applicable inside <think>.\n\n"
-    "Example:\n"
-    "<moves>e2e4,d2d3,g1f3</moves>\n"
-    "<think>e2e4 opens the center; d2d3 supports the pawn structure; g1f3 develops the knight</think>[STOP]\n"
-)
+
+# === Config class ===
+class ChessEnvConfig(BaseEnvConfig):
+    # Whether to wrap reasoning in a "thinking" tag
+    thinking_mode: bool = Field(
+        default=True,
+        description="If True, include the reasoning section wrapped in the chosen thinking tag.",
+    )
+
+    # Custom tag or marker for the reasoning section
+    thinking_tag: Optional[str] = Field(
+        default="think",
+        description="Tag used to wrap the reasoning section. If None, omit reasoning entirely.",
+    )
+
+    # Optional prefix prompt injected before the main system prompt
+    thinking_system_prompt: Optional[str] = Field(
+        default=None,
+        description="Custom system prompt to prepend for controlling thinking mode (/think, /no_think, etc.).",
+    )
+
+
+# === Helper to build system prompt dynamically ===
+def build_system_prompt(config: ChessEnvConfig) -> str:
+    """
+    Build the system prompt dynamically for the chess rules assistant
+    based on config values.
+    """
+    # dynamic tag for reasoning section
+    tag = config.thinking_tag or "think"
+
+    # prepend any extra system text if provided
+    prefix = config.thinking_system_prompt or ""
+
+    prompt = (
+        prefix
+        + "You are a chess rules assistant. You will be given a chess position in FEN format, "
+        "and your task is to output all possible legal moves for the player whose turn it is. "
+        "ALWAYS output exactly this format and nothing else:\n\n"
+        "<moves>comma-separated UCI moves</moves>\n"
+        f"<{tag}>explain your reasoning here (this may include internal chain-of-thought)</{tag}>[STOP]\n\n"
+        "Rules:\n"
+        "1) Only output legal moves for the current player; do NOT suggest illegal moves.\n"
+        "2) Do NOT use <tool_call>, <function_call>, JSON, or any other tags — only <moves> and "
+        f"<{tag}>.\n"
+        "3) Close both tags before emitting [STOP].\n"
+        "4) Use chess keywords (check, fork, skewer, promotion, castling) where applicable inside "
+        f"<{tag}>.\n\n"
+        "Example:\n"
+        "<moves>e2e4,d2d3,g1f3</moves>\n"
+        f"<{tag}>e2e4 opens the center; d2d3 supports the pawn structure; g1f3 develops the knight</{tag}>[STOP]\n"
+    )
+    return prompt
 
 
 class ChessRulesEnv(BaseEnv):
@@ -55,9 +94,11 @@ class ChessRulesEnv(BaseEnv):
         self.percent_correct_buffer = list()
         self.eval_metrics = list()
 
+        self.system_prompt = build_system_prompt(config)
+
     @classmethod
-    def config_init(self) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
-        env_config = BaseEnvConfig(
+    def config_init(cls) -> Tuple[ChessEnvConfig, List[APIServerConfig]]:
+        env_config = ChessEnvConfig(
             tokenizer_name="Qwen/Qwen3-4B-Instruct-2507",
             group_size=4,
             use_wandb=True,
@@ -67,6 +108,9 @@ class ChessRulesEnv(BaseEnv):
             steps_per_eval=100,
             max_token_length=2048,
             wandb_name="chess_puzzle_solver",
+            thinking_mode=True,
+            thinking_tag="analysis",  # default tag less likely to conflict
+            thinking_system_prompt=None,
         )
         server_configs = [
             APIServerConfig(
@@ -76,7 +120,6 @@ class ChessRulesEnv(BaseEnv):
                 num_requests_for_eval=256,
             ),
         ]
-
         return env_config, server_configs
 
     async def setup(self):
@@ -183,7 +226,9 @@ class ChessRulesEnv(BaseEnv):
         prompt = []
 
         # Add system prompt as defined at the top of the script
-        prompt.append(frozenset({"role": "system", "content": system_prompt}.items()))
+        prompt.append(
+            frozenset({"role": "system", "content": self.system_prompt}.items())
+        )
 
         # Add user message with the question and instruction
         prompt.append(
@@ -354,7 +399,7 @@ class ChessRulesEnv(BaseEnv):
 
     def _extract_model_moves(self, text):
         """
-        Extract sequence of moves inside </moves> tags and reasoning inside of </think> tags
+        Extract sequence of moves inside </moves> tags and reasoning inside of </{thinking_tag}> tags.
         Only allows one valid answer format - multiple answer formats result in a score of 0.
 
         Args:
@@ -363,57 +408,60 @@ class ChessRulesEnv(BaseEnv):
         Returns:
             List of moves, text for thinking section
         """
+        # pull the dynamic tag
+        tag = re.escape(self.config.thinking_tag)  # escape just in case
 
-        # Check for multiple <think> tags - score as 0 if found
-        think_tags = re.findall(r"<think>", text, re.IGNORECASE)
-        if len(think_tags) > 1:
+        # Regex patterns for open/close tags
+        open_tag_pattern = rf"<{tag}>"
+        close_tag_pattern = rf"</{tag}>"
+
+        # --- Thinking tag checks ---
+        think_tags = re.findall(open_tag_pattern, text, re.IGNORECASE)
+        if len(think_tags) > 1 or len(think_tags) != 1:
             return 0, 0
 
-        # Check if the think tag is properly opened - we need exactly one opening tag
-        if len(think_tags) != 1:
-            return 0, 0
-
-        # Check for </think> closing tags
-        think_close_tags = re.findall(r"</think>", text, re.IGNORECASE)
+        think_close_tags = re.findall(close_tag_pattern, text, re.IGNORECASE)
         if len(think_close_tags) != 1:
             return 0, 0  # Must have exactly one closing tag
 
-        # Check for multiple <moves> tags - score as 0 if found
+        # --- Moves tag checks ---
         moves_tags = re.findall(r"<moves>", text, re.IGNORECASE)
-        if len(moves_tags) > 1:
+        if len(moves_tags) > 1 or len(moves_tags) != 1:
             return 0, 0
 
-        # Check if the moves tag is properly opened - we need exactly one opening tag
-        if len(moves_tags) != 1:
-            return 0, 0
-
-        # Check for </moves> closing tags
         moves_close_tags = re.findall(r"</moves>", text, re.IGNORECASE)
         if len(moves_close_tags) != 1:
-            return 0, 0  # Must have exactly one closing tag
+            return 0, 0
 
-        # Check if <think> comes immediately after </moves>
-        tag_sequence_match = re.search(r"</moves>\s*<think>", text)
+        # Check if dynamic <tag> comes immediately after </moves>
+        tag_sequence_match = re.search(rf"</moves>\s*<{tag}>", text, re.IGNORECASE)
         if not tag_sequence_match:
             return 0, 0
 
-        moves_section = re.search(r"<moves>(.*?)</moves>", text, re.DOTALL)
+        # --- Extract moves section ---
+        moves_section = re.search(
+            r"<moves>(.*?)</moves>", text, re.DOTALL | re.IGNORECASE
+        )
         if moves_section:
             moves_text = moves_section.group(1).strip()
-            if "," in moves_text:
-                pass
-            else:
+            if "," not in moves_text:
                 return 0, 0
+        else:
+            return 0, 0
 
-        thinking_section = re.search(r"<think>(.*?)</think>", text, re.DOTALL)
+        # --- Extract thinking section ---
+        thinking_section = re.search(
+            rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE
+        )
+        if not thinking_section:
+            return 0, 0
 
-        # Validate thinking section
-        # Make sure thinking section actually contains the opening <think> tag
-        if "<think>" not in thinking_section.group():
-            return 0, 0  # Malformed thinking section
+        # Validate thinking section actually contains the opening tag
+        if f"<{self.config.thinking_tag}>" not in thinking_section.group():
+            return 0, 0
 
-        # Check if there are any <think> tags in the answer section (after the first </think>)
-        if "<think>" in moves_section.group():
+        # Make sure no thinking tags appear inside moves section
+        if f"<{self.config.thinking_tag}>" in moves_section.group():
             return 0, 0
 
         return [
@@ -432,7 +480,7 @@ class ChessRulesEnv(BaseEnv):
         """
         # Construct messages for the model using system prompt
         messages = [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": test_item["prompt"]},
         ]
 

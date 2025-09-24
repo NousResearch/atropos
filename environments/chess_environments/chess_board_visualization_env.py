@@ -5,10 +5,11 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import chess
 import chess.engine
-import wandb
 from datasets import load_dataset
+from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
+import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
@@ -18,28 +19,69 @@ from atroposlib.envs.base import (
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
-system_prompt = (
-    "You are a chess board visualizer. You will be given a list of moves in"
-    "UCI notation starting from the standard chess position. "
-    "Your task is to output the resulting board position after all the moves have been played. "
-    "ALWAYS output exactly this format and nothing else:\n\n"
-    "<board>ASCII board with each square separated by commas; empty squares as '.',"
-    "white pieces as uppercase letters, black pieces as lowercase letters; en passant squares marked with '*'</board>\n"
-    "<think>explain the current position and what is happening"
-    "(include tactical or strategic observations, possible threats,"
-    "and reasoning behind piece placement)</think>[STOP]\n\n"
-    "Rules:\n"
-    "1) Output the board from White's perspective (top is Black, bottom is White).\n"
-    "2) Use the following letter notation: K=White King, Q=White Queen, R=White Rook, B=White Bishop,"
-    "N=White Knight, P=White Pawn; lowercase for black pieces.\n"
-    "3) Empty squares must be a dot '.', en passant target squares marked with '*'.\n"
-    "4) Do NOT use <tool_call>, <function_call>, JSON, or any other tags — only <board> and <think>.\n"
-    "5) Close both tags before emitting [STOP].\n\n"
-    "Example:\n"
-    "<board>r,n,b,q,k,b,n,r,p,p,p,p,.,.,.,.,.,.,.,.,.,.,.,.,P,P,P,P,R,N,B,Q,K,B,N,R</board>\n"
-    "<think>All pawns are on their initial squares except for ... [describe moves]; pieces are developed according "
-    "to the move sequence; White is ready to castle kingside, Black has yet to move</think>[STOP]\n"
-)
+
+# === Config class ===
+class ChessEnvConfig(BaseEnvConfig):
+    # Whether to wrap reasoning in a "thinking" tag
+    thinking_mode: bool = Field(
+        default=True,
+        description="If True, include the reasoning section wrapped in the chosen thinking tag.",
+    )
+
+    # Custom tag or marker for the reasoning section
+    thinking_tag: Optional[str] = Field(
+        default="think",
+        description="Tag used to wrap the reasoning section. If None, omit reasoning entirely.",
+    )
+
+    # Optional prefix prompt injected before the main system prompt
+    thinking_system_prompt: Optional[str] = Field(
+        default=None,
+        description="Custom system prompt to prepend for controlling thinking mode (/think, /no_think, etc.).",
+    )
+
+
+# === Helper to build system prompt dynamically ===
+def build_system_prompt(config: ChessEnvConfig) -> str:
+    """
+    Build the system prompt dynamically for the chess board visualizer
+    based on config values.
+    """
+    # dynamic tag for reasoning section
+    tag = config.thinking_tag or "think"
+
+    # prepend any extra system text if provided
+    prefix = config.thinking_system_prompt or ""
+
+    prompt = (
+        prefix
+        + "You are a chess board visualizer. You will be given a list of moves in UCI notation,"
+        "starting from the standard chess position. "
+        "Play the moves internally and output the final board position in ASCII format.\n\n"
+        "<board>Each square separated by commas; empty squares as '.',"
+        "white pieces uppercase, black pieces lowercase, en passant squares as '*'. "
+        "Must contain exactly 64 squares. Do NOT include any extra text or explanation inside <board>.</board>\n"
+        f"<{tag}>Provide a concise explanation of the current position,"
+        "including tactical or strategic observations, possible threats, "
+        "and reasoning behind piece placement. Keep it short and relevant to the <board> state.</{tag}>[STOP]\n\n"
+        "Rules:\n"
+        "1) Board is from White's perspective (top is Black, bottom is White).\n"
+        "2) Pieces: K=White King, Q=White Queen, R=White Rook, "
+        "B=White Bishop, N=White Knight, P=White Pawn; lowercase for Black.\n"
+        "3) Empty squares as '.', en passant as '*'.\n"
+        "4) Do NOT use <tool_call>, <function_call>, JSON, or any other tags — only <board> and "
+        f"<{tag}>.\n"
+        "5) Close both tags before [STOP].\n"
+        "6) <board> must always have exactly 64 comma-separated characters.\n\n"
+        "Example format (do NOT copy this board, just follow the format):\n"
+        "<board>r,.,.,q,.,r,.,k,p,p,.,.,b,.,"
+        "p,p,.,.,n,p,.,n,.,.,.,.,.,N,p,b,.,.,.,.,P,.,.,.,.,.,N"
+        ",.,.,.,B,.,.,.,P,P,.,.,B,P,P,P,R,.,.,Q,.,R,K,.</board>\n"
+        f"<{tag}>Write a description of the position you output inside <board>,"
+        "focusing on piece activity, threats, and potential plans.</{tag}>[STOP]\n"
+    )
+
+    return prompt
 
 
 class ChessBoardVisualizationEnv(BaseEnv):
@@ -51,7 +93,7 @@ class ChessBoardVisualizationEnv(BaseEnv):
         testing=False,
     ):
         """
-        Initialize the Chess Puzzle Solver environment.
+        Initialize the chess board visualization env.
 
         Args:
             config: Configuration for the base environment
@@ -63,9 +105,11 @@ class ChessBoardVisualizationEnv(BaseEnv):
         self.percent_correct_buffer = list()
         self.eval_metrics = list()
 
+        self.system_prompt = build_system_prompt(config)
+
     @classmethod
-    def config_init(self) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
-        env_config = BaseEnvConfig(
+    def config_init(cls) -> Tuple[ChessEnvConfig, List[APIServerConfig]]:
+        env_config = ChessEnvConfig(
             tokenizer_name="Qwen/Qwen3-4B-Instruct-2507",
             group_size=4,
             use_wandb=True,
@@ -75,6 +119,9 @@ class ChessBoardVisualizationEnv(BaseEnv):
             steps_per_eval=100,
             max_token_length=2048,
             wandb_name="chess_puzzle_solver",
+            thinking_mode=True,
+            thinking_tag="analysis",  # default tag less likely to conflict
+            thinking_system_prompt=None,
         )
         server_configs = [
             APIServerConfig(
@@ -84,7 +131,6 @@ class ChessBoardVisualizationEnv(BaseEnv):
                 num_requests_for_eval=256,
             ),
         ]
-
         return env_config, server_configs
 
     async def setup(self):
@@ -164,7 +210,7 @@ class ChessBoardVisualizationEnv(BaseEnv):
 
         # Combine all parts into the final question text with instructions
         question_text_with_instruction = (
-            f"Prompt: Internally playout all of these moves below and then"
+            f"Prompt: Internally playout all of these moves below and then "
             "output the final position in ASCII format and describe what is happening in the final position. "
             f"Moves: {','.join(str(m) for m in moves)}\n"
         )
@@ -185,7 +231,9 @@ class ChessBoardVisualizationEnv(BaseEnv):
         prompt = []
 
         # Add system prompt as defined at the top of the script
-        prompt.append(frozenset({"role": "system", "content": system_prompt}.items()))
+        prompt.append(
+            frozenset({"role": "system", "content": self.system_prompt}.items())
+        )
 
         # Add user message with the question and instruction
         prompt.append(
@@ -258,25 +306,6 @@ class ChessBoardVisualizationEnv(BaseEnv):
 
         return scored_data, to_backlog
 
-    def toolcall_to_think(self, text: str) -> str:
-        """
-        Replace <tool_call>... (with or without closing tag) with <think>...</think>.
-        If a [STOP] follows the tool_call content (and no closing tag exists), ensure
-        the [STOP] ends up after the closing </think>.
-        """
-        pattern = re.compile(
-            r"<tool_call\b[^>]*>(.*?)"  # capture content after opening tag
-            r"(?:</tool_call>|(\s*\[STOP\])|$)",  # stop at closing tag, or capture trailing [STOP], or end
-            flags=re.DOTALL | re.IGNORECASE,
-        )
-
-        def _repl(m):
-            content = m.group(1).strip()
-            stopper = m.group(2) or ""
-            return f"<think>{content}</think>{stopper}"
-
-        return pattern.sub(_repl, text)
-
     async def score(self, rollout_group_data: List) -> Optional[ScoredDataGroup]:
         """
         Args:
@@ -309,14 +338,6 @@ class ChessBoardVisualizationEnv(BaseEnv):
                 reward = 0
             else:
                 # Extract the answer from the model's response
-
-                text = model_response
-                pattern = re.compile(r"</tool_call>(.*?)(\[STOP\])", flags=re.DOTALL)
-                text = pattern.sub(r"<think>\1</think>\2", text)
-                model_response = text
-
-                model_response = self.toolcall_to_think(model_response)
-
                 model_board, thinking_text = self._extract_model_board(model_response)
 
                 board_reward = 0.0
@@ -375,69 +396,37 @@ class ChessBoardVisualizationEnv(BaseEnv):
 
     def _extract_model_board(self, text):
         """
-        Extract ASCII board inside </board> tags and reasoning inside of </think> tags
-        Only allows one valid answer format - multiple answer formats result in a score of 0.
+        Extract board state inside <board> tags and reasoning inside <{thinking_tag}> tags.
 
         Args:
-            text: Text containing the model's response
+            text: Text containing the model's response.
 
         Returns:
-            List of moves, text for thinking section
+            Tuple[List[str], str]: (list of squares from board, analysis text)
         """
+        tag = re.escape(self.config.thinking_tag)  # e.g. "analysis"
 
-        # Check for multiple <think> tags - score as 0 if found
-        think_tags = re.findall(r"<think>", text, re.IGNORECASE)
-        if len(think_tags) > 1:
+        # --- Extract board section ---
+        board_match = re.search(
+            r"<board>(.*?)</board>", text, re.DOTALL | re.IGNORECASE
+        )
+        if not board_match:
+            return 0, 0
+        board_text = board_match.group(1).strip()
+
+        # --- Extract analysis/thinking section ---
+        thinking_match = re.search(
+            rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE
+        )
+        if not thinking_match:
+            return 0, 0
+        thinking_text = thinking_match.group(1).strip()
+
+        # Extra: Make sure no thinking tags inside board
+        if re.search(rf"<{tag}>", board_text, re.IGNORECASE):
             return 0, 0
 
-        # Check if the think tag is properly opened - we need exactly one opening tag
-        if len(think_tags) != 1:
-            return 0, 0
-
-        # Check for </think> closing tags
-        think_close_tags = re.findall(r"</think>", text, re.IGNORECASE)
-        if len(think_close_tags) != 1:
-            return 0, 0  # Must have exactly one closing tag
-
-        # Check for multiple <moves> tags - score as 0 if found
-        board_tags = re.findall(r"<board>", text, re.IGNORECASE)
-        if len(board_tags) > 1:
-            return 0, 0
-
-        # Check if the moves tag is properly opened - we need exactly one opening tag
-        if len(board_tags) != 1:
-            return 0, 0
-
-        # Check for </moves> closing tags
-        board_close_tags = re.findall(r"</board>", text, re.IGNORECASE)
-        if len(board_close_tags) != 1:
-            return 0, 0  # Must have exactly one closing tag
-
-        # Check if <think> comes immediately after </moves>
-        tag_sequence_match = re.search(r"</board>\s*<think>", text)
-        if not tag_sequence_match:
-            return 0, 0
-
-        board_section = re.search(r"<board>(.*?)</board>", text, re.DOTALL)
-        if board_section:
-            board_text = board_section.group(1).strip()
-            if "," in board_text:
-                pass
-            else:
-                return 0, 0
-
-        thinking_section = re.search(r"<think>(.*?)</think>", text, re.DOTALL)
-
-        # Validate thinking section
-        # Make sure thinking section actually contains the opening <think> tag
-        if "<think>" not in thinking_section.group():
-            return 0, 0  # Malformed thinking section
-
-        # Check if there are any <think> tags in the answer section (after the first </think>)
-        if "<think>" in board_section.group():
-            return 0, 0
-
-        return board_section.group(1), thinking_section.group(1)
+        return board_text, thinking_text
 
     async def rollout_and_score_eval(self, test_item):
         """
@@ -474,7 +463,7 @@ class ChessBoardVisualizationEnv(BaseEnv):
 
         # Construct messages for the model using system prompt
         messages = [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": question_text_with_instruction},
         ]
 
@@ -553,7 +542,6 @@ class ChessBoardVisualizationEnv(BaseEnv):
                     self.tokenizer.decode(scored_data["tokens"][i]),
                     scored_data["scores"][i],
                     item[1],
-                    item[2],
                 )
                 for i in range(num_keep)
             ]
