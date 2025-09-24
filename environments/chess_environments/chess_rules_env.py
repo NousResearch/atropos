@@ -471,10 +471,10 @@ class ChessRulesEnv(BaseEnv):
     async def rollout_and_score_eval(self, test_item):
         """
         Generate and score model responses for a single test item.
-    
+
         Args:
             test_item: Test item from dataset (contains board, fen, moves, etc.)
-    
+
         Returns:
             Score (float between 0 and 1 for accuracy)
         """
@@ -485,22 +485,32 @@ class ChessRulesEnv(BaseEnv):
         white_queenside_castling_rights = test_item["white_queenside"]
         black_kingside_castling_rights = test_item["black_kingside"]
         black_queenside_castling_rights = test_item["black_queenside"]
-    
+
         # Convert unicode pieces to letters
         unicode_to_piece = {
-            "♔": "K", "♕": "Q", "♖": "R", "♗": "B", "♘": "N", "♙": "P",
-            "♚": "k", "♛": "q", "♜": "r", "♝": "b", "♞": "n", "♟": "p",
+            "♔": "K",
+            "♕": "Q",
+            "♖": "R",
+            "♗": "B",
+            "♘": "N",
+            "♙": "P",
+            "♚": "k",
+            "♛": "q",
+            "♜": "r",
+            "♝": "b",
+            "♞": "n",
+            "♟": "p",
         }
         board = "".join(unicode_to_piece.get(c, c) for c in board)
-    
+
         # Format the question similar to get_next_item
         turn_text = "white" if turn == "w" else "black"
-        
+
         white_kingside = "can" if white_kingside_castling_rights else "can't"
         white_queenside = "can" if white_queenside_castling_rights else "can't"
         black_kingside = "can" if black_kingside_castling_rights else "can't"
         black_queenside = "can" if black_queenside_castling_rights else "can't"
-    
+
         castling_rights_text = (
             f"Castling Rights: "
             f"white {white_kingside} castle kingside, "
@@ -508,25 +518,25 @@ class ChessRulesEnv(BaseEnv):
             f"black {black_kingside} castle kingside, and "
             f"black {black_queenside} castle queenside"
         )
-    
+
         question_text_with_instruction = (
             f"Prompt: What are all the legal moves in the position for the active player?\n"
             f"Turn: {turn_text}\n"
             f"{castling_rights_text}\n"
             f"Board:\n{board}"
         )
-    
+
         # Construct messages for the model using system prompt
         messages = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": question_text_with_instruction},
         ]
-    
+
         # Apply chat template to convert messages to a single string
         prompt = self.tokenizer.apply_chat_template(
             messages, add_generation_prompt=True, tokenize=False
         )
-    
+
         # Get model completion
         completion = await self.server.completion(
             prompt=prompt,
@@ -535,45 +545,44 @@ class ChessRulesEnv(BaseEnv):
             temperature=0.5,
             split="eval",
         )
-    
+
         # Extract the model's response
         model_response = completion.choices[0].text
-    
+
         # Apply the same text preprocessing as in score()
         text = model_response
         pattern = re.compile(r"</tool_call>(.*?)(\[STOP\])", flags=re.DOTALL)
         text = pattern.sub(r"<think>\1</think>\2", text)
         model_response = text
-    
+
         # Extract moves and thinking from model response
         model_moves, thinking_text = self._extract_model_moves(model_response)
-    
+
         move_reward = 0.0
         if model_moves != 0:
             move_reward += 0.1  # little reward for getting the correct format
-            
+
             board = chess.Board(test_item["fen"])
             correct_legal_moves = [move.uci() for move in board.legal_moves]
-    
+
             model_set = set(model_moves)
             correct_set = set(correct_legal_moves)
-    
+
             # Count how many moves are correct
             num_correct = len(model_set & correct_set)  # intersection
-    
+
             # Divide by total legal moves
             accuracy = num_correct / len(correct_set)
             move_reward = accuracy
-    
+
         thinking_reward = 0.0
         if thinking_text != 0:
             thinking_reward += 0.1  # little reward for getting the correct format
-    
+
         # weights are tunable
         reward = 0.95 * move_reward + 0.05 * thinking_reward
         return reward
-    
-    
+
     async def evaluate(self, *args, **kwargs):
         """
         Evaluate the model on test data.
@@ -581,17 +590,18 @@ class ChessRulesEnv(BaseEnv):
         eval_tasks = []
         for test_item in self.test:
             eval_tasks.append(self.rollout_and_score_eval(test_item))
-    
+
         # Run evaluation with progress bar
         scores = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
-        
+
         # Calculate average score
         avg_score = sum(scores) / len(scores) if scores else 0.0
         self.eval_metrics.append(("eval/percent_correct", avg_score))
-        
-        print(f"Evaluation completed: {avg_score:.3f} average score on {len(scores)} examples")
-    
-    
+
+        print(
+            f"Evaluation completed: {avg_score:.3f} average score on {len(scores)} examples"
+        )
+
     async def add_rollouts_for_wandb(
         self,
         scored_data: Union[ScoredDataGroup, List[ScoredDataGroup]],
@@ -599,7 +609,7 @@ class ChessRulesEnv(BaseEnv):
     ):
         """
         Add rollouts for wandb logging.
-        
+
         Args:
             scored_data: ScoredDataGroup containing tokens, masks, and scores
             item: Current item containing (prompt, moves, tags)
@@ -608,60 +618,60 @@ class ChessRulesEnv(BaseEnv):
         num_keep = self.config.num_rollouts_per_group_for_logging
         if num_keep == -1:
             num_keep = self.config.group_size
-        
+
         # Ensure we don't try to keep more rollouts than we have
         num_keep = min(num_keep, len(scored_data["tokens"]))
-        
+
         rollout_data = []
         for i in range(num_keep):
             # Decode the tokenized conversation
             decoded_text = self.tokenizer.decode(scored_data["tokens"][i])
             score = scored_data["scores"][i]
             expected_moves = item[1] if item else "Unknown"  # ground truth moves
-            expected_tags = item[2] if item else "Unknown"   # ground truth tags
-            
+            expected_tags = item[2] if item else "Unknown"  # ground truth tags
+
             rollout_data.append((decoded_text, score, expected_moves, expected_tags))
-        
+
         self.rollouts_for_wandb.append(rollout_data)
-        
+
         # Keep only the most recent rollouts to avoid memory issues
         if len(self.rollouts_for_wandb) > self.config.num_rollouts_to_keep:
             self.rollouts_for_wandb.pop(0)
-    
-    
+
     async def create_rollout_table(self, wandb_metrics):
         """
         Create a wandb table from collected rollouts.
-        
+
         Args:
             wandb_metrics: Dictionary to add the table to
-            
+
         Returns:
             Updated wandb_metrics dictionary
         """
         if len(self.rollouts_for_wandb) > 0:
-            table = wandb.Table(columns=["text", "score", "expected_moves", "expected_tags"])
+            table = wandb.Table(
+                columns=["text", "score", "expected_moves", "expected_tags"]
+            )
             for group in self.rollouts_for_wandb:
                 for item in group:
                     # item is (decoded_text, score, expected_moves, expected_tags)
                     table.add_data(item[0], item[1], str(item[2]), str(item[3]))
             wandb_metrics["train/rollouts"] = table
-        
+
         # Clear the rollouts buffer after creating the table
         self.rollouts_for_wandb = []
         return wandb_metrics
-    
-    
+
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
         """
         Log metrics to wandb, including training accuracy and evaluation results.
-        
+
         Args:
             wandb_metrics: Optional dictionary of metrics to log
         """
         if wandb_metrics is None:
             wandb_metrics = {}
-    
+
         # Calculate training percent_correct from buffer
         try:
             if self.percent_correct_buffer:
@@ -671,19 +681,20 @@ class ChessRulesEnv(BaseEnv):
         except ZeroDivisionError:
             # Skip if buffer is empty
             pass
-    
+
         # Clear the buffer after logging
         self.percent_correct_buffer = []
-        
+
         # Add evaluation metrics
         for metric_name, metric_value in self.eval_metrics:
             wandb_metrics[metric_name] = metric_value
-        
+
         # Clear eval metrics after logging
         self.eval_metrics = []
-    
+
         # Call parent class wandb_log method
         await super().wandb_log(wandb_metrics)
-    
+
+
 if __name__ == "__main__":
     ChessRulesEnv.cli()
