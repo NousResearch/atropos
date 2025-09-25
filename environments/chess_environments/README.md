@@ -88,13 +88,9 @@ Step-wise reward:
 
     r_i = exp(-|S_pred(i) - S_correct(i)| / 100)
 
-Average cumulative reward:
+Average cumulative reward (final):
 
     r_bar = (1/N) * sum_{i=1}^{N} r_i
-
-Final reward (with non-linear transformation and clamping):
-
-    R = clip(tanh(r_bar), 0, 1)
 
 
 ---
