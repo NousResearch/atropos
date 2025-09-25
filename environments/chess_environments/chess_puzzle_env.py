@@ -58,7 +58,7 @@ def build_system_prompt(config: ChessEnvConfig) -> str:
         reasoning_section = "[STOP]\n\n"
 
     # prepend a provider-specific marker if needed
-    prefix = config.thinking_system_prompt or ""
+    prefix = (config.thinking_system_prompt + "\n\n") if config.thinking_system_prompt else ""
 
     prompt = (
         prefix
