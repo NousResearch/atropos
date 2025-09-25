@@ -59,10 +59,10 @@ def build_system_prompt(config: ChessEnvConfig) -> str:
     prompt = (
         prefix
         + "You are a chess rules assistant. You will be given a chess position in FEN format, "
-        "and your task is to output all possible legal moves for the player whose turn it is. "
-        "ALWAYS output exactly this format and nothing else:\n\n"
-        "<moves>comma-separated UCI moves</moves>\n"
-        f"<{tag}>explain your reasoning here (this may include internal chain-of-thought)</{tag}>[STOP]\n\n"
+          "and your task is to output all possible legal moves for the player whose turn it is. "
+          "ALWAYS output exactly this format and nothing else:\n\n"
+        f"<{tag}>explain your reasoning here (this may include internal chain-of-thought)</{tag}>\n"
+        "<moves>comma-separated UCI moves</moves>[STOP]\n\n"
         "Rules:\n"
         "1) Only output legal moves for the current player; do NOT suggest illegal moves.\n"
         "2) Do NOT use <tool_call>, <function_call>, JSON, or any other tags — only <moves> and "
@@ -71,9 +71,10 @@ def build_system_prompt(config: ChessEnvConfig) -> str:
         "4) Use chess keywords (check, fork, skewer, promotion, castling) where applicable inside "
         f"<{tag}>.\n\n"
         "Example:\n"
-        "<moves>e2e4,d2d3,g1f3</moves>\n"
-        f"<{tag}>e2e4 opens the center; d2d3 supports the pawn structure; g1f3 develops the knight</{tag}>[STOP]\n"
+        f"<{tag}>e2e4 opens the center; d2d3 supports the pawn structure; g1f3 develops the knight</{tag}>\n"
+        "<moves>e2e4,d2d3,g1f3</moves>[STOP]\n"
     )
+
     return prompt
 
 
@@ -403,74 +404,46 @@ class ChessRulesEnv(BaseEnv):
 
     def _extract_model_moves(self, text):
         """
-        Extract sequence of moves inside </moves> tags and reasoning inside of </{thinking_tag}> tags.
-        Only allows one valid answer format - multiple answer formats result in a score of 0.
-
+        Extract sequence of moves inside <moves> tags and reasoning inside <{thinking_tag}> tags.
+        Ignores the order of the tags, but still enforces one <moves> and one <thinking_tag> section.
+        
         Args:
             text: Text containing the model's response
-
+    
         Returns:
-            List of moves, text for thinking section
+            List of moves, text for thinking section, or (0, 0) if invalid
         """
-        # pull the dynamic tag
-        tag = re.escape(self.config.thinking_tag)  # escape just in case
-
-        # Regex patterns for open/close tags
-        open_tag_pattern = rf"<{tag}>"
-        close_tag_pattern = rf"</{tag}>"
-
-        # --- Thinking tag checks ---
-        think_tags = re.findall(open_tag_pattern, text, re.IGNORECASE)
-        if len(think_tags) > 1 or len(think_tags) != 1:
+        # Dynamic thinking tag
+        tag = re.escape(self.config.thinking_tag)
+    
+        # --- Moves section ---
+        moves_section = re.search(r"<moves>(.*?)</moves>", text, re.DOTALL | re.IGNORECASE)
+        if not moves_section:
             return 0, 0
-
-        think_close_tags = re.findall(close_tag_pattern, text, re.IGNORECASE)
-        if len(think_close_tags) != 1:
-            return 0, 0  # Must have exactly one closing tag
-
-        # --- Moves tag checks ---
-        moves_tags = re.findall(r"<moves>", text, re.IGNORECASE)
-        if len(moves_tags) > 1 or len(moves_tags) != 1:
+        moves_text = moves_section.group(1).strip()
+        if "," not in moves_text:
             return 0, 0
-
-        moves_close_tags = re.findall(r"</moves>", text, re.IGNORECASE)
-        if len(moves_close_tags) != 1:
-            return 0, 0
-
-        # Check if dynamic <tag> comes immediately after </moves>
-        tag_sequence_match = re.search(rf"</moves>\s*<{tag}>", text, re.IGNORECASE)
-        if not tag_sequence_match:
-            return 0, 0
-
-        # --- Extract moves section ---
-        moves_section = re.search(
-            r"<moves>(.*?)</moves>", text, re.DOTALL | re.IGNORECASE
-        )
-        if moves_section:
-            moves_text = moves_section.group(1).strip()
-            if "," not in moves_text:
-                return 0, 0
-        else:
-            return 0, 0
-
-        # --- Extract thinking section ---
-        thinking_section = re.search(
-            rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE
-        )
+        moves_list = [m.strip() for m in moves_text.split(",")]
+    
+        # --- Thinking section ---
+        thinking_section = re.search(rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE)
         if not thinking_section:
             return 0, 0
-
-        # Validate thinking section actually contains the opening tag
-        if f"<{self.config.thinking_tag}>" not in thinking_section.group():
+        thinking_text = thinking_section.group(1).strip()
+    
+        # --- Validation ---
+        # Must have exactly one of each tag
+        if len(re.findall(r"<moves>", text, re.IGNORECASE)) != 1 or len(re.findall(r"</moves>", text, re.IGNORECASE)) != 1:
+            return 0, 0
+        if len(re.findall(rf"<{tag}>", text, re.IGNORECASE)) != 1 or len(re.findall(rf"</{tag}>", text, re.IGNORECASE)) != 1:
+            return 0, 0
+    
+        # Make sure thinking tag does not appear inside moves section
+        if re.search(rf"<{tag}>", moves_section.group(), re.IGNORECASE):
             return 0, 0
 
-        # Make sure no thinking tags appear inside moves section
-        if f"<{self.config.thinking_tag}>" in moves_section.group():
-            return 0, 0
+    return moves_list, thinking_text
 
-        return [
-            m.strip() for m in moves_section.group(1).split(",")
-        ], thinking_section.group(1)
 
     async def rollout_and_score_eval(self, test_item):
         """
