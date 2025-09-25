@@ -82,7 +82,6 @@ def build_system_prompt(config: ChessEnvConfig) -> str:
         "<board>r,.,.,q,.,r,.,k,p,p,.,.,b,.,"
         "p,p,.,.,n,p,.,n,.,.,.,.,.,N,p,b,.,.,.,.,P,.,.,.,.,.,N"
         ",.,.,.,B,.,.,.,P,P,.,.,B,P,P,P,R,.,.,Q,.,R,K,.</board>\n"
-        
     )
 
     return prompt
