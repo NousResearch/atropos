@@ -58,7 +58,11 @@ def build_system_prompt(config: ChessEnvConfig) -> str:
         reasoning_section = "[STOP]\n\n"
 
     # prepend a provider-specific marker if needed
-    prefix = (config.thinking_system_prompt + "\n\n") if config.thinking_system_prompt else ""
+    prefix = (
+        (config.thinking_system_prompt + "\n\n")
+        if config.thinking_system_prompt
+        else ""
+    )
 
     prompt = (
         prefix
@@ -349,7 +353,7 @@ class ChessPuzzlesEnv(BaseEnv):
         # Average across all predicted moves and clamp
         avg_reward = cumulative_reward / max(len(pred_moves), 1)
         engine.quit()
-        
+
         return avg_reward
 
     async def score(self, rollout_group_data: List) -> Optional[ScoredDataGroup]:
