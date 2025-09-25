@@ -65,6 +65,8 @@ class ScoredData(BaseModel):
     messages: Optional[List[List[Dict[str, Any]]]] = (
         None  # Changed from Message TypedDict to Dict
     )
+    generation_params: Optional[Dict[str, Any]] = None
+    inference_logprobs: Optional[List[List[float]]] = None
     overrides: Optional[List[dict]] = None
     group_overrides: Optional[dict] = None
     images: Optional[Any] = None
@@ -268,6 +270,7 @@ async def get_latest_example():
             "scores": [],
             "advantages": [],
             "ref_logprobs": [],
+            "inference_logprobs": [],
             "messages": [],
             "images": [],
         }
@@ -282,6 +285,8 @@ async def scored_data(scored_data: ScoredData):
         "advantages": scored_data.advantages,
         "ref_logprobs": scored_data.ref_logprobs,
         "messages": scored_data.messages,
+        "generation_params": scored_data.generation_params,
+        "inference_logprobs": scored_data.inference_logprobs,
         "overrides": scored_data.overrides,
         "group_overrides": scored_data.group_overrides,
         "images": scored_data.images,
@@ -344,6 +349,8 @@ async def scored_data_list(scored_data_list: List[ScoredData]):
             "ref_logprobs": scored_data.ref_logprobs,
             "images": scored_data.images,
             "messages": scored_data.messages,
+            "generation_params": scored_data.generation_params,
+            "inference_logprobs": scored_data.inference_logprobs,
             "overrides": scored_data.overrides,
             "group_overrides": scored_data.group_overrides,
             "env_id": scored_data.env_id,
