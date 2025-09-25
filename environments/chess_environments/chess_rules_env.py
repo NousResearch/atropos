@@ -59,8 +59,8 @@ def build_system_prompt(config: ChessEnvConfig) -> str:
     prompt = (
         prefix
         + "You are a chess rules assistant. You will be given a chess position in FEN format, "
-          "and your task is to output all possible legal moves for the player whose turn it is. "
-          "ALWAYS output exactly this format and nothing else:\n\n"
+        "and your task is to output all possible legal moves for the player whose turn it is. "
+        "ALWAYS output exactly this format and nothing else:\n\n"
         f"<{tag}>explain your reasoning here (this may include internal chain-of-thought)</{tag}>\n"
         "<moves>comma-separated UCI moves</moves>[STOP]\n\n"
         "Rules:\n"
@@ -406,44 +406,53 @@ class ChessRulesEnv(BaseEnv):
         """
         Extract sequence of moves inside <moves> tags and reasoning inside <{thinking_tag}> tags.
         Ignores the order of the tags, but still enforces one <moves> and one <thinking_tag> section.
-        
+
         Args:
             text: Text containing the model's response
-    
+
         Returns:
             List of moves, text for thinking section, or (0, 0) if invalid
         """
         # Dynamic thinking tag
         tag = re.escape(self.config.thinking_tag)
-    
+
         # --- Moves section ---
-        moves_section = re.search(r"<moves>(.*?)</moves>", text, re.DOTALL | re.IGNORECASE)
+        moves_section = re.search(
+            r"<moves>(.*?)</moves>", text, re.DOTALL | re.IGNORECASE
+        )
         if not moves_section:
             return 0, 0
         moves_text = moves_section.group(1).strip()
         if "," not in moves_text:
             return 0, 0
         moves_list = [m.strip() for m in moves_text.split(",")]
-    
+
         # --- Thinking section ---
-        thinking_section = re.search(rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE)
+        thinking_section = re.search(
+            rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE
+        )
         if not thinking_section:
             return 0, 0
         thinking_text = thinking_section.group(1).strip()
-    
+
         # --- Validation ---
         # Must have exactly one of each tag
-        if len(re.findall(r"<moves>", text, re.IGNORECASE)) != 1 or len(re.findall(r"</moves>", text, re.IGNORECASE)) != 1:
+        if (
+            len(re.findall(r"<moves>", text, re.IGNORECASE)) != 1
+            or len(re.findall(r"</moves>", text, re.IGNORECASE)) != 1
+        ):
             return 0, 0
-        if len(re.findall(rf"<{tag}>", text, re.IGNORECASE)) != 1 or len(re.findall(rf"</{tag}>", text, re.IGNORECASE)) != 1:
+        if (
+            len(re.findall(rf"<{tag}>", text, re.IGNORECASE)) != 1
+            or len(re.findall(rf"</{tag}>", text, re.IGNORECASE)) != 1
+        ):
             return 0, 0
-    
+
         # Make sure thinking tag does not appear inside moves section
         if re.search(rf"<{tag}>", moves_section.group(), re.IGNORECASE):
             return 0, 0
 
     return moves_list, thinking_text
-
 
     async def rollout_and_score_eval(self, test_item):
         """
