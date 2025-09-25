@@ -65,9 +65,8 @@ def build_system_prompt(config: ChessEnvConfig) -> str:
         "<board>Each square separated by commas; empty squares as '.',"
         "white pieces uppercase, black pieces lowercase, en passant squares as '*'. "
         "Must contain exactly 64 squares. Do NOT include any extra text or explanation inside <board>.</board>\n"
-        f"<{tag}>Provide a concise explanation of the current position,"
-        "including tactical or strategic observations, possible threats, "
-        "and reasoning behind piece placement. Keep it short and relevant to the <board> state.</{tag}>[STOP]\n\n"
+        f"<{tag}>Provide your step by step logic of each move being played out on the board."
+        "Once you get your final position, explain what is happening in the final position.</{tag}>[STOP]\n\n"
         "Rules:\n"
         "1) Board is from White's perspective (top is Black, bottom is White).\n"
         "2) Pieces: K=White King, Q=White Queen, R=White Rook, "
@@ -78,11 +77,12 @@ def build_system_prompt(config: ChessEnvConfig) -> str:
         "5) Close both tags before [STOP].\n"
         "6) <board> must always have exactly 64 comma-separated characters.\n\n"
         "Example format (do NOT copy this board, just follow the format):\n"
+        f"<{tag}>Provide your step by step logic of each move being played out on the board."
+        "Once you get your final position, explain what is happening in the final position.</{tag}>[STOP]\n"
         "<board>r,.,.,q,.,r,.,k,p,p,.,.,b,.,"
         "p,p,.,.,n,p,.,n,.,.,.,.,.,N,p,b,.,.,.,.,P,.,.,.,.,.,N"
         ",.,.,.,B,.,.,.,P,P,.,.,B,P,P,P,R,.,.,Q,.,R,K,.</board>\n"
-        f"<{tag}>Write a description of the position you output inside <board>,"
-        "focusing on piece activity, threats, and potential plans.</{tag}>[STOP]\n"
+        
     )
 
     return prompt
