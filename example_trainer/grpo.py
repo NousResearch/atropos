@@ -170,11 +170,20 @@ def pad_data_to_good_offset(data, batch_size: int):
             # per-sample override -> group generation_params -> group_overrides - > 1.0
             # need to update docs since this lets you set the temperature for each sample from the override
             t = 1.0
-            if item.get("overrides") and i < len(item["overrides"]) and isinstance(item["overrides"][i], dict) and ("temperature" in item["overrides"][i]):
+            if (
+                item.get("overrides")
+                and i < len(item["overrides"])
+                and isinstance(item["overrides"][i], dict)
+                and ("temperature" in item["overrides"][i])
+            ):
                 t = float(item["overrides"][i]["temperature"])
-            elif item.get("generation_params") and ("temperature" in item["generation_params"]):
+            elif item.get("generation_params") and (
+                "temperature" in item["generation_params"]
+            ):
                 t = float(item["generation_params"]["temperature"])
-            elif item.get("group_overrides") and ("temperature" in item["group_overrides"]):
+            elif item.get("group_overrides") and (
+                "temperature" in item["group_overrides"]
+            ):
                 t = float(item["group_overrides"]["temperature"])
             temperatures.append(t)
     # combine all lists into tensors
@@ -213,7 +222,11 @@ def pad_data_to_good_offset(data, batch_size: int):
 
 def get_data(
     batch_size: int, seq_len: int
-) -> List[Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]]:
+) -> List[
+    Tuple[
+        List[torch.Tensor], List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]
+    ]
+]:
     """
     getting data from the api
     """
@@ -343,7 +356,9 @@ def train(config: TrainingConfig):
         total_neg = 0
         if len(batches) == 0:
             batches = get_data(config.batch_size, config.seq_len)
-        token_batches, label_batches, advantage_batches, temperature_batches = batches.pop(0)
+        token_batches, label_batches, advantage_batches, temperature_batches = (
+            batches.pop(0)
+        )
         # Terminate existing vLLM process if running
         if (
             step + 1
@@ -377,7 +392,7 @@ def train(config: TrainingConfig):
             logits = outputs.logits  # Assuming this is the structure
             # temp scaled logits before corss entropy (clamp to prevent zero division or just ignore 0 temps?)
             t = temperatures.to(logits.device, logits.dtype)
-            t = torch.where(t <= 0, torch.ones_like(t), t)   
+            t = torch.where(t <= 0, torch.ones_like(t), t)
             logits = logits / t
 
             # Calculate GRPO loss (reverting to user's previous logic)
