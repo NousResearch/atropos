@@ -134,6 +134,8 @@ The API documentation (Swagger UI) will be available at `http://<your-server-ip>
             scores: List[float]
             advantages: Optional[List[List[float]]] = None
             ref_logprobs: Optional[List[List[float]]] = None
+            inference_logprobs: Optional[List[List[float]]] = None
+            generation_params: Optional[Dict[str, Any]] = None
             messages: Optional[List[List[Message]]] = None
             overrides: Optional[List[dict]] = None # Per-item logging overrides
             group_overrides: Optional[dict] = None # Group logging overrides
@@ -154,7 +156,7 @@ The API documentation (Swagger UI) will be available at `http://<your-server-ip>
         * Not enough data: `{"batch": null}`
 * `GET /latest_example`
     * **Description:** Debug endpoint to retrieve the most recently added `ScoredData` item.
-    * **Response:** The last `ScoredData` dictionary pushed, or empty lists for tokens, masks, scores, advantages, ref_logprobs, messages, and images if none yet.
+    * **Response:** The last `ScoredData` dictionary pushed, or empty lists for tokens, masks, scores, advantages, ref_logprobs, inference_logprobs, generation_params, messages, and images if none yet.
 
 ### Debugging
 
