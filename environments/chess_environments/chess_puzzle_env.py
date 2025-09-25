@@ -349,10 +349,8 @@ class ChessPuzzlesEnv(BaseEnv):
         # Average across all predicted moves and clamp
         avg_reward = cumulative_reward / max(len(pred_moves), 1)
         engine.quit()
-
-        # Apply a final non-linear transformation
-        final_reward = math.tanh(avg_reward)  # emphasizes high values more
-        return max(min(final_reward, 1.0), 0.0)
+        
+        return avg_reward
 
     async def score(self, rollout_group_data: List) -> Optional[ScoredDataGroup]:
         """
