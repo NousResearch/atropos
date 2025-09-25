@@ -50,7 +50,7 @@ def build_system_prompt(config: ChessEnvConfig) -> str:
     tag = config.thinking_tag or "think"
 
     # prepend any extra system text if provided
-    prefix = config.thinking_system_prompt or ""
+    prefix = (config.thinking_system_prompt + "\n\n") if config.thinking_system_prompt else ""
 
     prompt = (
         prefix
