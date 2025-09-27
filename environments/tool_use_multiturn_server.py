@@ -528,7 +528,7 @@ class MultiTurnToolCallingEnv(BaseEnv):
             wandb_name="multiturn_tool_use",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
-            # Use config defaults; all knobs are overrideable via CLI/YAML
+            # Use config defaults; all knobs are overridable via CLI/YAML
             skip_completed=True,
         )
         # ─── Scenario‑specific tweaks ──────────────────────────────
