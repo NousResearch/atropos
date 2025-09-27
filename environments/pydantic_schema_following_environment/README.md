@@ -20,7 +20,7 @@ The environment expects a dataset with the following columns:
 **Generation Task:**
 ```json
 {
-  "problem_id": "pydantic_adherance_PuXNOOXO",
+  "problem_id": "pydantic_adherence_PuXNOOXO",
   "task_type": "generation",
   "prompt": "Below you see a pydantic model named FestivalLineup. Return a json that, when parsed to a dict, is compatible with the model. Here is the pydantic config:\n\n```python\nfrom pydantic import BaseModel, model_validator, ConfigDict, ValidationError, HttpUrl\nfrom typing import List, Dict, Literal\nfrom datetime import date, time\n\nclass Artist(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n    name: str\n    genre: Literal['rock', 'electronic', 'jazz', 'pop', 'hiphop']\n    popularity_score: int\n    social_links: Dict[str, HttpUrl] = {}\n\n    @model_validator(mode='after')\n    def check_popularity(cls, m):\n        if not (0 <= m.popularity_score <= 100):\n            raise ValidationError(...)\n        return m\n\n# ... more model definitions ...\n```\n\nReturn the json and nothing else.",
   "verification_info": "{\"pydantic_config\": \"from pydantic import BaseModel, model_validator, ConfigDict, ValidationError, HttpUrl\\nfrom typing import List, Dict, Literal\\nfrom datetime import date, time\\n\\nclass Artist(BaseModel):\\n    model_config = ConfigDict(extra=\\\"forbid\\\")\\n    name: str\\n    genre: Literal['rock', 'electronic', 'jazz', 'pop', 'hiphop']\\n    popularity_score: int\\n    social_links: Dict[str, HttpUrl] = {}\\n\\n    @model_validator(mode='after')\\n    def check_popularity(cls, m):\\n        if not (0 <= m.popularity_score <= 100):\\n            raise ValidationError(...)\\n        return m\\n\\n# ... complete model definitions ...\", \"model_name\": \"FestivalLineup\"}",
