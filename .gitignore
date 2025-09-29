@@ -1,8 +1,10 @@
+# keys
+*/secrets.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-
+.DS_Store
 # C extensions
 *.so
 
@@ -184,3 +186,25 @@ wandb
 .gradio/
 
 example_trainer/trained_model_checkpoints/
+
+# uv
+uv.lock
+
+.DS_Store
+.aider*
+environments/community/word_hunt/Dictionary.txt
+
+# Word Hunt artefacts
+environments/community/word_hunt/Dictionary.txt
+environments/community/word_hunt/debug_test.py
+environments/community/word_hunt/template_with_metadata.html
+environments/community/word_hunt/word_hunt_rollouts*.html
+.DS_Store
+
+# Textworld artefacts
+*.z8
+*.ni
+*.z5
+
+# Diplomacy artefacts
+environments/game_environments/diplomacy_environment/logs/

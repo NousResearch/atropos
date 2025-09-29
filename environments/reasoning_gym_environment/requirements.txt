@@ -1,0 +1,13 @@
+numpy>=1.21.0
+sympy>=1.9.0
+matplotlib>=3.5.0
+pillow>=8.3.0
+
+tqdm>=4.62.0
+asyncio-throttle>=1.0.0
+
+jsonlines>=2.0.0
+
+colorlog>=6.0.0
+
+# Python version requirement (reasoning-gym requires Python >= 3.10)

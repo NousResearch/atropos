@@ -1,0 +1,75 @@
+# Word Hunt Environment Example Configuration
+# Copy this file and modify as needed for your training runs
+
+# Environment Configuration
+env_name: "word_hunt_environment"
+env_config:
+  # Core Training Parameters
+  group_size: 4
+  max_token_length: 2048
+  steps_per_eval: 100
+  boards_per_epoch: 50
+
+  # Game Parameters
+  board_size: 4
+  min_word_length: 3
+  max_word_length: 16
+  max_tokens_per_game: 100
+
+  # Board Generation
+  vowel_weight: 0.4
+  common_letter_bias: true
+  board_generation_method: "random_weighted"
+
+  # Scoring
+  use_official_scoring: true
+  normalize_scores: true
+  max_possible_score_estimate: 10000
+
+  # Validation
+  validate_words: true
+  validate_board_paths: true
+
+  # Prompt Configuration
+  prompt_style: "grid_visual"  # Options: grid_visual, text_description, both
+  include_instructions: true
+  include_scoring_info: true
+
+  # Evaluation
+  eval_board_count: 10
+  eval_metrics: ["accuracy", "total_score", "word_count", "avg_word_length"]
+
+  # Logging
+  debug_mode: false
+  use_wandb: true
+  wandb_name: "word_hunt_training"
+
+  # Advanced Options
+  shuffle_boards: true
+  save_board_images: false
+
+# Server Configuration (example)
+server_configs:
+  - name: "openai"
+    server_type: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    base_url: "https://api.openai.com/v1"
+    model: "gpt-4"
+    max_retries: 3
+    timeout: 60
+
+# Training Parameters
+training:
+  total_steps: 10000
+  batch_size: 512
+  learning_rate: 1e-5
+  warmup_steps: 100
+  gradient_accumulation_steps: 1
+
+# Logging Configuration
+logging:
+  log_level: "INFO"
+  save_checkpoints: true
+  checkpoint_interval: 1000
+  save_rollouts: false
+  rollout_save_interval: 500

@@ -4,7 +4,7 @@ from transformers import PreTrainedTokenizer
 from atroposlib.type_definitions import Message
 
 # Roles that should be masked in the loss calculation (not used for training)
-UNMASKED_ROLES = ["assistant"]
+UNMASKED_ROLES = ["assistant", "agent"]
 
 
 def tokenize_for_trainer(
