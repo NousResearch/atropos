@@ -83,8 +83,12 @@ class ProcessSafeAtroposServerModel(Model):
     def _extract_user_message(self, messages):
         """Extract content from the last user message."""
         for msg in reversed(messages):
-            if msg["role"] == "user":
-                content = msg["content"]
+            # Handle both dict and ChatMessage objects
+            role = msg.role if hasattr(msg, "role") else msg["role"]
+            role_str = role.value if hasattr(role, "value") else str(role)
+
+            if role_str.lower() == "user":
+                content = msg.content if hasattr(msg, "content") else msg["content"]
                 if isinstance(content, list):
                     # Handle list format [{"type": "text", "text": "content"}]
                     return "\n".join(
@@ -99,8 +103,9 @@ class ProcessSafeAtroposServerModel(Model):
 
         # For OpenAI API, we need to map roles to the ones they support
         for i, msg in enumerate(messages):
-            role = msg["role"]
-            content = msg["content"]
+            # Handle both dict and ChatMessage objects
+            role = msg.role if hasattr(msg, "role") else msg["role"]
+            content = msg.content if hasattr(msg, "content") else msg["content"]
 
             # Map any role to either system, user, or assistant
             if isinstance(role, str):

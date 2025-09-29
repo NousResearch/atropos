@@ -26,17 +26,11 @@ The integration consists of:
 ## Installation
 
 1. First, make sure you have Atropos installed.
-2. Install SmolaGents:
-   ```
+2. Install SmolaGents and dependencies:
+   ```bash
    pip install smolagents
-   ```
-3. Install the GAIA benchmark dependencies:
-   ```
    pip install datasets pandas huggingface_hub
-   ```
-4. For web tools, install Tavily:
-   ```
-   pip install tavily-python
+   pip install tavily-python  # Required for web search tools (needed by most GAIA tasks)
    ```
 
 ## Environment Variables
@@ -50,6 +44,26 @@ If you need to use a different API key per run, you can also provide them as com
 ```
 --api-key your_api_key
 ```
+
+## Quick Start
+
+Test the environment with a small batch:
+
+```bash
+# Set your API keys
+export OPENAI_API_KEY='your-openai-key'
+export TAVILY_API_KEY='your-tavily-key'  # Get free key at https://tavily.com
+
+# Run a quick test (processes 2 examples)
+python -m environments.smolagents_integration.smolagents_env process \
+  --env.group_size 2 \
+  --env.total_steps 1 \
+  --env.use_wandb false \
+  --openai.model_name "gpt-4o-mini" \
+  --openai.base_url "https://api.openai.com/v1"
+```
+
+**Note:** The GAIA dataset will be automatically downloaded to `data/gaia` on first run if not present. You need HuggingFace access to the GAIA dataset.
 
 ## Using the Integration
 
@@ -161,9 +175,17 @@ The process-based isolation can be configured through the following options:
 
 The SmolaGents integration uses the GAIA benchmark dataset for generating high-quality agent trajectories. The dataset includes a variety of tasks with file attachments that test reasoning, problem-solving, and tool usage capabilities.
 
-### Downloading the Dataset
+### Automatic Download
 
-The integration includes a dedicated script for downloading and setting up the GAIA dataset:
+The environment automatically downloads the GAIA dataset on first run if it's not found. The dataset will be saved to `data/gaia` by default.
+
+**Requirements:**
+- You need access to the GAIA dataset on HuggingFace
+- Ensure you're logged in with `huggingface-cli login` or have your `HF_TOKEN` set
+
+### Manual Download (Optional)
+
+If you prefer to download the dataset manually or to a custom location, the integration includes a dedicated script:
 
 ```bash
 # Download to the default location (data/gaia)
