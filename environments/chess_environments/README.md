@@ -86,11 +86,12 @@ Given:
 
 Step-wise reward:
 
-    r_i = exp(-|S_pred(i) - S_correct(i)| / 100)
+$$ r_i = \exp\!\left(-\frac{\left|S_{\text{pred}}(i) - S_{\text{correct}}(i)\right|}{100}\right) $$
+
 
 Average cumulative reward (final):
 
-    r_bar = (1/N) * sum_{i=1}^{N} r_i
+$$ \overline r = \frac 1 N  \sum_{i=1}^{N} r_i $$
 
 
 ---
