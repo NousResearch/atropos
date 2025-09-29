@@ -315,8 +315,8 @@ class ChessPuzzlesEnv(BaseEnv):
         pred_moves,
         initial_fen,
         correct_moves,
-        stockfish_path="stockfish_path",
     ):
+        stockfish_path = os.environ.get("STOCKFISH_PATH", "stockfish")
         board = chess.Board(initial_fen)
         engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
 
