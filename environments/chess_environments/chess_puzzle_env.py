@@ -52,10 +52,10 @@ def build_system_prompt(config: ChessEnvConfig) -> str:
     if config.thinking_mode:
         reasoning_section = (
             f"<{tag}>explain your reasoning here "
-            f"(this may include internal chain-of-thought)</{tag}>[STOP]\n\n"
+            f"(this may include internal chain-of-thought)</{tag}>\n\n"
         )
     else:
-        reasoning_section = "[STOP]\n\n"
+        reasoning_section = "\n\n"
 
     # prepend a provider-specific marker if needed
     prefix = (
@@ -72,12 +72,12 @@ def build_system_prompt(config: ChessEnvConfig) -> str:
         "Rules:\n"
         "1) Do NOT use <tool_call>, <function_call>, JSON, or any other tags — only <moves> "
         f"and <{tag}>.\n"
-        "2) Close both tags before emitting [STOP].\n"
+        "2) Close both tags before emitting.\n"
         "3) Use chess keywords (fork, skewer, mate in 2, advanced pawn) where applicable "
         f"inside <{tag}>.\n\n"
         "Example:\n"
         f"<{tag}>e2e4 opens lines; e7e5 is a standard reply... add more chess reasoning</{tag}>\n"
-        "<moves>e2e4,e7e5</moves>[STOP]\n"
+        "<moves>e2e4,e7e5</moves>\n"
     )
 
     return prompt
