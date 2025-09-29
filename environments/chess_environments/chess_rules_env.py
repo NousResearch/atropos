@@ -339,9 +339,6 @@ class ChessRulesEnv(BaseEnv):
             else:
                 # Extract the answer from the model's response
 
-                text = model_response
-                pattern = re.compile(r"</tool_call>(.*?)(\[STOP\])", flags=re.DOTALL)
-                text = pattern.sub(r"<think>\1</think>\2", text)
                 model_response = text
 
                 model_moves, thinking_text = self._extract_model_moves(model_response)
@@ -534,12 +531,6 @@ class ChessRulesEnv(BaseEnv):
 
         # Extract the model's response
         model_response = completion.choices[0].text
-
-        # Apply the same text preprocessing as in score()
-        text = model_response
-        pattern = re.compile(r"</tool_call>(.*?)(\[STOP\])", flags=re.DOTALL)
-        text = pattern.sub(r"<think>\1</think>\2", text)
-        model_response = text
 
         # Extract moves and thinking from model response
         model_moves, thinking_text = self._extract_model_moves(model_response)
