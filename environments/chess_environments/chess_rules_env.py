@@ -62,17 +62,17 @@ def build_system_prompt(config: ChessEnvConfig) -> str:
         "and your task is to output all possible legal moves for the player whose turn it is. "
         "ALWAYS output exactly this format and nothing else:\n\n"
         f"<{tag}>explain your reasoning here (this may include internal chain-of-thought)</{tag}>\n"
-        "<moves>comma-separated UCI moves</moves>[STOP]\n\n"
+        "<moves>comma-separated UCI moves</moves>\n\n"
         "Rules:\n"
         "1) Only output legal moves for the current player; do NOT suggest illegal moves.\n"
         "2) Do NOT use <tool_call>, <function_call>, JSON, or any other tags — only <moves> and "
         f"<{tag}>.\n"
-        "3) Close both tags before emitting [STOP].\n"
+        "3) Close both tags before emitting.\n"
         "4) Use chess keywords (check, fork, skewer, promotion, castling) where applicable inside "
         f"<{tag}>.\n\n"
         "Example:\n"
         f"<{tag}>e2e4 opens the center; d2d3 supports the pawn structure; g1f3 develops the knight</{tag}>\n"
-        "<moves>e2e4,d2d3,g1f3</moves>[STOP]\n"
+        "<moves>e2e4,d2d3,g1f3</moves>\n"
     )
 
     return prompt
