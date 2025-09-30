@@ -777,7 +777,11 @@ class SmolagentsEnv(BaseEnv):
                     # Handle both dict and ChatMessage objects
                     if hasattr(message, "role") and hasattr(message, "content"):
                         # Convert ChatMessage to dict
-                        role = message.role.value if hasattr(message.role, "value") else str(message.role)
+                        role = (
+                            message.role.value
+                            if hasattr(message.role, "value")
+                            else str(message.role)
+                        )
                         messages.append({"role": role, "content": message.content})
                     elif isinstance(message, dict):
                         messages.append(message)

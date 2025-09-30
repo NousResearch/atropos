@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import os
+
 from smolagents import tool
+
 
 @tool
 def read_file(file_path: str) -> str:
@@ -19,6 +21,7 @@ def read_file(file_path: str) -> str:
         print(content)
         return content
 
+
 @tool
 def write_file(file_path: str, content: str) -> str:
     """
@@ -35,6 +38,7 @@ def write_file(file_path: str, content: str) -> str:
     with open(file_path, "w") as f:
         f.write(content)
     return f"Content written to {file_path}"
+
 
 @tool
 def append_to_file(file_path: str, content: str) -> str:

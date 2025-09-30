@@ -56,7 +56,10 @@ def question_scorer(
         try:
             model_answer = str(model_answer)
         except Exception as e:
-            warnings.warn(f"Failed to convert model_answer to string: {e}. Type: {type(model_answer)}", UserWarning)
+            warnings.warn(
+                f"Failed to convert model_answer to string: {e}. Type: {type(model_answer)}",
+                UserWarning,
+            )
             return False
 
     # if gt is a number
@@ -73,7 +76,9 @@ def question_scorer(
 
         # check length is the same
         if len(gt_elems) != len(ma_elems):
-            warnings.warn("Answer lists have different lengths, returning False.", UserWarning)
+            warnings.warn(
+                "Answer lists have different lengths, returning False.", UserWarning
+            )
             return False
 
         # compare each element as float or str
@@ -85,7 +90,8 @@ def question_scorer(
             else:
                 # we do not remove punct since comparisons can include punct
                 comparisons.append(
-                    normalize_str(ma_elem, remove_punct=False) == normalize_str(gt_elem, remove_punct=False)
+                    normalize_str(ma_elem, remove_punct=False)
+                    == normalize_str(gt_elem, remove_punct=False)
                 )
         return all(comparisons)
 
@@ -116,8 +122,12 @@ def check_close_call(prediction, true_answer, is_correct):
             return is_correct
         else:
             if (
-                check_prediction_contains_answer_letters_in_order(str(prediction), str(true_answer))
-                and len(str(true_answer)) * 0.5 <= len(str(prediction)) <= len(str(true_answer)) * 2
+                check_prediction_contains_answer_letters_in_order(
+                    str(prediction), str(true_answer)
+                )
+                and len(str(true_answer)) * 0.5
+                <= len(str(prediction))
+                <= len(str(true_answer)) * 2
             ):
                 # Remove print statement that causes duplicated output
                 return True
@@ -142,9 +152,12 @@ def normalize_str(input_str, remove_punct=True) -> str:
         try:
             input_str = str(input_str)
         except Exception as e:
-            warnings.warn(f"Failed to convert input to string: {e}. Type: {type(input_str)}", UserWarning)
+            warnings.warn(
+                f"Failed to convert input to string: {e}. Type: {type(input_str)}",
+                UserWarning,
+            )
             return ""
-            
+
     # Remove all white spaces. Required e.g for seagull vs. sea gull
     no_spaces = re.sub(r"\s", "", input_str)
 
