@@ -1,4 +1,5 @@
 import random
+import time
 from typing import Dict, List, Optional, Tuple, TypedDict, Union
 
 from datasets import load_dataset
@@ -12,7 +13,7 @@ from atroposlib.envs.base import (
     BaseEnvConfig,
     ScoredDataGroup,
 )
-from atroposlib.type_definitions import Item, number
+from atroposlib.type_definitions import Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 system_prompt = (
@@ -120,7 +121,8 @@ class GSM8kEnv(BaseEnv):
         data["iter"] = self.iter
         super().save_checkpoint(step, data)
 
-    async def rollout_and_score_eval(self, question: str, answer: str) -> number:
+    async def rollout_and_score_eval(self, question: str, answer: str) -> dict:
+        """Rollout and score evaluation with detailed sample data collection."""
         completion = await self.server.chat_completion(
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -131,13 +133,19 @@ class GSM8kEnv(BaseEnv):
             temperature=0.0,
             split="eval",
         )
+
+        response_content = completion.choices[0].message.content
+
+        # Parse gold answer
         gold_parsed = parse(
             "\\boxed{" + answer + "}",
             extraction_mode="first_match",
             extraction_config=[LatexExtractionConfig()],
         )
+
+        # Parse model answer
         answer_parsed = parse(
-            completion.choices[0].message.content.split("</think>")[-1],
+            response_content.split("</think>")[-1],
             extraction_config=[
                 LatexExtractionConfig(
                     normalization_config=NormalizationConfig(
@@ -148,24 +156,73 @@ class GSM8kEnv(BaseEnv):
                         boxed="all",
                         units=True,
                     ),
-                    # Ensures that boxed is tried first
                     boxed_match_priority=0,
                     try_extract_without_anchor=False,
                 )
             ],
             extraction_mode="first_match",
         )
+
         score = 1 if verify(answer_parsed, gold_parsed) else 0
-        return score
+
+        sample = {
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": response_content},
+            ],
+            "question": question,
+            "gold_answer": answer,
+            "gold_parsed": str(gold_parsed) if gold_parsed else None,
+            "model_parsed": str(answer_parsed) if answer_parsed else None,
+            "score": int(score),
+            "correct": bool(score),
+            "finish_reason": completion.choices[0].finish_reason,
+            "response_after_think": (
+                response_content.split("</think>")[-1]
+                if "</think>" in response_content
+                else response_content
+            ),
+        }
+
+        return {"score": score, "sample": sample}
 
     async def evaluate(self, *args, **kwargs):
+        start_time = time.time()
+
         eval_tasks = []
         for item in self.test:
             eval_tasks.append(
                 self.rollout_and_score_eval(item["question"], item["gold_answer"])
             )
-        scores = await tqdm_asyncio.gather(*eval_tasks)
-        self.eval_metrics.append(("eval/percent_correct", sum(scores) / len(scores)))
+        results = await tqdm_asyncio.gather(*eval_tasks)
+
+        # Extract scores and samples
+        scores = [result["score"] for result in results]
+        samples = [result["sample"] for result in results]
+
+        percent_correct = sum(scores) / len(scores)
+
+        end_time = time.time()
+
+        # Add to existing metrics for wandb
+        self.eval_metrics.append(("eval/percent_correct", percent_correct))
+
+        # Log evaluation results
+        eval_metrics = {
+            "eval/percent_correct": percent_correct,
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "temperature": 0.0,
+                "max_tokens": self.config.max_token_length,
+            },
+        )
 
     async def collect_trajectories(
         self, item: GSM8kRow

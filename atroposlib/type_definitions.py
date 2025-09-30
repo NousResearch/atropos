@@ -1,6 +1,7 @@
-from typing import Any, Dict, List, Literal, Optional, TypedDict
+from typing import Any, Dict, List, Literal, Optional
 
 from openai.types.chat import ChatCompletionContentPartParam
+from typing_extensions import TypedDict
 
 Content = str | list[ChatCompletionContentPartParam]
 Item = Any
@@ -68,3 +69,41 @@ class GameStep(TypedDict):
 
 # GameHistory is represented as a list of game steps.
 GameHistory = List[GameStep]
+
+
+class EvaluationConfigGeneral(TypedDict):
+    """Configuration section of evaluation results."""
+
+    total_evaluation_time_secondes: str
+    model_name: Optional[str]
+    generation_parameters: Dict[str, Any]
+
+
+class EvaluationResults(TypedDict):
+    """Results section containing metrics for tasks and aggregated results."""
+
+    all: Dict[str, float]  # Aggregated metrics across all tasks
+
+
+class EvaluationMetrics(TypedDict):
+    """Complete evaluation metrics JSON structure."""
+
+    config_general: EvaluationConfigGeneral
+    results: EvaluationResults
+
+
+class EvaluationSample(TypedDict, total=False):
+    """Individual sample data written to JSONL files.
+
+    All fields are optional to accommodate different evaluation scenarios.
+    """
+
+    messages: Optional[List[Dict[str, str]]]
+    question: Optional[str]
+    gold_answer: Optional[str]
+    gold_parsed: Optional[str]
+    model_parsed: Optional[str]
+    score: Optional[int]
+    correct: Optional[bool]
+    finish_reason: Optional[str]
+    response_after_think: Optional[str]

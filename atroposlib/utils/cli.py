@@ -14,9 +14,15 @@ def get_prefixed_pydantic_model(base_model: BaseModel, prefix: str) -> BaseModel
         if hasattr(field, "description") and field.description is not None:
             field_kwargs["description"] = field.description
 
+        # Handle both default and default_factory
+        if field.default_factory is not None:
+            field_kwargs["default_factory"] = field.default_factory
+        else:
+            field_kwargs["default"] = field.default
+
         fields[new_name] = (
             field.annotation,
-            Field(default=field.default, **field_kwargs),
+            Field(**field_kwargs),
         )
 
     return create_model(f"{prefix.capitalize()}{base_model.__name__}", **fields)
@@ -113,9 +119,16 @@ def adjust_model_defaults(
             ):
                 field_kwargs["description"] = field_info.description
 
+            # If the original field had a default_factory and we're not explicitly overriding with a value,
+            # preserve the default_factory
+            if field_info.default_factory is not None and defaults_dict[name] is None:
+                field_kwargs["default_factory"] = field_info.default_factory
+            else:
+                field_kwargs["default"] = defaults_dict[name]
+
             overridden[name] = (
                 field_info.annotation,
-                Field(default=defaults_dict[name], **field_kwargs),
+                Field(**field_kwargs),
             )
 
     new_name = f"{model_class.__name__}WithDefaults"

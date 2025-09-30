@@ -1,6 +1,6 @@
 # Base Environment (`BaseEnv`)
 
-The `BaseEnv` class (located in `trajectoryhandler/envs/base.py`) provides a foundation for creating custom reinforcement learning environments that interact with Atropos. When creating your own environment, you will typically subclass `BaseEnv` and implement several key methods.
+The `BaseEnv` class (located in `atroposlib/envs/base.py`) provides a foundation for creating custom reinforcement learning environments that interact with Atropos. When creating your own environment, you will typically subclass `BaseEnv` and implement several key methods.
 
 ## Design philosophy
 
@@ -62,7 +62,7 @@ These methods have default implementations or are optional based on your needs:
 
 *   **`async def cleanup(self)`**: Called after each call to `handle_env`. You can implement this for any cleanup needed after processing a single item, though it's often not required.
 
-## Overrideable Class Variables
+## Overridable Class Variables
 
 These class-level variables in `BaseEnv` can be overridden in your subclass to customize its behavior:
 
@@ -88,7 +88,7 @@ These class-level variables in `BaseEnv` can be overridden in your subclass to c
 
 *   **`server_cls: Type[APIServer]`**:
     *   Default: `APIServer`
-    *   Purpose: Specifies the class to be used for managing interactions with API servers (e.g., inference endpoints). Should mostly be used for developing addiitonal API interfaces, but if you need a nonstandard way of connecting with an existing API you can use this to easily slot in any modifications you need.
+    *   Purpose: Specifies the class to be used for managing interactions with API servers (e.g., inference endpoints). Should mostly be used for developing additional API interfaces, but if you need a nonstandard way of connecting with an existing API you can use this to easily slot in any modifications you need.
 
 ## Provided Functionality
 

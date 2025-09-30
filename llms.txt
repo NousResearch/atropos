@@ -543,7 +543,7 @@ Ensure all tests pass before submitting a PR.
         git push origin your-branch-name
         ```
     9.  **Open a Pull Request:** Submit a PR from your fork's branch to the `NousResearch/atropos:main` branch on GitHub.
-    10. **Use the Correct PR Template:** The repository may have specific PR templates (e.g., `environment_pull_request_template.md`, `non_environment_pull_request_template.md`). Please use the appropriate one.
+    10. **Follow the PR Template:** The repository has a general Pull Request template (`.github/pull_request_template.md`). Please ensure you fill out all applicable sections of this template to help reviewers understand your changes. The template includes guidance for different types of contributions, such as new RL environments or other code changes.
     11. **Describe Your PR:** Provide a clear title and a detailed description of your changes. Link any relevant issues (e.g., "Closes #123").
 
 ### 12.5. Code Style

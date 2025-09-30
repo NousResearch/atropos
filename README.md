@@ -36,13 +36,7 @@ Atropos encompasses both environments, which are set up as services, and a traje
 
 </div>
 
-Atropos is a robust, scalable framework for **Reinforcement Learning Environments with LLMs**. Key features:
-
-- **Multi-Turn & Asynchronous RL:** Efficiently supports complex, multi-turn, and asynchronous interactions, decoupling environment steps from policy updates.
-- **Inference Agnostic:** Integrates with standard inference APIs (e.g., OpenAI, vLLM, SGLang), enabling easy switching between LLM providers and frameworks.
-- **Trainer Independent:** Offers a standardized training interface for experimenting with different RL algorithms and frameworks without major code changes.
-- **Scalable & Decentralized:** Easily scale by launching more environment instances (locally or across decentralized resources) that contribute rollouts to a central service.
-- **Diverse Environment Integration:** Manages many varied environment types concurrently for heterogeneous, multi-modal training.
+Atropos is a robust, scalable framework for **Reinforcement Learning Environments with LLMs**.
 
 The goal: provide a flexible, scalable, and standardized platform to accelerate LLM-based RL research across diverse, interactive settings.
 
@@ -60,13 +54,6 @@ The framework supports collecting, distributing and evaluating LLM trajectories 
 | 🖼️ Multimodal             | OCR VQA, Clevr (via `multimodal_dpo/`)     | Train LLMs on tasks involving vision and language  |
 
 </div>
-
-## 🎉 Upcoming Atropos Hackathon: LLM RL Environments
-
-Join us in San Francisco on May 18th, 2025 for an exciting hackathon focused on building and experimenting with LLM RL Environments! This in-person event will bring together researchers and developers interested in advancing the field of LLM reinforcement learning.
-
-More details coming soon! Follow us on Twitter [@NousResearch](https://x.com/NousResearch) to stay updated.
-
 
 ---
 
@@ -90,7 +77,7 @@ https://huggingface.co/NousResearch/DeepHermes-ToolCalling-Specialist-Atropos
 
 
 Environment Used:
-[https://github.com/NousResearch/Atropos/environments/tool_calling_server.py](https://github.com/NousResearch/atropos/blob/main/environments/tool_calling_server.py)
+[https://github.com/NousResearch/Atropos/blob/main/environments/tool_calling_server.py](https://github.com/NousResearch/atropos/blob/main/environments/tool_calling_server.py)
 
 ---
 
@@ -108,7 +95,7 @@ Model Artifact:
 https://huggingface.co/NousResearch/DeepHermes-Financial-Fundamentals-Prediction-Specialist-Atropos
 
 Environment Used:
-[https://github.com/NousResearch/Atropos/environments/fundamental_prediction_environment.py](https://github.com/NousResearch/atropos/blob/main/environments/fundamental_prediction_environment.py)
+[https://github.com/NousResearch/Atropos/blob/main/environments/fundamental_prediction_environment.py](https://github.com/NousResearch/atropos/blob/main/environments/fundamental_prediction_environment.py)
 
 ---
 
@@ -133,12 +120,12 @@ Environment Used: [https://github.com/NousResearch/atropos/blob/main/environment
 | Category | Description |
 |----------|------------|
 | 📁 [`atroposlib/`](atroposlib/) | Core library containing base classes and utilities |
-| 🎮 [`environments/`](environments/) | Collection of ready-to-use RL environments |
+| 🎮 [`environments/`](environments/) | Collection of ready-to-use RL environments. Community contributions are typically placed in the [`environments/community/`](environments/community/) subdirectory. |
 | 📚 [`example_trainer/`](example_trainer/) | Example training scripts and configurations |
 
 Key Documents:
 - [Base Environment Class](atroposlib/envs/README.md) - Documentation for creating custom environments
-- [Environments Overview](environments/README.md) - Documentation for existing environments
+- [Environments Overview and Contribution Guide](environments/community/README.md) - Documentation for existing environments and how to contribute new ones.
 - [Full Environment Config Options](CONFIG.md) - Documentation for creating custom environments
 - [Example Trainer](example_trainer/README.md) - Getting started with training
 - [Slurm Guide](SLURM.md) - Guide for using Atropos with Slurm for distributed inference
@@ -297,6 +284,17 @@ Always refer to the specific environment script's help for all available options
 python environments/your_environment_script.py process --help
 ```
 
+### Environment Evaluation with `evaluate`
+
+For running evaluation on environments, Atropos provides an `evaluate` subcommand that calls the environment's `evaluate` method:
+
+```sh
+python gsm8k_server.py evaluate \
+  --openai.base_url https://openrouter.ai/api/v1 \
+  --openai.api_key $OPENROUTER_API_KEY \
+  --openai.model_name qwen/qwen3-14b
+```
+
 ### Offline Data Generation Quick Start
 
 Run the below in separate terminals:
@@ -348,12 +346,12 @@ If you have found the library helpful in your work, you can cite this repository
 
 ```latex
 @misc{atropos,
-  title = {{Atropos - An Async First Environment Rollout Controller}},
-  author = {Dakota Mahan, Roger Jin, Teknium, Shannon Sands, Artem Yatsenko, Jai Suphavadeeprasit, Karan Malhotra, Chen Guang, Joe Li},
-  url = {https://www.github.com/NousResearch/Atropos},
-  month = {4},
-  year = {2025},
-  version = {0.1},
+  title        = {Atropos: An Async First Environment Rollout Controller},
+  author       = {Mahan, Dakota and Jin, Roger and Teknium and Sands, Shannon and Yatsenko, Artem and Suphavadeeprasit, Jai and Malhotra, Karan and Guang, Chen and Li, Joe},
+  howpublished = {\url{https://www.github.com/NousResearch/Atropos}},
+  year         = {2025},
+  month        = apr,
+  note         = {Version 0.3.0},
 }
 ```
 

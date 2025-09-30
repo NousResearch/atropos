@@ -1,0 +1,8 @@
+# Requirements for minimal Diplomacy environment
+# Only includes dependencies specific to AI_Diplomacy that aren't in main project
+
+# AI_Diplomacy specific dependencies
+tornado>=6.0
+ujson>=5.0
+websockets>=10.0
+coloredlogs>=15.0.1
