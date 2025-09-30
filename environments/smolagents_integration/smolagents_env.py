@@ -600,10 +600,15 @@ class SmolagentsEnv(BaseEnv):
         if agent_memory:
             format_scores = []
             for step in agent_memory:
-                if "content" in step and isinstance(step["content"], str):
-                    format_scores.append(check_format_adherence(step["content"]))
-                elif "model_output" in step and isinstance(step["model_output"], str):
-                    format_scores.append(check_format_adherence(step["model_output"]))
+                # Handle both dict and ChatMessage objects
+                content = None
+                if hasattr(step, "content"):
+                    content = step.content
+                elif isinstance(step, dict):
+                    content = step.get("content") or step.get("model_output")
+
+                if content and isinstance(content, str):
+                    format_scores.append(check_format_adherence(content))
 
             # Average the format scores across all steps
             format_score = (
@@ -613,12 +618,15 @@ class SmolagentsEnv(BaseEnv):
             # 3. Check for final_answer tool usage
             final_answer_used = False
             for step in agent_memory:
-                if "content" in step and isinstance(step["content"], str):
-                    if check_final_answer_usage(step["content"]):
-                        final_answer_used = True
-                        break
-                elif "model_output" in step and isinstance(step["model_output"], str):
-                    if check_final_answer_usage(step["model_output"]):
+                # Handle both dict and ChatMessage objects
+                content = None
+                if hasattr(step, "content"):
+                    content = step.content
+                elif isinstance(step, dict):
+                    content = step.get("content") or step.get("model_output")
+
+                if content and isinstance(content, str):
+                    if check_final_answer_usage(content):
                         final_answer_used = True
                         break
 
@@ -766,7 +774,16 @@ class SmolagentsEnv(BaseEnv):
             if self.config.save_full_traces and "agent_memory" in scored_data:
                 # Add intermediate reasoning steps
                 for message in scored_data["agent_memory"]:
-                    messages.append(message)
+                    # Handle both dict and ChatMessage objects
+                    if hasattr(message, "role") and hasattr(message, "content"):
+                        # Convert ChatMessage to dict
+                        role = message.role.value if hasattr(message.role, "value") else str(message.role)
+                        messages.append({"role": role, "content": message.content})
+                    elif isinstance(message, dict):
+                        messages.append(message)
+                    else:
+                        # Unknown format, try to convert to dict
+                        messages.append({"role": "assistant", "content": str(message)})
             else:
                 # Just add the final response
                 messages.append(
