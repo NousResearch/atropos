@@ -390,7 +390,7 @@ def train(config: TrainingConfig):
             # User specified that tokens/labels are already prepared by get_data
             outputs = model(tokens)  # Assuming model just needs tokens
             logits = outputs.logits  # Assuming this is the structure
-            # temp scaled logits before corss entropy (clamp to prevent zero division or just ignore 0 temps?)
+            # temp scaled logits before cross entropy (clamp to prevent zero division or just ignore 0 temps?)
             t = temperatures.to(logits.device, logits.dtype)
             t = torch.where(t <= 0, torch.ones_like(t), t)
             logits = logits / t

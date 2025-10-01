@@ -270,6 +270,7 @@ async def get_latest_example():
             "scores": [],
             "advantages": [],
             "ref_logprobs": [],
+            "generation_params": [],
             "inference_logprobs": [],
             "messages": [],
             "images": [],
