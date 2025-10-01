@@ -59,6 +59,8 @@ class ScoredDataGroup(TypedDict):
     advantages: Optional[List[List[float]]]
     ref_logprobs: Optional[List[List[float]]]
     messages: Optional[List[List[Message]]]
+    generation_params: Optional[Dict[str, Any]]
+    inference_logprobs: Optional[List[List[float]]]
     group_overrides: Optional[Dict]
     overrides: Optional[List[Dict]]
     images: Optional[Any]
