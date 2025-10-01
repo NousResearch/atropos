@@ -7,9 +7,7 @@ execution error detection, and efficiency metrics.
 """
 
 import re
-from typing import Any, Dict, List, Optional
-
-import numpy as np
+from typing import Dict, List, Optional
 
 
 def check_format_adherence(memory_content: str) -> float:
