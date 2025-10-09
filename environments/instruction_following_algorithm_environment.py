@@ -2,6 +2,7 @@ import json
 import os
 import random
 import re
+import time
 import uuid
 from typing import Dict, List, Optional, Tuple
 
@@ -31,9 +32,21 @@ system_prompt = (
 
 
 class IFConfig(BaseEnvConfig):
+    dataset: str = Field(
+        "NousResearch/instruction_following",
+        description="HuggingFace dataset to use for training and evaluation",
+    )
     dataset_name: str = Field("allenai/RLVR-IFeval", description="Default dataset name")
     dataset_config_name: Optional[str] = Field(
         None, description="Dataset config name, if any"
+    )
+    max_eval_samples: Optional[int] = Field(
+        default=None,
+        description="Maximum number of samples to use for evaluation. If None, use all samples.",
+    )
+    eval_sample_seed: int = Field(
+        default=42,
+        description="Random seed for sampling evaluation data when max_eval_samples is set",
     )
     test_set_ratio: float = Field(
         0.05, description="The ratio of the selected dataset for testing"
@@ -217,6 +230,62 @@ class InstructionFollowingEnv(BaseEnv):
         self.eval_metrics = list()
         await super().wandb_log(wandb_metrics)
 
+    def _load_hf_dataset(self):
+        """Load data from HuggingFace dataset."""
+        try:
+            # Load train and test splits from the new dataset field
+            train_dataset = load_dataset(self.config.dataset, split="train")
+            test_dataset = load_dataset(self.config.dataset, split="test")
+
+            # Convert to list format expected by the environment
+            train_items = []
+            for item in train_dataset:
+                train_items.append(
+                    {
+                        "prompt": item.get("prompt", ""),
+                        "func_name": item.get("func_name", ""),
+                        "args": item.get("args", {}),
+                        "original_constraints_for_logging": item.get(
+                            "original_constraints_for_logging", ""
+                        ),
+                        "expected_response_for_logging": item.get(
+                            "expected_response_for_logging", ""
+                        ),
+                    }
+                )
+
+            test_items = []
+            for item in test_dataset:
+                test_items.append(
+                    {
+                        "prompt": item.get("prompt", ""),
+                        "func_name": item.get("func_name", ""),
+                        "args": item.get("args", {}),
+                        "original_constraints_for_logging": item.get(
+                            "original_constraints_for_logging", ""
+                        ),
+                        "expected_response_for_logging": item.get(
+                            "expected_response_for_logging", ""
+                        ),
+                    }
+                )
+
+            # Apply max_eval_samples if specified
+            if (
+                self.config.max_eval_samples
+                and len(test_items) > self.config.max_eval_samples
+            ):
+                random.seed(self.config.eval_sample_seed)
+                test_items = random.sample(test_items, self.config.max_eval_samples)
+
+            return Dataset.from_list(train_items), Dataset.from_list(test_items)
+
+        except Exception as e:
+            print(
+                f"Failed to load HuggingFace dataset '{self.config.dataset}': {e}. Falling back to dataset_name."
+            )
+            return None, None
+
     async def setup(self):
         """
         Load and preprocess the dataset for instruction following.
@@ -230,202 +299,215 @@ class InstructionFollowingEnv(BaseEnv):
         - 'func_name': The string name of the verifier function.
         - 'args': A dictionary of arguments for that verifier function.
         """  # noqa: E501
-        dataset_name = getattr(self.config, "dataset_name", "allenai/RLVR-IFeval")
-        dataset_config_name = getattr(
-            self.config, "dataset_config_name", None
-        )  # Default is None, RLVR-IFeval has no sub-config
 
-        processed_items = []
-        try:
+        # Try to load from HuggingFace dataset first
+        self.train, self.test = self._load_hf_dataset()
+
+        if self.train is not None and self.test is not None:
             print(
-                f"Attempting to load dataset: {dataset_name}, "
-                f"config: {dataset_config_name if dataset_config_name else 'default'}"
+                f"Loaded {len(self.train)} train and {len(self.test)} test items from HuggingFace dataset '{self.config.dataset}'"  # noqa: E501
             )
-            if dataset_config_name:
-                full_dataset_raw = load_dataset(
-                    dataset_name,
-                    dataset_config_name,
-                    split="train",
-                    trust_remote_code=True,
+            full_dataset = Dataset.from_list(list(self.train) + list(self.test))
+        else:
+            # Fall back to original dataset_name loading
+            dataset_name = getattr(self.config, "dataset_name", "allenai/RLVR-IFeval")
+            dataset_config_name = getattr(
+                self.config, "dataset_config_name", None
+            )  # Default is None, RLVR-IFeval has no sub-config
+
+            processed_items = []
+            try:
+                print(
+                    f"Attempting to load dataset: {dataset_name}, "
+                    f"config: {dataset_config_name if dataset_config_name else 'default'}"
                 )
-            else:
-                full_dataset_raw = load_dataset(
-                    dataset_name, split="train", trust_remote_code=True
+                if dataset_config_name:
+                    full_dataset_raw = load_dataset(
+                        dataset_name,
+                        dataset_config_name,
+                        split="train",
+                        trust_remote_code=True,
+                    )
+                else:
+                    full_dataset_raw = load_dataset(
+                        dataset_name, split="train", trust_remote_code=True
+                    )
+                print(
+                    f"Successfully loaded raw dataset. Number of items: {len(full_dataset_raw)}"
                 )
-            print(
-                f"Successfully loaded raw dataset. Number of items: {len(full_dataset_raw)}"
-            )
 
-            for i, item in enumerate(full_dataset_raw):
-                # Extract prompt from 'messages' field
-                item_messages = item.get("messages")
-                if (
-                    not item_messages
-                    or not isinstance(item_messages, list)
-                    or len(item_messages) == 0
-                ):
-                    print(
-                        f"Warning: Item {i} has invalid or empty 'messages' field. Skipping. Item: {item}"
-                    )
-                    continue
-                # Assuming the relevant prompt is the content of the first message in the list
-                # (or last, if multiple user messages were possible, but IFEval is typically single user instruction)
-                prompt_text = item_messages[0].get("content")
-                if not prompt_text:
-                    print(
-                        f"Warning: Item {i} '{item_messages[0]}' has no content. Skipping."
-                    )
-                    continue
+                for i, item in enumerate(full_dataset_raw):
+                    # Extract prompt from 'messages' field
+                    item_messages = item.get("messages")
+                    if (
+                        not item_messages
+                        or not isinstance(item_messages, list)
+                        or len(item_messages) == 0
+                    ):
+                        print(
+                            f"Warning: Item {i} has invalid or empty 'messages' field. Skipping. Item: {item}"
+                        )
+                        continue
+                    # Assuming the relevant prompt is the content of the first message in the list
+                    # (or last, if multiple user messages were possible, but IFEval is typically single user instruction)  # noqa: E501
+                    prompt_text = item_messages[0].get("content")
+                    if not prompt_text:
+                        print(
+                            f"Warning: Item {i} '{item_messages[0]}' has no content. Skipping."
+                        )
+                        continue
 
-                # Get the ground_truth JSON string
-                ground_truth_json_str = item.get("ground_truth")
-                if not ground_truth_json_str or not isinstance(
-                    ground_truth_json_str, str
-                ):
-                    print(
-                        f"Warning: Item {i} missing or has invalid 'ground_truth' string. Skipping. "
-                        f"Prompt: {prompt_text[:50]}..."
-                    )
-                    continue
+                    # Get the ground_truth JSON string
+                    ground_truth_json_str = item.get("ground_truth")
+                    if not ground_truth_json_str or not isinstance(
+                        ground_truth_json_str, str
+                    ):
+                        print(
+                            f"Warning: Item {i} missing or has invalid 'ground_truth' string. Skipping. "
+                            f"Prompt: {prompt_text[:50]}..."
+                        )
+                        continue
 
-                try:
-                    parsed_gt = json.loads(ground_truth_json_str)
-                    if not isinstance(parsed_gt, dict):
-                        raise ValueError("Parsed ground_truth is not a dictionary.")
-                except (json.JSONDecodeError, ValueError) as e:
-                    print(
-                        f"Warning: Could not parse 'ground_truth' JSON for item {i}. Error: {e}. "
-                        f"GT String: '{ground_truth_json_str}'. Prompt: {prompt_text[:50]}... Skipping."
-                    )
-                    continue
+                    try:
+                        parsed_gt = json.loads(ground_truth_json_str)
+                        if not isinstance(parsed_gt, dict):
+                            raise ValueError("Parsed ground_truth is not a dictionary.")
+                    except (json.JSONDecodeError, ValueError) as e:
+                        print(
+                            f"Warning: Could not parse 'ground_truth' JSON for item {i}. Error: {e}. "
+                            f"GT String: '{ground_truth_json_str}'. Prompt: {prompt_text[:50]}... Skipping."
+                        )
+                        continue
 
-                func_name_from_gt = parsed_gt.get("func_name")
-                if not func_name_from_gt:
-                    print(
-                        f"Warning: Item {i} parsed 'ground_truth' has no 'func_name'. GT: {parsed_gt}. "
-                        f"Prompt: {prompt_text[:50]}... Skipping."
-                    )
-                    continue
+                    func_name_from_gt = parsed_gt.get("func_name")
+                    if not func_name_from_gt:
+                        print(
+                            f"Warning: Item {i} parsed 'ground_truth' has no 'func_name'. GT: {parsed_gt}. "
+                            f"Prompt: {prompt_text[:50]}... Skipping."
+                        )
+                        continue
 
-                if func_name_from_gt not in IF_FUNCTIONS_MAP:
-                    print(
-                        f"Warning: func_name '{func_name_from_gt}' in item {i} not in IF_FUNCTIONS_MAP. "
-                        f"Prompt: {prompt_text[:50]}... Skipping."
-                    )
-                    continue
+                    if func_name_from_gt not in IF_FUNCTIONS_MAP:
+                        print(
+                            f"Warning: func_name '{func_name_from_gt}' in item {i} not in IF_FUNCTIONS_MAP. "
+                            f"Prompt: {prompt_text[:50]}... Skipping."
+                        )
+                        continue
 
-                # Prepare args for the verifier function: remove func_name and keep others.
-                # Verifier functions will only use args they expect.
-                args_dict = {
-                    k: v
-                    for k, v in parsed_gt.items()
-                    if k != "func_name" and v is not None
-                }
-
-                processed_items.append(
-                    {
-                        "prompt": prompt_text,
-                        "func_name": func_name_from_gt,
-                        "args": args_dict,
-                        "original_constraints_for_logging": str(
-                            item.get("constraint", "")
-                        ),  # For logging, from RLVR-IFeval structure
-                        "expected_response_for_logging": "",
+                    # Prepare args for the verifier function: remove func_name and keep others.
+                    # Verifier functions will only use args they expect.
+                    args_dict = {
+                        k: v
+                        for k, v in parsed_gt.items()
+                        if k != "func_name" and v is not None
                     }
-                )
 
-            if not processed_items:
+                    processed_items.append(
+                        {
+                            "prompt": prompt_text,
+                            "func_name": func_name_from_gt,
+                            "args": args_dict,
+                            "original_constraints_for_logging": str(
+                                item.get("constraint", "")
+                            ),  # For logging, from RLVR-IFeval structure
+                            "expected_response_for_logging": "",
+                        }
+                    )
+
+                if not processed_items:
+                    print(
+                        "Warning: No items successfully processed from the dataset. "
+                        "Check dataset format/content or parsing logic."
+                    )
+                    raise ValueError(
+                        "Dataset processing resulted in no valid items for RLVR-IFeval. Cannot proceed without data."
+                    )
+
+                full_dataset = Dataset.from_list(processed_items)
                 print(
-                    "Warning: No items successfully processed from the dataset. "
-                    "Check dataset format/content or parsing logic."
-                )
-                raise ValueError(
-                    "Dataset processing resulted in no valid items for RLVR-IFeval. Cannot proceed without data."
+                    f"Successfully processed {len(full_dataset)} items from dataset '{dataset_name}'."
                 )
 
-            full_dataset = Dataset.from_list(processed_items)
-            print(
-                f"Successfully processed {len(full_dataset)} items from dataset '{dataset_name}'."
-            )
-
-        except Exception as e:
-            # This block is a fallback if the primary dataset loading/processing fails catastrophically.
-            # For RLVR-IFeval, a failure here suggests issues with Hugging Face access,
-            # dataset integrity, or fundamental code errors.
-            print(
-                f"CRITICAL: Failed to load or process primary dataset '{dataset_name}': {e}. "
-                f"Using a DUMMY dataset as fallback."
-            )
-            dummy_data_for_fallback = [
-                {
-                    "prompt": "Dummy Instruction 1: Ensure your response contains the word 'example'.",
-                    "func_name": "verify_keywords",
-                    "args": {"keyword_list": ["example"]},
-                    "original_constraints_for_logging": "Contains 'example'",
-                    "expected_response_for_logging": "This is an example response.",
-                },
-                {
-                    "prompt": "Dummy Instruction 2: Output a valid JSON with key 'data' and value 'test'.",
-                    "func_name": "validate_json_format",
-                    "args": {},
-                    "original_constraints_for_logging": "Output valid JSON.",
-                    "expected_response_for_logging": '{\\"data\\": \\"test\\"}',
-                },
-            ]
-            full_dataset = Dataset.from_list(dummy_data_for_fallback)
-            print(
-                f"Initialized with DUMMY dataset of {len(full_dataset)} items "
-                f"due to previous errors."
-            )
-
-        full_dataset = full_dataset.shuffle(seed=self.config.dataset_shuffle_seed)
-
-        actual_test_size = self.config.test_set_ratio  # Read from config
-        num_items = len(full_dataset)
-
-        if num_items == 0:
-            print("ERROR: Dataset is empty. Cannot create train/test split.")
-            self.train = Dataset.from_list([])
-            self.test = Dataset.from_list([])
-        elif num_items == 1:
-            print("Warning: Dataset has only 1 item. Using it for both train and test.")
-            self.train = full_dataset
-            self.test = full_dataset
-        else:  # num_items > 1
-            # Ensure test_size results in at least 1 item for test set if possible, but not more than train set
-            if num_items < 5:  # For 2,3,4 items, make test size 1
-                min_test_items = 1
-            else:  # For 5+ items, 20% is fine
-                min_test_items = max(1, int(num_items * actual_test_size))
-
-            # Ensure test split is not too large, e.g. not more than 50% unless dataset is very small
-            # And ensure train always has at least one item if num_items > 1
-            calculated_test_size = min_test_items / num_items
-            if (
-                calculated_test_size >= 0.5 and num_items > 2
-            ):  # If test is 50% or more and we have 3+ items
-                calculated_test_size = (
-                    num_items - 1
-                ) / num_items  # Make train have at least 1
-
-            split_dataset = full_dataset.train_test_split(
-                test_size=calculated_test_size, seed=42
-            )
-            self.train = split_dataset["train"]
-            self.test = split_dataset["test"]
-            # Final check for empty train/test after split, should not happen with logic above if num_items > 0
-            if len(self.train) == 0 and len(self.test) > 0:
+            except Exception as e:
+                # This block is a fallback if the primary dataset loading/processing fails catastrophically.
+                # For RLVR-IFeval, a failure here suggests issues with Hugging Face access,
+                # dataset integrity, or fundamental code errors.
                 print(
-                    "Warning: Train set empty after split, test set has data. "
-                    "This is unusual. Swapping."
+                    f"CRITICAL: Failed to load or process primary dataset '{dataset_name}': {e}. "
+                    f"Using a DUMMY dataset as fallback."
                 )
-                self.train = self.test  # Fallback, though indicates issue
-            elif len(self.test) == 0 and len(self.train) > 0:
+                dummy_data_for_fallback = [
+                    {
+                        "prompt": "Dummy Instruction 1: Ensure your response contains the word 'example'.",
+                        "func_name": "verify_keywords",
+                        "args": {"keyword_list": ["example"]},
+                        "original_constraints_for_logging": "Contains 'example'",
+                        "expected_response_for_logging": "This is an example response.",
+                    },
+                    {
+                        "prompt": "Dummy Instruction 2: Output a valid JSON with key 'data' and value 'test'.",
+                        "func_name": "validate_json_format",
+                        "args": {},
+                        "original_constraints_for_logging": "Output valid JSON.",
+                        "expected_response_for_logging": '{\\"data\\": \\"test\\"}',
+                    },
+                ]
+                full_dataset = Dataset.from_list(dummy_data_for_fallback)
                 print(
-                    "Warning: Test set empty after split, train set has data. "
-                    "Using full train set for test as well."
+                    f"Initialized with DUMMY dataset of {len(full_dataset)} items "
+                    f"due to previous errors."
                 )
-                self.test = self.train
+
+            full_dataset = full_dataset.shuffle(seed=self.config.dataset_shuffle_seed)
+
+            actual_test_size = self.config.test_set_ratio  # Read from config
+            num_items = len(full_dataset)
+
+            if num_items == 0:
+                print("ERROR: Dataset is empty. Cannot create train/test split.")
+                self.train = Dataset.from_list([])
+                self.test = Dataset.from_list([])
+            elif num_items == 1:
+                print(
+                    "Warning: Dataset has only 1 item. Using it for both train and test."
+                )
+                self.train = full_dataset
+                self.test = full_dataset
+            else:  # num_items > 1
+                # Ensure test_size results in at least 1 item for test set if possible, but not more than train set
+                if num_items < 5:  # For 2,3,4 items, make test size 1
+                    min_test_items = 1
+                else:  # For 5+ items, 20% is fine
+                    min_test_items = max(1, int(num_items * actual_test_size))
+
+                # Ensure test split is not too large, e.g. not more than 50% unless dataset is very small
+                # And ensure train always has at least one item if num_items > 1
+                calculated_test_size = min_test_items / num_items
+                if (
+                    calculated_test_size >= 0.5 and num_items > 2
+                ):  # If test is 50% or more and we have 3+ items
+                    calculated_test_size = (
+                        num_items - 1
+                    ) / num_items  # Make train have at least 1
+
+                split_dataset = full_dataset.train_test_split(
+                    test_size=calculated_test_size, seed=42
+                )
+                self.train = split_dataset["train"]
+                self.test = split_dataset["test"]
+                # Final check for empty train/test after split, should not happen with logic above if num_items > 0
+                if len(self.train) == 0 and len(self.test) > 0:
+                    print(
+                        "Warning: Train set empty after split, test set has data. "
+                        "This is unusual. Swapping."
+                    )
+                    self.train = self.test  # Fallback, though indicates issue
+                elif len(self.test) == 0 and len(self.train) > 0:
+                    print(
+                        "Warning: Test set empty after split, train set has data. "
+                        "Using full train set for test as well."
+                    )
+                    self.test = self.train
 
         self.iter = 0
 
@@ -592,12 +674,12 @@ class InstructionFollowingEnv(BaseEnv):
             messages, add_generation_prompt=True, tokenize=False
         )
 
+        eval_temperature = 0.2  # Temperature for eval, can be 0 for deterministic
         completion = await self.server.completion(
             prompt=prompt_str,
             n=1,
             max_tokens=self.config.max_token_length,  # Use config for max_tokens
-            temperature=0.2,  # Temperature for eval, can be 0 for deterministic
-            split="eval",
+            temperature=eval_temperature,
         )
 
         model_response_text = completion.choices[0].text
@@ -605,9 +687,20 @@ class InstructionFollowingEnv(BaseEnv):
             model_response_text, func_name, args_for_verifier
         )
 
-        return (
-            score_value  # Returns 1.0 for correct, 0.0 for incorrect based on verifier
-        )
+        # Create sample data
+        sample = {
+            "messages": messages
+            + [{"role": "assistant", "content": model_response_text}],
+            "instruction_prompt": instruction_prompt_text,
+            "func_name": func_name,
+            "args_for_verifier": args_for_verifier,
+            "model_response": model_response_text,
+            "score": float(score_value),
+            "correct": bool(score_value > 0),
+            "finish_reason": completion.choices[0].finish_reason,
+        }
+
+        return {"score": score_value, "sample": sample}
 
     async def evaluate(self, *args, **kwargs):
         # Evaluates the model on the test set
@@ -616,20 +709,46 @@ class InstructionFollowingEnv(BaseEnv):
             self.eval_metrics.append(("eval/percent_correct", 0.0))
             return
 
+        start_time = time.time()
+        eval_temperature = 0.2
+
         print(f"Starting evaluation on {len(self.test)} items...")
         eval_tasks = []
         for test_item_dict in self.test:  # self.test contains dicts after setup
             eval_tasks.append(self.rollout_and_score_eval(test_item_dict))
 
-        scores = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
+        results = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
+
+        # Extract scores and samples
+        scores = [result["score"] for result in results]
+        samples = [result["sample"] for result in results]
 
         if not scores:  # If gather returns empty list
             percent_correct = 0.0
         else:
             percent_correct = sum(scores) / len(scores)
 
+        end_time = time.time()
+
+        # Add to existing metrics for wandb
         self.eval_metrics.append(("eval/percent_correct", percent_correct))
         print(f"Evaluation finished. Percent correct: {percent_correct:.4f}")
+
+        # Log evaluation results
+        eval_metrics = {
+            "eval/percent_correct": percent_correct,
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "temperature": eval_temperature,
+                "max_tokens": self.config.max_token_length,
+            },
+        )
 
     async def collect_trajectories(
         self, item: Item
