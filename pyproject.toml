@@ -26,6 +26,8 @@ dependencies = [
     "jsonlines",
     "pydantic-cli",
     "hf_transfer",
+    "gradio>=5.49.1",
+    "verifiers>=0.1.5.post0",
 ]
 
 [project.scripts]
