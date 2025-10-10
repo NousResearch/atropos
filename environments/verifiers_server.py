@@ -1,15 +1,16 @@
-import os
 import asyncio
-from typing import Dict, List, Optional, Tuple, Union, TypedDict
+import os
+from typing import Dict, List, Optional, Tuple, TypedDict, Union
+
+import verifiers as vf
 
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    ScoredDataGroup
+    ScoredDataGroup,
 )
 
-import verifiers as vf
 
 class VfEnvConfig:
     vf_env_name: str = "gsm8k"
@@ -24,12 +25,10 @@ class VerifiersEnv(BaseEnv):
         vf_env_config: VfEnvConfig,
         slurm=False,
         testing=False,
-
     ):
         super().__init__(config, server_configs, slurm, testing)
         self.vf_env = vf.load_environment(
-            vf_env_config["vf_env_name"], 
-            **vf_env_config["env_args"]
+            vf_env_config["vf_env_name"], **vf_env_config["env_args"]
         )
         self.rubric = self.vf_env.rubric
 
@@ -53,7 +52,7 @@ class VerifiersEnv(BaseEnv):
                 model_name="gpt-4.1-nano",
                 base_url=None,
                 api_key=os.getenv("OPENAI_API_KEY"),
-                num_requests_for_eval=4
+                num_requests_for_eval=4,
             ),
         ]
         return env_config, server_configs
@@ -71,13 +70,15 @@ class VerifiersEnv(BaseEnv):
             )
         self.iter = 0
 
-    async def rollout_and_score_eval(self, question: str, answer: str, **kwargs) -> dict:
+    async def rollout_and_score_eval(
+        self, question: str, answer: str, **kwargs
+    ) -> dict:
         state = kwargs["state"] if "state" in kwargs else None
         info = kwargs["info"] if "info" in kwargs else None
         system_prompt = kwargs["system_prompt"] if "system_prompt" in kwargs else None
-        messages=[
-            {"role":"system","content":system_prompt},
-            {"role":"user","content":question},
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": question},
         ]
 
         completion = await self.server.chat_completion(
@@ -88,20 +89,23 @@ class VerifiersEnv(BaseEnv):
         )
 
         response_content = completion.choices[0].message.content
-        messages.append({"role":"assistant", "content": response_content})
+        messages.append({"role": "assistant", "content": response_content})
 
         # PARSE HERE WITH VF PARSER
         answer_parsed = self.parser.parse_answer(completion=response_content)
 
         # USE REWARD FUNC HERE TO GET SCORE
-        rewards = [await self.rubric.call_reward_func(
-            func=func,
-            prompt=question,
-            completion=messages,
-            answer=answer,
-            info=info,
-            state=state
-        ) for func in self.reward_funcs]
+        rewards = [
+            await self.rubric.call_reward_func(
+                func=func,
+                prompt=question,
+                completion=messages,
+                answer=answer,
+                info=info,
+                state=state,
+            )
+            for func in self.reward_funcs
+        ]
 
         score = sum(rewards)
 
@@ -109,7 +113,7 @@ class VerifiersEnv(BaseEnv):
             "messages": messages,
             "question": question,
             "gold_answer": answer,
-            #"gold_parsed": str(gold_parsed) if gold_parsed else None,
+            # "gold_parsed": str(gold_parsed) if gold_parsed else None,
             "model_parsed": str(answer_parsed) if answer_parsed else None,
             "score": int(score),
             "correct": bool(score),
@@ -126,13 +130,11 @@ class VerifiersEnv(BaseEnv):
         self.iter += 1
         return next_item
 
+
 async def main():
     env_config, server_configs = VerifiersEnv.config_init()
 
-    vf_env_config = {
-        "vf_env_name": "wordle",
-        "env_args": {"use_think":False}
-    }
+    vf_env_config = {"vf_env_name": "wordle", "env_args": {"use_think": False}}
 
     env = VerifiersEnv(
         config=env_config,
@@ -148,14 +150,11 @@ async def main():
     roll = await env.rollout_and_score_eval(
         question=item["question"],
         answer=item["answer"],
-        system_prompt=env.system_prompt
+        system_prompt=env.system_prompt,
     )
     print(roll)
 
 
-
 if __name__ == "__main__":
-    #VerifiersEnv.cli()
+    # VerifiersEnv.cli()
     asyncio.run(main())
-
-
