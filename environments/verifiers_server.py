@@ -1,5 +1,7 @@
 import os
+import time
 import asyncio
+from tqdm.asyncio import tqdm_asyncio
 from typing import Dict, List, Optional, Tuple, Union, TypedDict
 
 from atroposlib.envs.base import (
@@ -11,8 +13,8 @@ from atroposlib.envs.base import (
 
 import verifiers as vf
 
-class VfEnvConfig:
-    vf_env_name: str = "gsm8k"
+class VfEnvConfig(BaseEnvConfig):
+    vf_env_name: str = ""
     env_args: dict = {}
 
 
@@ -27,6 +29,8 @@ class VerifiersEnv(BaseEnv):
 
     ):
         super().__init__(config, server_configs, slurm, testing)
+        self.eval_metrics = list()
+
         self.vf_env = vf.load_environment(
             vf_env_config["vf_env_name"], 
             **vf_env_config["env_args"]
@@ -35,6 +39,11 @@ class VerifiersEnv(BaseEnv):
 
         self.parser = self.rubric.parser
         self.reward_funcs = self.rubric.get_reward_funcs()
+        self.reward_weights = self.rubric.get_reward_weights()
+        self.reward_scales = [
+            weight / sum(self.reward_weights)
+            for weight in self.reward_weights
+        ]
         self.system_prompt = self.vf_env.system_prompt
 
     @classmethod
@@ -103,7 +112,12 @@ class VerifiersEnv(BaseEnv):
             state=state
         ) for func in self.reward_funcs]
 
-        score = sum(rewards)
+        def mul_weight(reward, i):
+            return reward * self.reward_scales[int(i)]
+
+        weighted_rewards = [mul_weight(reward, i) for reward, i in enumerate(rewards)]
+
+        score = sum(weighted_rewards)
 
         sample = {
             "messages": messages,
@@ -119,7 +133,45 @@ class VerifiersEnv(BaseEnv):
         return {"score": score, "sample": sample}
 
     async def evaluate(self, *args, **kwargs):
-        pass
+        start_time = time.time()
+
+        eval_tasks = []
+        for item in self.test:
+            eval_tasks.append(
+                self.rollout_and_score_eval(
+                    item["question"], 
+                    item["answer"],
+                    system_prompt=self.system_prompt
+                )
+            )
+        results = await tqdm_asyncio.gather(*eval_tasks)
+
+        scores = [result["score"] for result in results]
+        samples = [result["sample"] for result in results]
+
+        avg_total_score = sum(scores) / len(scores)
+
+        end_time = time.time()
+
+        self.eval_metrics.append(("eval/avg_total_score", avg_total_score))
+
+        eval_metrics = {
+            "eval/avg_total_score": avg_total_score
+        }
+
+        await self.evaluate_log(
+            metrics=eval_metrics,
+            samples=samples,
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters = {
+                "temperature": 0.0,
+                "max_tokens": self.config.max_token_length
+            }
+        )
+
+        return eval_metrics
+
 
     async def get_next_item(self):
         next_item = self.train[self.iter % len(self.train)]
@@ -151,6 +203,12 @@ async def main():
         system_prompt=env.system_prompt
     )
     print(roll)
+
+    print("Starting evaluate")
+
+    metrics = await env.evaluate()
+
+    print(metrics)
 
 
 
