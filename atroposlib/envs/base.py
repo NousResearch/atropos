@@ -1,4 +1,5 @@
 import asyncio
+import gzip
 import json
 import logging
 import math
@@ -766,9 +767,10 @@ class BaseEnv(ABC):
             else f"{self.config.rollout_server_url}/scored_data"
         )
         async with aiohttp.ClientSession() as session:
-            async with session.post(
+            async with self._post_json_with_compression(
+                session,
                 url,
-                json=scored_data,
+                scored_data,
             ) as resp:
                 if resp.status >= 500:
                     # Server errors (5xx) should trigger a retry
@@ -780,6 +782,29 @@ class BaseEnv(ABC):
                     return
                 # Success case: print response text
                 print(await resp.text())
+
+    def _post_json_with_compression(
+        self,
+        session: aiohttp.ClientSession,
+        url: str,
+        payload: Any,
+        *,
+        minimum_size: int = 1024,
+    ):
+        """
+        Send JSON payloads with optional gzip compression when payloads are large.
+        """
+        serialized = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        body = serialized
+
+        if len(serialized) >= minimum_size:
+            compressed = gzip.compress(serialized)
+            if len(compressed) < len(serialized):
+                headers["Content-Encoding"] = "gzip"
+                body = compressed
+
+        return session.post(url, data=body, headers=headers)
 
     async def handle_send_to_api(
         self,
