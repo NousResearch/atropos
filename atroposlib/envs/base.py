@@ -773,14 +773,11 @@ class BaseEnv(ABC):
                 scored_data,
             ) as resp:
                 if resp.status >= 500:
-                    # Server errors (5xx) should trigger a retry
                     logging.debug(f"Server error: {resp.status}, retrying...")
                     raise Exception(f"Server error: {resp.status}")
                 elif resp.status >= 400:
-                    # Client errors (4xx) are logged but not retried
                     logging.error(f"Client error: {resp.status}, not retrying")
                     return
-                # Success case: print response text
                 print(await resp.text())
 
     def _post_json_with_compression(
