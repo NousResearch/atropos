@@ -120,7 +120,7 @@ pre-commit run --all-files
 This command will automatically fix formatting issues found by `black` and `isort`. However, you may need to manually address any linting errors reported by `flake8`.
 
 ## License for Contributions
-Any contributions you make will be under the Apache License 2.0. In short, when you submit code changes, your submissions are understood to be under the same [Apache License 2.0](LICENSE) that covers the project. Feel free to contact the maintainers if that\'s a concern.
+Any contributions you make will be under the MIT License. In short, when you submit code changes, your submissions are understood to be under the same [MIT License](LICENSE) that covers the project. Feel free to contact the maintainers if that's a concern.
 
 ## Environment Contribution Guidelines
 
