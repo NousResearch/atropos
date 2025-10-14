@@ -18,7 +18,7 @@ from atroposlib.type_definitions import (  # Item might not be directly used if 
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
-# from pypantograph import PyPantograph # Assuming it\'s a package
+# from pypantograph import PyPantograph # Assuming it's a package
 # For now, mock PyPantograph:
 
 

@@ -365,4 +365,4 @@ Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 ---
 
 ## License
-Atropos is uses the MIT license, see the [LICENSE](LICENSE) file here for more information
+Atropos uses the MIT license, see the [LICENSE](LICENSE) file here for more information
