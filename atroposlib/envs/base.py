@@ -40,6 +40,7 @@ from atroposlib.utils.io import parse_http_response
 from atroposlib.utils.metrics import get_std_min_max_avg
 
 from ..type_definitions import Item, Message
+from ..utils.message_bus import MessageBusClient
 from .server_handling.server_manager import (
     APIServer,
     APIServerConfig,
@@ -224,6 +225,10 @@ class BaseEnv(ABC):
         self.wandb_prepend = None
         self.checkpoint_dir = ""
         self.checkpoint_interval = -1
+        self.message_bus_details: Optional[Dict[str, Any]] = None
+        self.message_bus_client: Optional[MessageBusClient] = None
+        self.message_bus_env_name: Optional[str] = None
+        self.message_bus_wandb_prepend: Optional[str] = None
         if self.config.data_path_to_save_groups is not None:
             Path(self.config.data_path_to_save_groups).parent.mkdir(
                 parents=True, exist_ok=True
@@ -423,36 +428,39 @@ class BaseEnv(ABC):
         raise NotImplementedError("Setup method must be implemented in subclass")
 
     async def setup_wandb(self):
-        if self.config.use_wandb:
-            # Setup wandb getting the group and project via the server
-            while self.wandb_project is None:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        f"{self.config.rollout_server_url}/wandb_info"
-                    ) as resp:
-                        data = await parse_http_response(resp, logger)
-                        self.wandb_group = data["group"]
-                        self.wandb_project = data["project"]
+        if not self.config.use_wandb:
+            return
 
-                if self.wandb_project is None:
-                    await asyncio.sleep(1)
-                    continue
+        # Setup wandb getting the group and project via the server
+        while self.wandb_project is None:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{self.config.rollout_server_url}/wandb_info"
+                ) as resp:
+                    data = await parse_http_response(resp, logger)
+                    self.wandb_group = data["group"]
+                    self.wandb_project = data["project"]
 
-                wandb_run_name = None
-                if self.config.wandb_name:
-                    random_id = "".join(random.choices(string.ascii_lowercase, k=6))
-                    current_date = datetime.now().strftime("%Y-%m-%d")
-                    wandb_run_name = (
-                        f"{self.config.wandb_name}-{current_date}-{random_id}"
-                    )
+            if self.wandb_project is None:
+                await asyncio.sleep(1)
+                continue
 
-                wandb.init(
-                    name=wandb_run_name,
-                    project=self.wandb_project,
-                    group=self.wandb_group,
-                    config=self.config.model_dump(),
-                )
-                break
+        # When a central logger is present we avoid creating per-env wandb runs.
+        if self.message_bus_client is not None:
+            return
+
+        wandb_run_name = None
+        if self.config.wandb_name:
+            random_id = "".join(random.choices(string.ascii_lowercase, k=6))
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            wandb_run_name = f"{self.config.wandb_name}-{current_date}-{random_id}"
+
+        wandb.init(
+            name=wandb_run_name,
+            project=self.wandb_project,
+            group=self.wandb_group,
+            config=self.config.model_dump(),
+        )
 
     @retry(
         stop=stop_after_attempt(3),
@@ -496,6 +504,14 @@ class BaseEnv(ABC):
                 self.config.total_steps = data["num_steps"]
                 if self.config.total_steps == -1:
                     raise ValueError("Total steps not set in config or server!")
+            self.message_bus_details = data.get("message_bus")
+            if self.message_bus_details:
+                self.message_bus_env_name = self.message_bus_details.get(
+                    "env_name", self.config.wandb_name
+                )
+                self.message_bus_wandb_prepend = self.message_bus_details.get(
+                    "wandb_prepend"
+                )
             print(
                 f"Initialized env with id {self.env_id}: "
                 f"curr_step: {self.curr_step}, "
@@ -505,6 +521,33 @@ class BaseEnv(ABC):
             if self.curr_step > 0:
                 self.load_checkpoint()
             break
+
+    async def setup_message_bus(self):
+        if self.message_bus_client is not None:
+            return
+        if not self.message_bus_details:
+            return
+
+        endpoint = self.message_bus_details.get("endpoint")
+        token = self.message_bus_details.get("token")
+        if not endpoint or not token:
+            logger.warning(
+                "Message bus details missing endpoint or token, skipping connection."
+            )
+            return
+        try:
+            self.message_bus_client = MessageBusClient(endpoint=endpoint, token=token)
+        except Exception as exc:
+            logger.warning(f"Failed to initialise message bus client: {exc}")
+            self.message_bus_client = None
+
+    async def close_message_bus(self):
+        if self.message_bus_client is None:
+            return
+        try:
+            await self.message_bus_client.close()
+        finally:
+            self.message_bus_client = None
 
     async def get_server_info(self):
         """
@@ -567,6 +610,18 @@ class BaseEnv(ABC):
             self.workers_added_list = list()
         return metrics_dict
 
+    def _sanitize_for_json(self, value: Any) -> Any:
+        """Convert numpy/native structures into JSON-serialisable primitives."""
+        if isinstance(value, np.generic):
+            return value.item()
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        if isinstance(value, dict):
+            return {k: self._sanitize_for_json(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [self._sanitize_for_json(v) for v in value]
+        return value
+
     async def create_rollout_table(self, wandb_metrics):
         if len(self.rollouts_for_wandb) > 0:
             table = wandb.Table(columns=["text", "score"])
@@ -610,8 +665,11 @@ class BaseEnv(ABC):
         """
         if wandb_metrics is None:
             wandb_metrics = dict()
+        server_wandb_metrics: Dict[str, Any] = {}
         for i, server in enumerate(self.server.servers):
-            server_wandb_metrics = await server.wandb_metrics({}, f"server_{i}")
+            server_wandb_metrics = await server.wandb_metrics(
+                server_wandb_metrics, f"server_{i}"
+            )
         if len(self.completion_lengths) > 0:
             wandb_metrics["train/completion_lengths"] = sum(
                 self.completion_lengths
@@ -628,18 +686,48 @@ class BaseEnv(ABC):
             wandb_metrics["train/completion_lengths_p95"] = (
                 np.array(self.completion_lengths) > (0.95 * self.max_token_len)
             ).mean()
-        wandb_metrics = await self.create_rollout_table(wandb_metrics)
+
+        use_message_bus = self.message_bus_client is not None and self.config.use_wandb
+        if not use_message_bus:
+            wandb_metrics = await self.create_rollout_table(wandb_metrics)
         wandb_metrics = self.perf_stats(wandb_metrics)
+
+        rollout_snapshot: List[List[Tuple[str, float]]] = []
+        if use_message_bus:
+            rollout_snapshot = [list(group) for group in self.rollouts_for_wandb]
         self.rollouts_for_wandb = []
         self.completion_lengths = []
-        if self.config.use_wandb:
-            if self.wandb_prepend is not None:
-                wandb_metrics = {
-                    f"{self.wandb_prepend}_{k}": v for k, v in wandb_metrics.items()
-                }
-            # add server metrics to wandb without prepend to collate them all
-            wandb_metrics.update(server_wandb_metrics)
-            wandb.log(wandb_metrics, step=self.curr_step)
+        if not self.config.use_wandb:
+            return
+
+        if use_message_bus and self.message_bus_client is not None:
+            payload = {
+                "type": "metrics",
+                "env_id": self.env_id,
+                "env_name": self.message_bus_env_name or self.config.wandb_name,
+                "wandb_prepend": self.message_bus_wandb_prepend or self.wandb_prepend,
+                "metrics": {
+                    k: self._sanitize_for_json(v) for k, v in wandb_metrics.items()
+                },
+                "server_metrics": {
+                    k: self._sanitize_for_json(v)
+                    for k, v in server_wandb_metrics.items()
+                },
+                "rollouts": self._sanitize_for_json(rollout_snapshot),
+                "step": self.curr_step,
+            }
+            try:
+                await self.message_bus_client.send_json(payload)
+            except Exception as exc:
+                logger.warning(f"Failed to send metrics to message bus: {exc}")
+            return
+
+        if self.wandb_prepend is not None:
+            wandb_metrics = {
+                f"{self.wandb_prepend}_{k}": v for k, v in wandb_metrics.items()
+            }
+        wandb_metrics.update(server_wandb_metrics)
+        wandb.log(wandb_metrics, step=self.curr_step)
 
     async def evaluate_log(
         self,
@@ -1106,9 +1194,10 @@ class BaseEnv(ABC):
         Rollout manager
         """
         await self.setup()
-        await self.setup_wandb()
         await self.register_env()
         await self.get_server_info()
+        await self.setup_message_bus()
+        await self.setup_wandb()
         # Wait for other instances to get setup :)
         await asyncio.sleep(5)
         while True:
@@ -1185,6 +1274,7 @@ class BaseEnv(ABC):
                         # Do we want to retry? probably not...
                         # self.backlog.append(item["item"])
             await asyncio.sleep(0.1)
+        await self.close_message_bus()
 
     async def process_manager(self):
         """

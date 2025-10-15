@@ -4,29 +4,45 @@ Tests for API server message handling, particularly for SFT (Supervised Fine-Tun
 
 import os
 import signal
+import socket
 import subprocess
 import time
+from subprocess import TimeoutExpired
 
 import pytest
 import requests
 
 
-def wait_for_api_server(max_wait=10):
+def wait_for_api_server(max_wait: float = 30.0, interval: float = 0.2) -> bool:
     """Wait for API server to be ready."""
-    for _ in range(max_wait):
+    attempts = max(1, int(max_wait / interval))
+    for attempt in range(attempts):
         try:
             response = requests.get("http://localhost:8000/info")
             if response.status_code == 200:
                 return True
-        except requests.exceptions.ConnectionError:
-            pass
-        time.sleep(1)
+        except requests.exceptions.ConnectionError as exc:
+            print(f"Waiting for API server (attempt {attempt + 1}/{attempts}): {exc}")
+        time.sleep(interval)
     return False
+
+
+def _get_free_tcp_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
 
 
 @pytest.fixture(scope="module")
 def api_server():
     """Launch API server for testing."""
+    prev_endpoint = os.environ.get("ATROPOS_MESSAGE_BUS_ENDPOINT")
+    prev_enable = os.environ.get("ATROPOS_ENABLE_MESSAGE_BUS")
+    bus_port = _get_free_tcp_port()
+    os.environ["ATROPOS_MESSAGE_BUS_ENDPOINT"] = f"tcp://127.0.0.1:{bus_port}"
+    if prev_enable is None:
+        os.environ["ATROPOS_ENABLE_MESSAGE_BUS"] = "1"
+
     # Start the API server as a subprocess
     proc = subprocess.Popen(
         [
@@ -46,7 +62,23 @@ def api_server():
     # Wait for server to be ready
     if not wait_for_api_server():
         proc.terminate()
-        raise RuntimeError("API server failed to start")
+        try:
+            stdout, stderr = proc.communicate(timeout=1)
+        except TimeoutExpired:
+            proc.kill()
+            stdout, stderr = proc.communicate()
+        stderr = stderr.decode() if stderr else ""
+        stdout = stdout.decode() if stdout else ""
+        msg = f"API server failed to start. stdout:\n{stdout}\nstderr:\n{stderr}"
+        if prev_endpoint is None:
+            os.environ.pop("ATROPOS_MESSAGE_BUS_ENDPOINT", None)
+        else:
+            os.environ["ATROPOS_MESSAGE_BUS_ENDPOINT"] = prev_endpoint
+        if prev_enable is None:
+            os.environ.pop("ATROPOS_ENABLE_MESSAGE_BUS", None)
+        else:
+            os.environ["ATROPOS_ENABLE_MESSAGE_BUS"] = prev_enable
+        raise RuntimeError(msg)
 
     yield
 
@@ -59,6 +91,15 @@ def api_server():
         requests.get("http://localhost:8000/reset_data")
     except Exception:
         pass
+
+    if prev_endpoint is None:
+        os.environ.pop("ATROPOS_MESSAGE_BUS_ENDPOINT", None)
+    else:
+        os.environ["ATROPOS_MESSAGE_BUS_ENDPOINT"] = prev_endpoint
+    if prev_enable is None:
+        os.environ.pop("ATROPOS_ENABLE_MESSAGE_BUS", None)
+    else:
+        os.environ["ATROPOS_ENABLE_MESSAGE_BUS"] = prev_enable
 
 
 @pytest.fixture(autouse=True)
