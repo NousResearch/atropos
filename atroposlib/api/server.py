@@ -6,12 +6,12 @@ from contextlib import suppress
 from typing import Any, Dict, List, Optional
 
 import wandb
+import zmq
+import zmq.asyncio
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, field_validator
-import zmq
-import zmq.asyncio
 
 from atroposlib.api.utils import (
     find_groups_summing_to_target,
@@ -694,7 +694,8 @@ async def reset_data():
     if getattr(app.state, "wandb_run", None) is not None:
         wandb.finish()
         app.state.wandb_run = None
-    app.state.wandb_enabled = MESSAGE_BUS_ENABLED and getattr(
-        app.state, "message_bus_socket", None
-    ) is not None
+    app.state.wandb_enabled = (
+        MESSAGE_BUS_ENABLED
+        and getattr(app.state, "message_bus_socket", None) is not None
+    )
     return PlainTextResponse("Reset successful", status_code=status.HTTP_200_OK)

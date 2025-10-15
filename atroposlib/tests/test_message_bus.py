@@ -60,7 +60,11 @@ def test_api_message_bus_routes_metrics_to_wandb(monkeypatch):
         "init",
         lambda **kwargs: init_calls.append(kwargs) or object(),
     )
-    monkeypatch.setattr(server.wandb, "log", lambda metrics, step=None: logged_calls.append((metrics, step)))
+    monkeypatch.setattr(
+        server.wandb,
+        "log",
+        lambda metrics, step=None: logged_calls.append((metrics, step)),
+    )
     monkeypatch.setattr(server.wandb, "finish", lambda *args, **kwargs: None)
 
     with TestClient(server.app) as client:
@@ -80,6 +84,8 @@ def test_api_message_bus_routes_metrics_to_wandb(monkeypatch):
         assert response.status_code == 200
         assert init_calls, "wandb.init should be invoked during trainer registration"
 
+        server.app.state.started = True
+
         env_response = client.post(
             "/register-env",
             json={
@@ -95,26 +101,156 @@ def test_api_message_bus_routes_metrics_to_wandb(monkeypatch):
         message_bus = data.get("message_bus")
         assert message_bus, "message bus details should be returned when enabled"
         assert message_bus["endpoint"] == endpoint
+        assert message_bus["token"] in server.app.state.message_bus_tokens
 
+        payload = {
+            "type": "metrics",
+            "token": message_bus["token"],
+            "metrics": {"train/foo": 1.0},
+            "server_metrics": {"server_metric": 2.0},
+            "rollouts": [[("hello world", 0.5)]],
+            "step": 5,
+            "wandb_prepend": message_bus["wandb_prepend"],
+        }
+        asyncio.run(server._log_metrics(payload))
+
+        assert logged_calls, "Metrics sent over the message bus should reach wandb.log"
+        metrics_logged, step_logged = logged_calls[-1]
+        expected_prefix = message_bus["wandb_prepend"]
+        assert metrics_logged[f"{expected_prefix}_train/foo"] == 1.0
+        assert metrics_logged["server_metric"] == 2.0
+        rollout_key = f"{expected_prefix}_train/rollouts"
+        assert rollout_key in metrics_logged
+        assert metrics_logged[rollout_key].rows[0] == ("hello world", 0.5)
+        assert step_logged == 5
+
+        client.get("/reset_data")
+
+
+@pytest.mark.asyncio
+async def test_message_bus_worker_processes_registered_messages(monkeypatch):
+    token = "tok123"
+    messages: List[Dict[str, Any]] = [
+        {"token": token, "type": "metrics", "payload": 1},
+    ]
+
+    class DummySocket:
+        def __init__(self, responses: List[Dict[str, Any]]):
+            self._responses = list(responses)
+            self.closed = False
+
+        async def recv_json(self):
+            if self._responses:
+                return self._responses.pop(0)
+            raise asyncio.CancelledError()
+
+        def close(self, linger: int = 0):
+            self.closed = True
+
+        def setsockopt(self, *args, **kwargs):
+            pass
+
+    socket = DummySocket(messages)
+    original_socket = getattr(server.app.state, "message_bus_socket", None)
+    original_tokens = getattr(server.app.state, "message_bus_tokens", None)
+    server.app.state.message_bus_socket = socket
+    server.app.state.message_bus_tokens = {token: {"registered_id": 0}}
+
+    logged_messages: List[Dict[str, Any]] = []
+
+    async def fake_log(message: Dict[str, Any]) -> None:
+        logged_messages.append(message)
+
+    monkeypatch.setattr(server, "_log_metrics", fake_log)
+
+    worker_task = asyncio.create_task(server._message_bus_worker())
+    await asyncio.sleep(0)
+    await worker_task
+
+    assert logged_messages and logged_messages[0]["payload"] == 1
+    assert socket.closed is False
+    server.app.state.message_bus_socket = original_socket
+    server.app.state.message_bus_tokens = original_tokens
+
+
+def test_message_bus_end_to_end(monkeypatch):
+    port = _get_free_tcp_port()
+    endpoint = f"tcp://127.0.0.1:{port}"
+
+    monkeypatch.setattr(server, "MESSAGE_BUS_ENABLED", True)
+    monkeypatch.setattr(server, "MESSAGE_BUS_ENDPOINT", endpoint)
+
+    init_calls: List[Dict[str, Any]] = []
+    logged_calls: List[Tuple[Dict[str, Any], Any]] = []
+
+    monkeypatch.setattr(server.wandb, "Table", DummyTable)
+    monkeypatch.setattr(
+        server.wandb,
+        "init",
+        lambda **kwargs: init_calls.append(kwargs) or object(),
+    )
+    monkeypatch.setattr(
+        server.wandb,
+        "log",
+        lambda metrics, step=None: logged_calls.append((metrics, step)),
+    )
+    monkeypatch.setattr(server.wandb, "finish", lambda *args, **kwargs: None)
+
+    with TestClient(server.app) as client:
+        response = client.post(
+            "/register",
+            json={
+                "wandb_group": "test_group",
+                "wandb_project": "test_project",
+                "batch_size": 4,
+                "max_token_len": 128,
+                "checkpoint_dir": "/tmp",
+                "save_checkpoint_interval": 10,
+                "starting_step": 0,
+                "num_steps": 100,
+            },
+        )
+        assert response.status_code == 200
+        assert init_calls, "wandb.init should be invoked during trainer registration"
+
+        server.app.state.started = True
+
+        env_response = client.post(
+            "/register-env",
+            json={
+                "max_token_length": 128,
+                "desired_name": "env",
+                "weight": 1.0,
+                "group_size": 2,
+                "min_batch_allocation": None,
+            },
+        )
+        data = env_response.json()
+        assert env_response.status_code == 200
+        message_bus = data.get("message_bus")
+        assert message_bus, "message bus details should be returned when enabled"
+
+        endpoint_for_client = message_bus["endpoint"].replace("0.0.0.0", "127.0.0.1")
         bus_client = MessageBusClient(
-            endpoint=message_bus["endpoint"],
+            endpoint=endpoint_for_client,
             token=message_bus["token"],
         )
         payload = {
             "type": "metrics",
             "metrics": {"train/foo": 1.0},
             "server_metrics": {"server_metric": 2.0},
-            "rollouts": [["hello world", 0.5]],
+            "rollouts": [[["hello world", 0.5]]],
             "step": 5,
             "wandb_prepend": message_bus["wandb_prepend"],
         }
         asyncio.run(bus_client.send_json(payload))
-        asyncio.run(bus_client.close())
-
-        for _ in range(20):
-            if logged_calls:
-                break
-            time.sleep(0.05)
+        try:
+            for _ in range(100):
+                if logged_calls:
+                    break
+                time.sleep(0.05)
+        finally:
+            asyncio.run(bus_client.close())
 
         assert logged_calls, "Metrics sent over the message bus should reach wandb.log"
         metrics_logged, step_logged = logged_calls[-1]
@@ -138,7 +274,9 @@ class DummyMessageBusClient:
 
 
 class DummyServer:
-    async def wandb_metrics(self, metrics_dict: Optional[Dict[str, Any]], server_name: Optional[str]):
+    async def wandb_metrics(
+        self, metrics_dict: Optional[Dict[str, Any]], server_name: Optional[str]
+    ):
         metrics_dict = metrics_dict or {}
         metrics_dict[f"{server_name}_latency"] = np.float32(3.25)
         return metrics_dict
@@ -188,7 +326,9 @@ def test_base_env_wandb_log_uses_message_bus(monkeypatch):
     dummy_env, dummy_client = _build_dummy_env(use_bus=True, monkeypatch=monkeypatch)
 
     def fail_log(*args, **kwargs):
-        raise AssertionError("wandb.log should not be called when message bus is active")
+        raise AssertionError(
+            "wandb.log should not be called when message bus is active"
+        )
 
     monkeypatch.setattr("atroposlib.envs.base.wandb.log", fail_log)
 
