@@ -82,7 +82,7 @@ class GZipRequestMiddleware:
 
         sent = False
 
-        # needed some odd logic here to handle gzip stream so just returning an empty body 
+        # needed some odd logic here to handle gzip stream so just returning an empty body
         async def new_receive():
             nonlocal sent
             if sent:

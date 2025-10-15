@@ -105,9 +105,7 @@ class TestAPICompression:
             "scores": [0.5 for _ in range(16)],
             "advantages": [[0.1 for _ in range(512)] for _ in range(16)],
             "ref_logprobs": [[0.2 for _ in range(512)] for _ in range(16)],
-            "messages": [
-                [{"role": "user", "content": "test" * 50}] for _ in range(16)
-            ],
+            "messages": [[{"role": "user", "content": "test" * 50}] for _ in range(16)],
         }
 
         post_response = requests.post(
@@ -157,7 +155,7 @@ class TestAPICompression:
         response = session.get(
             "http://localhost:8000/batch",
             headers={"Accept-Encoding": "gzip"},
-            stream=True
+            stream=True,
         )
 
         assert response.status_code == 200
@@ -201,7 +199,7 @@ class TestAPICompression:
         data = response.json()
 
         uncompressed_json = json.dumps(data)
-        uncompressed_size = len(uncompressed_json.encode('utf-8'))
+        uncompressed_size = len(uncompressed_json.encode("utf-8"))
 
         assert data["batch"] is not None
         batch = data["batch"][0]
@@ -257,8 +255,7 @@ class TestAPICompression:
         assert post_response.status_code == 200
 
         status_response = requests.get(
-            "http://localhost:8000/status-env",
-            json={"env_id": env_id}
+            "http://localhost:8000/status-env", json={"env_id": env_id}
         )
         assert status_response.status_code == 200
         status_data = status_response.json()
