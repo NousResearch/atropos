@@ -350,7 +350,7 @@ If you have found the library helpful in your work, you can cite this repository
   author       = {Mahan, Dakota and Jin, Roger and Teknium and Sands, Shannon and Yatsenko, Artem and Suphavadeeprasit, Jai and Malhotra, Karan and Guang, Chen and Li, Joe},
   howpublished = {\url{https://www.github.com/NousResearch/Atropos}},
   year         = {2025},
-  month        = apr,
+  month        = {apr},
   note         = {Version 0.3.0},
 }
 ```
