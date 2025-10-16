@@ -123,9 +123,8 @@ class TrlVllmServer(APIServer):
         )
         return completions
 
-
     async def _tokens_and_logprobs_completion_wrapper(
-            self, **kwargs
+        self, **kwargs
     ) -> tuple[list, list, list, list]:
         """
         Wrapper for the tokens and logprobs completion using the openai client.
