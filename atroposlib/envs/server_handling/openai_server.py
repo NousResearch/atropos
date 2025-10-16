@@ -134,6 +134,14 @@ class OpenAIServer(APIServer):
                         completions.choices.extend(c.choices)
         return completions
 
+    async def _tokens_and_logprobs_completion_wrapper(
+            self, **kwargs
+    ) -> tuple[list, list, list, list]:
+        """
+        Wrapper for the tokens and logprobs completion using the openai client.
+        """
+        raise NotImplementedError("Tokens and logprobs not supported by base OpenAI API, use specific API servers.")
+
 
 def resolve_openai_configs(
     default_server_configs,

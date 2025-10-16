@@ -173,7 +173,7 @@ class SGLangServer(APIServer):
         import aiohttp
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self.config.base_url}/generate",
+                f"{self.config.base_url.replace('/v1', '')}/generate",
                 json=request_data,
                 headers={"Authorization": f"Bearer {self.config.api_key}"} if self.config.api_key else {},
                 timeout=aiohttp.ClientTimeout(total=self.config.timeout)
