@@ -77,7 +77,7 @@ https://huggingface.co/NousResearch/DeepHermes-ToolCalling-Specialist-Atropos
 
 
 Environment Used:
-[https://github.com/NousResearch/Atropos/blob/main/environments/tool_calling_server.py](https://github.com/NousResearch/atropos/blob/main/environments/tool_calling_server.py)
+[https://github.com/NousResearch/atropos/blob/main/environments/tool_calling_server.py](https://github.com/NousResearch/atropos/blob/main/environments/tool_calling_server.py)
 
 ---
 
@@ -95,7 +95,7 @@ Model Artifact:
 https://huggingface.co/NousResearch/DeepHermes-Financial-Fundamentals-Prediction-Specialist-Atropos
 
 Environment Used:
-[https://github.com/NousResearch/Atropos/blob/main/environments/fundamental_prediction_environment.py](https://github.com/NousResearch/atropos/blob/main/environments/fundamental_prediction_environment.py)
+[https://github.com/NousResearch/atropos/blob/main/environments/fundamental_prediction_environment.py](https://github.com/NousResearch/atropos/blob/main/environments/fundamental_prediction_environment.py)
 
 ---
 
@@ -348,9 +348,9 @@ If you have found the library helpful in your work, you can cite this repository
 @misc{atropos,
   title        = {Atropos: An Async First Environment Rollout Controller},
   author       = {Mahan, Dakota and Jin, Roger and Teknium and Sands, Shannon and Yatsenko, Artem and Suphavadeeprasit, Jai and Malhotra, Karan and Guang, Chen and Li, Joe},
-  howpublished = {\url{https://www.github.com/NousResearch/Atropos}},
+  howpublished = {\url{https://www.github.com/NousResearch/atropos}},
   year         = {2025},
-  month        = apr,
+  month        = {apr},
   note         = {Version 0.3.0},
 }
 ```
