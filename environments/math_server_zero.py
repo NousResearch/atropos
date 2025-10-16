@@ -18,11 +18,11 @@ from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
-    ServerBaseline,
     BaseEnv,
     BaseEnvConfig,
     EvalHandlingEnum,
     ScoredDataGroup,
+    ServerBaseline,
 )
 
 prompt_format = (
@@ -49,7 +49,8 @@ class RSConfig(BaseEnvConfig):
         0.0, description="The percentage of items to have length penalty"
     )
     start_tok_length: int = Field(
-        8192, description="The starting length of the token length, scaled linearly to the max_token_length"
+        8192,
+        description="The starting length of the token length, scaled linearly to the max_token_length",
     )
 
 
@@ -149,12 +150,12 @@ class MathEnv(BaseEnv):
             wandb_name="math",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
-            max_num_workers_per_node=24
+            max_num_workers_per_node=24,
         )
         server_configs = ServerBaseline(
             model_name="Qwen/Qwen2.5-7B",
             num_requests_for_eval=256,  # since evaling only on one...
-            server_type="sglang"
+            server_type="sglang",
         )
 
         return env_config, server_configs
@@ -240,10 +241,7 @@ class MathEnv(BaseEnv):
                         name,
                     )
                 )
-        for name, t_dataset in zip(
-            ['olympiad'],
-            [olympiad_test_data]
-        ):
+        for name, t_dataset in zip(["olympiad"], [olympiad_test_data]):
             for item in t_dataset:
                 self.test.append(
                     (
@@ -317,18 +315,22 @@ class MathEnv(BaseEnv):
         curr_length = int(curr_length * (self.curr_step / self.config.total_steps))
         curr_length += self.config.start_tok_length
         thinking_len = min(thinking_len, curr_length)
-        prompt_tokens, out_tokens, out_logprobs, finish_reasons = await self.server.tokens_and_logprobs_completion(
-            prompt=user_prompt,
-            n=self.config.group_size,
-            max_tokens=thinking_len,
-            temperature=1.0,
-            top_p=1.0,
-            stop=stop_list,
+        prompt_tokens, out_tokens, out_logprobs, finish_reasons = (
+            await self.server.tokens_and_logprobs_completion(
+                prompt=user_prompt,
+                n=self.config.group_size,
+                max_tokens=thinking_len,
+                temperature=1.0,
+                top_p=1.0,
+                stop=stop_list,
+            )
         )
         # print(completions, flush=True)
         to_score = list()
         to_backlog = list()
-        for i, (tokens, logprobs, finish_reason) in enumerate(zip(out_tokens, out_logprobs, finish_reasons)):
+        for i, (tokens, logprobs, finish_reason) in enumerate(
+            zip(out_tokens, out_logprobs, finish_reasons)
+        ):
             message = self.tokenizer.decode(prompt_tokens + tokens)
             to_score.append(
                 (
@@ -378,7 +380,7 @@ class MathEnv(BaseEnv):
             user_prompt_tokens = item[3]
             out_toks = item[4]
             out_logps = item[5]
-            if item[2]['type'] == "length":
+            if item[2]["type"] == "length":
                 reward = False
                 if self.config.mask_too_long_completions:
                     scores["overrides"][-1]["set_advantage_to_zero"] = True
@@ -392,7 +394,9 @@ class MathEnv(BaseEnv):
             masks = masks + out_toks
             inf_logp = [0 for _ in range(len(user_prompt_tokens))]
             inf_logp = inf_logp + out_logps
-            assert len(inf_logp) == len(masks), f"{len(inf_logp)}, {len(masks)} mismatch"
+            assert len(inf_logp) == len(
+                masks
+            ), f"{len(inf_logp)}, {len(masks)} mismatch"
             user_prompt = resp.split("<think>")[0]
             messages = [
                 {"role": "user", "content": user_prompt},
