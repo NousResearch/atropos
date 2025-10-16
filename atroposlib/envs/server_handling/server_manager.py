@@ -15,8 +15,8 @@ from atroposlib.envs.server_handling.server_baseline import (
     ServerBaseline,
 )
 from atroposlib.envs.server_handling.server_harness import ServerHarness
-from atroposlib.envs.server_handling.trl_vllm_server import TrlVllmServer
 from atroposlib.envs.server_handling.sglang_server import SGLangServer
+from atroposlib.envs.server_handling.trl_vllm_server import TrlVllmServer
 
 
 class ServerManagerConfig(BaseModel):
@@ -289,7 +289,9 @@ class ServerManager:
                 most_available_server_num_slots = (
                     server.sem._value if is_train else server.eval_sem._value
                 )
-        return await self.servers[most_available_server].tokens_and_logprobs_completion(**kwargs)
+        return await self.servers[most_available_server].tokens_and_logprobs_completion(
+            **kwargs
+        )
 
     @asynccontextmanager
     async def dedicated_server(self) -> AsyncGenerator[OpenAIServer, None]:
