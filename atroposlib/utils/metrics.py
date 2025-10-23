@@ -4,7 +4,7 @@ import numpy as np
 def get_std_min_max_avg(name: str, data: list, metrics_dict: dict) -> dict:
     """
     Calculate the standard deviation, minimum, maximum, and average of a list of numbers.
-    Adds it to the wandb dict for logging.
+    Adds it to the metrics dict for logging.
 
     Args:
         data (list): A list of numbers.
