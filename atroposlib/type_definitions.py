@@ -74,7 +74,7 @@ GameHistory = List[GameStep]
 class EvaluationConfigGeneral(TypedDict):
     """Configuration section of evaluation results."""
 
-    total_evaluation_time_secondes: str
+    total_evaluation_time_seconds: str
     model_name: Optional[str]
     generation_parameters: Dict[str, Any]
 
