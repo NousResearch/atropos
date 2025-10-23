@@ -721,7 +721,7 @@ class BaseEnv(ABC):
         eval_result = {
             "config_general": {
                 "model_name": model_name,
-                "total_evaluation_time_secondes": str(end_time - start_time),
+                "total_evaluation_time_seconds": str(end_time - start_time),
                 "generation_parameters": merged_gen_params,
             },
             "results": {
