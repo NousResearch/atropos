@@ -12,7 +12,7 @@ def get_std_min_max_avg(name: str, data: list, metrics_dict: dict) -> dict:
         metrics_dict: Dictionary to add the computed metrics to.
 
     Returns:
-        dict: A dictionary containing the standard deviation, minimum, maximum, and average.
+        The updated metrics dictionary with added statistics (mean, std, max, min).
     """
     metrics_dict[f"{name}_mean"] = np.mean(data)
     metrics_dict[f"{name}_std"] = np.std(data)
