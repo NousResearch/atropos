@@ -7,7 +7,9 @@ def get_std_min_max_avg(name: str, data: list, metrics_dict: dict) -> dict:
     Adds it to the metrics dict for logging.
 
     Args:
-        data (list): A list of numbers.
+        name: The base name for the metrics keys.
+        data: A list of numbers to compute statistics from.
+        metrics_dict: Dictionary to add the computed metrics to.
 
     Returns:
         dict: A dictionary containing the standard deviation, minimum, maximum, and average.
