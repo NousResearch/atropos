@@ -360,7 +360,9 @@ class ManagedServer:
             choice = Choice(
                 finish_reason=finish_reason,
                 index=i,
-                message=ChatCompletionMessage(content=completion_text, role="assistant"),
+                message=ChatCompletionMessage(
+                    content=completion_text, role="assistant"
+                ),
             )
             choices.append(choice)
 
