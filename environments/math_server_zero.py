@@ -382,7 +382,7 @@ class MathEnv(BaseEnv):
             finish_reason = item[2]  # Now a clean string like "stop" or "length"
             # ManagedServer already provides properly formatted data
             tokens = item[3]  # Full token sequence
-            masks = item[4]   # Masked tokens (already formatted)
+            masks = item[4]  # Masked tokens (already formatted)
             inf_logp = item[5]  # Logprobs (already formatted)
 
             if finish_reason == "length":
@@ -406,7 +406,9 @@ class MathEnv(BaseEnv):
             # remove obviously bad examples
             if len([1 for i in masks if i != -100]) < 10:
                 continue
-            if (finish_reason == "length") and (not self.config.mask_too_long_completions):
+            if (finish_reason == "length") and (
+                not self.config.mask_too_long_completions
+            ):
                 scores["overrides"][-1]["set_advantage_to_zero"] = True
             scores["tokens"].append(tokens)
             scores["masks"].append(masks)

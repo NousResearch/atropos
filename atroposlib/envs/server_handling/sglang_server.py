@@ -148,7 +148,8 @@ class SGLangServer(APIServer):
             kwargs.get("model", None) is not None
         ), "Model is required for completion!"
         assert (
-            kwargs.get("prompt", None) is not None or kwargs.get("input_ids", None) is not None
+            kwargs.get("prompt", None) is not None
+            or kwargs.get("input_ids", None) is not None
         ), "Prompt or input_ids is required for completion!"
 
         # Get n parameter for number of completions
