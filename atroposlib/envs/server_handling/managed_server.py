@@ -10,7 +10,7 @@ This wrapper maintains a tree structure of sequences, where:
 import time
 import uuid
 import warnings
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from openai.types.chat.chat_completion import (
     ChatCompletion,
@@ -50,7 +50,7 @@ class ManagedServer:
     new branches. Provides proper masking for training (prompt tokens masked with -100,
     logprobs set to 0.0).
 
-    Uses the clean _tokens_and_logprobs_completion_wrapper interface internally.
+    Uses the clean tokens_and_logprobs_completion interface internally.
     """
 
     def __init__(
@@ -300,9 +300,7 @@ class ManagedServer:
             output_tokens_list,
             output_logprobs_list,
             finish_reasons,
-        ) = await self.server._tokens_and_logprobs_completion_wrapper(
-            **completion_kwargs
-        )
+        ) = await self.server.tokens_and_logprobs_completion(**completion_kwargs)
 
         # Track each completion and build choices
         n = len(output_tokens_list)
@@ -360,7 +358,9 @@ class ManagedServer:
             choice = Choice(
                 finish_reason=finish_reason,
                 index=i,
-                message=ChatCompletionMessage(content=completion_text, role="assistant"),
+                message=ChatCompletionMessage(
+                    content=completion_text, role="assistant"
+                ),
             )
             choices.append(choice)
 
@@ -414,7 +414,7 @@ class ManagedServer:
             output_tokens_list,
             output_logprobs_list,
             finish_reasons,
-        ) = await self.server._tokens_and_logprobs_completion_wrapper(**kwargs)
+        ) = await self.server.tokens_and_logprobs_completion(**kwargs)
 
         # Track each completion and build choices
         n = len(output_tokens_list)
