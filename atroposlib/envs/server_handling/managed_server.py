@@ -243,7 +243,7 @@ class ManagedServer:
         elif len(output_logprobs) > len(output_tokens):
             output_logprobs = output_logprobs[: len(output_tokens)]
 
-        full_logprobs = [0.0] * prompt_len + output_logprobs
+        full_logprobs = [1.0] * prompt_len + output_logprobs
 
         return SequenceNode(
             full_text=full_text,
