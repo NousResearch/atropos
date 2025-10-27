@@ -128,6 +128,7 @@ def pad_data_to_good_offset(data, batch_size: int):
     labels = list()
     advantages = list()
     lengths = list()
+    temperatures = list()
     for item in data["batch"]:
         scores = item["scores"]
         scores = np.array(scores)
@@ -166,10 +167,30 @@ def pad_data_to_good_offset(data, batch_size: int):
             input_ids.append(item["tokens"][i][:-1])
             labels.append(label_item[1:])
             advantages.append(item["scores"][i])
+            # per-sample override -> group generation_params -> group_overrides - > 1.0
+            # need to update docs since this lets you set the temperature for each sample from the override
+            t = 1.0
+            if (
+                item.get("overrides")
+                and i < len(item["overrides"])
+                and isinstance(item["overrides"][i], dict)
+                and ("temperature" in item["overrides"][i])
+            ):
+                t = float(item["overrides"][i]["temperature"])
+            elif item.get("generation_params") and (
+                "temperature" in item["generation_params"]
+            ):
+                t = float(item["generation_params"]["temperature"])
+            elif item.get("group_overrides") and (
+                "temperature" in item["group_overrides"]
+            ):
+                t = float(item["group_overrides"]["temperature"])
+            temperatures.append(t)
     # combine all lists into tensors
     token_batches = []
     label_batches = []
     advantage_batches = []
+    temperature_batches = []
     for i in range(len(input_ids) // batch_size):
         token_batches.append(
             torch.tensor(
@@ -186,12 +207,26 @@ def pad_data_to_good_offset(data, batch_size: int):
                 np.stack(advantages[i * batch_size : (i + 1) * batch_size], axis=0)
             ).view(-1, 1)
         )
-    return token_batches, label_batches, advantage_batches
+        # Temperatures: one per sample, shaped for broadcasting to [B, 1, 1]
+        temperature_batches.append(
+            torch.tensor(
+                np.array(
+                    temperatures[i * batch_size : (i + 1) * batch_size],
+                    dtype=np.float32,
+                )
+            ).view(-1, 1, 1)
+        )
+
+    return token_batches, label_batches, advantage_batches, temperature_batches
 
 
 def get_data(
     batch_size: int, seq_len: int
-) -> List[Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]]:
+) -> List[
+    Tuple[
+        List[torch.Tensor], List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]
+    ]
+]:
     """
     getting data from the api
     """
@@ -321,7 +356,9 @@ def train(config: TrainingConfig):
         total_neg = 0
         if len(batches) == 0:
             batches = get_data(config.batch_size, config.seq_len)
-        token_batches, label_batches, advantage_batches = batches.pop(0)
+        token_batches, label_batches, advantage_batches, temperature_batches = (
+            batches.pop(0)
+        )
         # Terminate existing vLLM process if running
         if (
             step + 1
@@ -339,8 +376,8 @@ def train(config: TrainingConfig):
                     vllm_process.kill()
                     vllm_process.wait()
                 vllm_process = None
-        for tokens, labels, advantages in zip(
-            token_batches, label_batches, advantage_batches
+        for tokens, labels, advantages, temperatures in zip(
+            token_batches, label_batches, advantage_batches, temperature_batches
         ):
 
             tokens, labels, advantages = (
@@ -353,6 +390,10 @@ def train(config: TrainingConfig):
             # User specified that tokens/labels are already prepared by get_data
             outputs = model(tokens)  # Assuming model just needs tokens
             logits = outputs.logits  # Assuming this is the structure
+            # temp scaled logits before cross entropy (clamp to prevent zero division or just ignore 0 temps?)
+            t = temperatures.to(logits.device, logits.dtype)
+            t = torch.where(t <= 0, torch.ones_like(t), t)
+            logits = logits / t
 
             # Calculate GRPO loss (reverting to user's previous logic)
             # User stated ignore_index is -100 and tokens/labels are aligned by get_data

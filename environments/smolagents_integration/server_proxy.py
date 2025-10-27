@@ -4,12 +4,11 @@ Proxy mechanism for communicating with Atropos server from child processes.
 
 import asyncio
 import multiprocessing
-import queue
 import threading
 import time
 import traceback
 import uuid
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple
 
 
 class ServerRequest:
@@ -148,7 +147,7 @@ class ServerProxyManager:
         )
         self.worker_thread.start()
 
-        print(f"Server proxy manager started in main process")
+        print("Server proxy manager started in main process")
 
     def stop(self):
         """Stop the server proxy manager."""
@@ -160,7 +159,7 @@ class ServerProxyManager:
         # Signal the worker thread to exit
         try:
             self.request_queue.put(None)
-        except:
+        except (BrokenPipeError, EOFError):
             pass
 
         # Wait for the worker thread to exit
@@ -168,7 +167,7 @@ class ServerProxyManager:
             self.worker_thread.join(timeout=5.0)
             self.worker_thread = None
 
-        print(f"Server proxy manager stopped")
+        print("Server proxy manager stopped")
 
     def create_server_proxy(
         self, model_name: str, timeout: float = 120.0
@@ -198,16 +197,13 @@ class ServerProxyManager:
         self.process_event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.process_event_loop)
 
-        print(f"Server worker thread started in main process")
-
-        # This queue will be used to send events from the asyncio loop to the thread
-        thread_queue = queue.Queue()
+        print("Server worker thread started in main process")
 
         async def handle_request(request):
             """Handle a server request."""
             if request is None:
                 # Signal to exit
-                print(f"Server worker received exit signal")
+                print("Server worker received exit signal")
                 return True
 
             try:
@@ -282,6 +278,6 @@ class ServerProxyManager:
             print(f"Error in server worker thread: {e}")
             traceback.print_exc()
         finally:
-            print(f"Server worker thread exiting")
+            print("Server worker thread exiting")
             self.process_event_loop.close()
-            print(f"Server worker thread done")
+            print("Server worker thread done")

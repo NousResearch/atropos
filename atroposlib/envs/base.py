@@ -1,4 +1,5 @@
 import asyncio
+import gzip
 import json
 import logging
 import math
@@ -59,6 +60,8 @@ class ScoredDataGroup(TypedDict):
     advantages: Optional[List[List[float]]]
     ref_logprobs: Optional[List[List[float]]]
     messages: Optional[List[List[Message]]]
+    generation_params: Optional[Dict[str, Any]]
+    inference_logprobs: Optional[List[List[float]]]
     group_overrides: Optional[Dict]
     overrides: Optional[List[Dict]]
     images: Optional[Any]
@@ -764,20 +767,41 @@ class BaseEnv(ABC):
             else f"{self.config.rollout_server_url}/scored_data"
         )
         async with aiohttp.ClientSession() as session:
-            async with session.post(
+            async with self._post_json_with_compression(
+                session,
                 url,
-                json=scored_data,
+                scored_data,
             ) as resp:
                 if resp.status >= 500:
-                    # Server errors (5xx) should trigger a retry
                     logging.debug(f"Server error: {resp.status}, retrying...")
                     raise Exception(f"Server error: {resp.status}")
                 elif resp.status >= 400:
-                    # Client errors (4xx) are logged but not retried
                     logging.error(f"Client error: {resp.status}, not retrying")
                     return
-                # Success case: print response text
                 print(await resp.text())
+
+    def _post_json_with_compression(
+        self,
+        session: aiohttp.ClientSession,
+        url: str,
+        payload: Any,
+        *,
+        minimum_size: int = 1024,
+    ):
+        """
+        Send JSON payloads with optional gzip compression when payloads are large.
+        """
+        serialized = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        body = serialized
+
+        if len(serialized) >= minimum_size:
+            compressed = gzip.compress(serialized)
+            if len(compressed) < len(serialized):
+                headers["Content-Encoding"] = "gzip"
+                body = compressed
+
+        return session.post(url, data=body, headers=headers)
 
     async def handle_send_to_api(
         self,
