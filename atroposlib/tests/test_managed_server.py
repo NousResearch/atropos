@@ -99,8 +99,8 @@ async def test_single_completion(mock_server):
     assert all(t == -100 for t in node.masked_tokens[:prompt_len])
     assert node.masked_tokens[prompt_len:] == output_tokens
 
-    # Check logprobs: prompt should be 0.0, completion should have actual logprobs
-    assert all(lp == 0.0 for lp in node.logprobs[:prompt_len])
+    # Check logprobs: prompt should be 1.0 (masked), completion should have actual logprobs
+    assert all(lp == 1.0 for lp in node.logprobs[:prompt_len])
     assert node.logprobs[prompt_len:] == output_logprobs
 
 
@@ -400,9 +400,6 @@ async def test_multi_turn_chat_with_branching(mock_server):
     # After turn 1: should have 8 nodes
     state = managed.get_state()
     assert len(state["nodes"]) == 8
-
-    # Save references to turn 1 nodes for later verification
-    turn_1_nodes = [node.full_text for node in state["nodes"]]
 
     # Turn 2: For each of the 8 nodes, extend with another user+assistant turn
     for i in range(8):
