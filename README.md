@@ -125,6 +125,7 @@ Environment Used: [https://github.com/NousResearch/atropos/blob/main/environment
 
 Key Documents:
 - [Base Environment Class](atroposlib/envs/README.md) - Documentation for creating custom environments
+- [ManagedServer Guide](atroposlib/envs/server_handling/MANAGED_SERVER.md) - **Recommended approach** for automatic token and logprob tracking
 - [Environments Overview and Contribution Guide](environments/community/README.md) - Documentation for existing environments and how to contribute new ones.
 - [Full Environment Config Options](CONFIG.md) - Documentation for creating custom environments
 - [Example Trainer](example_trainer/README.md) - Getting started with training
