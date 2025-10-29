@@ -152,9 +152,6 @@ class SGLangServer(APIServer):
             or kwargs.get("input_ids", None) is not None
         ), "Prompt or input_ids is required for completion!"
 
-        # Get n parameter for number of completions
-        n = kwargs.get("n", 1)
-
         # Use input_ids if provided (from ManagedServer), otherwise tokenize prompt
         if "input_ids" in kwargs:
             prompt_tokens = kwargs.pop("input_ids")
@@ -310,7 +307,6 @@ def resolve_openai_configs(
 
 
 if __name__ == "__main__":
-    import asyncio
 
     async def test_tokens_and_logprobs():
         # Configure the server - update these values for your setup
@@ -337,7 +333,7 @@ if __name__ == "__main__":
                 )
             )
 
-            print(f"\nResults:")
+            print("\nResults:")
             print(f"Prompt tokens: {prompt_tokens}")
             print(f"Output tokens: {output_tokens}")
             print(f"Output logprobs (first 5): {[lp[:5] for lp in output_logprobs]}")
