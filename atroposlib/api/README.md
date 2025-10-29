@@ -142,6 +142,12 @@ The API documentation (Swagger UI) will be available at `http://<your-server-ip>
             images: Optional[Any] = None # Image data (if applicable)
             env_id: Optional[int] = None # ID of the environment that generated this data
         ```
+    * **Expected Data Format:**
+        * `tokens`: Full unmasked token sequences (prompt + completion)
+        * `masks`: Token sequences for training with **`-100` for prompt positions**, actual token IDs for completion positions
+        * `inference_logprobs`: Optional logprob sequences for training with **`1.0` for masked positions** (masked), actual logprob values for completion positions
+        * Why **1.0** for masked logprobs? It represents an "obviously bad" probability (e^1.0 ≈ 2.718 > 1.0, invalid), making masked positions easy to identify during training
+        * **Recommended:** Use [ManagedServer](../envs/server_handling/MANAGED_SERVER.md) in your environment to automatically produce this format
     * **Response:**
         * Normal submission: `{"status": "received"}`
         * Mixed-size group buffered: `{"status": "buffered", "buffer_size": <sequences_in_buffer>}`
