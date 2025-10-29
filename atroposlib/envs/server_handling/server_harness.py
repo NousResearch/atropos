@@ -151,7 +151,7 @@ class ServerHarness:
         except KeyError as e:
             raise KeyError(f"KeyError: {e} for key:\n{prompt}")
 
-    async def _tokens_and_logprobs_completion_wrapper(
+    async def tokens_and_logprobs_completion(
         self, **kwargs
     ) -> tuple[list, list, list, list]:
         """
