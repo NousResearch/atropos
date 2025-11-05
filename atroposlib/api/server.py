@@ -1,10 +1,10 @@
 import gzip
+import os
 import time
 import uuid
 from typing import Any, Dict, List, Optional
-import os
-import weave
 
+import weave
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -390,7 +390,9 @@ async def scored_data(scored_data: ScoredData):
         "images": scored_data.images,
         "env_id": scored_data.env_id,
     }
-    queue_before = len(getattr(app.state, "queue", [])) if hasattr(app.state, "queue") else 0
+    queue_before = (
+        len(getattr(app.state, "queue", [])) if hasattr(app.state, "queue") else 0
+    )
     # Check if this is a mixed-size group
     env_id = scored_data.env_id
     if env_id is not None and env_id < len(app.state.envs):

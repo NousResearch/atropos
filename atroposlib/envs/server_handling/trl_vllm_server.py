@@ -8,6 +8,7 @@ import time
 import uuid
 
 import aiohttp
+import weave
 from openai.types.chat.chat_completion import (
     ChatCompletion,
     ChatCompletionMessage,
@@ -15,7 +16,6 @@ from openai.types.chat.chat_completion import (
 )
 from openai.types.completion import Completion, CompletionChoice
 from transformers import AutoTokenizer
-import weave
 
 from atroposlib.envs.server_handling.server_baseline import APIServer, APIServerConfig
 

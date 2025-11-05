@@ -3,11 +3,11 @@ import warnings
 
 import aiohttp
 import openai
+import weave
 from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.completion import Completion
 from pydantic_cli import FailedExecutionException
 from transformers import AutoTokenizer
-import weave
 
 from atroposlib.envs.constants import NAMESPACE_SEP, OPENAI_NAMESPACE
 from atroposlib.envs.server_handling.server_baseline import APIServer, APIServerConfig
@@ -151,7 +151,10 @@ class SGLangServer(APIServer):
                         warnings.warn("n kwarg is ignored by the API, setting to True")
                         self.config.n_kwarg_is_ignored = True
                         completion_list = await asyncio.gather(
-                            *[self.openai.completions.create(**kwargs) for _ in range(1, n)]
+                            *[
+                                self.openai.completions.create(**kwargs)
+                                for _ in range(1, n)
+                            ]
                         )
                         for c in completion_list:
                             completions.choices.extend(c.choices)

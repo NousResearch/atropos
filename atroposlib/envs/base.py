@@ -19,9 +19,8 @@ import aiohttp
 import jsonlines
 import numpy as np
 import wandb
-import yaml
-import os
 import weave
+import yaml
 from pydantic import BaseModel, Field
 from pydantic_cli import Cmd, FailedExecutionException, run_and_exit
 from rich import print as rprint
@@ -778,7 +777,9 @@ class BaseEnv(ABC):
         with weave.attributes(
             {
                 "endpoint": url,
-                "payload_groups": (len(scored_data) if isinstance(scored_data, list) else 1),
+                "payload_groups": (
+                    len(scored_data) if isinstance(scored_data, list) else 1
+                ),
                 "payload_sequences": payload_len,
             }
         ):
@@ -930,7 +931,9 @@ class BaseEnv(ABC):
         with weave.attributes(
             {
                 "env_id": getattr(self, "env_id", None),
-                "env_name": getattr(self, "wandb_prepend", None) or self.name or self.__class__.__name__,
+                "env_name": getattr(self, "wandb_prepend", None)
+                or self.name
+                or self.__class__.__name__,
                 "step": self.curr_step,
             }
         ):
@@ -1156,7 +1159,9 @@ class BaseEnv(ABC):
         await self.setup_wandb()
         # Initialize Weave tracing once per process (if not disabled)
         if os.getenv("WEAVE_DISABLED", "false").lower() not in ("1", "true", "yes"):
-            project_name = os.getenv("WEAVE_PROJECT") or (self.wandb_project or "atropos")
+            project_name = os.getenv("WEAVE_PROJECT") or (
+                self.wandb_project or "atropos"
+            )
             try:
                 weave.init(project_name)
             except Exception:
@@ -1175,15 +1180,29 @@ class BaseEnv(ABC):
             with weave.attributes(
                 {
                     "env_id": getattr(self, "env_id", None),
-                    "env_name": getattr(self, "wandb_prepend", None) or self.name or self.__class__.__name__,
+                    "env_name": getattr(self, "wandb_prepend", None)
+                    or self.name
+                    or self.__class__.__name__,
                     "wandb_project": self.wandb_project,
                     "wandb_group": self.wandb_group,
-                    "model_name": getattr(getattr(self.server.servers[0], "config", object()), "model_name", None)
-                    if self.server.servers
-                    else None,
-                    "base_url": getattr(getattr(self.server.servers[0], "config", object()), "base_url", None)
-                    if self.server.servers
-                    else None,
+                    "model_name": (
+                        getattr(
+                            getattr(self.server.servers[0], "config", object()),
+                            "model_name",
+                            None,
+                        )
+                        if self.server.servers
+                        else None
+                    ),
+                    "base_url": (
+                        getattr(
+                            getattr(self.server.servers[0], "config", object()),
+                            "base_url",
+                            None,
+                        )
+                        if self.server.servers
+                        else None
+                    ),
                     "group_size": self.config.group_size,
                     "batch_size": self.config.batch_size,
                 }
