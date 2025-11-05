@@ -20,6 +20,8 @@ import jsonlines
 import numpy as np
 import wandb
 import yaml
+import os
+import weave
 from pydantic import BaseModel, Field
 from pydantic_cli import Cmd, FailedExecutionException, run_and_exit
 from rich import print as rprint
@@ -287,6 +289,7 @@ class BaseEnv(ABC):
             "Handle env single method must be implemented in subclass "
         )
 
+    @weave.op
     async def collect_trajectories(self, item: Item) -> Tuple[
         Union[
             Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]], List[Any | None]
@@ -750,6 +753,7 @@ class BaseEnv(ABC):
         stop=stop_after_attempt(3),
         wait=wait_random_exponential(multiplier=1, max=10),
     )
+    @weave.op
     async def _send_scored_data_to_api(self, scored_data):
         """
         Send scored data to the API with retry logic for timeouts and server errors.
@@ -766,19 +770,31 @@ class BaseEnv(ABC):
             if isinstance(scored_data, list)
             else f"{self.config.rollout_server_url}/scored_data"
         )
-        async with aiohttp.ClientSession() as session:
-            async with self._post_json_with_compression(
-                session,
-                url,
-                scored_data,
-            ) as resp:
-                if resp.status >= 500:
-                    logging.debug(f"Server error: {resp.status}, retrying...")
-                    raise Exception(f"Server error: {resp.status}")
-                elif resp.status >= 400:
-                    logging.error(f"Client error: {resp.status}, not retrying")
-                    return
-                print(await resp.text())
+        payload_len = (
+            sum(len(g.get("tokens", [])) for g in scored_data)
+            if isinstance(scored_data, list)
+            else len(scored_data.get("tokens", []))
+        )
+        with weave.attributes(
+            {
+                "endpoint": url,
+                "payload_groups": (len(scored_data) if isinstance(scored_data, list) else 1),
+                "payload_sequences": payload_len,
+            }
+        ):
+            async with aiohttp.ClientSession() as session:
+                async with self._post_json_with_compression(
+                    session,
+                    url,
+                    scored_data,
+                ) as resp:
+                    if resp.status >= 500:
+                        logging.debug(f"Server error: {resp.status}, retrying...")
+                        raise Exception(f"Server error: {resp.status}")
+                    elif resp.status >= 400:
+                        logging.error(f"Client error: {resp.status}, not retrying")
+                        return
+                    print(await resp.text())
 
     def _post_json_with_compression(
         self,
@@ -803,6 +819,7 @@ class BaseEnv(ABC):
 
         return session.post(url, data=body, headers=headers)
 
+    @weave.op
     async def handle_send_to_api(
         self,
         scored_data: Union[ScoredDataGroup, List[ScoredDataGroup]],
@@ -898,6 +915,7 @@ class BaseEnv(ABC):
                 )
                 print(f"Failed to send {data_type_str} after retries: {e}")
 
+    @weave.op
     async def handle_env(
         self, item_uuid: str
     ) -> Optional[Union[ScoredDataGroup, List[ScoredDataGroup]]]:
@@ -909,7 +927,14 @@ class BaseEnv(ABC):
             print(f"item {item_uuid} not found... returning")
             return None
         start_time = time.time()
-        logger.debug(f"handle_env: Starting with item: {item}")
+        with weave.attributes(
+            {
+                "env_id": getattr(self, "env_id", None),
+                "env_name": getattr(self, "wandb_prepend", None) or self.name or self.__class__.__name__,
+                "step": self.curr_step,
+            }
+        ):
+            logger.debug(f"handle_env: Starting with item: {item}")
         # do a rollout with item
         try:
             to_postprocess, to_backlog = await self.collect_trajectories(item)
@@ -1129,6 +1154,13 @@ class BaseEnv(ABC):
         """
         await self.setup()
         await self.setup_wandb()
+        # Initialize Weave tracing once per process (if not disabled)
+        if os.getenv("WEAVE_DISABLED", "false").lower() not in ("1", "true", "yes"):
+            project_name = os.getenv("WEAVE_PROJECT") or (self.wandb_project or "atropos")
+            try:
+                weave.init(project_name)
+            except Exception:
+                pass
         await self.register_env()
         await self.get_server_info()
         # Wait for other instances to get setup :)
@@ -1140,8 +1172,24 @@ class BaseEnv(ABC):
                 )
             # get status from server
             self.last_loop_time = time.time()
-            await self.get_status()
-            await self.env_step_checks()
+            with weave.attributes(
+                {
+                    "env_id": getattr(self, "env_id", None),
+                    "env_name": getattr(self, "wandb_prepend", None) or self.name or self.__class__.__name__,
+                    "wandb_project": self.wandb_project,
+                    "wandb_group": self.wandb_group,
+                    "model_name": getattr(getattr(self.server.servers[0], "config", object()), "model_name", None)
+                    if self.server.servers
+                    else None,
+                    "base_url": getattr(getattr(self.server.servers[0], "config", object()), "base_url", None)
+                    if self.server.servers
+                    else None,
+                    "group_size": self.config.group_size,
+                    "batch_size": self.config.batch_size,
+                }
+            ):
+                await self.get_status()
+                await self.env_step_checks()
             logger.info(f"env_manager: Status dict: {self.status_dict}")
             if (
                 self.status_dict["current_step"]

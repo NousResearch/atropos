@@ -2,6 +2,8 @@ import gzip
 import time
 import uuid
 from typing import Any, Dict, List, Optional
+import os
+import weave
 
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,6 +38,33 @@ app.add_middleware(
 
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+if os.getenv("WEAVE_DISABLED", "false").lower() not in ("1", "true", "yes"):
+    try:
+        weave.init(os.getenv("WEAVE_PROJECT", "atropos-api"))
+    except Exception:
+        pass
+
+
+@weave.op
+def _trace_api_enq(
+    endpoint: str,
+    env_id: Optional[int],
+    group_size: int,
+    buffered: bool,
+    buffer_size: int,
+    queue_len_before: int,
+    queue_len_after: int,
+):
+    return {
+        "endpoint": endpoint,
+        "env_id": env_id,
+        "group_size": group_size,
+        "buffered": buffered,
+        "buffer_size": buffer_size,
+        "queue_len_before": queue_len_before,
+        "queue_len_after": queue_len_after,
+    }
 
 
 class GZipRequestMiddleware:
@@ -361,7 +390,7 @@ async def scored_data(scored_data: ScoredData):
         "images": scored_data.images,
         "env_id": scored_data.env_id,
     }
-
+    queue_before = len(getattr(app.state, "queue", [])) if hasattr(app.state, "queue") else 0
     # Check if this is a mixed-size group
     env_id = scored_data.env_id
     if env_id is not None and env_id < len(app.state.envs):
@@ -391,16 +420,41 @@ async def scored_data(scored_data: ScoredData):
                     app.state.queue.append(group)
                     app.state.latest = group
 
-            return {
+            ret = {
                 "status": "buffered",
                 "buffer_size": sum(
                     len(g["tokens"]) for g in app.state.buffer.get(env_id, [])
                 ),
             }
+            try:
+                await _trace_api_enq(
+                    endpoint="/scored_data",
+                    env_id=env_id,
+                    group_size=actual_group_size,
+                    buffered=True,
+                    buffer_size=ret["buffer_size"],
+                    queue_len_before=queue_before,
+                    queue_len_after=len(app.state.queue),
+                )
+            except Exception:
+                pass
+            return ret
 
     # Normal path - correct size or no env info
     app.state.queue.append(data_dict)
     app.state.latest = data_dict
+    try:
+        await _trace_api_enq(
+            endpoint="/scored_data",
+            env_id=env_id,
+            group_size=len(scored_data.tokens),
+            buffered=False,
+            buffer_size=0,
+            queue_len_before=queue_before,
+            queue_len_after=len(app.state.queue),
+        )
+    except Exception:
+        pass
     return {"status": "received"}
 
 

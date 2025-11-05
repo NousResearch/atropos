@@ -15,6 +15,7 @@ from openai.types.chat.chat_completion import (
 )
 from openai.types.completion import Completion, CompletionChoice
 from transformers import AutoTokenizer
+import weave
 
 from atroposlib.envs.server_handling.server_baseline import APIServer, APIServerConfig
 
@@ -35,6 +36,7 @@ class TrlVllmServer(APIServer):
         """
         self.server_healthy = True
 
+    @weave.op
     async def _chat_completion_wrapper(self, **kwargs) -> ChatCompletion:
         """
         Wrapper for the chat completion using the trl's vLLM server.
@@ -44,21 +46,30 @@ class TrlVllmServer(APIServer):
         prompt = self.tokenizer.apply_chat_template(
             prompt, tokenize=False, add_generation_prompt=True
         )
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url,
-                json={
-                    "prompts": [prompt],
-                    "n": kwargs.get("n", 1),
-                    "repetition_penalty": kwargs.get("repetition_penalty", 1.0),
-                    "temperature": kwargs.get("temperature", 1.0),
-                    "top_p": kwargs.get("top_p", 1.0),
-                    "top_k": kwargs.get("top_k", -1),
-                    "min_p": kwargs.get("min_p", 0.0),
-                    "max_tokens": kwargs.get("max_tokens", 1024),
-                },
-            ) as response:
-                completions = await response.json()
+        with weave.attributes(
+            {
+                "server_type": "trl_vllm",
+                "endpoint": "/generate",
+                "model": self.config.model_name,
+                "n": kwargs.get("n", 1),
+                "base_url": getattr(self.config, "base_url", None),
+            }
+        ):
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    json={
+                        "prompts": [prompt],
+                        "n": kwargs.get("n", 1),
+                        "repetition_penalty": kwargs.get("repetition_penalty", 1.0),
+                        "temperature": kwargs.get("temperature", 1.0),
+                        "top_p": kwargs.get("top_p", 1.0),
+                        "top_k": kwargs.get("top_k", -1),
+                        "min_p": kwargs.get("min_p", 0.0),
+                        "max_tokens": kwargs.get("max_tokens", 1024),
+                    },
+                ) as response:
+                    completions = await response.json()
         completions = ChatCompletion(
             id=str(uuid.uuid4()),
             object="chat.completion",
@@ -82,27 +93,37 @@ class TrlVllmServer(APIServer):
         )
         return completions
 
+    @weave.op
     async def _completion_wrapper(self, **kwargs) -> Completion:
         """
         Wrapper for the completion using the trl's vLLM server.
         """
         url = f"{self.config.base_url}/generate/"
         prompt = kwargs.get("prompt", "")
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url,
-                json={
-                    "prompts": [prompt],
-                    "n": kwargs.get("n", 1),
-                    "repetition_penalty": kwargs.get("repetition_penalty", 1.0),
-                    "temperature": kwargs.get("temperature", 1.0),
-                    "top_p": kwargs.get("top_p", 1.0),
-                    "top_k": kwargs.get("top_k", -1),
-                    "min_p": kwargs.get("min_p", 0.0),
-                    "max_tokens": kwargs.get("max_tokens", 1024),
-                },
-            ) as response:
-                completions = await response.json()
+        with weave.attributes(
+            {
+                "server_type": "trl_vllm",
+                "endpoint": "/generate",
+                "model": self.config.model_name,
+                "n": kwargs.get("n", 1),
+                "base_url": getattr(self.config, "base_url", None),
+            }
+        ):
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    json={
+                        "prompts": [prompt],
+                        "n": kwargs.get("n", 1),
+                        "repetition_penalty": kwargs.get("repetition_penalty", 1.0),
+                        "temperature": kwargs.get("temperature", 1.0),
+                        "top_p": kwargs.get("top_p", 1.0),
+                        "top_k": kwargs.get("top_k", -1),
+                        "min_p": kwargs.get("min_p", 0.0),
+                        "max_tokens": kwargs.get("max_tokens", 1024),
+                    },
+                ) as response:
+                    completions = await response.json()
         completions = Completion(
             id=str(uuid.uuid4()),
             object="text_completion",

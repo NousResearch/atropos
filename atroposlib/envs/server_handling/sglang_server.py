@@ -7,6 +7,7 @@ from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.completion import Completion
 from pydantic_cli import FailedExecutionException
 from transformers import AutoTokenizer
+import weave
 
 from atroposlib.envs.constants import NAMESPACE_SEP, OPENAI_NAMESPACE
 from atroposlib.envs.server_handling.server_baseline import APIServer, APIServerConfig
@@ -51,6 +52,7 @@ class SGLangServer(APIServer):
                 self.server_healthy = False
             await asyncio.sleep(1)
 
+    @weave.op
     async def _chat_completion_wrapper(self, **kwargs) -> ChatCompletion:
         """
         Wrapper for the chat completion using the openai client.
@@ -61,41 +63,51 @@ class SGLangServer(APIServer):
         assert (
             kwargs.get("messages", None) is not None
         ), "Messages are required for chat completion!"
-        if self.config.n_kwarg_is_ignored:
-            n = kwargs.pop("n", 1)
-            completion_list = await asyncio.gather(
-                *[self.openai.chat.completions.create(**kwargs) for _ in range(n)]
-            )
-            completions = completion_list[0]
-            if n > 1:
-                for c in completion_list[1:]:
-                    completions.choices.extend(c.choices)
-            else:
-                completions = await self.openai.chat.completions.create(**kwargs)
-        else:
-            if "n" in kwargs:
-                n = kwargs["n"]
-            else:
-                n = 1
-            completions = await self.openai.chat.completions.create(**kwargs)
-            if len(completions.choices) != n:
-                if len(completions.choices) != 1:
-                    raise ValueError(
-                        f"Expected 1 or {n} completions, got {len(completions.choices)}!"
-                    )
-                else:
-                    warnings.warn("n kwarg is ignored by the API, setting to True")
-                    self.config.n_kwarg_is_ignored = True
-                    completion_list = await asyncio.gather(
-                        *[
-                            self.openai.chat.completions.create(**kwargs)
-                            for _ in range(1, n)
-                        ]
-                    )
-                    for c in completion_list:
+        with weave.attributes(
+            {
+                "server_type": "sglang",
+                "endpoint": "chat.completions.create",
+                "model": kwargs.get("model"),
+                "n": kwargs.get("n", 1),
+                "base_url": getattr(self.config, "base_url", None),
+            }
+        ):
+            if self.config.n_kwarg_is_ignored:
+                n = kwargs.pop("n", 1)
+                completion_list = await asyncio.gather(
+                    *[self.openai.chat.completions.create(**kwargs) for _ in range(n)]
+                )
+                completions = completion_list[0]
+                if n > 1:
+                    for c in completion_list[1:]:
                         completions.choices.extend(c.choices)
+                else:
+                    completions = await self.openai.chat.completions.create(**kwargs)
+            else:
+                if "n" in kwargs:
+                    n = kwargs["n"]
+                else:
+                    n = 1
+                completions = await self.openai.chat.completions.create(**kwargs)
+                if len(completions.choices) != n:
+                    if len(completions.choices) != 1:
+                        raise ValueError(
+                            f"Expected 1 or {n} completions, got {len(completions.choices)}!"
+                        )
+                    else:
+                        warnings.warn("n kwarg is ignored by the API, setting to True")
+                        self.config.n_kwarg_is_ignored = True
+                        completion_list = await asyncio.gather(
+                            *[
+                                self.openai.chat.completions.create(**kwargs)
+                                for _ in range(1, n)
+                            ]
+                        )
+                        for c in completion_list:
+                            completions.choices.extend(c.choices)
         return completions
 
+    @weave.op
     async def _completion_wrapper(self, **kwargs) -> Completion:
         """
         Wrapper for the completion using the openai client.
@@ -106,36 +118,46 @@ class SGLangServer(APIServer):
         assert (
             kwargs.get("prompt", None) is not None
         ), "Prompt is required for completion!"
-        if self.config.n_kwarg_is_ignored:
-            n = kwargs.pop("n", 1)
-            completion_list = await asyncio.gather(
-                *[self.openai.completions.create(**kwargs) for _ in range(n)]
-            )
-            completions = completion_list[0]
-            if n > 1:
-                for c in completion_list[1:]:
-                    completions.choices.extend(c.choices)
-        else:
-            if "n" in kwargs:
-                n = kwargs["n"]
-            else:
-                n = 1
-            completions = await self.openai.completions.create(**kwargs)
-            if len(completions.choices) != n:
-                if len(completions.choices) != 1:
-                    raise ValueError(
-                        f"Expected 1 or {n} completions, got {len(completions.choices)}!"
-                    )
-                else:
-                    warnings.warn("n kwarg is ignored by the API, setting to True")
-                    self.config.n_kwarg_is_ignored = True
-                    completion_list = await asyncio.gather(
-                        *[self.openai.completions.create(**kwargs) for _ in range(1, n)]
-                    )
-                    for c in completion_list:
+        with weave.attributes(
+            {
+                "server_type": "sglang",
+                "endpoint": "completions.create",
+                "model": kwargs.get("model"),
+                "n": kwargs.get("n", 1),
+                "base_url": getattr(self.config, "base_url", None),
+            }
+        ):
+            if self.config.n_kwarg_is_ignored:
+                n = kwargs.pop("n", 1)
+                completion_list = await asyncio.gather(
+                    *[self.openai.completions.create(**kwargs) for _ in range(n)]
+                )
+                completions = completion_list[0]
+                if n > 1:
+                    for c in completion_list[1:]:
                         completions.choices.extend(c.choices)
+            else:
+                if "n" in kwargs:
+                    n = kwargs["n"]
+                else:
+                    n = 1
+                completions = await self.openai.completions.create(**kwargs)
+                if len(completions.choices) != n:
+                    if len(completions.choices) != 1:
+                        raise ValueError(
+                            f"Expected 1 or {n} completions, got {len(completions.choices)}!"
+                        )
+                    else:
+                        warnings.warn("n kwarg is ignored by the API, setting to True")
+                        self.config.n_kwarg_is_ignored = True
+                        completion_list = await asyncio.gather(
+                            *[self.openai.completions.create(**kwargs) for _ in range(1, n)]
+                        )
+                        for c in completion_list:
+                            completions.choices.extend(c.choices)
         return completions
 
+    @weave.op
     async def _tokens_and_logprobs_completion_wrapper(
         self, **kwargs
     ) -> tuple[list, list, list, list]:
@@ -180,19 +202,27 @@ class SGLangServer(APIServer):
         # Make async request to SGLang /generate endpoint
         import aiohttp
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.config.base_url.replace('/v1', '')}/generate",
-                json=request_data,
-                headers=(
-                    {"Authorization": f"Bearer {self.config.api_key}"}
-                    if self.config.api_key
-                    else {}
-                ),
-                timeout=aiohttp.ClientTimeout(total=self.config.timeout),
-            ) as response:
-                response.raise_for_status()
-                results = await response.json()
+        with weave.attributes(
+            {
+                "server_type": "sglang",
+                "endpoint": "generate",
+                "model": kwargs.get("model"),
+                "base_url": getattr(self.config, "base_url", None),
+            }
+        ):
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.config.base_url.replace('/v1', '')}/generate",
+                    json=request_data,
+                    headers=(
+                        {"Authorization": f"Bearer {self.config.api_key}"}
+                        if self.config.api_key
+                        else {}
+                    ),
+                    timeout=aiohttp.ClientTimeout(total=self.config.timeout),
+                ) as response:
+                    response.raise_for_status()
+                    results = await response.json()
 
         # Handle both single and batch responses
         if not isinstance(results, list):
