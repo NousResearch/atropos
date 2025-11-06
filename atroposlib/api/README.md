@@ -53,6 +53,16 @@ uvicorn atroposlib.api.server:app --host 0.0.0.0 --port 8000 --reload
 
 The API documentation (Swagger UI) will be available at `http://<your-server-ip>:8000/docs`.
 
+### Weave tracing for API submissions
+
+This service emits lightweight Weave traces for rollout submissions so you can inspect various behavior while training:
+
+- Enabled by default. Disable with `WEAVE_DISABLED=true`.
+- Optional project name via `WEAVE_PROJECT` (defaults to `atropos-api`).
+- `/scored_data` shows whether data was buffered or enqueued and the queue lengths before/after.
+
+View traces in your project at `https://weave.wandb.ai`.
+
 ## API Endpoints
 
 ### General
