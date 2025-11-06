@@ -349,7 +349,7 @@ If you have found the library helpful in your work, you can cite this repository
 @misc{atropos,
   title        = {Atropos: An Async First Environment Rollout Controller},
   author       = {Mahan, Dakota and Jin, Roger and Teknium and Sands, Shannon and Yatsenko, Artem and Suphavadeeprasit, Jai and Malhotra, Karan and Guang, Chen and Li, Joe},
-  howpublished = {\url{https://www.github.com/NousResearch/atropos}},
+  howpublished = {GitHub: https://github.com/NousResearch/atropos},
   year         = {2025},
   month        = {apr},
   note         = {Version 0.3.0},
