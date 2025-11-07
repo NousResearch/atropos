@@ -8,6 +8,10 @@ This example uses `vLLM` for efficient inference during the (simulated) data gen
 
 **Note:** This script is intended as a *reference example* for API integration and basic training setup. It is not optimized for large-scale, efficient training.
 
+### Custom vLLM Server
+
+The `vllm_api_server.py` file in this directory provides a customized vLLM API server implementation based on vLLM's native API. This server exposes enhanced endpoints for token and logprob tracking. The `VLLMServer` class in `atroposlib/envs/server_handling/vllm_server.py` can connect to this server for direct access to vLLM's `/generate` endpoint with full token-level logprobs.
+
 ## Prerequisites
 
 1.  **Python:** Python 3.8 or higher is recommended.

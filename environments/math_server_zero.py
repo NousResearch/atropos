@@ -155,7 +155,7 @@ class MathEnv(BaseEnv):
         server_configs = ServerBaseline(
             model_name="Qwen/Qwen2.5-7B",
             num_requests_for_eval=256,  # since evaling only on one...
-            server_type="sglang",
+            server_type="vllm",
         )
 
         return env_config, server_configs
@@ -255,15 +255,15 @@ class MathEnv(BaseEnv):
         return
 
     async def rollout_and_score_eval(self, question, answer, subset):
-
-        completion = await self.server.completion(
-            prompt=question,
-            n=1,
-            max_tokens=32765,
-            temperature=0.0,
-            split="eval",
-            stop=stop_list,
-        )
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+            completion = await managed.completion(
+                prompt=question,
+                n=1,
+                max_tokens=32765,
+                temperature=0.0,
+                split="eval",
+                stop=stop_list,
+            )
         loop = asyncio.get_event_loop()
         gold = "\\boxed{" + answer + "}" if "\\boxed" not in answer else answer
         resp = completion.choices[0].text
