@@ -404,8 +404,8 @@ async def get_latest_example():
 
 
 @app.post("/scored_data")
-
-    return {"status": "received"}
+async def scored_data(scored_data: ScoredData):
+    return _process_scored_data(scored_data)
 
 
 @app.post("/scored_data_list")
