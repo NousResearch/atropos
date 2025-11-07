@@ -413,6 +413,8 @@ async def scored_data_list(scored_data_list: List[ScoredData]):
     """Handle a list of ScoredData objects for step-based learning"""
 
     # Process each scored data item
+    buffered_count = 0
+    last_buffer_size: Optional[int] = None
     for scored_data in scored_data_list:
         data_dict = {
             "tokens": scored_data.tokens,
