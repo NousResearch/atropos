@@ -426,44 +426,12 @@ async def scored_data_list(scored_data_list: List[ScoredData]):
         "groups_processed": len(scored_data_list),
     }
 
-        # Check if this is a mixed-size group
-        env_id = scored_data.env_id
-        if env_id is not None and env_id < len(app.state.envs):
-            expected_group_size = app.state.envs[env_id].get("group_size", 1)
-            actual_group_size = len(scored_data.tokens)
+    if buffered_count:
+        response["buffered"] = buffered_count
+        if last_buffer_size is not None:
+            response["last_buffer_size"] = last_buffer_size
 
-            if actual_group_size != expected_group_size:
-                # Mixed size group - add to buffer
-                if env_id not in app.state.buffer:
-                    app.state.buffer[env_id] = []
-
-                app.state.buffer[env_id].append(data_dict)
-
-                # Try to find groups that sum to expected_group_size
-                indices = find_groups_summing_to_target(
-                    app.state.buffer[env_id], expected_group_size
-                )
-
-                if indices:
-                    # Add these groups to queue in order
-                    groups_to_add = []
-                    for idx in sorted(indices, reverse=True):
-                        groups_to_add.append(app.state.buffer[env_id].pop(idx))
-
-                    # Add in FIFO order
-                    for group in reversed(groups_to_add):
-                        app.state.queue.append(group)
-                        app.state.latest = group
-            else:
-                # Normal size - add directly to queue
-                app.state.queue.append(data_dict)
-                app.state.latest = data_dict
-        else:
-            # No env info or normal path - add directly to queue
-            app.state.queue.append(data_dict)
-            app.state.latest = data_dict
-
-    return {"status": "received", "groups_processed": len(scored_data_list)}
+    return response
 
 
 @app.get("/status")
