@@ -165,6 +165,7 @@ class ScoredData(BaseModel):
 
         return v
 
+
 def _scored_data_to_dict(scored_data: ScoredData) -> Dict[str, Any]:
     """Convert a `ScoredData` pydantic model into a plain dictionary."""
 
@@ -217,12 +218,15 @@ def _process_scored_data(scored_data: ScoredData) -> Dict[str, Any]:
 
             return {
                 "status": "buffered",
-                "buffer_size": sum(len(group["tokens"]) for group in app.state.buffer.get(env_id, [])),
+                "buffer_size": sum(
+                    len(group["tokens"]) for group in app.state.buffer.get(env_id, [])
+                ),
             }
 
     app.state.queue.append(data_dict)
     app.state.latest = data_dict
     return {"status": "received"}
+
 
 class Status(BaseModel):
     """
