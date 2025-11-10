@@ -3,7 +3,6 @@ import warnings
 
 import aiohttp
 import openai
-import weave
 from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.completion import Completion
 from pydantic_cli import FailedExecutionException
@@ -50,7 +49,6 @@ class OpenAIServer(APIServer):
                 self.server_healthy = False
             await asyncio.sleep(1)
 
-    @weave.op
     async def _chat_completion_wrapper(self, **kwargs) -> ChatCompletion:
         """
         Wrapper for the chat completion using the openai client.
@@ -61,51 +59,41 @@ class OpenAIServer(APIServer):
         assert (
             kwargs.get("messages", None) is not None
         ), "Messages are required for chat completion!"
-        with weave.attributes(
-            {
-                "server_type": "openai",
-                "endpoint": "chat.completions.create",
-                "model": kwargs.get("model"),
-                "n": kwargs.get("n", 1),
-                "base_url": getattr(self.config, "base_url", None),
-            }
-        ):
-            if self.config.n_kwarg_is_ignored:
-                n = kwargs.pop("n", 1)
-                completion_list = await asyncio.gather(
-                    *[self.openai.chat.completions.create(**kwargs) for _ in range(n)]
-                )
-                completions = completion_list[0]
-                if n > 1:
-                    for c in completion_list[1:]:
-                        completions.choices.extend(c.choices)
-                else:
-                    completions = await self.openai.chat.completions.create(**kwargs)
+        if self.config.n_kwarg_is_ignored:
+            n = kwargs.pop("n", 1)
+            completion_list = await asyncio.gather(
+                *[self.openai.chat.completions.create(**kwargs) for _ in range(n)]
+            )
+            completions = completion_list[0]
+            if n > 1:
+                for c in completion_list[1:]:
+                    completions.choices.extend(c.choices)
             else:
-                if "n" in kwargs:
-                    n = kwargs["n"]
-                else:
-                    n = 1
                 completions = await self.openai.chat.completions.create(**kwargs)
-                if len(completions.choices) != n:
-                    if len(completions.choices) != 1:
-                        raise ValueError(
-                            f"Expected 1 or {n} completions, got {len(completions.choices)}!"
-                        )
-                    else:
-                        warnings.warn("n kwarg is ignored by the API, setting to True")
-                        self.config.n_kwarg_is_ignored = True
-                        completion_list = await asyncio.gather(
-                            *[
-                                self.openai.chat.completions.create(**kwargs)
-                                for _ in range(1, n)
-                            ]
-                        )
-                        for c in completion_list:
-                            completions.choices.extend(c.choices)
+        else:
+            if "n" in kwargs:
+                n = kwargs["n"]
+            else:
+                n = 1
+            completions = await self.openai.chat.completions.create(**kwargs)
+            if len(completions.choices) != n:
+                if len(completions.choices) != 1:
+                    raise ValueError(
+                        f"Expected 1 or {n} completions, got {len(completions.choices)}!"
+                    )
+                else:
+                    warnings.warn("n kwarg is ignored by the API, setting to True")
+                    self.config.n_kwarg_is_ignored = True
+                    completion_list = await asyncio.gather(
+                        *[
+                            self.openai.chat.completions.create(**kwargs)
+                            for _ in range(1, n)
+                        ]
+                    )
+                    for c in completion_list:
+                        completions.choices.extend(c.choices)
         return completions
 
-    @weave.op
     async def _completion_wrapper(self, **kwargs) -> Completion:
         """
         Wrapper for the completion using the openai client.
@@ -116,46 +104,34 @@ class OpenAIServer(APIServer):
         assert (
             kwargs.get("prompt", None) is not None
         ), "Prompt is required for completion!"
-        with weave.attributes(
-            {
-                "server_type": "openai",
-                "endpoint": "completions.create",
-                "model": kwargs.get("model"),
-                "n": kwargs.get("n", 1),
-                "base_url": getattr(self.config, "base_url", None),
-            }
-        ):
-            if self.config.n_kwarg_is_ignored:
-                n = kwargs.pop("n", 1)
-                completion_list = await asyncio.gather(
-                    *[self.openai.completions.create(**kwargs) for _ in range(n)]
-                )
-                completions = completion_list[0]
-                if n > 1:
-                    for c in completion_list[1:]:
-                        completions.choices.extend(c.choices)
+        if self.config.n_kwarg_is_ignored:
+            n = kwargs.pop("n", 1)
+            completion_list = await asyncio.gather(
+                *[self.openai.completions.create(**kwargs) for _ in range(n)]
+            )
+            completions = completion_list[0]
+            if n > 1:
+                for c in completion_list[1:]:
+                    completions.choices.extend(c.choices)
+        else:
+            if "n" in kwargs:
+                n = kwargs["n"]
             else:
-                if "n" in kwargs:
-                    n = kwargs["n"]
+                n = 1
+            completions = await self.openai.completions.create(**kwargs)
+            if len(completions.choices) != n:
+                if len(completions.choices) != 1:
+                    raise ValueError(
+                        f"Expected 1 or {n} completions, got {len(completions.choices)}!"
+                    )
                 else:
-                    n = 1
-                completions = await self.openai.completions.create(**kwargs)
-                if len(completions.choices) != n:
-                    if len(completions.choices) != 1:
-                        raise ValueError(
-                            f"Expected 1 or {n} completions, got {len(completions.choices)}!"
-                        )
-                    else:
-                        warnings.warn("n kwarg is ignored by the API, setting to True")
-                        self.config.n_kwarg_is_ignored = True
-                        completion_list = await asyncio.gather(
-                            *[
-                                self.openai.completions.create(**kwargs)
-                                for _ in range(1, n)
-                            ]
-                        )
-                        for c in completion_list:
-                            completions.choices.extend(c.choices)
+                    warnings.warn("n kwarg is ignored by the API, setting to True")
+                    self.config.n_kwarg_is_ignored = True
+                    completion_list = await asyncio.gather(
+                        *[self.openai.completions.create(**kwargs) for _ in range(1, n)]
+                    )
+                    for c in completion_list:
+                        completions.choices.extend(c.choices)
         return completions
 
     async def _tokens_and_logprobs_completion_wrapper(
