@@ -1,5 +1,4 @@
 import gzip
-import os
 import time
 import uuid
 from typing import Any, Dict, List, Optional
@@ -37,9 +36,6 @@ app.add_middleware(
 
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
-
-
- 
 
 
 class GZipRequestMiddleware:

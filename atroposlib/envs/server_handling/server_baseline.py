@@ -1,8 +1,12 @@
 import asyncio
 import collections
+import functools
+import inspect
+import os
 import time
 from abc import ABC, abstractmethod
 from asyncio import exceptions
+from contextlib import contextmanager
 from typing import Literal, Optional
 
 import numpy as np
@@ -10,10 +14,7 @@ from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.completion import Completion
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_random_exponential
-import os
-import inspect
-import functools
-from contextlib import contextmanager
+
 try:
     import weave as _weave
 except Exception:
@@ -23,32 +24,35 @@ try:
 except Exception:
     _wandb = None
 
-WEAVE_ENABLED = (
-    _weave is not None
-    and os.getenv("WEAVE_DISABLED", "false").lower() not in ("1", "true", "yes")
-)
+WEAVE_ENABLED = _weave is not None and os.getenv(
+    "WEAVE_DISABLED", "false"
+).lower() not in ("1", "true", "yes")
 _weave_initialized = False
+
 
 def _resolve_weave_project_name() -> str:
 
     if _wandb is not None:
         try:
             run = getattr(_wandb, "run", None)
-            project_from_run = getattr(run, "project", None) if run is not None else None
+            project_from_run = (
+                getattr(run, "project", None) if run is not None else None
+            )
             if project_from_run:
                 return str(project_from_run)
         except Exception:
             pass
-   
+
     project_from_env = os.getenv("WANDB_PROJECT")
     if project_from_env:
         return project_from_env
-  
+
     project_from_weave_env = os.getenv("WEAVE_PROJECT")
     if project_from_weave_env:
         return project_from_weave_env
-    
+
     return "atropos"
+
 
 def ensure_weave_init() -> None:
     global _weave_initialized
@@ -57,25 +61,31 @@ def ensure_weave_init() -> None:
         try:
             _weave.init(project_name)
         except Exception:
-          
+
             pass
         _weave_initialized = True
+
 
 def weave_op(func):
     if WEAVE_ENABLED:
         wrapped = _weave.op(func)
         if inspect.iscoroutinefunction(func):
+
             @functools.wraps(wrapped)
             async def init_then_call(*args, **kwargs):
                 ensure_weave_init()
                 return await wrapped(*args, **kwargs)
+
         else:
+
             @functools.wraps(wrapped)
             def init_then_call(*args, **kwargs):
                 ensure_weave_init()
                 return wrapped(*args, **kwargs)
+
         return init_then_call
     return func
+
 
 @contextmanager
 def weave_attributes(attrs: dict):
@@ -376,7 +386,7 @@ class APIServer(ABC):
                 self.request_timings.append(stat_dict["end"] - stat_dict["start"])
                 self.attempts_list.append(stat_dict["attempts"])
             else:
-                
+
                 ret_data = await self._chat_eval(stat_dict, **kwargs)
                 self.eval_request_timings.append(stat_dict["end"] - stat_dict["start"])
                 self.eval_attempts_list.append(stat_dict["attempts"])
@@ -455,7 +465,7 @@ class APIServer(ABC):
                 self.request_timings.append(stat_dict["end"] - stat_dict["start"])
                 self.attempts_list.append(stat_dict["attempts"])
             else:
-                
+
                 ret_data = await self._comp_eval(stat_dict, **kwargs)
                 self.eval_request_timings.append(stat_dict["end"] - stat_dict["start"])
                 self.eval_attempts_list.append(stat_dict["attempts"])
@@ -541,8 +551,10 @@ class APIServer(ABC):
                 self.request_timings.append(stat_dict["end"] - stat_dict["start"])
                 self.attempts_list.append(stat_dict["attempts"])
             else:
-                
-                ret_data = await self._tokens_and_logprobs_comp_eval(stat_dict, **kwargs)
+
+                ret_data = await self._tokens_and_logprobs_comp_eval(
+                    stat_dict, **kwargs
+                )
                 self.eval_request_timings.append(stat_dict["end"] - stat_dict["start"])
                 self.eval_attempts_list.append(stat_dict["attempts"])
         return ret_data
