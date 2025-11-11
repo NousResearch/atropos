@@ -1974,6 +1974,48 @@ class BaseEnv(ABC):
                 rprint(env_config)
                 rprint(final_openai_configs)
 
+                # --- Dump config to YAML in env save dir ---
+                if env_config.data_dir_to_save_evals is not None:
+                    os.makedirs(env_config.data_dir_to_save_evals, exist_ok=True)
+
+                    # Build config dictionary in the same format as YAML config files
+                    # Use mode='json' to properly serialize enums and other complex types
+                    config_dict = {
+                        ENV_NAMESPACE: env_config.model_dump(mode="json"),
+                    }
+
+                    # Handle OpenAI configs - can be a list or single dict
+                    if isinstance(final_openai_configs, list):
+                        config_dict[OPENAI_NAMESPACE] = [
+                            (
+                                cfg.model_dump(mode="json")
+                                if hasattr(cfg, "model_dump")
+                                else cfg
+                            )
+                            for cfg in final_openai_configs
+                        ]
+                    elif isinstance(final_openai_configs, APIServerConfig):
+                        config_dict[OPENAI_NAMESPACE] = final_openai_configs.model_dump(
+                            mode="json"
+                        )
+                    else:
+                        # ServerBaseline or other - convert to dict representation
+                        config_dict[OPENAI_NAMESPACE] = {}
+
+                    # Add server manager config
+                    config_dict["slurm"] = server_manager_config.slurm
+                    config_dict["testing"] = server_manager_config.testing
+
+                    # Write to YAML file
+                    config_filepath = os.path.join(
+                        env_config.data_dir_to_save_evals, "evaluate_config.yaml"
+                    )
+                    with open(config_filepath, "w") as f:
+                        yaml.dump(
+                            config_dict, f, default_flow_style=False, sort_keys=False
+                        )
+                    print(f"Dumped evaluate config to {config_filepath}")
+
                 # --- Create and Run Environment ---
                 # Create the environment instance
                 env = cls(
