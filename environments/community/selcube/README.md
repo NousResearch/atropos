@@ -1,6 +1,6 @@
 # Rubik's Cube Environment for LLM Training
 
-[![Watch the Demonstration Video](banner-image.jpg)](https://youtu.be/fi4lhIyF_5M)
+[![Watch the Demonstration Video](../../../banner-image.jpg)](https://youtu.be/fi4lhIyF_5M)
 
 *Click the image above to watch a 1-minute demonstration video*
 
