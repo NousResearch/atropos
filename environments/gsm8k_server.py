@@ -232,11 +232,17 @@ class GSM8kEnv(BaseEnv):
             "\\boxed{" + item["answer"].split("#")[-1].strip().replace(",", "") + "}"
         )
 
-        chat_completions = await self.server.chat_completion(
-            messages=[{"role": "system", "content": system_prompt}, user_message],
-            n=self.config.group_size,
-            max_tokens=self.config.max_token_length,
-        )
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+
+            chat_completions = await managed.chat_completion(
+                messages=[{"role": "system", "content": system_prompt}, user_message],
+                n=self.config.group_size,
+                max_tokens=self.config.max_token_length,
+            )
+
+            state = managed.get_state()
+            nodes = state["nodes"]
+
         to_score = list()
         to_backlog = list()
         for i, chat_completion in enumerate(chat_completions.choices):
@@ -299,18 +305,25 @@ class GSM8kEnv(BaseEnv):
                 out_dict = tokenize_for_trainer(
                     self.tokenizer, item["messages"], item["finish_reason"]
                 )
-                tokens = out_dict["tokens"]
-                masks = out_dict["masks"]
+                tokens = item["tokens"]
+                masks = item["masks"]
+                logprobs = item["logprobs"]
+
+
                 # remove obviously bad examples
                 if len([1 for i in masks if i != -100]) < 10:
                     continue
                 scores["tokens"].append(tokens)
                 scores["masks"].append(masks)
+                scores["inference_logprobs"].append(logprobs)
                 scores["scores"].append(1.0 if reward else -1.0)
+                
                 if len(scores["tokens"]) >= self.config.group_size:
                     break
+
             for score in scores["scores"]:
                 self.percent_correct_buffer.append(max(score, 0))
+
             # check if all the same
             # print(scores['scores'])
             if all([score == 1 for score in scores["scores"]]):
