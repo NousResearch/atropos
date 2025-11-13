@@ -131,7 +131,7 @@ class GSM8kEnv(BaseEnv):
                 ],
                 n=1,
                 max_tokens=self.config.max_token_length,
-                temperature=0.0,
+                temperature=0.6,
             )
 
             response_content = completion.choices[0].message.content
@@ -238,6 +238,7 @@ class GSM8kEnv(BaseEnv):
                 messages=[{"role": "system", "content": system_prompt}, user_message],
                 n=self.config.group_size,
                 max_tokens=self.config.max_token_length,
+                temperature=1.0,
             )
 
             state = managed.get_state()
