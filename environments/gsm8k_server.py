@@ -122,7 +122,7 @@ class GSM8kEnv(BaseEnv):
 
     async def rollout_and_score_eval(self, question: str, answer: str) -> dict:
         """Rollout and score evaluation with detailed sample data collection."""
-        
+
         async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
             completion = await managed.chat_completion(
                 messages=[
