@@ -688,7 +688,7 @@ The context manager:
 
 - [ManagedServer Source Code](managed_server.py)
 - [ManagedServer Tests](../../tests/test_managed_server.py)
-- [Example: math_server_zero.py](../../../../environments/math_server_zero.py#L320-L332)
-- [Example: math_server.py](../../../../environments/math_server.py#L377-L387)
+- [Example: math_server_zero.py](../../../environments/math_server_zero.py#L320-L332)
+- [Example: math_server.py](../../../environments/math_server.py#L377-L387)
 - [BaseEnv Documentation](../README.md)
 - [API Server Documentation](../../api/README.md)
