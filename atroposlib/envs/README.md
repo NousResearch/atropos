@@ -204,7 +204,17 @@ By implementing the required methods and optionally overriding others, you can c
 
 Environments emit Weave traces to help you inspect rollout flow and LLM calls:
 
-- Enabled by default; disable with `WEAVE_DISABLED=true`.
+- Enabled by default; disable via config or env:
+  - Config: under your OpenAI server settings, set `tracing_enabled: false`
+    - YAML example:
+      ```yaml
+      openai:
+        model_name: your-model
+        base_url: http://localhost:9000
+        tracing_enabled: false
+      ```
+    - CLI example: `--openai--tracing_enabled false`
+  - Env (hard disable): `WEAVE_DISABLED=true`
 - Optional project override via `WEAVE_PROJECT=<your-project-name>`.
 - Traces include:
   - Environment operations (group collection and send-to-API)

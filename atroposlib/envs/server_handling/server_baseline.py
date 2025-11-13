@@ -73,6 +73,15 @@ def weave_op(func):
 
             @functools.wraps(wrapped)
             async def init_then_call(*args, **kwargs):
+                # Gate tracing via per-instance config if available
+                tracing_enabled = True
+                try:
+                    if len(args) > 0 and getattr(args[0], "config", None) is not None:
+                        tracing_enabled = getattr(args[0].config, "tracing_enabled", True)
+                except Exception:
+                    tracing_enabled = True
+                if not tracing_enabled:
+                    return await func(*args, **kwargs)
                 ensure_weave_init()
                 return await wrapped(*args, **kwargs)
 
@@ -80,6 +89,14 @@ def weave_op(func):
 
             @functools.wraps(wrapped)
             def init_then_call(*args, **kwargs):
+                tracing_enabled = True
+                try:
+                    if len(args) > 0 and getattr(args[0], "config", None) is not None:
+                        tracing_enabled = getattr(args[0].config, "tracing_enabled", True)
+                except Exception:
+                    tracing_enabled = True
+                if not tracing_enabled:
+                    return func(*args, **kwargs)
                 ensure_weave_init()
                 return wrapped(*args, **kwargs)
 
@@ -194,6 +211,10 @@ class ServerBaseline(BaseModel):
     )
     server_type: Literal["openai", "trl", "sglang"] = Field(
         default="openai", description="Type of server to use, openai or trl"
+    )
+    tracing_enabled: bool = Field(
+        default=True,
+        description="Enable Weave tracing for chat/completion ops (overridden by WEAVE_DISABLED).",
     )
 
 
@@ -370,7 +391,6 @@ class APIServer(ABC):
         split = kwargs.pop("split", "train")
         stat_dict = {}
         stat_dict["attempts"] = 0
-        ensure_weave_init()
         with weave_attributes(
             {
                 "server_type": getattr(self.config, "server_type", None),
@@ -449,7 +469,6 @@ class APIServer(ABC):
         split = kwargs.pop("split", "train")
         stat_dict = {}
         stat_dict["attempts"] = 0
-        ensure_weave_init()
         with weave_attributes(
             {
                 "server_type": getattr(self.config, "server_type", None),
@@ -535,7 +554,6 @@ class APIServer(ABC):
         split = kwargs.pop("split", "train")
         stat_dict = {}
         stat_dict["attempts"] = 0
-        ensure_weave_init()
         with weave_attributes(
             {
                 "server_type": getattr(self.config, "server_type", None),
