@@ -245,7 +245,7 @@ class GSM8kEnv(BaseEnv):
 
         to_score = list()
         to_backlog = list()
-        for i, chat_completion in enumerate(chat_completions.choices):
+        for i, chat_completion in zip(chat_completions.choices, nodes):
             messages = (
                 {"role": "system", "content": system_prompt},
                 user_message,
@@ -256,6 +256,9 @@ class GSM8kEnv(BaseEnv):
                     "messages": messages,
                     "gold_answer": gold_answer,
                     "finish_reason": chat_completion.finish_reason,
+                    "tokens": nodes[i].tokens,
+                    "masks": nodes[i].masked_tokens,
+                    "logprobs": nodes[i].logprobs,
                 }
             )
         to_postprocess = await self.score(to_score)
@@ -299,12 +302,7 @@ class GSM8kEnv(BaseEnv):
                 )
                 # Reward 1 if the content is the same as the ground truth, 0 otherwise
                 reward = verify(answer_parsed, gold_parsed)
-                # print(
-                #     f"message: {item[0][-1]['content']}, ground_truth: {item[1]}, reward: {reward}"
-                # )
-                out_dict = tokenize_for_trainer(
-                    self.tokenizer, item["messages"], item["finish_reason"]
-                )
+
                 tokens = item["tokens"]
                 masks = item["masks"]
                 logprobs = item["logprobs"]
