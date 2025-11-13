@@ -14,7 +14,6 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
 )
 from atroposlib.type_definitions import Item
-from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 system_prompt = (
     "You are a deep thinking AI, you may use extremely long chains of thought "
