@@ -1661,7 +1661,9 @@ class LetterCountingEnv(BaseEnv):
             "correct_counts"
         ]  # correct counts (dict for multi, int for single - legacy)
         text = rollout_group_data[0]["text"]  # text (word or sentence)
-        target_letters = rollout_group_data[0]["target_letters"]  # target letters (list)
+        target_letters = rollout_group_data[0][
+            "target_letters"
+        ]  # target letters (list)
 
         # Handle legacy format (single letter as string, single count as int)
         if isinstance(target_letters, str):

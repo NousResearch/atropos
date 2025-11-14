@@ -333,8 +333,12 @@ class FundamentalPredictionEnv(BaseEnv):
         expected_answer = rollout_group_data[0][
             "answer"
         ]  # "maintained", "raised", or "reduced"
-        expected_magnitude = rollout_group_data[0]["magnitude"]  # Expected percentage change
-        fundamental_metric = rollout_group_data[0]["fundamental_metric"]  # Type of fundamental metric
+        expected_magnitude = rollout_group_data[0][
+            "magnitude"
+        ]  # Expected percentage change
+        fundamental_metric = rollout_group_data[0][
+            "fundamental_metric"
+        ]  # Type of fundamental metric
 
         # Shuffle to avoid bias in selection
         random.shuffle(rollout_group_data)
