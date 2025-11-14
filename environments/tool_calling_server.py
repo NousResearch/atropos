@@ -15,7 +15,6 @@ from atroposlib.envs.base import (
     Item,
     ScoredDataGroup,
 )
-from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 system_prompt = (
     "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the "
@@ -157,14 +156,15 @@ class SingleToolCallingEnv(BaseEnv):
             messages, add_generation_prompt=True, tokenize=False
         )
 
-        # Get model completion using completion() instead of chat_completion()
-        completion = await self.server.completion(
-            prompt=prompt,
-            n=1,
-            max_tokens=1024 * 15,
-            temperature=1.0,
-            split="eval",
-        )
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+            # Get model completion using completion() instead of chat_completion()
+            completion = await managed.completion(
+                prompt=prompt,
+                n=1,
+                max_tokens=1024 * 15,
+                temperature=1.0,
+                split="eval",
+            )
 
         # Extract the model's response from the completion
         model_response = completion.choices[0].text
@@ -289,13 +289,18 @@ class SingleToolCallingEnv(BaseEnv):
             messages, add_generation_prompt=True, tokenize=False
         )
 
-        # Get completions from the model using completion() instead of chat_completion()
-        completions = await self.server.completion(
-            prompt=prompt,
-            n=self.config.group_size,
-            max_tokens=1024 * 15,
-            temperature=0.8,  # Using temperature to get diverse responses
-        )
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+            # Get completions from the model using completion() instead of chat_completion()
+            completions = await managed.completion(
+                prompt=prompt,
+                n=self.config.group_size,
+                max_tokens=1024 * 15,
+                temperature=0.8,  # Using temperature to get diverse responses
+            )
+
+            state = managed.get_state()
+            nodes = state["nodes"]
+
         to_score = list()
 
         for i, completion_choice in enumerate(completions.choices):
@@ -311,10 +316,13 @@ class SingleToolCallingEnv(BaseEnv):
 
             # Add to scoring queue with expected answer
             to_score.append(
-                (
-                    tuple(trajectory_messages),
-                    item[1],  # The expected tool call JSON
-                )
+                {
+                    "messages": tuple(trajectory_messages),
+                    "expected_tool_call": item[1],  # The expected tool call JSON
+                    "tokens": nodes[i].tokens,
+                    "masks": nodes[i].masked_tokens,
+                    "logprobs": nodes[i].logprobs,
+                }
             )
 
         # Call score to get the scored data
@@ -330,9 +338,12 @@ class SingleToolCallingEnv(BaseEnv):
         scores["tokens"] = list()
         scores["masks"] = list()
         scores["scores"] = list()
+        scores["inference_logprobs"] = list()
 
         # Extract the expected JSONs from the answer
-        expected_jsons = self._extract_tool_call_jsons(rollout_group_data[0][1])
+        expected_jsons = self._extract_tool_call_jsons(
+            rollout_group_data[0]["expected_tool_call"]
+        )
 
         # If we can't extract the expected tool call JSONs, skip this item
         if not expected_jsons:
@@ -343,15 +354,18 @@ class SingleToolCallingEnv(BaseEnv):
 
         for item in rollout_group_data:
             # Extract the model's response
-            model_response = item[0][-1]["content"]
+            model_response = item["messages"][-1]["content"]
 
             # Score 1 if tool calls match, 0 otherwise
-            reward = 1 if self._compare_tool_calls(model_response, item[1]) else 0
+            reward = (
+                1
+                if self._compare_tool_calls(model_response, item["expected_tool_call"])
+                else 0
+            )
 
-            # Tokenize the conversation for learning
-            out_dict = tokenize_for_trainer(self.tokenizer, item[0])
-            tokens = out_dict["tokens"]
-            masks = out_dict["masks"]
+            tokens = item["tokens"]
+            masks = item["masks"]
+            logprobs = item["logprobs"]
 
             # Remove examples with insufficient context
             if len([1 for i in masks if i != -100]) < 10:
@@ -359,6 +373,7 @@ class SingleToolCallingEnv(BaseEnv):
 
             scores["tokens"].append(tokens)
             scores["masks"].append(masks)
+            scores["inference_logprobs"].append(logprobs)
             scores["scores"].append(1.0 if reward else -1.0)
 
             # Break once we have enough examples
