@@ -20,7 +20,6 @@ from atroposlib.envs.base import (
     Item,
     ScoredDataGroup,
 )
-from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 # Add the local reasoning-gym submodule to Python's path
 # This allows `import reasoning_gym` to find the local submodule
@@ -724,15 +723,19 @@ class ReasoningGymEnv(BaseEnv):
 
     async def score(
         self,
-        rollout_group_data: List[Tuple[Tuple[Dict[str, str]], Dict[str, Any], Any]],
+        rollout_group_data: List[Dict[str, Any]],
     ) -> Optional[ScoredDataGroup]:
         """
         Scores a group of rollouts using reasoning_gym's score_answer method.
         Args:
-            rollout_group_data: A list of tuples, where each tuple contains:
-                - trajectory_messages: The full conversation history for the rollout.
+            rollout_group_data: A list of dicts, where each dict contains:
+                - messages: The full conversation history for the rollout.
                 - rg_item: The original reasoning_gym item (contains 'question', 'answer', 'metadata').
                 - dataset_obj: The reasoning_gym dataset object used to generate and score the item.
+                - finish_reason: The completion finish reason.
+                - tokens: The token IDs.
+                - masks: The token masks.
+                - logprobs: The token logprobs.
         Returns:
             ScoredDataGroup with scores between 0.0 and 1.0, or None if no valid items
         """
@@ -741,17 +744,24 @@ class ReasoningGymEnv(BaseEnv):
         scores_container["masks"] = list()
         scores_container["scores"] = list()
         scores_container["overrides"] = list()
+        scores_container["inference_logprobs"] = list()
 
         if not rollout_group_data:
             return None
 
-        rg_item_for_group = rollout_group_data[0][1]
-        dataset_obj_for_group = rollout_group_data[0][2]
+        rg_item_for_group = rollout_group_data[0]["rg_item"]
+        dataset_obj_for_group = rollout_group_data[0]["dataset_obj"]
 
         # Shuffle to avoid bias in selection
         random.shuffle(rollout_group_data)
 
-        for trajectory_messages, _, _, finish_reason in rollout_group_data:
+        for rollout_item in rollout_group_data:
+            trajectory_messages = rollout_item["messages"]
+            finish_reason = rollout_item["finish_reason"]
+            tokens = rollout_item["tokens"]
+            masks = rollout_item["masks"]
+            logprobs = rollout_item["logprobs"]
+
             model_full_response = trajectory_messages[-1]["content"]
 
             # Extract the part of the response that should be the answer
@@ -773,17 +783,13 @@ class ReasoningGymEnv(BaseEnv):
                     model_answer_to_score, rg_item_for_group, dataset_obj_for_group
                 )
 
-            # Tokenize the conversation for learning
-            out_dict = tokenize_for_trainer(self.tokenizer, trajectory_messages)
-            tokens = out_dict["tokens"]
-            masks = out_dict["masks"]
-
             # Remove examples with insufficient context
             if len([1 for i in masks if i != -100]) < 10:
                 continue
 
             scores_container["tokens"].append(tokens)
             scores_container["masks"].append(masks)
+            scores_container["inference_logprobs"].append(logprobs)
             scores_container["scores"].append(reward_0_to_1)
             scores_container["overrides"].append(dict())
             if finish_reason == "length":
@@ -904,21 +910,19 @@ class ReasoningGymEnv(BaseEnv):
         failed_rollouts_with_scores_to_save = []
 
         # Build the failed rollouts data structure
-        for i, (trajectory_messages, rg_item, dataset_obj) in enumerate(
-            rollout_group_data
-        ):
+        for i, rollout_item in enumerate(rollout_group_data):
             if i < len(scores_container["scores"]):
                 score_for_rollout = scores_container["scores"][i]
                 failed_rollouts_with_scores_to_save.append(
                     {
-                        "conversation": trajectory_messages,  # Full conversation history
+                        "conversation": rollout_item["messages"],  # Full conversation history
                         "score": score_for_rollout,
                     }
                 )
 
         if failed_rollouts_with_scores_to_save:
             # Extract item info for logging - get from first rollout
-            _, rg_item, _ = rollout_group_data[0]
+            rg_item = rollout_group_data[0]["rg_item"]
             item_id = rg_item.get("metadata", {}).get("source_dataset", "unknown_task")
 
             failed_item_data_to_save = {
@@ -982,16 +986,20 @@ class ReasoningGymEnv(BaseEnv):
         if max_tokens <= 0:
             return None, []
 
-        completions = await self.server.completion(
-            prompt=prompt_str,
-            n=self.config.group_size,
-            max_tokens=max_tokens,
-            temperature=1.0,
-            top_p=0.95,
-        )
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+            completions = await managed.completion(
+                prompt=prompt_str,
+                n=self.config.group_size,
+                max_tokens=max_tokens,
+                temperature=1.0,
+                top_p=0.95,
+            )
+
+            state = managed.get_state()
+            nodes = state["nodes"]
 
         to_score_list = []
-        for choice in completions.choices:
+        for i, choice in enumerate(completions.choices):
             self.completion_lengths.append(len(choice.text))
 
             # Create full trajectory messages for this choice
@@ -1001,12 +1009,15 @@ class ReasoningGymEnv(BaseEnv):
             )
 
             to_score_list.append(
-                (
-                    tuple(current_trajectory_messages),
-                    rg_item,
-                    dataset_obj,
-                    choice.finish_reason,
-                )
+                {
+                    "messages": tuple(current_trajectory_messages),
+                    "rg_item": rg_item,
+                    "dataset_obj": dataset_obj,
+                    "finish_reason": choice.finish_reason,
+                    "tokens": nodes[i].tokens,
+                    "masks": nodes[i].masked_tokens,
+                    "logprobs": nodes[i].logprobs,
+                }
             )
 
         scored_data_group = await self.score(to_score_list)
@@ -1024,7 +1035,7 @@ class ReasoningGymEnv(BaseEnv):
 
                 num_scored_rollouts = len(group_scores)
                 for i in range(num_scored_rollouts):
-                    conversation_messages = to_score_list[i][0]
+                    conversation_messages = to_score_list[i]["messages"]
                     score_for_rollout = group_scores[i]
                     rollouts_with_scores_to_save.append(
                         {
@@ -1181,13 +1192,14 @@ class ReasoningGymEnv(BaseEnv):
         if max_tokens < 0:
             return 0.0
 
-        completion = await self.server.completion(
-            prompt=prompt_str,
-            n=1,
-            max_tokens=max_tokens,
-            temperature=0.1,
-            split="eval",
-        )
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+            completion = await managed.completion(
+                prompt=prompt_str,
+                n=1,
+                max_tokens=max_tokens,
+                temperature=0.1,
+                split="eval",
+            )
 
         model_full_response = completion.choices[0].text
         model_answer_to_score = self._extract_final_answer(model_full_response)
