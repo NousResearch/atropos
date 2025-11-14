@@ -861,7 +861,7 @@ class SWERLEnv(BaseEnv):
             tokens = rollout_item["tokens"]
             masks = rollout_item["masks"]
             logprobs = rollout_item["logprobs"]
-            
+
             assistant_response = ""
             if (
                 trajectory_messages
@@ -1167,7 +1167,9 @@ class SWERLEnv(BaseEnv):
                 score_for_rollout = scored_data["scores"][i]
                 failed_rollouts_with_scores_to_save.append(
                     {
-                        "conversation": rollout_item["messages"],  # Full conversation history
+                        "conversation": rollout_item[
+                            "messages"
+                        ],  # Full conversation history
                         "score": score_for_rollout,
                         "oracle_patch": rollout_item["oracle_patch"],
                         "finish_reason": rollout_item["finish_reason"],
