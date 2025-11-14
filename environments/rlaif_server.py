@@ -13,7 +13,6 @@ from atroposlib.envs.base import (
     EvalHandlingEnum,
     ScoredDataGroup,
 )
-from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 judge_system_prompt = (
     "You are a deep thinking AI, you may use extremely long chains of thought "
@@ -154,27 +153,32 @@ class RLAIFEnv(BaseEnv):
         ) - (self.config.max_token_length // 2):
             # Skipping due to length
             return None, []
-        if added_sys:
-            resp1 = self.server.chat_completion(
-                messages=chat,
-                n=1,
-                max_tokens=self.config.max_token_length // 3,
-            )
-            resp2 = self.server.chat_completion(
-                messages=chat[1:],
-                n=1,
-                max_tokens=self.config.max_token_length // 3,
-            )
-            # gather the responses
-            resp1, resp2 = await asyncio.gather(resp1, resp2)
-            chat_completions = resp1
-            chat_completions.choices.append(resp2.choices[0])
-        else:
-            chat_completions = await self.server.chat_completion(
-                messages=chat,
-                n=2,
-                max_tokens=self.config.max_token_length // 3,
-            )
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+            if added_sys:
+                resp1 = managed.chat_completion(
+                    messages=chat,
+                    n=1,
+                    max_tokens=self.config.max_token_length // 3,
+                )
+                resp2 = managed.chat_completion(
+                    messages=chat[1:],
+                    n=1,
+                    max_tokens=self.config.max_token_length // 3,
+                )
+                # gather the responses
+                resp1, resp2 = await asyncio.gather(resp1, resp2)
+                chat_completions = resp1
+                chat_completions.choices.append(resp2.choices[0])
+            else:
+                chat_completions = await managed.chat_completion(
+                    messages=chat,
+                    n=2,
+                    max_tokens=self.config.max_token_length // 3,
+                )
+
+            state = managed.get_state()
+            nodes = state["nodes"]
+
         to_score = list()
         to_score_prompt = []
         for msg in item[0]:
@@ -188,7 +192,15 @@ class RLAIFEnv(BaseEnv):
             messages.append(
                 {"role": "assistant", "content": chat_completion.message.content}
             )
-            to_score.append((messages, chat_completion.finish_reason))
+            to_score.append(
+                {
+                    "messages": messages,
+                    "finish_reason": chat_completion.finish_reason,
+                    "tokens": nodes[i].tokens,
+                    "masks": nodes[i].masked_tokens,
+                    "logprobs": nodes[i].logprobs,
+                }
+            )
 
         # Call score to get the scored data
         scored_data = await self.score(to_score)
@@ -201,17 +213,21 @@ class RLAIFEnv(BaseEnv):
         scores["tokens"] = list()
         scores["masks"] = list()
         scores["scores"] = list()
-        if all([item[1] == "length" for item in rollout_group_data]):
+        scores["inference_logprobs"] = list()
+        if all([item["finish_reason"] == "length" for item in rollout_group_data]):
             return None
-        if any([item[1] == "length" for item in rollout_group_data]):
+        if any([item["finish_reason"] == "length" for item in rollout_group_data]):
             # well, don't use so many tokens...
             for item in rollout_group_data:
-                out_dict = tokenize_for_trainer(self.tokenizer, item[0])
-                tokens = out_dict["tokens"]
-                masks = out_dict["masks"]
+                tokens = item["tokens"]
+                masks = item["masks"]
+                logprobs = item["logprobs"]
                 scores["tokens"].append(tokens)
                 scores["masks"].append(masks)
-                scores["scores"].append(1.0 if item[1] != "length" else -1.0)
+                scores["inference_logprobs"].append(logprobs)
+                scores["scores"].append(
+                    1.0 if item["finish_reason"] != "length" else -1.0
+                )
             return scores
         else:
             fwd_fmt = RLAIF_user_prompt_format_str.format(
@@ -219,22 +235,22 @@ class RLAIFEnv(BaseEnv):
                 conversation="\n".join(
                     [
                         f"{msg['role']}: {msg['content']}"
-                        for msg in rollout_group_data[0][0][:-1]
+                        for msg in rollout_group_data[0]["messages"][:-1]
                     ]
                 ),
-                response_a=rollout_group_data[0][0][-1]["content"],
-                response_b=rollout_group_data[1][0][-1]["content"],
+                response_a=rollout_group_data[0]["messages"][-1]["content"],
+                response_b=rollout_group_data[1]["messages"][-1]["content"],
             )
             rvs_fmt = RLAIF_user_prompt_format_str.format(
                 rl_preference_string=rl_preference_string,
                 conversation="\n".join(
                     [
                         f"{msg['role']}: {msg['content']}"
-                        for msg in rollout_group_data[1][0][:-1]
+                        for msg in rollout_group_data[1]["messages"][:-1]
                     ]
                 ),
-                response_a=rollout_group_data[1][0][-1]["content"],
-                response_b=rollout_group_data[0][0][-1]["content"],
+                response_a=rollout_group_data[1]["messages"][-1]["content"],
+                response_b=rollout_group_data[0]["messages"][-1]["content"],
             )
             fwd_judge = self.server.chat_completion(
                 messages=[
@@ -256,8 +272,8 @@ class RLAIFEnv(BaseEnv):
             # Save example to wandb
             self.judgement_strings.append(
                 (
-                    rollout_group_data[0][0][-1]["content"],
-                    rollout_group_data[1][0][-1]["content"],
+                    rollout_group_data[0]["messages"][-1]["content"],
+                    rollout_group_data[1]["messages"][-1]["content"],
                     fwd_judge.choices[0].message.content,
                 )
             )
@@ -287,11 +303,12 @@ class RLAIFEnv(BaseEnv):
             B_score -= mean_score
             # to tokenization and scoring
             for i, item in enumerate(rollout_group_data):
-                out_dict = tokenize_for_trainer(self.tokenizer, item[0])
-                tokens = out_dict["tokens"]
-                masks = out_dict["masks"]
+                tokens = item["tokens"]
+                masks = item["masks"]
+                logprobs = item["logprobs"]
                 scores["tokens"].append(tokens)
                 scores["masks"].append(masks)
+                scores["inference_logprobs"].append(logprobs)
                 scores["scores"].append(A_score if i == 0 else B_score)
             return scores
 
