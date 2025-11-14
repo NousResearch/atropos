@@ -197,7 +197,9 @@ class MCQAThinkingEnv(BaseEnv):
                 {
                     "messages": tuple(trajectory_messages),
                     "expected_answer": item[1],  # Letter (A, B, C, D)
-                    "ground_truth_text": item[2],  # Include the answer_string/ground_truth_text
+                    "ground_truth_text": item[
+                        2
+                    ],  # Include the answer_string/ground_truth_text
                     "finish_reason": completion_choice.finish_reason,  # Add the stop reason
                     "tokens": nodes[i].tokens,
                     "masks": nodes[i].masked_tokens,
