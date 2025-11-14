@@ -915,7 +915,9 @@ class ReasoningGymEnv(BaseEnv):
                 score_for_rollout = scores_container["scores"][i]
                 failed_rollouts_with_scores_to_save.append(
                     {
-                        "conversation": rollout_item["messages"],  # Full conversation history
+                        "conversation": rollout_item[
+                            "messages"
+                        ],  # Full conversation history
                         "score": score_for_rollout,
                     }
                 )
