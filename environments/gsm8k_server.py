@@ -246,7 +246,7 @@ class GSM8kEnv(BaseEnv):
 
         to_score = list()
         to_backlog = list()
-        for i, chat_completion in zip(chat_completions.choices, nodes):
+        for i, chat_completion in enumerate(chat_completions.choices):
             messages = (
                 {"role": "system", "content": system_prompt},
                 user_message,
