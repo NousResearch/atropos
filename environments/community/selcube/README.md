@@ -43,7 +43,7 @@ cd atropos/environments/hack0
 
 ## Performance Metrics & Training (150 words)
 
-[View WandB Run Results]([https://wandb.ai/team/project/runs/abc123](https://wandb.ai/joshuaxjerin-uc/atropos-environments?nw=nwuserjoshuaxjerin))
+View WandB Run Results [https://wandb.ai/team/project/runs/abc123](https://wandb.ai/joshuaxjerin-uc/atropos-environments?nw=nwuserjoshuaxjerin)
 
 Our environment tracks several key metrics:
 
