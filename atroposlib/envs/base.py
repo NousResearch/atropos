@@ -215,7 +215,20 @@ class BaseEnv(ABC):
         self.wandb_group = None
         self.curr_step = 0
         self.max_token_len = -1
-        self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
+        try:
+            logger.debug(
+                "Initializing tokenizer in BaseEnv with name=%s",
+                getattr(config, "tokenizer_name", None),
+            )
+        except Exception:
+            # If logger or config not ready, ignore.
+            pass
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
+        except Exception:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                config.tokenizer_name, use_fast=False
+            )
         self.completion_lengths = []
         self.max_num_workers = config.max_num_workers
         if self.max_num_workers == -1:
