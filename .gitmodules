@@ -10,3 +10,6 @@
 [submodule "environments/community/bleuberi/bleuberi-repo"]
 	path = environments/community/bleuberi/bleuberi-repo
 	url = https://github.com/lilakk/BLEUBERI.git
+[submodule "environments/cline_env/cline"]
+	path = environments/cline_env/cline
+	url = git@github.com:NousResearch/cline.git
