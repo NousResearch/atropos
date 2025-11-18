@@ -146,3 +146,117 @@ To make builds repeatable and portable:
 
 These requirements should be kept in sync with changes to `ClineAgentEnv`, the Cline core gRPC launcher, and any Nomad/Nix tooling we introduce.
 
+## Execution Environments: Detailed Plan
+
+This section captures the concrete steps required to convert any dataset row into an isolated Cline rollout environment. It is intentionally prescriptive so each stage can be automated and tested independently.
+
+### 1. Task Intake
+
+1. Fetch the next row from `NousResearch/swe-agent-13k-2025-06-15` (or similar JSONL datasets).
+2. Extract key columns:
+   - `repo_name`, `repo_url`, `language`.
+   - `conversation[1]` where `role == "human"` → task prompt.
+   - Additional metadata (difficulty, tags, etc.) for logging/metrics.
+3. Construct an Atropos `TaskProfile` object to track which rollout consumed which dataset row.
+
+### 2. Environment Profiles
+
+To keep builds reproducible we will curate a small library of Nix-based toolchain profiles:
+
+| Profile ID   | Includes                                                     | Targets                              |
+|--------------|--------------------------------------------------------------|--------------------------------------|
+| `python-env` | CPython, pip/poetry/pdm, pytest tooling                      | Python web/backend repos             |
+| `node-env`   | Node LTS, npm/pnpm/yarn, eslint/prettier                      | JS/TS frontends & services           |
+| `rust-env`   | rustup + stable toolchain, cargo install, clippy, rustfmt     | Rust CLI/libs (e.g. `ratatui`)       |
+| `go-env`     | Go toolchain, `gotest`, goreleaser basics                     | Go microservices/CLI                 |
+| `c-env`      | GCC/Clang, make/cmake ninja, ctest, valgrind                  | C/C++ repos                          |
+
+Each profile is defined as a Nix flake (`devShell`/`packages`) that can be built into a Docker/OCI image. Repo-specific overrides can be layered on top when necessary.
+
+### 3. Container Preparation (per task)
+
+1. **Select base profile** based on `language`; fall back to a generic `dev-base`.
+2. Build container image via Nix (`nix build .#rust-env-container` etc.) that includes:
+   - Toolchains, package managers, and the Cline CLI prerequisites (Node 22+, npm).
+   - Helper scripts for cloning repos and bootstrapping Cline.
+3. Layout inside container:
+   - `/workspace` → task repo clone (writable).
+   - `/cline` → vendored Cline repo + build artifacts (read-only base + writable overlay).
+   - `/cache` → optional shared caches (cargo, pip, npm) with per-job isolation.
+4. Bootstrap steps:
+   - Clone `repo_url` into `/workspace/<repo_name>`.
+   - Checkout dataset-specified branch/commit if provided.
+   - Install project dependencies (cargo fetch/build, npm install, pip install, etc.).
+   - Smoke-test tooling (`cargo test --lib`, `npm run lint`, etc.) and log results.
+   - Copy the Atropos vendored Cline repo into `/cline`, run `npm install`, `npm run compile-standalone`, and cache `dist-standalone`.
+
+### 4. Runtime Orchestration
+
+We will create a `cline_env` orchestration module responsible for worker lifecycle:
+
+1. **Nomad job template**:
+   - Resources: ~4 CPU cores, 8–16 GB RAM, 20+ GB disk (no GPU).
+   - Task driver: Docker; image is the per-language Nix build.
+   - Entrypoint: `bootstrap_cline_worker.sh`.
+   - Ports: expose ProtoBus + HostBridge (or use Nomad networking).
+2. `bootstrap_cline_worker.sh` responsibilities:
+   - Read environment variables (task ID, dataset row JSON, API credentials).
+   - Ensure `/workspace/<repo>` exists (clone if necessary, apply dataset mutations).
+   - Export `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, or policy-server credentials.
+   - Launch `node scripts/test-standalone-core-api-server.ts` with:
+     - `WORKSPACE_DIR`/`DEV_WORKSPACE_FOLDER` pointing to repo.
+     - `CLINE_DISABLE_BANNERS=true`, `CLINE_DISABLE_REMOTE_CONFIG=true`.
+   - Wait for ProtoBus gRPC health check and signal readiness (e.g. via file/socket).
+3. Atropos coordinator workflow:
+   - For each dataset row, request `group_size` Nomad allocations.
+   - When each worker is healthy:
+     1. Use gRPC to call `UiService.initializeWebview`.
+     2. Call `ModelsService.updateApiConfigurationPartial` to point Cline at our policy backend (Anthropic, vLLM, sglang, etc.).
+     3. Call `TaskService.newTask` with dataset prompt and stream `UiService.subscribeToPartialMessage` for reasoning/tool use.
+     4. Enforce time/toolcall limits; cancel via `TaskService.cancelTask` if necessary.
+   - Collect artifacts (ui/api histories, repository diffs, metrics) per worker.
+   - Signal workers to exit; Nomad tears down allocations and cleans ephemeral disks.
+
+### 5. Local Development Harness (`cline_dev/`)
+
+Before Nomad integration we will create a local test bench under `environments/cline_env/cline_dev/`:
+
+1. Add per-profile `Dockerfile`s or Nix-based `dockerTools.buildLayer`.
+2. Provide `compose.yml` (or tilt scripts) for quick ADR-style tests:
+   - Example scenario: Rust task using `ratatui` repo and issue [#2148](https://github.com/ratatui/ratatui/issues/2148) “Add support for vertical gauges”.
+   - Steps:
+     1. Build `rust-env` image.
+     2. Clone `ratatui` into `/workspace` and run `cargo test` to validate toolchain.
+     3. Start Cline core inside the container using our launcher.
+     4. From host orchestrator, run the gRPC smoke flow (configure Anthropic, call `newTask`, capture partial messages) to confirm end-to-end behaviour.
+     5. Tear down container and inspect artifacts (logs, diffs).
+3. Once this works manually, script it (`cline_dev/run_local_task.py`) to serve as a regression test.
+
+### 6. Automation Components
+
+Planned modules/files:
+
+1. `environments/cline_env/cline_dev/`
+   - `profiles/<lang>/flake.nix` or `Dockerfile`.
+   - `bootstrap_cline_worker.sh`.
+   - `compose.local.yml` for single-node testing.
+2. `atroposlib/envs/cline_env/worker_manager.py`
+   - Abstracts over Nomad jobs (submit, monitor, shutdown).
+   - Handles local fallback when `use_nomad=False`.
+3. `atroposlib/envs/cline_env/task_runner.py`
+   - Integrates dataset intake, worker provisioning, gRPC driving, scoring, artifact upload.
+4. `environments/cline_env/tests/` (future)
+   - Pytests that mock the Nomad API and ensure we submit the expected job spec.
+
+### 7. Next Actions
+
+1. Implement the `rust-env` Nix profile + image (since `ratatui` is our first test case).
+2. Create `cline_dev/examples/ratatui_vertical_gauge.md` describing the end-to-end flow.
+3. Extend `ClineAgentEnv` to optionally call out to the worker manager (vs local gRPC).
+4. Add W&B metrics for:
+   - Environment prep time.
+   - Container boot success/failure.
+   - Trajectory outcomes, rewards, tokens.
+5. After Rust flow works, add Python and Node profiles, then generalize the pipeline.
+
+This plan keeps us focused on the Cline RL use case while establishing reusable building blocks (Nix profiles, Nomad job specs, gRPC automation) that we can later expose to other environments.
