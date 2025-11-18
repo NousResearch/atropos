@@ -28,3 +28,35 @@ cline_dev/
 4. Once the flow works locally (docker-compose or direnv + Nix shell), wire it into the Atropos `ClineAgentEnv` via the worker manager.
 
 This structure keeps experimental scripts versioned while we iterate on the automation story.
+
+## Worker Bootstrap Script
+
+`bootstrap_cline_worker.sh` lives at the root of `cline_dev/` and encapsulates the logic for preparing a worker container:
+
+- Clones (or updates) the NousResearch Cline fork (`CLINE_REPO_URL`, default `https://github.com/NousResearch/cline`) into `CLINE_SRC_DIR` (default `/tmp/nous-cline`).
+- Runs `npm install` and `npm run compile-standalone` inside that repo.
+- Optionally executes a repo-specific bootstrap script (set `TASK_BOOTSTRAP_SCRIPT`) to prepare `/workspace` or another path.
+- Launches the standalone Cline gRPC server with `WORKSPACE_DIR`/`DEV_WORKSPACE_FOLDER` pointing at the prepared repo.
+
+### Key Environment Variables
+
+| Variable              | Default                        | Description                                                    |
+|-----------------------|--------------------------------|----------------------------------------------------------------|
+| `CLINE_SRC_DIR`       | `/tmp/nous-cline`              | Location where the Cline fork is cloned/built                  |
+| `CLINE_REPO_URL`      | `https://github.com/NousResearch/cline` | Git URL for the forked Cline repo                     |
+| `WORKSPACE_ROOT`      | `/workspace`                   | Root path for task workspace mounting                          |
+| `TASK_BOOTSTRAP_SCRIPT` | *(unset)*                   | Executable script to prepare the repo (e.g., `examples/.../bootstrap.sh`) |
+| `PROTOBUS_PORT`       | `26040`                        | Port Cline’s ProtoBus gRPC server listens on                   |
+| `HOSTBRIDGE_PORT`     | `26041`                        | Port for HostBridge mock                                       |
+
+### Example
+
+```bash
+WORKSPACE_ROOT=/tmp/ratatui-workspace \\
+TASK_BOOTSTRAP_SCRIPT=$PWD/examples/ratatui_vertical_gauge/bootstrap.sh \\
+CLINE_SRC_DIR=/tmp/nous-cline \\
+PROTOBUS_PORT=36040 HOSTBRIDGE_PORT=36041 \\
+./bootstrap_cline_worker.sh
+```
+
+Use this script as the entrypoint for local Docker containers or Nomad jobs; once it logs “Launching Cline core…”, the orchestrator can connect to `127.0.0.1:$PROTOBUS_PORT` and drive tasks via gRPC.
