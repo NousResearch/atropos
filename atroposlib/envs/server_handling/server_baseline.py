@@ -77,7 +77,9 @@ def weave_op(func):
                 tracing_enabled = True
                 try:
                     if len(args) > 0 and getattr(args[0], "config", None) is not None:
-                        tracing_enabled = getattr(args[0].config, "tracing_enabled", True)
+                        tracing_enabled = getattr(
+                            args[0].config, "tracing_enabled", True
+                        )
                 except Exception:
                     tracing_enabled = True
                 if not tracing_enabled:
@@ -92,7 +94,9 @@ def weave_op(func):
                 tracing_enabled = True
                 try:
                     if len(args) > 0 and getattr(args[0], "config", None) is not None:
-                        tracing_enabled = getattr(args[0].config, "tracing_enabled", True)
+                        tracing_enabled = getattr(
+                            args[0].config, "tracing_enabled", True
+                        )
                 except Exception:
                     tracing_enabled = True
                 if not tracing_enabled:

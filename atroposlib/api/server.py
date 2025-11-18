@@ -1,7 +1,14 @@
 import gzip
+import logging
+import os
 import time
 import uuid
 from typing import Any, Dict, List, Optional
+
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,11 +18,14 @@ from pydantic import BaseModel, field_validator
 from starlette.datastructures import MutableHeaders
 from starlette.types import Receive, Scope, Send
 
+from atroposlib.api.sidecar import ZMQLogAggregator
 from atroposlib.api.utils import (
     find_groups_summing_to_target,
     grab_batch_with_minimum_allocations,
     grab_exact_from_heterogeneous_queue,
 )
+
+logger = logging.getLogger(__name__)
 
 # Constants
 MIN_ENV_WEIGHT = (
@@ -201,6 +211,34 @@ async def register(registration: Registration):
         app.state.envs = []
         app.state.buffer = {}  # Buffer for mixed-size groups per environment
 
+        # start zmq sidecar
+        zmq_port = int(os.getenv("ATROPOS_ZMQ_PORT", "5555"))
+        try:
+            app.state.zmq_aggregator = ZMQLogAggregator(port=zmq_port)
+            app.state.zmq_aggregator.start()
+            app.state.zmq_port = zmq_port
+
+            if wandb and registration.wandb_project:
+                # Resume Logic:
+                # hash of the group name saved locally so that if server crashes
+                # or some other issues happens we can keep using the same run for the env isntances
+                import hashlib
+
+                run_id = hashlib.md5(registration.wandb_group.encode()).hexdigest()
+
+                wandb.init(
+                    project=registration.wandb_project,
+                    group=registration.wandb_group,
+                    name=f"API_Aggregator_{registration.wandb_group}",
+                    id=run_id,
+                    resume="allow",
+                    config=registration.model_dump(),
+                    reinit=True,
+                )
+        except Exception as e:
+            logger.error(f"Failed to start ZMQ Sidecar: {e}")
+            app.state.zmq_port = None
+
     # Initialize requesters list if not already done
     if not hasattr(app.state, "requesters"):
         app.state.requesters = []
@@ -264,9 +302,13 @@ async def disconnect_env(disconnect_env: EnvIdentifier):
 @app.get("/wandb_info")
 async def wandb_info():
     try:
-        return {"group": app.state.group, "project": app.state.project}
+        return {
+            "group": app.state.group,
+            "project": app.state.project,
+            "zmq_port": getattr(app.state, "zmq_port", None),
+        }
     except AttributeError:
-        return {"group": None, "project": None}
+        return {"group": None, "project": None, "zmq_port": None}
 
 
 @app.get("/info")

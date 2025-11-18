@@ -38,6 +38,7 @@ from atroposlib.utils.cli import (
     merge_dicts,
 )
 from atroposlib.utils.io import parse_http_response
+from atroposlib.utils.logging_client import ZMQLogger, setup_weave_for_worker
 from atroposlib.utils.metrics import get_std_min_max_avg
 
 from ..type_definitions import Item, Message
@@ -225,6 +226,7 @@ class BaseEnv(ABC):
         self.wandb_prepend = None
         self.checkpoint_dir = ""
         self.checkpoint_interval = -1
+        self.zmq_logger = None
         if self.config.data_path_to_save_groups is not None:
             Path(self.config.data_path_to_save_groups).parent.mkdir(
                 parents=True, exist_ok=True
@@ -640,7 +642,10 @@ class BaseEnv(ABC):
                 }
             # add server metrics to wandb without prepend to collate them all
             wandb_metrics.update(server_wandb_metrics)
-            wandb.log(wandb_metrics, step=self.curr_step)
+            if self.zmq_logger is not None:
+                self.zmq_logger.log(wandb_metrics, step=self.curr_step)
+            else:
+                wandb.log(wandb_metrics, step=self.curr_step)
 
     async def evaluate_log(
         self,
@@ -1220,15 +1225,54 @@ class BaseEnv(ABC):
         await self.setup()
 
         if self.config.use_wandb:
-            random_id = "".join(random.choices(string.ascii_lowercase, k=6))
-            current_date = datetime.now().strftime("%Y-%m-%d")
-            wandb_run_name = f"{self.name}-{current_date}-{random_id}"
-            wandb.init(
-                project=self.wandb_project,
-                name=wandb_run_name,
-                group=self.wandb_group,
-                config=self.config.model_dump(),
-            )
+            # check if zmq sidecar is open
+            zmq_port = None
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        f"{self.config.rollout_server_url}/wandb_info"
+                    ) as resp:
+                        if resp.status == 200:
+                            info = await resp.json()
+                            zmq_port = info.get("zmq_port")
+                            # Update project/group from API truth
+                            if info.get("project"):
+                                self.wandb_project = info["project"]
+                            if info.get("group"):
+                                self.wandb_group = info["group"]
+            except Exception as e:
+                logger.warning(f"Failed to fetch wandb_info from API: {e}")
+
+            # logging for zmq messages
+            if zmq_port:
+                try:
+                    from urllib.parse import urlparse
+
+                    parsed_url = urlparse(self.config.rollout_server_url)
+                    server_host = parsed_url.hostname or "localhost"
+
+                    zmq_addr = f"tcp://{server_host}:{zmq_port}"
+                    self.zmq_logger = ZMQLogger(address=zmq_addr)
+                    logger.info(f"Using ZMQ Logger connected to {zmq_addr}")
+
+                    if self.wandb_project:
+                        setup_weave_for_worker(self.wandb_project)
+
+                except Exception as e:
+                    logger.error(f"Failed to init ZMQ Logger: {e}")
+                    self.zmq_logger = None
+
+            # regular wandb logs per env if zmq isnt open for some reason
+            if self.zmq_logger is None:
+                random_id = "".join(random.choices(string.ascii_lowercase, k=6))
+                current_date = datetime.now().strftime("%Y-%m-%d")
+                wandb_run_name = f"{self.name}-{current_date}-{random_id}"
+                wandb.init(
+                    project=self.wandb_project,
+                    name=wandb_run_name,
+                    group=self.wandb_group,
+                    config=self.config.model_dump(),
+                )
 
         # Initialize the processing
         self.curr_step = 0
