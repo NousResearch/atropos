@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class ClineAgentEnvConfig(BaseEnvConfig):
     tokenizer_name: str = "NousResearch/Meta-Llama-3-8B"
     env_name: str = "cline_agent_env"
-    dataset_name: str = "nebius/SWE-agent-trajectories"
+    dataset_name: str = "NousResearch/swe-agent-13k-2025-06-15" # "conversation" is json column, message idx 1 (role "human") should be task
     max_episode_turns: int = 1
     eval_episodes: int = 50
     scoring_function: str = "dataset_target"
@@ -139,22 +139,23 @@ class ClineAgentEnv(BaseEnv):
         self.dataset_position += 1
         row = self.dataset[index]
 
-        trajectory = row["trajectory"]
+        conversations = row["conversations"]
 
         issue_text = ""
-        for entry in trajectory:
-            if entry.get("role") == "user":
-                issue_text = entry.get("text", "")
-                if issue_text:
-                    break
+        if isinstance(conversations, list) and len(conversations) > 1:
+            second = conversations[1]
+            if isinstance(second, dict) and second.get("from") in ("human", "user"):
+                issue_text = second.get("value") or ""
 
-        if not issue_text:
-            issue_text = trajectory[0].get("system_prompt", "")
+        if not issue_text and isinstance(conversations, list) and conversations:
+            first = conversations[0]
+            if isinstance(first, dict):
+                issue_text = first.get("value") or ""
 
         item: Item = {
-            "instance_id": row["instance_id"],
-            "model_name": row["model_name"],
-            "target": bool(row["target"]),
+            "instance_id": row.get("id", ""),
+            "model_name": row.get("task_type", ""),
+            "target": bool(row.get("target", False)),
             "issue_text": issue_text,
         }
         return item
@@ -213,4 +214,3 @@ class ClineAgentEnv(BaseEnv):
 
 if __name__ == "__main__":
     ClineAgentEnv.cli()
-
