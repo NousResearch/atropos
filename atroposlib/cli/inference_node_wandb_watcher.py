@@ -3,8 +3,8 @@ import time
 from urllib.parse import urlparse
 
 import requests
-
 import wandb
+
 from atroposlib.utils.logging_client import ZMQLogger
 
 

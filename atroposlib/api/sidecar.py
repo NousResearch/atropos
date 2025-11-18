@@ -1,16 +1,19 @@
-import threading
-import zmq
 import logging
-import wandb
+import threading
 from typing import Optional
 
+import wandb
+import zmq
+
 logger = logging.getLogger(__name__)
+
 
 class ZMQLogAggregator:
     """
     A sidecar service that listens for log data over ZeroMQ and aggregates it
     into the centralized WandB run.
     """
+
     def __init__(self, port: int = 5555, context: Optional[zmq.Context] = None):
         self.port = port
         self.context = context or zmq.Context()
@@ -22,7 +25,7 @@ class ZMQLogAggregator:
         """Start the aggregator thread."""
         if self.running:
             return
-            
+
         try:
             self.socket.bind(f"tcp://*:{self.port}")
             logger.info(f"ZMQLogAggregator listening on port {self.port}")
@@ -45,24 +48,25 @@ class ZMQLogAggregator:
         """Main listening loop."""
         poller = zmq.Poller()
         poller.register(self.socket, zmq.POLLIN)
-        
+
         while self.running:
             try:
                 # check if open
                 socks = dict(poller.poll(1000))
                 if self.socket in socks:
-                    # pyobj in case of  some other data stuff later 
+                    # pyobj in case of  some other data stuff later
                     payload = self.socket.recv_pyobj()
 
                     if wandb.run is not None:
-                       
+
                         wandb.log(payload)
                     else:
-                        
-                        logger.debug(f"Received log payload (wandb not active): {payload.keys() if isinstance(payload, dict) else 'unknown'}")
-                        
+
+                        logger.debug(
+                            f"Received log payload (wandb not active): {payload.keys() if isinstance(payload, dict) else 'unknown'}"
+                        )
+
             except Exception as e:
                 logger.error(f"Error in ZMQLogAggregator loop: {e}")
                 if not self.running:
                     break
-
