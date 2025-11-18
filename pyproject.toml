@@ -27,6 +27,7 @@ dependencies = [
     "pydantic-cli",
     "hf_transfer",
     "python-dotenv>=1.2.1",
+    "grpcio>=1.76.0",
 ]
 
 [project.scripts]
