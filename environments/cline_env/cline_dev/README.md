@@ -29,6 +29,21 @@ cline_dev/
 
 This structure keeps experimental scripts versioned while we iterate on the automation story.
 
+## Progress
+
+- ✅ `profiles/rust` flake + Docker image for Rust + Node toolchain.
+- ✅ `examples/ratatui_vertical_gauge` bootstrap script (clones repo, runs cargo, emits metadata).
+- ✅ `bootstrap_cline_worker.sh` for cloning NousResearch/cline, building `dist-standalone`, packaging `standalone.zip`, running repo bootstrap, and launching the standalone gRPC server.
+- ✅ `cline_agent_local_server_smoke.py` orchestrates end-to-end: starts worker, configures Anthropic via ProtoBus, triggers `TaskService.newTask`, validates reasoning stream, and tears everything down.
+
+## Remaining Work
+
+- Nomad job template + worker manager in Atropos (submit, monitor, tear down per trajectory).
+- Additional language profiles (python-env, node-env, etc.) and mapping dataset rows to profiles (`envs_required.csv`).
+- Artifact capture (ui/api histories, diffs) and reward computation integrated into `collect_trajectory`.
+- Parameterize smoke/orchestrator to drive arbitrary dataset rows instead of the single Ratatui example.
+- CI or scripted tests to ensure profiles/examples remain reproducible.
+
 ## Worker Bootstrap Script
 
 `bootstrap_cline_worker.sh` lives at the root of `cline_dev/` and encapsulates the logic for preparing a worker container:
