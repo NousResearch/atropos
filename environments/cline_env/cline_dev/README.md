@@ -44,6 +44,14 @@ This structure keeps experimental scripts versioned while we iterate on the auto
 - Parameterize smoke/orchestrator to drive arbitrary dataset rows instead of the single Ratatui example.
 - CI or scripted tests to ensure profiles/examples remain reproducible.
 
+### ManagedServer vs Cline Trajectories
+
+- For now, Cline is treated as a **black-box environment**: it talks to the LLM internally and logs its own trajectories (ui/api histories, tool traces).
+- We will consume those logs as **offline supervision data**, applying tokenization and masking ourselves during training/refresh, rather than trying to wrap Cline’s internal calls in Atropos’ `ManagedServer`.
+- Possible future improvement (not currently planned):
+  - Proxy Cline’s LLM/API calls through an Atropos-managed endpoint that uses `ManagedServer` under the hood to capture tokens/logprobs automatically.
+  - This would add complexity (Cline → proxy → LLM) but could unify logging; for now it’s deferred in favor of reading Cline’s own logs directly.
+
 ## Worker Bootstrap Script
 
 `bootstrap_cline_worker.sh` lives at the root of `cline_dev/` and encapsulates the logic for preparing a worker container:
