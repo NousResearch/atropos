@@ -21,6 +21,7 @@ class ZMQLogAggregator:
     into the centralized WandB run.
     """
 
+
     def __init__(self, port: int = 5555, context: Optional[zmq.Context] = None):
         self.port = port
         self.context = context or zmq.Context()
@@ -32,6 +33,7 @@ class ZMQLogAggregator:
         """Start the aggregator thread."""
         if self.running:
             return
+
 
         try:
             self.socket.bind(f"tcp://*:{self.port}")

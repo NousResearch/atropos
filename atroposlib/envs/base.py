@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import aiohttp
 import jsonlines
 import numpy as np
+import wandb
 import yaml
 from pydantic import BaseModel, Field
 from pydantic_cli import Cmd, FailedExecutionException, run_and_exit
