@@ -28,8 +28,6 @@ from tenacity import retry, stop_after_attempt, wait_random_exponential
 from transformers import AutoTokenizer
 from typing_extensions import TypedDict
 
-import wandb
-
 try:
     import weave
 except ImportError:
