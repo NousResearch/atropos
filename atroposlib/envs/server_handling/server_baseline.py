@@ -40,6 +40,7 @@ def _resolve_weave_project_name() -> str:
             )
             if project_from_run:
                 return str(project_from_run)
+
         except Exception:
             pass
 
@@ -77,7 +78,9 @@ def weave_op(func):
                 tracing_enabled = True
                 try:
                     if len(args) > 0 and getattr(args[0], "config", None) is not None:
-                        tracing_enabled = getattr(args[0].config, "tracing_enabled", True)
+                        tracing_enabled = getattr(
+                            args[0].config, "tracing_enabled", True
+                        )
                 except Exception:
                     tracing_enabled = True
                 if not tracing_enabled:
@@ -92,7 +95,9 @@ def weave_op(func):
                 tracing_enabled = True
                 try:
                     if len(args) > 0 and getattr(args[0], "config", None) is not None:
-                        tracing_enabled = getattr(args[0].config, "tracing_enabled", True)
+                        tracing_enabled = getattr(
+                            args[0].config, "tracing_enabled", True
+                        )
                 except Exception:
                     tracing_enabled = True
                 if not tracing_enabled:
@@ -399,6 +404,8 @@ class APIServer(ABC):
                 "base_url": getattr(self.config, "base_url", None),
                 "split": split,
                 "n": kwargs.get("n", 1),
+                "wandb_group": os.getenv("WANDB_GROUP", "unknown"),
+                "wandb_run_id": os.getenv("WANDB_RUN_ID", None),
             }
         ):
             if split == "train":
@@ -477,6 +484,10 @@ class APIServer(ABC):
                 "base_url": getattr(self.config, "base_url", None),
                 "split": split,
                 "n": kwargs.get("n", 1),
+                "wandb_group": os.getenv(
+                    "WANDB_GROUP", "unknown"
+                ),  # This is set during the weave setup in our base env
+                "wandb_run_id": os.getenv("WANDB_RUN_ID", None),
             }
         ):
             if split == "train":
@@ -562,6 +573,8 @@ class APIServer(ABC):
                 "base_url": getattr(self.config, "base_url", None),
                 "split": split,
                 "n": kwargs.get("n", 1),
+                "wandb_group": os.getenv("WANDB_GROUP", "unknown"),
+                "wandb_run_id": os.getenv("WANDB_RUN_ID", None),
             }
         ):
             if split == "train":

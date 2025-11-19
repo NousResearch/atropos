@@ -27,6 +27,7 @@ dependencies = [
     "jsonlines",
     "pydantic-cli",
     "hf_transfer",
+    "pyzmq",
 ]
 
 [project.scripts]

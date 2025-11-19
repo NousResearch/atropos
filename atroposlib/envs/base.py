@@ -10,6 +10,7 @@ import time
 import uuid
 import warnings
 from abc import ABC, abstractmethod
+from contextlib import nullcontext
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -18,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import aiohttp
 import jsonlines
 import numpy as np
+import wandb
 import yaml
 from pydantic import BaseModel, Field
 from pydantic_cli import Cmd, FailedExecutionException, run_and_exit
@@ -26,7 +28,11 @@ from tenacity import retry, stop_after_attempt, wait_random_exponential
 from transformers import AutoTokenizer
 from typing_extensions import TypedDict
 
-import wandb
+try:
+    import weave
+except ImportError:
+    weave = None
+
 from atroposlib.envs.constants import ENV_NAMESPACE, NAMESPACE_SEP, OPENAI_NAMESPACE
 from atroposlib.envs.server_handling.openai_server import resolve_openai_configs
 from atroposlib.frontend.jsonl2html import generate_html
@@ -38,9 +44,11 @@ from atroposlib.utils.cli import (
     merge_dicts,
 )
 from atroposlib.utils.io import parse_http_response
+from atroposlib.utils.logging_client import ZMQLogger, setup_weave_for_worker
 from atroposlib.utils.metrics import get_std_min_max_avg
 
 from ..type_definitions import Item, Message
+from .server_handling.server_baseline import weave_op
 from .server_handling.server_manager import (
     APIServer,
     APIServerConfig,
@@ -225,6 +233,7 @@ class BaseEnv(ABC):
         self.wandb_prepend = None
         self.checkpoint_dir = ""
         self.checkpoint_interval = -1
+        self.zmq_logger = None
         if self.config.data_path_to_save_groups is not None:
             Path(self.config.data_path_to_save_groups).parent.mkdir(
                 parents=True, exist_ok=True
@@ -287,6 +296,7 @@ class BaseEnv(ABC):
             "Handle env single method must be implemented in subclass "
         )
 
+    @weave_op
     async def collect_trajectories(self, item: Item) -> Tuple[
         Union[
             Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]], List[Any | None]
@@ -425,6 +435,7 @@ class BaseEnv(ABC):
 
     async def setup_wandb(self):
         if self.config.use_wandb:
+            zmq_port = None
             # Setup wandb getting the group and project via the server
             while self.wandb_project is None:
                 async with aiohttp.ClientSession() as session:
@@ -434,10 +445,27 @@ class BaseEnv(ABC):
                         data = await parse_http_response(resp, logger)
                         self.wandb_group = data["group"]
                         self.wandb_project = data["project"]
+                        zmq_port = data.get("zmq_port")
+                        self.wandb_run_id = data.get("wandb_run_id")
 
                 if self.wandb_project is None:
                     await asyncio.sleep(1)
                     continue
+
+                if zmq_port:
+                    try:
+                        from urllib.parse import urlparse
+
+                        parsed_url = urlparse(self.config.rollout_server_url)
+                        server_host = parsed_url.hostname or "localhost"
+
+                        zmq_addr = f"tcp://{server_host}:{zmq_port}"
+                        self.zmq_logger = ZMQLogger(address=zmq_addr)
+                        logger.info(f"Using ZMQ Logger connected to {zmq_addr}")
+                        break
+                    except Exception as e:
+                        logger.error(f"Failed to init ZMQ Logger: {e}")
+                        self.zmq_logger = None
 
                 wandb_run_name = None
                 if self.config.wandb_name:
@@ -446,6 +474,12 @@ class BaseEnv(ABC):
                     wandb_run_name = (
                         f"{self.config.wandb_name}-{current_date}-{random_id}"
                     )
+
+                if weave is not None:
+                    try:
+                        weave.init(self.wandb_project)
+                    except Exception as e:
+                        logger.warning(f"Failed to initialize Weave: {e}")
 
                 wandb.init(
                     name=wandb_run_name,
@@ -493,6 +527,19 @@ class BaseEnv(ABC):
             self.curr_step = data["starting_step"]
             self.checkpoint_dir = data["checkpoint_dir"]
             self.checkpoint_interval = data["checkpoint_interval"]
+            if self.zmq_logger is not None and self.wandb_project:
+                setup_weave_for_worker(
+                    self.wandb_project,
+                    group_name=self.wandb_prepend,  # Pass the unique env ID as the 'group' for Weave traces
+                    run_id=getattr(self, "wandb_run_id", None),
+                )
+                if weave is not None:
+                    try:
+                        weave.init(self.wandb_project)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to initialize Weave in register_env: {e}"
+                        )
             if self.config.total_steps == -1:
                 self.config.total_steps = data["num_steps"]
                 if self.config.total_steps == -1:
@@ -640,7 +687,26 @@ class BaseEnv(ABC):
                 }
             # add server metrics to wandb without prepend to collate them all
             wandb_metrics.update(server_wandb_metrics)
-            wandb.log(wandb_metrics, step=self.curr_step)
+            if self.zmq_logger is not None:
+
+                self.zmq_logger.log(wandb_metrics, step=self.curr_step)
+
+                unprefixed_metrics = {}
+                prefix_len = len(self.wandb_prepend) + 1
+                for k, v in wandb_metrics.items():
+                    if k.startswith(f"{self.wandb_prepend}_"):
+                        short_key = k[prefix_len:]
+                        # Log with the base environment name
+                        # allows overlaying all instances on one plot.
+                        unprefixed_metrics[
+                            f"{self.config.desired_name}/{short_key}"
+                        ] = v
+
+                if unprefixed_metrics:
+                    self.zmq_logger.log(unprefixed_metrics, step=self.curr_step)
+
+            else:
+                wandb.log(wandb_metrics, step=self.curr_step)
 
     async def evaluate_log(
         self,
@@ -903,6 +969,7 @@ class BaseEnv(ABC):
                 )
                 print(f"Failed to send {data_type_str} after retries: {e}")
 
+    @weave_op
     async def handle_env(
         self, item_uuid: str
     ) -> Optional[Union[ScoredDataGroup, List[ScoredDataGroup]]]:
@@ -917,7 +984,16 @@ class BaseEnv(ABC):
         logger.debug(f"handle_env: Starting with item: {item}")
         # do a rollout with item
         try:
-            to_postprocess, to_backlog = await self.collect_trajectories(item)
+            # Add weave attributes for filtering
+            if weave is not None and getattr(self, "env_id", None) is not None:
+                ctx = weave.attributes(
+                    {"env_id": self.env_id, "env_name": self.wandb_prepend}
+                )
+            else:
+                ctx = nullcontext()
+
+            with ctx:
+                to_postprocess, to_backlog = await self.collect_trajectories(item)
         except Exception as e:
             logging.error(f"Error in collect_trajectories: {e}")
             to_postprocess = None
@@ -1220,15 +1296,71 @@ class BaseEnv(ABC):
         await self.setup()
 
         if self.config.use_wandb:
-            random_id = "".join(random.choices(string.ascii_lowercase, k=6))
-            current_date = datetime.now().strftime("%Y-%m-%d")
-            wandb_run_name = f"{self.name}-{current_date}-{random_id}"
-            wandb.init(
-                project=self.wandb_project,
-                name=wandb_run_name,
-                group=self.wandb_group,
-                config=self.config.model_dump(),
-            )
+            # check if zmq sidecar is open
+            zmq_port = None
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        f"{self.config.rollout_server_url}/wandb_info"
+                    ) as resp:
+                        if resp.status == 200:
+                            info = await resp.json()
+                            zmq_port = info.get("zmq_port")
+                            # Update project/group from API truth
+                            if info.get("project"):
+                                self.wandb_project = info["project"]
+                            if info.get("group"):
+                                self.wandb_group = info["group"]
+            except Exception as e:
+                logger.warning(f"Failed to fetch wandb_info from API: {e}")
+
+            # logging for zmq messages
+            if zmq_port:
+                try:
+                    from urllib.parse import urlparse
+
+                    parsed_url = urlparse(self.config.rollout_server_url)
+                    server_host = parsed_url.hostname or "localhost"
+
+                    zmq_addr = f"tcp://{server_host}:{zmq_port}"
+                    self.zmq_logger = ZMQLogger(address=zmq_addr)
+                    logger.info(f"Using ZMQ Logger connected to {zmq_addr}")
+
+                    if self.wandb_project:
+                        setup_weave_for_worker(
+                            self.wandb_project,
+                            group_name=self.wandb_prepend,  # Pass the unique env ID as the 'group' for Weave traces
+                        )
+                        if weave is not None:
+                            try:
+                                weave.init(self.wandb_project)
+                            except Exception as e:
+                                logger.warning(
+                                    f"Failed to initialize Weave in process_manager: {e}"
+                                )
+
+                except Exception as e:
+                    logger.error(f"Failed to init ZMQ Logger: {e}")
+                    self.zmq_logger = None
+
+            # regular wandb logs per env if zmq isnt open for some reason
+            if self.zmq_logger is None:
+                random_id = "".join(random.choices(string.ascii_lowercase, k=6))
+                current_date = datetime.now().strftime("%Y-%m-%d")
+                wandb_run_name = f"{self.name}-{current_date}-{random_id}"
+
+                if weave is not None:
+                    try:
+                        weave.init(self.wandb_project)
+                    except Exception as e:
+                        logger.warning(f"Failed to initialize Weave: {e}")
+
+                wandb.init(
+                    project=self.wandb_project,
+                    name=wandb_run_name,
+                    group=self.wandb_group,
+                    config=self.config.model_dump(),
+                )
 
         # Initialize the processing
         self.curr_step = 0
