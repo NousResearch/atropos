@@ -40,6 +40,7 @@ def _resolve_weave_project_name() -> str:
             )
             if project_from_run:
                 return str(project_from_run)
+
         except Exception:
             pass
 
@@ -403,6 +404,8 @@ class APIServer(ABC):
                 "base_url": getattr(self.config, "base_url", None),
                 "split": split,
                 "n": kwargs.get("n", 1),
+                "wandb_group": os.getenv("WANDB_GROUP", "unknown"),
+                "wandb_run_id": os.getenv("WANDB_RUN_ID", None),
             }
         ):
             if split == "train":
@@ -481,6 +484,10 @@ class APIServer(ABC):
                 "base_url": getattr(self.config, "base_url", None),
                 "split": split,
                 "n": kwargs.get("n", 1),
+                "wandb_group": os.getenv(
+                    "WANDB_GROUP", "unknown"
+                ),  # This is set during the weave setup in our base env
+                "wandb_run_id": os.getenv("WANDB_RUN_ID", None),
             }
         ):
             if split == "train":
@@ -566,6 +573,8 @@ class APIServer(ABC):
                 "base_url": getattr(self.config, "base_url", None),
                 "split": split,
                 "n": kwargs.get("n", 1),
+                "wandb_group": os.getenv("WANDB_GROUP", "unknown"),
+                "wandb_run_id": os.getenv("WANDB_RUN_ID", None),
             }
         ):
             if split == "train":
