@@ -2,16 +2,26 @@ import json
 import logging
 import os
 import random
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import grpc
 from datasets import load_dataset
+from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
 
 from atroposlib.envs.base import APIServerConfig, BaseEnv, BaseEnvConfig, ScoredDataItem
 from atroposlib.type_definitions import Item, Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+from environments.cline_env.worker_manager import LocalWorkerManager, WorkerHandle
 
 
 logger = logging.getLogger(__name__)
+
+# Simple mapping from dataset language labels to environment profiles.
+# For now we only support Rust via the ratatui bootstrap example.
+LANGUAGE_PROFILE_MAP: Dict[str, str] = {
+    "Rust": "rust_ratatui",
+}
 
 
 class ClineAgentEnvConfig(BaseEnvConfig):
@@ -21,6 +31,12 @@ class ClineAgentEnvConfig(BaseEnvConfig):
     max_episode_turns: int = 1
     eval_episodes: int = 50
     scoring_function: str = "dataset_target"
+    # Limit tasks to specific languages (by dataset `language` column).
+    # If None, all languages are allowed.
+    allowed_languages: Optional[List[str]] = None
+    # Whether to route rollouts through a Cline worker (gRPC) instead of
+    # directly calling the policy LLM. For now only Rust is supported.
+    use_cline_worker: bool = False
     system_prompt: str = (
         "You are a senior software engineer helping to resolve a GitHub issue. "
         "Read the issue description carefully and propose a clear, concrete patch "
@@ -61,6 +77,9 @@ class ClineAgentEnv(BaseEnv):
             steps_per_eval=100,
             max_episode_turns=1,
             eval_episodes=50,
+            # Start by focusing on Rust, since we have a concrete
+            # environment profile and bootstrap for it.
+            allowed_languages=["Rust"],
         )
         server_configs = [
             APIServerConfig(
@@ -75,7 +94,30 @@ class ClineAgentEnv(BaseEnv):
     async def setup(self):
         if self.dataset is None:
             self.dataset = load_dataset(self.config.dataset_name, split="train")
-            self.dataset_indices = list(range(len(self.dataset)))
+            all_indices = list(range(len(self.dataset)))
+
+            if self.config.allowed_languages:
+                allowed = set(self.config.allowed_languages)
+                filtered: List[int] = []
+                for idx in all_indices:
+                    row = self.dataset[idx]
+                    lang = row.get("language", None)
+                    if lang in allowed:
+                        filtered.append(idx)
+                if not filtered:
+                    raise RuntimeError(
+                        f"No dataset rows matched allowed_languages={self.config.allowed_languages}"
+                    )
+                self.dataset_indices = filtered
+                logger.info(
+                    "ClineAgentEnv: filtered dataset to %d/%d rows for languages %s",
+                    len(self.dataset_indices),
+                    len(all_indices),
+                    sorted(allowed),
+                )
+            else:
+                self.dataset_indices = all_indices
+
             random.shuffle(self.dataset_indices)
             self.dataset_position = 0
 
@@ -84,18 +126,37 @@ class ClineAgentEnv(BaseEnv):
     ) -> Tuple[Optional[ScoredDataItem], List[Item]]:
         issue_text: str = item["issue_text"]
         target: bool = item["target"]
+        language: str = item.get("language", "unknown")
 
         messages: List[Message] = [
             {"role": "system", "content": self.config.system_prompt, "reward": None},
             {"role": "user", "content": issue_text, "reward": None},
         ]
 
-        chat_completion = await self.server.chat_completion(
-            messages=messages,
-            n=1,
-            max_tokens=self.config.max_token_length,
-        )
-        assistant_content = chat_completion.choices[0].message.content
+        assistant_content: str
+        cline_task_id: Optional[str] = None
+        if self.config.use_cline_worker:
+            profile = LANGUAGE_PROFILE_MAP.get(language)
+            if not profile:
+                logger.warning(
+                    "No Cline worker profile for language '%s'; falling back to policy LLM",
+                    language,
+                )
+                chat_completion = await self.server.chat_completion(
+                    messages=messages,
+                    n=1,
+                    max_tokens=self.config.max_token_length,
+                )
+                assistant_content = chat_completion.choices[0].message.content
+            else:
+                assistant_content, cline_task_id = self._run_cline_worker(profile, issue_text)
+        else:
+            chat_completion = await self.server.chat_completion(
+                messages=messages,
+                n=1,
+                max_tokens=self.config.max_token_length,
+            )
+            assistant_content = chat_completion.choices[0].message.content
 
         messages.append(
             {"role": "assistant", "content": assistant_content, "reward": None}
@@ -115,6 +176,16 @@ class ClineAgentEnv(BaseEnv):
             train_on_all_assistant_turns=False,
         )
 
+        overrides: Optional[Dict[str, object]] = None
+        if cline_task_id is not None:
+            overrides = {
+                "cline_metadata": {
+                    "task_id": cline_task_id,
+                    "language": language,
+                    "profile": LANGUAGE_PROFILE_MAP.get(language),
+                }
+            }
+
         scored_item: ScoredDataItem = {
             "tokens": tokenized["tokens"],
             "masks": tokenized["masks"],
@@ -123,7 +194,7 @@ class ClineAgentEnv(BaseEnv):
             "ref_logprobs": None,
             "messages": messages if self.config.include_messages else None,
             "group_overrides": None,
-            "overrides": None,
+            "overrides": overrides,
             "images": None,
         }
         return scored_item, []
@@ -157,8 +228,115 @@ class ClineAgentEnv(BaseEnv):
             "model_name": row.get("task_type", ""),
             "target": bool(row.get("target", False)),
             "issue_text": issue_text,
+            "language": row.get("language", "unknown"),
         }
         return item
+
+    def _run_cline_worker(self, profile: str, issue_text: str) -> Tuple[str, Optional[str]]:
+        """Start a local Cline worker for the given profile and trigger a newTask via gRPC.
+
+        For now this is a minimal integration that:
+        - Starts the worker (Rust/Ratatui profile only).
+        - Configures Anthropic as the provider if API key is present.
+        - Calls TaskService.newTask with the issue text.
+        - Returns a simple assistant summary string.
+        """
+        manager = LocalWorkerManager()
+        handle: WorkerHandle = manager.start_for_profile(profile)
+
+        try:
+            descriptor_candidates = [
+                handle.cline_src_dir / "dist-standalone" / "proto" / "descriptor_set.pb",
+                handle.cline_src_dir / "proto" / "descriptor_set.pb",
+            ]
+            descriptor_path = next((p for p in descriptor_candidates if p.exists()), None)
+            if descriptor_path is None:
+                raise FileNotFoundError(
+                    f"descriptor_set.pb not found under {handle.cline_src_dir}"
+                )
+
+            descriptor_bytes = descriptor_path.read_bytes()
+            descriptor_set = descriptor_pb2.FileDescriptorSet()
+            descriptor_set.ParseFromString(descriptor_bytes)
+
+            pool = descriptor_pool.DescriptorPool()
+            for file_proto in descriptor_set.file:
+                pool.Add(file_proto)
+
+            factory = message_factory.MessageFactory(pool)
+
+            def msg(name: str):
+                return factory.GetPrototype(pool.FindMessageTypeByName(name))
+
+            Metadata = msg("cline.Metadata")
+            NewTaskRequest = msg("cline.NewTaskRequest")
+            StringMsg = msg("cline.String")
+            UpdateApiConfigurationPartialRequest = msg("cline.UpdateApiConfigurationPartialRequest")
+
+            ApiProvider_enum = pool.FindEnumTypeByName("cline.ApiProvider")
+            anthropic_value = ApiProvider_enum.values_by_name["ANTHROPIC"].number
+
+            channel = grpc.insecure_channel(handle.protobus_address)
+
+            def unary(method: str, request, response_cls):
+                stub = channel.unary_unary(
+                    method,
+                    request_serializer=lambda m: m.SerializeToString(),
+                    response_deserializer=lambda data: response_cls.FromString(data),
+                )
+                return stub(request)
+
+            # Configure Anthropic provider if credentials exist.
+            anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+            anthropic_model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
+            if anthropic_key:
+                cfg_req = UpdateApiConfigurationPartialRequest()
+                cfg_req.metadata.CopyFrom(Metadata())
+                api_cfg = cfg_req.api_configuration  # type: ignore[attr-defined]
+                api_cfg.api_key = anthropic_key
+                api_cfg.plan_mode_api_provider = anthropic_value
+                api_cfg.act_mode_api_provider = anthropic_value
+                api_cfg.plan_mode_api_model_id = anthropic_model
+                api_cfg.act_mode_api_model_id = anthropic_model
+                cfg_req.update_mask.paths.extend(
+                    [
+                        "apiKey",
+                        "planModeApiProvider",
+                        "actModeApiProvider",
+                        "planModeApiModelId",
+                        "actModeApiModelId",
+                    ]
+                )
+                unary(
+                    "/cline.ModelsService/updateApiConfigurationPartial",
+                    cfg_req,
+                    msg("cline.Empty"),
+                )
+
+            # Initialize UI and create a new task.
+            unary(
+                "/cline.UiService/initializeWebview",
+                Metadata(),
+                msg("cline.Empty"),
+            )
+
+            task_req = NewTaskRequest()
+            task_req.metadata.CopyFrom(Metadata())
+            task_req.text = issue_text
+            resp = unary("/cline.TaskService/newTask", task_req, StringMsg)
+
+            channel.close()
+
+            task_id = resp.value
+            summary = f"Cline created task {task_id} for issue: {issue_text[:200]}"
+            return summary, task_id
+        except Exception as exc:
+            logger.exception(
+                "Cline worker invocation failed, falling back to empty assistant: %s", exc
+            )
+            return "", None
+        finally:
+            manager.stop(handle)
 
     async def evaluate(self, *args, **kwargs):
         eval_outcomes: List[float] = []
