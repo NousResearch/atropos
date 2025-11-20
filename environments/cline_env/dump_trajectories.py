@@ -47,7 +47,7 @@ async def run(num_episodes: int, output_path: Path) -> None:
     with output_path.open("w", encoding="utf-8") as f:
         for _ in range(num_episodes):
             item = await env.get_next_item()
-            scored, _ = await env.collect_trajectory(item)
+            scored, _ = await env.collect_trajectory(item, skip_tokenization=True)
             row = env.dump_trajectory(item, scored)
             f.write(json.dumps(row))
             f.write("\n")

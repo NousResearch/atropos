@@ -66,7 +66,7 @@ async def main() -> None:
         item.get("language"),
     )
 
-    scored, _ = await env.collect_trajectory(item)
+    scored, _ = await env.collect_trajectory(item, skip_tokenization=True)
     if scored is None:
         logger.error("Smoke test failed: collect_trajectory returned None")
         return
@@ -83,4 +83,3 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-

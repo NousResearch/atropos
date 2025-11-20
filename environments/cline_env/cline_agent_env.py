@@ -2,12 +2,15 @@ import json
 import logging
 import os
 import random
+import threading
+import time
+import contextlib
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 import grpc
 from datasets import load_dataset
-from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
+from google.protobuf import descriptor_pb2, descriptor_pool, json_format, message_factory
 
 from atroposlib.envs.base import APIServerConfig, BaseEnv, BaseEnvConfig, ScoredDataItem
 from atroposlib.type_definitions import Item, Message
@@ -65,7 +68,7 @@ class ClineAgentEnv(BaseEnv):
 
     @classmethod
     def config_init(cls) -> Tuple[ClineAgentEnvConfig, List[APIServerConfig]]:
-        tokenizer_name = os.getenv("TOKENIZER_NAME", "gpt2")
+        tokenizer_name = os.getenv("TOKENIZER_NAME", "NousResearch/Meta-Llama-3-8B")
 
         env_config = ClineAgentEnvConfig(
             tokenizer_name=tokenizer_name,
@@ -77,6 +80,7 @@ class ClineAgentEnv(BaseEnv):
             steps_per_eval=100,
             max_episode_turns=1,
             eval_episodes=50,
+            include_messages=True,
             # Start by focusing on Rust, since we have a concrete
             # environment profile and bootstrap for it.
             allowed_languages=["Rust"],
@@ -122,7 +126,7 @@ class ClineAgentEnv(BaseEnv):
             self.dataset_position = 0
 
     async def collect_trajectory(
-        self, item: Item
+        self, item: Item, skip_tokenization: bool = False
     ) -> Tuple[Optional[ScoredDataItem], List[Item]]:
         issue_text: str = item["issue_text"]
         target: bool = item["target"]
@@ -134,7 +138,7 @@ class ClineAgentEnv(BaseEnv):
         ]
 
         assistant_content: str
-        cline_task_id: Optional[str] = None
+        cline_metadata: Optional[Dict[str, Any]] = None
         if self.config.use_cline_worker:
             profile = LANGUAGE_PROFILE_MAP.get(language)
             if not profile:
@@ -149,7 +153,11 @@ class ClineAgentEnv(BaseEnv):
                 )
                 assistant_content = chat_completion.choices[0].message.content
             else:
-                assistant_content, cline_task_id = self._run_cline_worker(profile, issue_text)
+                assistant_content, cline_metadata = self._run_cline_worker(
+                    profile, issue_text
+                )
+                if cline_metadata is not None:
+                    cline_metadata.setdefault("language", language)
         else:
             chat_completion = await self.server.chat_completion(
                 messages=messages,
@@ -169,26 +177,26 @@ class ClineAgentEnv(BaseEnv):
 
         self.episode_outcomes_buffer.append(reward)
 
-        tokenized = tokenize_for_trainer(
-            self.tokenizer,
-            messages,
-            include_messages=self.config.include_messages,
-            train_on_all_assistant_turns=False,
-        )
+        if skip_tokenization:
+            tokens: List[int] = []
+            masks: List[int] = []
+        else:
+            tokenized = tokenize_for_trainer(
+                self.tokenizer,
+                messages,
+                include_messages=self.config.include_messages,
+                train_on_all_assistant_turns=False,
+            )
+            tokens = tokenized["tokens"]
+            masks = tokenized["masks"]
 
         overrides: Optional[Dict[str, object]] = None
-        if cline_task_id is not None:
-            overrides = {
-                "cline_metadata": {
-                    "task_id": cline_task_id,
-                    "language": language,
-                    "profile": LANGUAGE_PROFILE_MAP.get(language),
-                }
-            }
+        if cline_metadata is not None:
+            overrides = {"cline_metadata": cline_metadata}
 
         scored_item: ScoredDataItem = {
-            "tokens": tokenized["tokens"],
-            "masks": tokenized["masks"],
+            "tokens": tokens,
+            "masks": masks,
             "scores": reward,
             "advantages": None,
             "ref_logprobs": None,
@@ -233,14 +241,25 @@ class ClineAgentEnv(BaseEnv):
         }
         return item
 
-    def _run_cline_worker(self, profile: str, issue_text: str) -> Tuple[str, Optional[str]]:
-        """Start a local Cline worker for the given profile and trigger a newTask via gRPC.
+    def _run_cline_worker(
+        self,
+        profile: str,
+        issue_text: str,
+        max_ui_messages: int = 2048,
+        stream_timeout_s: float = 300.0,
+        idle_timeout_s: float = 10.0,
+    ) -> Tuple[str, Optional[Dict[str, Any]]]:
+        """Start a local Cline worker for the given profile and capture the full UI trajectory.
 
-        For now this is a minimal integration that:
+        This method:
         - Starts the worker (Rust/Ratatui profile only).
         - Configures Anthropic as the provider if API key is present.
+        - Subscribes to UiService.subscribeToPartialMessage to stream ClineMessage events.
         - Calls TaskService.newTask with the issue text.
-        - Returns a simple assistant summary string.
+        - Waits until the UI stream is idle or a timeout/max message limit is hit.
+        - Returns:
+            * assistant_content: concatenation of reasoning/text fields for all UI messages.
+            * cline_metadata: dict containing task_id, profile, and the full ui_messages list.
         """
         manager = LocalWorkerManager()
         handle: WorkerHandle = manager.start_for_profile(profile)
@@ -265,25 +284,50 @@ class ClineAgentEnv(BaseEnv):
                 pool.Add(file_proto)
 
             factory = message_factory.MessageFactory(pool)
+            message_cache: Dict[str, Any] = {}
 
-            def msg(name: str):
-                return factory.GetPrototype(pool.FindMessageTypeByName(name))
+            def get_message_class(full_name: str):
+                if full_name not in message_cache:
+                    desc = pool.FindMessageTypeByName(full_name)
+                    get_proto = getattr(factory, "GetPrototype", None)
+                    if callable(get_proto):
+                        cls = get_proto(desc)
+                    else:
+                        cls = message_factory.GetMessageClass(desc)
+                    message_cache[full_name] = cls
+                return message_cache[full_name]
 
-            Metadata = msg("cline.Metadata")
-            NewTaskRequest = msg("cline.NewTaskRequest")
-            StringMsg = msg("cline.String")
-            UpdateApiConfigurationPartialRequest = msg("cline.UpdateApiConfigurationPartialRequest")
+            def new_message(full_name: str):
+                cls = get_message_class(full_name)
+                return cls()
 
-            ApiProvider_enum = pool.FindEnumTypeByName("cline.ApiProvider")
-            anthropic_value = ApiProvider_enum.values_by_name["ANTHROPIC"].number
+            def enum_value(full_name: str, name: str) -> int:
+                enum_desc = pool.FindEnumTypeByName(full_name)
+                try:
+                    return enum_desc.values_by_name[name].number
+                except KeyError as exc:
+                    raise ValueError(f"Enum {full_name} has no value named {name}") from exc
 
             channel = grpc.insecure_channel(handle.protobus_address)
+            grpc.channel_ready_future(channel).result(timeout=60.0)
 
-            def unary(method: str, request, response_cls):
+            def unary_unary(method: str, request, response_type: str):
                 stub = channel.unary_unary(
                     method,
                     request_serializer=lambda m: m.SerializeToString(),
-                    response_deserializer=lambda data: response_cls.FromString(data),
+                    response_deserializer=lambda data: get_message_class(response_type).FromString(
+                        data
+                    ),
+                )
+                return stub(request)
+
+            def unary_stream(method: str, request, response_type: str):
+                stub = channel.unary_stream(
+                    method,
+                    request_serializer=lambda m: m.SerializeToString(),
+                    response_deserializer=lambda data: get_message_class(response_type).FromString(
+                        data
+                    ),
                 )
                 return stub(request)
 
@@ -291,10 +335,11 @@ class ClineAgentEnv(BaseEnv):
             anthropic_key = os.getenv("ANTHROPIC_API_KEY")
             anthropic_model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
             if anthropic_key:
-                cfg_req = UpdateApiConfigurationPartialRequest()
-                cfg_req.metadata.CopyFrom(Metadata())
+                cfg_req = new_message("cline.UpdateApiConfigurationPartialRequest")
+                cfg_req.metadata.CopyFrom(new_message("cline.Metadata"))
                 api_cfg = cfg_req.api_configuration  # type: ignore[attr-defined]
                 api_cfg.api_key = anthropic_key
+                anthropic_value = enum_value("cline.ApiProvider", "ANTHROPIC")
                 api_cfg.plan_mode_api_provider = anthropic_value
                 api_cfg.act_mode_api_provider = anthropic_value
                 api_cfg.plan_mode_api_model_id = anthropic_model
@@ -308,29 +353,116 @@ class ClineAgentEnv(BaseEnv):
                         "actModeApiModelId",
                     ]
                 )
-                unary(
+                unary_unary(
                     "/cline.ModelsService/updateApiConfigurationPartial",
                     cfg_req,
-                    msg("cline.Empty"),
+                    "cline.Empty",
                 )
 
-            # Initialize UI and create a new task.
-            unary(
+            # Initialize UI.
+            unary_unary(
                 "/cline.UiService/initializeWebview",
-                Metadata(),
-                msg("cline.Empty"),
+                new_message("cline.EmptyRequest"),
+                "cline.Empty",
             )
 
-            task_req = NewTaskRequest()
-            task_req.metadata.CopyFrom(Metadata())
+            # Subscribe to partial message stream.
+            ui_messages: List[Dict[str, Any]] = []
+            stream_ready = threading.Event()
+            stream_stop = threading.Event()
+            stream_error: List[Optional[BaseException]] = [None]
+            call_holder: Dict[str, Any] = {}
+
+            def stream_consumer() -> None:
+                request = new_message("cline.EmptyRequest")
+                call = unary_stream(
+                    "/cline.UiService/subscribeToPartialMessage",
+                    request,
+                    "cline.ClineMessage",
+                )
+                call_holder["call"] = call
+                stream_ready.set()
+                try:
+                    for message in call:
+                        msg_dict = json_format.MessageToDict(
+                            message, preserving_proto_field_name=True
+                        )
+                        ui_messages.append(msg_dict)
+                        if stream_stop.is_set() or len(ui_messages) >= max_ui_messages:
+                            break
+                except grpc.RpcError as exc:
+                    if not stream_stop.is_set() and exc.code() != grpc.StatusCode.CANCELLED:
+                        stream_error[0] = exc
+                finally:
+                    stream_stop.set()
+
+            consumer_thread = threading.Thread(
+                target=stream_consumer, name="cline-ui-stream", daemon=True
+            )
+            consumer_thread.start()
+
+            if not stream_ready.wait(timeout=20.0):
+                raise TimeoutError(
+                    "Timed out waiting to subscribe to Cline UiService partial messages"
+                )
+
+            # Create a new task.
+            metadata_msg = new_message("cline.Metadata")
+            task_req = new_message("cline.NewTaskRequest")
+            task_req.metadata.CopyFrom(metadata_msg)
             task_req.text = issue_text
-            resp = unary("/cline.TaskService/newTask", task_req, StringMsg)
+            resp = unary_unary("/cline.TaskService/newTask", task_req, "cline.String")
+            task_id = resp.value
+
+            # Wait for the stream to be idle or timeout.
+            deadline = time.time() + stream_timeout_s
+            last_len = 0
+            last_change = time.time()
+
+            while time.time() < deadline:
+                current_len = len(ui_messages)
+                if current_len != last_len:
+                    last_len = current_len
+                    last_change = time.time()
+                    if current_len >= max_ui_messages:
+                        logger.warning(
+                            "Reached max_ui_messages=%d for task %s; truncating UI stream",
+                            max_ui_messages,
+                            task_id,
+                        )
+                        break
+                elif time.time() - last_change > idle_timeout_s:
+                    break
+                time.sleep(0.5)
+
+            stream_stop.set()
+            call = call_holder.get("call")
+            if call is not None:
+                with contextlib.suppress(Exception):
+                    call.cancel()
+            consumer_thread.join(timeout=5.0)
+
+            if stream_error[0]:
+                raise RuntimeError(f"Cline UI stream failed: {stream_error[0]}")
 
             channel.close()
 
-            task_id = resp.value
-            summary = f"Cline created task {task_id} for issue: {issue_text[:200]}"
-            return summary, task_id
+            # Build assistant content as concatenation of reasoning/text fields.
+            assistant_parts: List[str] = []
+            for msg in ui_messages:
+                reasoning = msg.get("reasoning") or ""
+                text = msg.get("text") or ""
+                parts = [p for p in (reasoning, text) if p]
+                if parts:
+                    assistant_parts.append("\n\n".join(parts))
+            assistant_content = "\n\n---\n\n".join(assistant_parts)
+
+            cline_metadata: Dict[str, Any] = {
+                "task_id": task_id,
+                "profile": profile,
+                "ui_messages": ui_messages,
+            }
+            return assistant_content, cline_metadata
         except Exception as exc:
             logger.exception(
                 "Cline worker invocation failed, falling back to empty assistant: %s", exc
@@ -394,8 +526,12 @@ class ClineAgentEnv(BaseEnv):
         """Return a JSON-serializable row with the Cline trajectory in the `conversations` column.
 
         The output row mirrors the input dataset schema, but replaces `conversations`
-        with a simplified conversation derived from the messages used in collect_trajectory,
-        and attaches Cline metadata (if available) under `cline_metadata`.
+        with a conversation containing:
+          - system prompt
+          - user issue text
+          - full assistant trajectory reconstructed from Cline UI messages (if available)
+        and attaches raw Cline metadata (including the full `ui_messages` list) under
+        `cline_metadata`.
         """
         if self.dataset is None:
             raise RuntimeError("Dataset not loaded; call setup() first")
@@ -414,18 +550,37 @@ class ClineAgentEnv(BaseEnv):
 
         conversations.append({"from": "human", "value": item["issue_text"]})
 
-        assistant_text = ""
-        if scored and scored.get("messages"):
-            last_msg = scored["messages"][-1]
-            if last_msg.get("role") == "assistant":
-                assistant_text = str(last_msg.get("content") or "")
-        out_row["conversations"] = conversations + (
-            [{"from": "assistant", "value": assistant_text}] if assistant_text else []
-        )
-
         overrides = scored.get("overrides") if scored else None
-        if isinstance(overrides, dict) and "cline_metadata" in overrides:
-            out_row["cline_metadata"] = overrides["cline_metadata"]
+        cline_meta = overrides.get("cline_metadata") if isinstance(overrides, dict) else None
+
+        # If we have Cline UI messages, reconstruct the full assistant trajectory from them.
+        if isinstance(cline_meta, dict) and isinstance(
+            cline_meta.get("ui_messages"), list
+        ):
+            ui_messages = cline_meta["ui_messages"]
+            for msg in ui_messages:
+                if not isinstance(msg, dict):
+                    continue
+                reasoning = msg.get("reasoning") or ""
+                text = msg.get("text") or ""
+                parts = [p for p in (reasoning, text) if p]
+                if not parts:
+                    continue
+                conversations.append(
+                    {"from": "assistant", "value": "\n\n".join(parts)}
+                )
+            out_row["cline_metadata"] = cline_meta
+        else:
+            # Fallback: use the assistant message stored in scored["messages"], if any.
+            assistant_text = ""
+            if scored and scored.get("messages"):
+                last_msg = scored["messages"][-1]
+                if last_msg.get("role") == "assistant":
+                    assistant_text = str(last_msg.get("content") or "")
+            if assistant_text:
+                conversations.append({"from": "assistant", "value": assistant_text})
+
+        out_row["conversations"] = conversations
 
         out_row["score"] = float(scored["scores"]) if scored is not None else None
 
