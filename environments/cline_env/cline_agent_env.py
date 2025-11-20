@@ -3,7 +3,7 @@ import logging
 import os
 import random
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
 import grpc
 from datasets import load_dataset
@@ -229,6 +229,7 @@ class ClineAgentEnv(BaseEnv):
             "target": bool(row.get("target", False)),
             "issue_text": issue_text,
             "language": row.get("language", "unknown"),
+            "dataset_index": index,
         }
         return item
 
@@ -388,6 +389,47 @@ class ClineAgentEnv(BaseEnv):
         self.eval_metrics_custom = []
 
         await super().wandb_log(wandb_metrics)
+
+    def dump_trajectory(self, item: Item, scored: Optional[ScoredDataItem]) -> Dict[str, Any]:
+        """Return a JSON-serializable row with the Cline trajectory in the `conversations` column.
+
+        The output row mirrors the input dataset schema, but replaces `conversations`
+        with a simplified conversation derived from the messages used in collect_trajectory,
+        and attaches Cline metadata (if available) under `cline_metadata`.
+        """
+        if self.dataset is None:
+            raise RuntimeError("Dataset not loaded; call setup() first")
+
+        dataset_index = item.get("dataset_index")
+        if dataset_index is None:
+            raise ValueError("Item missing dataset_index; ensure get_next_item was used")
+
+        row = self.dataset[int(dataset_index)]
+        out_row: Dict[str, Any] = dict(row)
+
+        conversations: List[Dict[str, Any]] = []
+        system_prompt = self.config.system_prompt
+        if system_prompt:
+            conversations.append({"from": "system", "value": system_prompt})
+
+        conversations.append({"from": "human", "value": item["issue_text"]})
+
+        assistant_text = ""
+        if scored and scored.get("messages"):
+            last_msg = scored["messages"][-1]
+            if last_msg.get("role") == "assistant":
+                assistant_text = str(last_msg.get("content") or "")
+        out_row["conversations"] = conversations + (
+            [{"from": "assistant", "value": assistant_text}] if assistant_text else []
+        )
+
+        overrides = scored.get("overrides") if scored else None
+        if isinstance(overrides, dict) and "cline_metadata" in overrides:
+            out_row["cline_metadata"] = overrides["cline_metadata"]
+
+        out_row["score"] = float(scored["scores"]) if scored is not None else None
+
+        return out_row
 
 
 if __name__ == "__main__":
