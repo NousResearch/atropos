@@ -26,14 +26,31 @@ fetch_cline_repo() {
     rm -rf "$CLINE_SRC_DIR"
     git clone "$CLINE_REPO_URL" "$CLINE_SRC_DIR"
   fi
+
+  apply_cline_patches
+}
+
+apply_cline_patches() {
+  local patch_dir="$ROOT_DIR/patches"
+  if [[ ! -d "$patch_dir" ]]; then
+    return
+  fi
+
+  pushd "$CLINE_SRC_DIR" >/dev/null
+  for patch in "$patch_dir"/*.patch; do
+    [[ -f "$patch" ]] || continue
+    log "Applying patch $(basename "$patch")"
+    git apply --whitespace=nowarn "$patch" || {
+      log "Patch $(basename "$patch") failed to apply; continuing"
+    }
+  done
+  popd >/dev/null
 }
 
 build_cline() {
   pushd "$CLINE_SRC_DIR" >/dev/null
-  if [[ ! -d node_modules ]]; then
-    log "Installing npm dependencies"
-    npm install
-  fi
+  log "Installing npm dependencies"
+  npm install
   log "Running proto generation"
   npm run protos
   log "Running lint"

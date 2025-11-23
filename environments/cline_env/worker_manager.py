@@ -6,7 +6,9 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
+
+from .profile_registry import PROFILE_REGISTRY, ProfileConfig
 
 logger = logging.getLogger(__name__)
 
@@ -33,55 +35,64 @@ class WorkerHandle:
 class LocalWorkerManager:
     """Starts and stops local Cline workers via bootstrap_cline_worker.sh.
 
-    For now this is specialized to the Rust/Ratatui example profile:
     - Clones/updates the NousResearch Cline fork.
-    - Bootstraps the Ratatui workspace.
+    - Bootstraps the target workspace.
     - Starts the standalone gRPC server on a fixed port.
     """
 
-    def __init__(self, protobus_port: int = 46040, hostbridge_port: int = 46041) -> None:
+    def __init__(
+        self,
+        protobus_port: int = 46040,
+        hostbridge_port: int = 46041,
+        profiles: Optional[Dict[str, ProfileConfig]] = None,
+    ) -> None:
         self.protobus_port = protobus_port
         self.hostbridge_port = hostbridge_port
+        self.profile_registry = profiles or PROFILE_REGISTRY
+        self.bootstrap_script = Path(__file__).resolve().parent / "cline_dev" / "bootstrap_cline_worker.sh"
 
-    def start_for_profile(self, profile: str) -> WorkerHandle:
-        if profile == "rust_ratatui":
-            return self._start_rust_ratatui_worker()
-        raise ValueError(f"Unsupported worker profile: {profile}")
-
-    def _start_rust_ratatui_worker(self) -> WorkerHandle:
-        base_dir = Path(__file__).resolve().parent
-        cline_dev_dir = base_dir / "cline_dev"
-        bootstrap_script = cline_dev_dir / "bootstrap_cline_worker.sh"
-        task_bootstrap_script = (
-            cline_dev_dir / "examples" / "ratatui_vertical_gauge" / "bootstrap.sh"
-        )
-
-        if not bootstrap_script.exists():
-            raise FileNotFoundError(f"bootstrap_cline_worker.sh not found at {bootstrap_script}")
-        if not task_bootstrap_script.exists():
+    def start_for_profile(self, profile_key: str, task_env: Dict[str, str]) -> WorkerHandle:
+        config = self.profile_registry.get(profile_key)
+        if not config:
+            raise ValueError(f"Unsupported worker profile: {profile_key}")
+        if not config.profile_dir.exists():
+            raise FileNotFoundError(f"Nix profile for '{profile_key}' not found at {config.profile_dir}")
+        if not config.bootstrap_script.exists():
             raise FileNotFoundError(
-                f"Ratatuí bootstrap script not found at {task_bootstrap_script}"
+                f"Bootstrap script for profile '{profile_key}' missing: {config.bootstrap_script}"
             )
 
-        workspace_root = Path(os.getenv("CLINE_RUST_WORKSPACE", "/tmp/ratatui-workspace"))
-        cline_src_dir = Path(os.getenv("CLINE_RUST_CLONE", "/tmp/nous-cline-worker"))
+        base_dir = Path(__file__).resolve().parent
+        profile_env = os.environ.copy()
+        profile_env.update(task_env)
+        profile_env.setdefault("TASK_BOOTSTRAP_SCRIPT", str(config.bootstrap_script))
+        profile_env.setdefault("CLINE_PROFILE_KEY", profile_key)
+
+        workspace_root = Path(profile_env.get("WORKSPACE_ROOT", "/tmp/cline-workspace"))
         workspace_root.mkdir(parents=True, exist_ok=True)
 
-        env = os.environ.copy()
-        env.update(
+        cline_src_dir = Path(profile_env.get("CLINE_SRC_DIR", "/tmp/nous-cline-worker"))
+
+        profile_env.update(
             {
                 "CLINE_SRC_DIR": str(cline_src_dir),
                 "WORKSPACE_ROOT": str(workspace_root),
-                "TASK_BOOTSTRAP_SCRIPT": str(task_bootstrap_script),
                 "PROTOBUS_PORT": str(self.protobus_port),
                 "HOSTBRIDGE_PORT": str(self.hostbridge_port),
             }
         )
 
-        logger.info("Starting local Cline worker with profile rust_ratatui")
+        logger.info("Starting local Cline worker for profile %s", profile_key)
+        cmd = [
+            "nix",
+            "develop",
+            str(config.profile_dir),
+            "--command",
+            str(self.bootstrap_script),
+        ]
         process = subprocess.Popen(
-            [str(bootstrap_script)],
-            env=env,
+            cmd,
+            env=profile_env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -115,4 +126,3 @@ class LocalWorkerManager:
         except subprocess.TimeoutExpired:
             logger.warning("Worker did not terminate gracefully; killing")
             proc.kill()
-

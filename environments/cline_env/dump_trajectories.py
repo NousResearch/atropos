@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 from atroposlib.envs.base import APIServerConfig
 from environments.cline_env.cline_agent_env import ClineAgentEnv, ClineAgentEnvConfig
+from environments.cline_env.profile_registry import supported_languages
 
 # Load API keys and other settings from .env in the repo root.
 load_dotenv()
@@ -17,12 +18,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def run(num_episodes: int, output_path: Path) -> None:
+async def collect_language(language: str, num_episodes: int, output_path: Path) -> None:
     env_config, _ = ClineAgentEnv.config_init()
     env_config.use_wandb = False
     env_config.group_size = 1
     env_config.use_cline_worker = True
-    env_config.allowed_languages = ["Rust"]
+    env_config.allowed_languages = [language]
 
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
     anthropic_model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
@@ -53,9 +54,10 @@ async def run(num_episodes: int, output_path: Path) -> None:
             f.write("\n")
             f.flush()
             logger.info(
-                "Dumped trajectory for id=%s language=%s",
+                "Dumped trajectory for id=%s language=%s -> %s",
                 item.get("instance_id"),
-                item.get("language"),
+                language,
+                output_path,
             )
 
 
@@ -74,16 +76,52 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=str,
-        default="cline_rust_trajectories.jsonl",
+        default="cline_trajectories.jsonl",
         help="Output JSONL filename (saved under environments/cline_env/data by default).",
+    )
+    parser.add_argument(
+        "--languages",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Languages to process (default: run for all supported mappings).",
+    )
+    parser.add_argument(
+        "--output-template",
+        type=str,
+        default="cline_{language}_trajectories.jsonl",
+        help="Filename template when multiple languages are specified (supports {language}).",
     )
     args = parser.parse_args()
 
-    out_path = Path(args.output)
-    if not out_path.is_absolute():
-        out_path = base_dir / "data" / out_path
+    if args.languages:
+        languages = args.languages
+    else:
+        languages = list(supported_languages())
 
-    asyncio.run(run(args.num_episodes, out_path))
+    base_output = Path(args.output)
+    template_path = Path(args.output_template)
+
+    for language in languages:
+        template = template_path
+        if len(languages) == 1:
+            out_path = base_output
+        else:
+            slug = language.lower().replace(" ", "_")
+            if "{language}" in template.name:
+                name = template.name.format(language=slug)
+                out_path = template.with_name(name)
+            else:
+                out_dir = template.parent if template.name else Path(".")
+                stem = template.stem or base_output.stem
+                suffix = template.suffix or ".jsonl"
+                out_path = out_dir / f"{stem}_{slug}{suffix}"
+
+        if not out_path.is_absolute():
+            out_path = base_dir / "data" / out_path
+
+        logger.info("Collecting %d episode(s) for language %s -> %s", args.num_episodes, language, out_path)
+        asyncio.run(collect_language(language, args.num_episodes, out_path))
 
 
 if __name__ == "__main__":

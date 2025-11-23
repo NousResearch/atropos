@@ -5,6 +5,7 @@ import random
 import threading
 import time
 import contextlib
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -16,16 +17,10 @@ from atroposlib.envs.base import APIServerConfig, BaseEnv, BaseEnvConfig, Scored
 from atroposlib.type_definitions import Item, Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 from environments.cline_env.worker_manager import LocalWorkerManager, WorkerHandle
+from environments.cline_env.profile_registry import get_profile_config, ProfileConfig, supported_languages
 
 
 logger = logging.getLogger(__name__)
-
-# Simple mapping from dataset language labels to environment profiles.
-# For now we only support Rust via the ratatui bootstrap example.
-LANGUAGE_PROFILE_MAP: Dict[str, str] = {
-    "Rust": "rust_ratatui",
-}
-
 
 class ClineAgentEnvConfig(BaseEnvConfig):
     tokenizer_name: str = "NousResearch/Meta-Llama-3-8B"
@@ -81,9 +76,7 @@ class ClineAgentEnv(BaseEnv):
             max_episode_turns=1,
             eval_episodes=50,
             include_messages=True,
-            # Start by focusing on Rust, since we have a concrete
-            # environment profile and bootstrap for it.
-            allowed_languages=["Rust"],
+            allowed_languages=list(supported_languages()),
         )
         server_configs = [
             APIServerConfig(
@@ -139,25 +132,26 @@ class ClineAgentEnv(BaseEnv):
 
         assistant_content: str
         cline_metadata: Optional[Dict[str, Any]] = None
+        profile_key: Optional[str] = None
         if self.config.use_cline_worker:
-            profile = LANGUAGE_PROFILE_MAP.get(language)
-            if not profile:
-                logger.warning(
-                    "No Cline worker profile for language '%s'; falling back to policy LLM",
-                    language,
+            try:
+                profile_config = get_profile_config(language)
+            except KeyError:
+                profile_config = None
+                logger.warning("No Cline worker profile for language '%s'; falling back to policy LLM", language)
+
+            if profile_config:
+                profile_key = profile_config.profile_key
+                assistant_content, cline_metadata = self._run_cline_worker(
+                    profile_config, item, issue_text
                 )
+            else:
                 chat_completion = await self.server.chat_completion(
                     messages=messages,
                     n=1,
                     max_tokens=self.config.max_token_length,
                 )
                 assistant_content = chat_completion.choices[0].message.content
-            else:
-                assistant_content, cline_metadata = self._run_cline_worker(
-                    profile, issue_text
-                )
-                if cline_metadata is not None:
-                    cline_metadata.setdefault("language", language)
         else:
             chat_completion = await self.server.chat_completion(
                 messages=messages,
@@ -192,6 +186,9 @@ class ClineAgentEnv(BaseEnv):
 
         overrides: Optional[Dict[str, object]] = None
         if cline_metadata is not None:
+            cline_metadata.setdefault("language", language)
+            if profile_key:
+                cline_metadata.setdefault("profile_key", profile_key)
             overrides = {"cline_metadata": cline_metadata}
 
         scored_item: ScoredDataItem = {
@@ -231,6 +228,11 @@ class ClineAgentEnv(BaseEnv):
             if isinstance(first, dict):
                 issue_text = first.get("value") or ""
 
+        repo_name = row.get("repo_name") or row.get("repo") or ""
+        repo_url = row.get("repo_url") or (f"https://github.com/{repo_name}" if repo_name else "")
+        repo_branch = row.get("branch") or row.get("default_branch") or ""
+        repo_commit = row.get("base_commit") or row.get("commit") or ""
+
         item: Item = {
             "instance_id": row.get("id", ""),
             "model_name": row.get("task_type", ""),
@@ -238,12 +240,17 @@ class ClineAgentEnv(BaseEnv):
             "issue_text": issue_text,
             "language": row.get("language", "unknown"),
             "dataset_index": index,
+            "repo_name": repo_name,
+            "repo_url": repo_url,
+            "repo_branch": repo_branch,
+            "repo_commit": repo_commit,
         }
         return item
 
     def _run_cline_worker(
         self,
-        profile: str,
+        profile_config: ProfileConfig,
+        item: Item,
         issue_text: str,
         max_ui_messages: int = 2048,
         stream_timeout_s: float = 300.0,
@@ -261,8 +268,27 @@ class ClineAgentEnv(BaseEnv):
             * assistant_content: concatenation of reasoning/text fields for all UI messages.
             * cline_metadata: dict containing task_id, profile, and the full ui_messages list.
         """
+        repo_name = item.get("repo_name") or f"task-{item.get('instance_id', 'repo')}"
+        repo_slug = repo_name.replace("/", "__")
+        repo_url = item.get("repo_url") or ""
+        workspace_root = Path(tempfile.mkdtemp(prefix=f"cline-{profile_config.profile_key}-"))
+        repo_path = workspace_root / repo_slug
+        task_env = {
+            "TASK_LANGUAGE": item.get("language", "unknown"),
+            "TASK_ID": str(item.get("instance_id")),
+            "TASK_REPO_URL": repo_url,
+            "TASK_REPO_NAME": repo_name,
+            "TASK_REPO_BRANCH": item.get("repo_branch", ""),
+            "TASK_REPO_REV": item.get("repo_commit", ""),
+            "TASK_REPO_PATH": str(repo_path),
+            "WORKSPACE_ROOT": str(workspace_root),
+            "WORKSPACE_DIR": str(repo_path),
+            "DEV_WORKSPACE_FOLDER": str(repo_path),
+        }
+
         manager = LocalWorkerManager()
-        handle: WorkerHandle = manager.start_for_profile(profile)
+        handle: Optional[WorkerHandle] = None
+        handle = manager.start_for_profile(profile_config.profile_key, task_env)
 
         try:
             descriptor_candidates = [
@@ -459,8 +485,12 @@ class ClineAgentEnv(BaseEnv):
 
             cline_metadata: Dict[str, Any] = {
                 "task_id": task_id,
-                "profile": profile,
+                "profile": profile_config.profile_key,
                 "ui_messages": ui_messages,
+                "repo_name": repo_name,
+                "repo_url": repo_url,
+                "workspace_root": str(workspace_root),
+                "workspace_repo": str(repo_path),
             }
             return assistant_content, cline_metadata
         except Exception as exc:
@@ -469,7 +499,8 @@ class ClineAgentEnv(BaseEnv):
             )
             return "", None
         finally:
-            manager.stop(handle)
+            if handle is not None:
+                manager.stop(handle)
 
     async def evaluate(self, *args, **kwargs):
         eval_outcomes: List[float] = []

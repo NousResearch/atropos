@@ -1,0 +1,33 @@
+--- a/scripts/test-hostbridge-server.ts	2025-11-18 16:09:13
++++ b/scripts/test-hostbridge-server.ts	2025-11-21 13:59:52
+@@ -24,16 +24,20 @@
+ 	server.addService(DiffServiceService, createMockService<DiffServiceServer>("DiffService"))
+ 	server.addService(TestingServiceService, createMockService<TestingServiceServer>("TestingService"))
+ 
+-	// Load package definition for reflection service
+-	const packageDefinition = await getPackageDefinition()
+-	// Filter service names to only include host services
+-	const hostBridgeServiceNames = Object.keys(packageDefinition).filter(
+-		(name) => name.startsWith("host.") || name.startsWith("grpc.health"),
+-	)
+-	const reflection = new ReflectionService(packageDefinition, {
+-		services: hostBridgeServiceNames,
+-	})
+-	reflection.addToServer(server)
++	try {
++		// Load package definition for reflection service
++		const packageDefinition = await getPackageDefinition()
++		// Filter service names to only include host services
++		const hostBridgeServiceNames = Object.keys(packageDefinition).filter(
++			(name) => name.startsWith("host.") || name.startsWith("grpc.health"),
++		)
++		const reflection = new ReflectionService(packageDefinition, {
++			services: hostBridgeServiceNames,
++		})
++		reflection.addToServer(server)
++	} catch (error) {
++		console.warn("HostBridge reflection disabled:", error)
++	}
+ 
+ 	const bindAddress = process.env.HOST_BRIDGE_ADDRESS || `127.0.0.1:26041`
+ 
