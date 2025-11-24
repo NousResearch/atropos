@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import asyncio
 import grpc
 from datasets import load_dataset
 from google.protobuf import descriptor_pb2, descriptor_pool, json_format, message_factory
