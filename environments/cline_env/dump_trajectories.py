@@ -49,6 +49,13 @@ async def collect_language(language: str, num_episodes: int, output_path: Path) 
         for _ in range(num_episodes):
             item = await env.get_next_item()
             scored, _ = await env.collect_trajectory(item, skip_tokenization=True)
+            if not scored:
+                logger.error(
+                    "Skipping trajectory for id=%s language=%s due to Cline worker failure",
+                    item.get("instance_id"),
+                    language,
+                )
+                continue
             row = env.dump_trajectory(item, scored)
             f.write(json.dumps(row))
             f.write("\n")
