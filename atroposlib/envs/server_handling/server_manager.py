@@ -159,22 +159,47 @@ class ServerManager:
         """
 
         def get_available_slots():
+            def sem_min_val(sem):
+                """
+                Helper to get the minimum effective value for a semaphore.
+
+                Supports AsyncSemWithAdaptiveWeight (which exposes min_val())
+                and falls back to 0 for plain asyncio.Semaphore instances used
+                by the ServerHarness in testing mode.
+                """
+                min_fn = getattr(sem, "min_val", None)
+                if callable(min_fn):
+                    try:
+                        return min_fn()
+                    except Exception:
+                        return 0
+                return 0
+
             if is_training:
-                eval_vals = [
-                    (
-                        max(0, server.eval_sem._value - server.eval_sem.min_val())
-                        if server.eval_sem._value != server.eval_sem.max_val
-                        else 0
-                    )
-                    for server in self.servers
-                ]
+                eval_vals = []
+                for server in self.servers:
+                    eval_sem = getattr(server, "eval_sem", None)
+                    if eval_sem is None:
+                        eval_vals.append(0)
+                        continue
+                    min_val = sem_min_val(eval_sem)
+                    current = getattr(eval_sem, "_value", 0)
+                    eval_vals.append(max(0, current - min_val))
                 return [
-                    max(0, (server.sem._value - server.sem.min_val()) - eval_val)
+                    max(
+                        0,
+                        (getattr(server.sem, "_value", 0) - sem_min_val(server.sem))
+                        - eval_val,
+                    )
                     for server, eval_val in zip(self.servers, eval_vals)
                 ]
             else:
                 return [
-                    max(0, server.eval_sem._value - server.eval_sem.min_val())
+                    max(
+                        0,
+                        getattr(server.eval_sem, "_value", 0)
+                        - sem_min_val(server.eval_sem),
+                    )
                     for server in self.servers
                 ]
 
