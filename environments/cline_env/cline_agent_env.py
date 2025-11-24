@@ -145,6 +145,17 @@ class ClineAgentEnv(BaseEnv):
                 assistant_content, cline_metadata = self._run_cline_worker(
                     profile_config, item, issue_text
                 )
+                if not assistant_content and cline_metadata is None:
+                    logger.warning(
+                        "Cline worker for language '%s' returned no content; falling back to policy LLM",
+                        language,
+                    )
+                    chat_completion = await self.server.chat_completion(
+                        messages=messages,
+                        n=1,
+                        max_tokens=self.config.max_token_length,
+                    )
+                    assistant_content = chat_completion.choices[0].message.content
             else:
                 chat_completion = await self.server.chat_completion(
                     messages=messages,
