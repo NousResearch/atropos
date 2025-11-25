@@ -524,6 +524,63 @@ class ClineAgentEnv(BaseEnv):
             if handle is not None:
                 manager.stop(handle)
 
+    def _filter_complete_ui_messages(self, ui_messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Filter UI messages to remove partial/streaming updates and keep only complete messages.
+        
+        The subscribeToPartialMessage stream sends incremental token updates, each marked with
+        `partial=True`. These are progressively longer versions of the same message. We want to:
+        1. Group messages by their timestamp (ts) - partials share the same ts
+        2. Keep only the last (most complete) message in each group
+        3. Additionally filter out messages that are still marked partial if possible
+        
+        This converts hundreds of streaming token fragments into a small number of complete messages.
+        """
+        if not ui_messages:
+            return []
+        
+        # Group by timestamp - partial messages share the same timestamp
+        ts_groups: Dict[str, List[Dict[str, Any]]] = {}
+        no_ts_messages: List[Dict[str, Any]] = []
+        
+        for msg in ui_messages:
+            ts = msg.get("ts")
+            if ts:
+                ts_str = str(ts)
+                if ts_str not in ts_groups:
+                    ts_groups[ts_str] = []
+                ts_groups[ts_str].append(msg)
+            else:
+                no_ts_messages.append(msg)
+        
+        # For each timestamp group, keep only the last message (most complete version)
+        filtered: List[Dict[str, Any]] = []
+        
+        # Sort groups by timestamp to maintain order
+        sorted_ts = sorted(ts_groups.keys(), key=lambda x: int(x) if x.isdigit() else 0)
+        
+        for ts_str in sorted_ts:
+            group = ts_groups[ts_str]
+            if group:
+                # Take the last message in the group (most complete)
+                last_msg = group[-1]
+                # Only include if it has meaningful content
+                if last_msg.get("text") or last_msg.get("reasoning"):
+                    # Skip if still marked partial AND there's a non-partial version
+                    # But if all are partial, we take the last one anyway
+                    non_partial = [m for m in group if not m.get("partial")]
+                    if non_partial:
+                        filtered.append(non_partial[-1])
+                    else:
+                        # All partial - take the last (most complete) one
+                        filtered.append(last_msg)
+        
+        # Add messages without timestamps
+        for msg in no_ts_messages:
+            if not msg.get("partial") and (msg.get("text") or msg.get("reasoning")):
+                filtered.append(msg)
+        
+        return filtered
+
     async def evaluate(self, *args, **kwargs):
         eval_outcomes: List[float] = []
 
@@ -607,11 +664,16 @@ class ClineAgentEnv(BaseEnv):
         cline_meta = overrides.get("cline_metadata") if isinstance(overrides, dict) else None
 
         # If we have Cline UI messages, reconstruct the full assistant trajectory from them.
+        # IMPORTANT: Filter out partial (streaming) messages - only keep complete messages.
+        # Partial messages are incremental token updates; we want the final complete version.
         if isinstance(cline_meta, dict) and isinstance(
             cline_meta.get("ui_messages"), list
         ):
             ui_messages = cline_meta["ui_messages"]
-            for msg in ui_messages:
+            # Group messages by timestamp and only keep the last (most complete) version
+            # of each message within the same timestamp group, or filter to non-partial only.
+            filtered_messages = self._filter_complete_ui_messages(ui_messages)
+            for msg in filtered_messages:
                 if not isinstance(msg, dict):
                     continue
                 reasoning = msg.get("reasoning") or ""
@@ -635,7 +697,10 @@ class ClineAgentEnv(BaseEnv):
 
         out_row["conversations"] = conversations
 
-        out_row["score"] = float(scored["scores"]) if scored is not None else None
+        if scored is not None:
+            out_row["score"] = float(scored["scores"])
+        else:
+            out_row["score"] = None
 
         return out_row
 
