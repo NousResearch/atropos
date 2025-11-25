@@ -137,46 +137,43 @@ class ClineAgentEnv(BaseEnv):
         if self.config.use_cline_worker:
             try:
                 profile_config = get_profile_config(language)
-            except KeyError:
-                profile_config = None
-                logger.warning("No Cline worker profile for language '%s'; falling back to policy LLM", language)
-
-            if profile_config:
-                profile_key = profile_config.profile_key
-                max_attempts = 3
-                backoff_s = 1.0
-                for attempt in range(1, max_attempts + 1):
-                    assistant_content, cline_metadata = self._run_cline_worker(
-                        profile_config, item, issue_text
-                    )
-                    if assistant_content or cline_metadata is not None:
-                        break
-                    logger.warning(
-                        "Cline worker attempt %d/%d for language '%s' (instance_id=%s) returned no content",
-                        attempt,
-                        max_attempts,
-                        language,
-                        item.get("instance_id"),
-                    )
-                    if attempt < max_attempts:
-                        await asyncio.sleep(backoff_s)
-                        backoff_s *= 2.0
-
-                if not assistant_content and cline_metadata is None:
-                    logger.error(
-                        "Cline worker failed after %d attempts for language '%s'; skipping episode instance_id=%s",
-                        max_attempts,
-                        language,
-                        item.get("instance_id"),
-                    )
-                    return None, []
-            else:
-                chat_completion = await self.server.chat_completion(
-                    messages=messages,
-                    n=1,
-                    max_tokens=self.config.max_token_length,
+            except KeyError as exc:
+                logger.error(
+                    "No Cline worker profile for language '%s'; skipping episode instance_id=%s (%s)",
+                    language,
+                    item.get("instance_id"),
+                    exc,
                 )
-                assistant_content = chat_completion.choices[0].message.content
+                return None, []
+
+            profile_key = profile_config.profile_key
+            max_attempts = 3
+            backoff_s = 1.0
+            for attempt in range(1, max_attempts + 1):
+                assistant_content, cline_metadata = self._run_cline_worker(
+                    profile_config, item, issue_text
+                )
+                if assistant_content or cline_metadata is not None:
+                    break
+                logger.warning(
+                    "Cline worker attempt %d/%d for language '%s' (instance_id=%s) returned no content",
+                    attempt,
+                    max_attempts,
+                    language,
+                    item.get("instance_id"),
+                )
+                if attempt < max_attempts:
+                    await asyncio.sleep(backoff_s)
+                    backoff_s *= 2.0
+
+            if not assistant_content and cline_metadata is None:
+                logger.error(
+                    "Cline worker failed after %d attempts for language '%s'; skipping episode instance_id=%s",
+                    max_attempts,
+                    language,
+                    item.get("instance_id"),
+                )
+                return None, []
         else:
             chat_completion = await self.server.chat_completion(
                 messages=messages,

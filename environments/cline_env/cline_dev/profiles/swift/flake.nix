@@ -1,5 +1,5 @@
 {
-  description = "Python + Jupyter env for notebook-style repos";
+  description = "Swift toolchain for Swift-based repos";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
@@ -11,26 +11,14 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        python = pkgs.python310;
-        pythonPackages = pkgs.python310Packages;
+        # Use the Swift toolchain from the pinned nixpkgs.
+        swift = pkgs.swift;
 
-        # Keep this close to the plain Python profile for stability.
-        # JupyterLab / full notebook server currently fail to build on the
-        # pinned nixpkgs + macOS combo (uvloop / jupyter-server deps), which
-        # prevents the worker from starting. For now we provide a robust
-        # Python toolchain suitable for notebook-style repos without
-        # attempting to run the full Jupyter server inside the container.
         commonPackages = with pkgs; [
-          python
-          pythonPackages.pip
-          pythonPackages.virtualenv
-
-          nodejs_22
-          yarn
+          swift
 
           git
           pkg-config
-          openssl
           cmake
           bashInteractive
           gnupg
@@ -42,24 +30,22 @@
         devShells.default = pkgs.mkShell {
           packages = commonPackages;
           shellHook = ''
-            export PYTHONUNBUFFERED=1
-            export JUPYTER_ENABLE_LAB=yes
+            export SWIFT_ENV=development
           '';
         };
 
-        packages.jupyter-env-image = pkgs.dockerTools.buildImage {
-          name = "cline-jupyter-env";
+        packages.swift-env-image = pkgs.dockerTools.buildImage {
+          name = "cline-swift-env";
           tag = "latest";
           config = {
             Cmd = [ "/bin/bash" ];
             Env = [
-              "PYTHONUNBUFFERED=1"
-              "JUPYTER_ENABLE_LAB=yes"
+              "SWIFT_ENV=development"
               "PATH=/usr/bin:/bin:/opt/bin"
             ];
           };
           copyToRoot = pkgs.buildEnv {
-            name = "cline-jupyter-env-root";
+            name = "cline-swift-env-root";
             paths = commonPackages ++ [
               pkgs.cacert
               pkgs.gitFull
@@ -72,3 +58,4 @@
       }
     );
 }
+

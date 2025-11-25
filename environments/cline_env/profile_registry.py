@@ -40,6 +40,7 @@ PROFILE_REGISTRY: Dict[str, ProfileConfig] = {
     "elixir": _profile("elixir"),
     "jupyter": _profile("jupyter"),
     "haskell": _profile("haskell"),
+    "swift": _profile("swift"),
     "shell": _profile("shell"),
 }
 
@@ -64,6 +65,7 @@ LANGUAGE_TO_PROFILE: Dict[str, str] = {
     "Jupyter Notebook": "jupyter",
     "Python Notebook": "jupyter",
     "Haskell": "haskell",
+    "Swift": "swift",
     "Shell": "shell",
     "HTML": "node",
 }
