@@ -414,12 +414,17 @@ class ClineAgentEnv(BaseEnv):
                 "cline.Empty",
             )
 
-            # Subscribe to partial message stream.
+            # Subscribe to partial message stream for UI updates.
             ui_messages: List[Dict[str, Any]] = []
             stream_ready = threading.Event()
             stream_stop = threading.Event()
             stream_error: List[Optional[BaseException]] = [None]
             call_holder: Dict[str, Any] = {}
+
+            # Also capture state updates which contain the full clineMessages array.
+            state_snapshots: List[Dict[str, Any]] = []
+            state_stream_ready = threading.Event()
+            state_call_holder: Dict[str, Any] = {}
 
             def stream_consumer() -> None:
                 request = new_message("cline.EmptyRequest")
@@ -444,10 +449,39 @@ class ClineAgentEnv(BaseEnv):
                 finally:
                     stream_stop.set()
 
+            def state_stream_consumer() -> None:
+                """Subscribe to state updates to capture the full clineMessages array."""
+                request = new_message("cline.EmptyRequest")
+                try:
+                    call = unary_stream(
+                        "/cline.StateService/subscribeToState",
+                        request,
+                        "cline.State",
+                    )
+                    state_call_holder["call"] = call
+                    state_stream_ready.set()
+                    for state in call:
+                        if stream_stop.is_set():
+                            break
+                        state_dict = json_format.MessageToDict(
+                            state, preserving_proto_field_name=True
+                        )
+                        state_snapshots.append(state_dict)
+                except grpc.RpcError as exc:
+                    if not stream_stop.is_set() and exc.code() != grpc.StatusCode.CANCELLED:
+                        logger.warning("State stream error: %s", exc)
+                except Exception as exc:
+                    logger.warning("State stream consumer error: %s", exc)
+
             consumer_thread = threading.Thread(
                 target=stream_consumer, name="cline-ui-stream", daemon=True
             )
             consumer_thread.start()
+
+            state_consumer_thread = threading.Thread(
+                target=state_stream_consumer, name="cline-state-stream", daemon=True
+            )
+            state_consumer_thread.start()
 
             if not stream_ready.wait(timeout=20.0):
                 raise TimeoutError(
@@ -490,14 +524,42 @@ class ClineAgentEnv(BaseEnv):
                     call.cancel()
             consumer_thread.join(timeout=5.0)
 
+            # Also cancel state stream.
+            state_call = state_call_holder.get("call")
+            if state_call is not None:
+                with contextlib.suppress(Exception):
+                    state_call.cancel()
+            state_consumer_thread.join(timeout=2.0)
+
             if stream_error[0]:
                 raise RuntimeError(f"Cline UI stream failed: {stream_error[0]}")
 
             channel.close()
 
+            # Extract clineMessages from the last state snapshot (contains full trajectory).
+            cline_messages: List[Dict[str, Any]] = []
+            if state_snapshots:
+                last_state = state_snapshots[-1]
+                state_json_str = last_state.get("state_json") or last_state.get("stateJson", "")
+                if state_json_str:
+                    try:
+                        state_data = json.loads(state_json_str)
+                        cline_messages = state_data.get("clineMessages", [])
+                        logger.info(
+                            "Extracted %d clineMessages from state (vs %d partial UI messages)",
+                            len(cline_messages),
+                            len(ui_messages),
+                        )
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning("Failed to parse state_json: %s", e)
+
+            # Use clineMessages if available, otherwise fall back to ui_messages.
+            # clineMessages contains the FULL trajectory with ASK and SAY messages.
+            final_messages = cline_messages if cline_messages else ui_messages
+
             # Build assistant content as concatenation of reasoning/text fields.
             assistant_parts: List[str] = []
-            for msg in ui_messages:
+            for msg in final_messages:
                 reasoning = msg.get("reasoning") or ""
                 text = msg.get("text") or ""
                 parts = [p for p in (reasoning, text) if p]
@@ -508,7 +570,8 @@ class ClineAgentEnv(BaseEnv):
             cline_metadata: Dict[str, Any] = {
                 "task_id": task_id,
                 "profile": profile_config.profile_key,
-                "ui_messages": ui_messages,
+                "ui_messages": final_messages,  # Use full messages from state if available.
+                "ui_messages_partial_stream": ui_messages if cline_messages else None,
                 "repo_name": repo_name,
                 "repo_url": repo_url,
                 "workspace_root": str(workspace_root),
