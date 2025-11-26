@@ -63,7 +63,7 @@ LANGUAGE_TO_PROFILE: Dict[str, str] = {
     "Lua": "lua",
     "Elixir": "elixir",
     "Jupyter Notebook": "jupyter",
-    "Python Notebook": "jupyter",
+    # Note: "Python Notebook" removed - dataset uses "Jupyter Notebook" only
     "Haskell": "haskell",
     "Swift": "swift",
     "Shell": "shell",

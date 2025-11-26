@@ -222,7 +222,8 @@ class NomadWorkerManager:
         logger.info("Nomad job submitted: %s", output[:500])
 
         # Parse job ID and allocation ID from output
-        job_id = f"cline-{profile_key}"
+        # Note: job name is always "cline-worker" as defined in the HCL
+        job_id = "cline-worker"
         allocation_id = None
         for line in output.splitlines():
             if "Allocation" in line and "created" in line:
