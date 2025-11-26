@@ -23,6 +23,11 @@ from atroposlib.type_definitions import Item, Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 from environments.cline_env.worker_manager import get_worker_manager, WorkerHandle
 from environments.cline_env.profile_registry import get_profile_config, ProfileConfig, supported_languages
+from environments.cline_env.scoring import (
+    score_trajectory,
+    extract_trajectory_summary,
+    extract_files_modified,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -33,7 +38,9 @@ class ClineAgentEnvConfig(BaseEnvConfig):
     dataset_name: str = "NousResearch/swe-agent-13k-2025-06-15" # "conversation" is json column, message idx 1 (role "human") should be task
     max_episode_turns: int = 1
     eval_episodes: int = 50
-    scoring_function: str = "dataset_target"
+    # Scoring function: "hybrid" (recommended), "dataset_target" (placeholder), "none"
+    # hybrid = 0.3*syntax + 0.6*llm_judge + 0.1*complexity
+    scoring_function: str = "hybrid"
     # Limit tasks to specific languages (by dataset `language` column).
     # If None, all languages are allowed.
     allowed_languages: Optional[List[str]] = None
@@ -190,8 +197,39 @@ class ClineAgentEnv(BaseEnv):
             {"role": "assistant", "content": assistant_content, "reward": None}
         )
 
+        # Calculate reward based on scoring function
         if self.config.scoring_function == "dataset_target":
             reward = 1.0 if target else -1.0
+        elif self.config.scoring_function == "hybrid" and cline_metadata is not None:
+            # Use hybrid scoring: execution + llm_judge + complexity
+            try:
+                workspace_path = Path(cline_metadata.get("workspace_root", ""))
+                trajectory_summary = extract_trajectory_summary(cline_metadata)
+                files_modified = extract_files_modified(cline_metadata)
+                
+                reward, score_meta = await score_trajectory(
+                    issue_text=issue_text,
+                    trajectory_summary=trajectory_summary,
+                    workspace_path=workspace_path if workspace_path.exists() else None,
+                    language=language,
+                    cline_metadata=cline_metadata,
+                    files_modified=files_modified,
+                )
+                # Store scoring metadata in cline_metadata for inspection
+                cline_metadata["scoring"] = score_meta
+                logger.info(
+                    "Hybrid scoring for %s: %.3f (exec=%.2f, llm=%.2f, complexity=%.2f)",
+                    item.get("instance_id"),
+                    reward,
+                    score_meta.get("component_scores", {}).get("execution", {}).get("score", 0),
+                    score_meta.get("component_scores", {}).get("llm_judge", {}).get("score", 0),
+                    score_meta.get("component_scores", {}).get("complexity", {}).get("score", 0),
+                )
+            except Exception as e:
+                logger.warning("Hybrid scoring failed for %s: %s", item.get("instance_id"), e)
+                reward = 0.0
+        elif self.config.scoring_function == "none":
+            reward = 0.0
         else:
             reward = 0.0
 
