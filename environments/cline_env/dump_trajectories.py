@@ -110,19 +110,23 @@ def main() -> None:
     template_path = Path(args.output_template)
 
     for language in languages:
-        template = template_path
-        if len(languages) == 1:
+        slug = language.lower().replace(" ", "_")
+        
+        # Always use language-based naming unless user explicitly specified --output with a single language
+        if len(languages) == 1 and args.output != "cline_trajectories.jsonl":
+            # User explicitly specified --output, use it directly
             out_path = base_output
         else:
-            slug = language.lower().replace(" ", "_")
+            # Use template-based naming for all languages (including single language with default output)
+            template = template_path
             if "{language}" in template.name:
                 name = template.name.format(language=slug)
                 out_path = template.with_name(name)
             else:
                 out_dir = template.parent if template.name else Path(".")
-                stem = template.stem or base_output.stem
+                stem = template.stem or "cline"
                 suffix = template.suffix or ".jsonl"
-                out_path = out_dir / f"{stem}_{slug}{suffix}"
+                out_path = out_dir / f"{stem}_{slug}_trajectories{suffix}"
 
         if not out_path.is_absolute():
             out_path = base_dir / "data" / out_path
