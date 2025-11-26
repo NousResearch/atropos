@@ -12,6 +12,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import asyncio
 import grpc
 from datasets import load_dataset
+from dotenv import load_dotenv
+
+# Load .env from repo root for API keys and other settings
+load_dotenv()
 from google.protobuf import descriptor_pb2, descriptor_pool, json_format, message_factory
 
 from atroposlib.envs.base import APIServerConfig, BaseEnv, BaseEnvConfig, ScoredDataItem

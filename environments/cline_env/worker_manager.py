@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Protocol
@@ -28,6 +29,7 @@ def _wait_for_port(host: str, port: int, timeout: float = 600.0) -> None:
 
 @dataclass
 class WorkerHandle:
+    worker_id: str
     protobus_address: str
     workspace_root: Path
     cline_src_dir: Path
@@ -48,12 +50,7 @@ class WorkerManager(Protocol):
 
 
 class LocalWorkerManager:
-    """Starts and stops local Cline workers via bootstrap_cline_worker.sh.
-
-    - Clones/updates the NousResearch Cline fork.
-    - Bootstraps the target workspace.
-    - Starts the standalone gRPC server on a fixed port.
-    """
+    """Starts and stops local Cline workers via bootstrap_cline_worker.sh."""
 
     def __init__(
         self,
@@ -77,7 +74,7 @@ class LocalWorkerManager:
                 f"Bootstrap script for profile '{profile_key}' missing: {config.bootstrap_script}"
             )
 
-        base_dir = Path(__file__).resolve().parent
+        worker_id = str(uuid.uuid4())[:8]
         profile_env = os.environ.copy()
         profile_env.update(task_env)
         profile_env.setdefault("TASK_BOOTSTRAP_SCRIPT", str(config.bootstrap_script))
@@ -97,7 +94,7 @@ class LocalWorkerManager:
             }
         )
 
-        logger.info("Starting local Cline worker for profile %s", profile_key)
+        logger.info("Starting local Cline worker %s for profile %s", worker_id, profile_key)
         cmd = [
             "nix",
             "develop",
@@ -117,13 +114,14 @@ class LocalWorkerManager:
             if not proc.stdout:
                 return
             for line in proc.stdout:
-                logger.info("[worker] %s", line.rstrip())
+                logger.info("[worker-%s] %s", worker_id[:8], line.rstrip())
 
         threading.Thread(target=_log_stream, args=(process,), daemon=True).start()
 
         _wait_for_port("127.0.0.1", self.protobus_port, timeout=600.0)
 
         return WorkerHandle(
+            worker_id=worker_id,
             protobus_address=f"127.0.0.1:{self.protobus_port}",
             workspace_root=workspace_root,
             cline_src_dir=cline_src_dir,
@@ -134,31 +132,23 @@ class LocalWorkerManager:
         proc = handle.process
         if proc is None or proc.poll() is not None:
             return
-        logger.info("Stopping local Cline worker")
+        logger.info("Stopping local Cline worker %s", handle.worker_id)
         proc.terminate()
         try:
             proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            logger.warning("Worker did not terminate gracefully; killing")
+            logger.warning("Worker %s did not terminate gracefully; killing", handle.worker_id)
             proc.kill()
 
 
 class NomadWorkerManager:
-    """Starts and stops Cline workers via Nomad job scheduler.
-
-    Uses a parameterized HCL job template to spin up workers with the correct
-    Nix profile and task environment.
-    """
+    """Starts and stops Cline workers via Nomad with dynamic port allocation."""
 
     def __init__(
         self,
-        protobus_port: int = 46040,
-        hostbridge_port: int = 46041,
         profiles: Optional[Dict[str, ProfileConfig]] = None,
         nomad_address: str = "http://127.0.0.1:4646",
     ) -> None:
-        self.protobus_port = protobus_port
-        self.hostbridge_port = hostbridge_port
         self.profile_registry = profiles or PROFILE_REGISTRY
         self.nomad_address = nomad_address
         self.atropos_root = Path(__file__).resolve().parent.parent.parent
@@ -173,6 +163,32 @@ class NomadWorkerManager:
             raise RuntimeError(f"Nomad command {' '.join(args)} failed: {result.stderr.strip()}")
         return result.stdout
 
+    def _get_allocation_ports(self, allocation_id: str) -> tuple:
+        """Query Nomad for dynamically allocated ports."""
+        status_output = self._run_nomad_cmd(["nomad", "alloc", "status", "-json", allocation_id])
+        status_data = json.loads(status_output)
+        
+        # Extract dynamic ports from allocation
+        resources = status_data.get("AllocatedResources", {})
+        shared = resources.get("Shared", {})
+        networks = shared.get("Networks", [])
+        
+        protobus_port = None
+        hostbridge_port = None
+        
+        for network in networks:
+            dyn_ports = network.get("DynamicPorts", [])
+            for port_info in dyn_ports:
+                if port_info.get("Label") == "protobus":
+                    protobus_port = port_info.get("Value")
+                elif port_info.get("Label") == "hostbridge":
+                    hostbridge_port = port_info.get("Value")
+        
+        if not protobus_port or not hostbridge_port:
+            raise RuntimeError(f"Could not find dynamic ports in allocation {allocation_id}")
+        
+        return protobus_port, hostbridge_port
+
     def start_for_profile(self, profile_key: str, task_env: Dict[str, str]) -> WorkerHandle:
         config = self.profile_registry.get(profile_key)
         if not config:
@@ -184,7 +200,11 @@ class NomadWorkerManager:
                 f"Bootstrap script for profile '{profile_key}' missing: {config.bootstrap_script}"
             )
 
-        workspace_root = Path(task_env.get("WORKSPACE_ROOT", tempfile.mkdtemp(prefix=f"cline-{profile_key}-")))
+        # Generate unique worker ID for this instance
+        worker_id = str(uuid.uuid4())[:8]
+        job_name = f"cline-{profile_key}-{worker_id}"
+
+        workspace_root = Path(task_env.get("WORKSPACE_ROOT", tempfile.mkdtemp(prefix=f"cline-{worker_id}-")))
         workspace_root.mkdir(parents=True, exist_ok=True)
 
         cline_src_dir = Path(task_env.get("CLINE_SRC_DIR", "/tmp/nous-cline-worker"))
@@ -204,9 +224,8 @@ class NomadWorkerManager:
             "workspace_root": str(workspace_root),
             "cline_src_dir": str(cline_src_dir),
             "task_env_json": json.dumps(task_env),
-            "job_name": f"cline-{profile_key}",
-            "protobus_port": str(self.protobus_port),
-            "hostbridge_port": str(self.hostbridge_port),
+            "job_name": job_name,
+            "worker_id": worker_id,
             "profile_dir": str(config.profile_dir),
             "atropos_root": str(self.atropos_root),
         }
@@ -217,13 +236,11 @@ class NomadWorkerManager:
             args.extend(["-var", f"{key}={value}"])
         args.append(str(self.job_hcl))
 
-        logger.info("Submitting Nomad job for profile %s", profile_key)
+        logger.info("Submitting Nomad job %s for profile %s", job_name, profile_key)
         output = self._run_nomad_cmd(args)
-        logger.info("Nomad job submitted: %s", output[:500])
+        logger.debug("Nomad job submitted: %s", output[:500])
 
-        # Parse job ID and allocation ID from output
-        # Note: job name is always "cline-worker" as defined in the HCL
-        job_id = "cline-worker"
+        # Parse allocation ID from output
         allocation_id = None
         for line in output.splitlines():
             if "Allocation" in line and "created" in line:
@@ -235,34 +252,42 @@ class NomadWorkerManager:
                         allocation_id = parts[idx + 1]
                         break
 
+        if not allocation_id:
+            raise RuntimeError(f"Could not parse allocation ID from Nomad output")
+
         # Wait for allocation to be running
-        if allocation_id:
-            deadline = time.time() + 300.0
-            while time.time() < deadline:
-                try:
-                    status_output = self._run_nomad_cmd(["nomad", "alloc", "status", "-json", allocation_id])
-                    status_data = json.loads(status_output)
-                    client_status = status_data.get("ClientStatus")
-                    if client_status == "running":
-                        logger.info("Nomad allocation %s is running", allocation_id)
-                        break
-                    if client_status in {"complete", "failed", "lost"}:
-                        raise RuntimeError(f"Allocation {allocation_id} entered terminal state: {client_status}")
-                except Exception as e:
-                    logger.warning("Error checking allocation status: %s", e)
-                time.sleep(2.0)
-            else:
-                raise TimeoutError("Timed out waiting for Nomad allocation to reach running state")
+        deadline = time.time() + 300.0
+        while time.time() < deadline:
+            try:
+                status_output = self._run_nomad_cmd(["nomad", "alloc", "status", "-json", allocation_id])
+                status_data = json.loads(status_output)
+                client_status = status_data.get("ClientStatus")
+                if client_status == "running":
+                    logger.info("Nomad allocation %s is running", allocation_id)
+                    break
+                if client_status in {"complete", "failed", "lost"}:
+                    raise RuntimeError(f"Allocation {allocation_id} entered terminal state: {client_status}")
+            except Exception as e:
+                logger.warning("Error checking allocation status: %s", e)
+            time.sleep(2.0)
+        else:
+            raise TimeoutError("Timed out waiting for Nomad allocation to reach running state")
+
+        # Get dynamically allocated ports
+        protobus_port, hostbridge_port = self._get_allocation_ports(allocation_id)
+        logger.info("Worker %s got dynamic ports: protobus=%d, hostbridge=%d", 
+                    worker_id, protobus_port, hostbridge_port)
 
         # Wait for protobus port to be ready
-        _wait_for_port("127.0.0.1", self.protobus_port, timeout=600.0)
+        _wait_for_port("127.0.0.1", protobus_port, timeout=600.0)
 
         return WorkerHandle(
-            protobus_address=f"127.0.0.1:{self.protobus_port}",
+            worker_id=worker_id,
+            protobus_address=f"127.0.0.1:{protobus_port}",
             workspace_root=workspace_root,
             cline_src_dir=cline_src_dir,
             process=None,
-            nomad_job_id=job_id,
+            nomad_job_id=job_name,
             nomad_allocation_id=allocation_id,
         )
 
@@ -270,7 +295,7 @@ class NomadWorkerManager:
         if not handle.nomad_job_id:
             return
         try:
-            logger.info("Stopping Nomad job %s", handle.nomad_job_id)
+            logger.info("Stopping Nomad job %s (worker %s)", handle.nomad_job_id, handle.worker_id)
             self._run_nomad_cmd(["nomad", "job", "stop", "-purge", handle.nomad_job_id])
             logger.info("Nomad job %s stopped", handle.nomad_job_id)
         except Exception as e:
@@ -283,25 +308,8 @@ def get_worker_manager(
     hostbridge_port: int = 46041,
     nomad_address: str = "http://127.0.0.1:4646",
 ) -> WorkerManager:
-    """Factory function to get the appropriate worker manager.
-    
-    Args:
-        use_nomad: If True (default), use NomadWorkerManager. If False, use LocalWorkerManager.
-        protobus_port: Port for gRPC protobus service.
-        hostbridge_port: Port for host bridge service.
-        nomad_address: Address of Nomad server (only used if use_nomad=True).
-    
-    Returns:
-        WorkerManager instance (either NomadWorkerManager or LocalWorkerManager).
-    """
+    """Factory function to get the appropriate worker manager."""
     if use_nomad:
-        return NomadWorkerManager(
-            protobus_port=protobus_port,
-            hostbridge_port=hostbridge_port,
-            nomad_address=nomad_address,
-        )
+        return NomadWorkerManager(nomad_address=nomad_address)
     else:
-        return LocalWorkerManager(
-            protobus_port=protobus_port,
-            hostbridge_port=hostbridge_port,
-        )
+        return LocalWorkerManager(protobus_port=protobus_port, hostbridge_port=hostbridge_port)

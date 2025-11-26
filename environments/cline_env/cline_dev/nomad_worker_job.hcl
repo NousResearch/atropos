@@ -34,16 +34,13 @@ variable "task_env_json" {
 variable "job_name" {
   type    = string
   default = "cline-worker"
+  description = "Unique job name for this worker instance"
 }
 
-variable "protobus_port" {
-  type    = number
-  default = 46040
-}
-
-variable "hostbridge_port" {
-  type    = number
-  default = 46041
+variable "worker_id" {
+  type    = string
+  default = ""
+  description = "Unique identifier for this worker instance"
 }
 
 variable "profile_dir" {
@@ -58,23 +55,22 @@ variable "atropos_root" {
 }
 
 job "cline-worker" {
+  name        = var.job_name
   datacenters = ["dc1"]
   type        = "batch"
 
   meta {
     profile_key = var.profile_key
+    worker_id   = var.worker_id
   }
 
   group "worker" {
     count = 1
 
     network {
-      port "protobus" {
-        static = var.protobus_port
-      }
-      port "hostbridge" {
-        static = var.hostbridge_port
-      }
+      # Dynamic port allocation - Nomad assigns from ephemeral range
+      port "protobus" {}
+      port "hostbridge" {}
     }
 
     task "cline" {
