@@ -17,7 +17,7 @@ from google.protobuf import descriptor_pb2, descriptor_pool, json_format, messag
 from atroposlib.envs.base import APIServerConfig, BaseEnv, BaseEnvConfig, ScoredDataItem
 from atroposlib.type_definitions import Item, Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
-from environments.cline_env.worker_manager import LocalWorkerManager, WorkerHandle
+from environments.cline_env.worker_manager import get_worker_manager, WorkerHandle
 from environments.cline_env.profile_registry import get_profile_config, ProfileConfig, supported_languages
 
 
@@ -308,7 +308,9 @@ class ClineAgentEnv(BaseEnv):
             "DEV_WORKSPACE_FOLDER": str(repo_path),
         }
 
-        manager = LocalWorkerManager()
+        # Use Nomad by default for worker management
+        use_nomad = os.getenv("CLINE_USE_NOMAD", "true").lower() in ("true", "1", "yes")
+        manager = get_worker_manager(use_nomad=use_nomad)
         handle: Optional[WorkerHandle] = None
         handle = manager.start_for_profile(profile_config.profile_key, task_env)
 
