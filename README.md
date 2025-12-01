@@ -219,6 +219,12 @@ This allows you to leverage Atropos for reinforcement learning while utilizing A
 To use, follow the README on the [plugin repository](https://github.com/axolotl-ai-cloud/plugin-atropos).
 
 ## Tinker
+<a href="https://github.com/NousResearch/tinker-atropos">
+  <img
+    src="https://raw.githubusercontent.com/thinking-machines-lab/tinker-cookbook/refs/heads/main/assets/tinker-cover.png"
+    alt="Atropos Tinker logo"
+    width="50%">
+</a>
 
 The Tinker API is a simple and flexible LoRA trainer framework for researchers and developers to quickly build out their ideas without worrying about the complexities of distributed training. Users write a simple loop that runs on their CPU, and Tinker manages the backend computation on their GPUs, while still providing full control over the training and algorithmic details.
 
