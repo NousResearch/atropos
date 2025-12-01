@@ -221,7 +221,7 @@ To use, follow the README on the [plugin repository](https://github.com/axolotl-
 ## Tinker
 <a href="https://github.com/NousResearch/tinker-atropos">
   <img
-    src="https://raw.githubusercontent.com/thinking-machines-lab/tinker-cookbook/refs/heads/main/assets/tinker-cover.png"
+    src="https://github.com/user-attachments/assets/6c226187-4df8-4094-be5d-72f3f58de423"
     alt="Atropos Tinker logo"
     width="50%">
 </a>
