@@ -21,7 +21,7 @@ Architecture:
     │  └───────┼────────────┼────────────────┼──────────┘     │
     │          │            │                │                │
     │  ┌───────▼────────────▼────────────────▼──────────┐     │
-    │  │              AsyncLLMEngine                     │     │
+    │  │                 AsyncLLM                        │     │
     │  │  - Model weights (shared via NCCL)             │     │
     │  │  - LoRA adapters (hot-swappable)               │     │
     │  └────────────────────────────────────────────────┘     │
@@ -52,7 +52,7 @@ from vllm.logger import init_logger
 from vllm.sampling_params import RequestOutputKind, SamplingParams
 from vllm.usage.usage_lib import UsageContext
 from vllm.utils import random_uuid
-from vllm.v1.engine.async_llm import AsyncLLMEngine
+from vllm.v1.engine.async_llm import AsyncLLM
 
 try:
     from vllm.utils.argparse_utils import FlexibleArgumentParser
@@ -70,7 +70,7 @@ logger = init_logger("vllm.entrypoints.api_server")
 # =============================================================================
 
 app = FastAPI()
-engine: Optional[AsyncLLMEngine] = None
+engine: Optional[AsyncLLM] = None
 
 
 @dataclass
@@ -494,7 +494,7 @@ def build_app(args: Namespace) -> FastAPI:
 
 async def init_app(
     args: Namespace,
-    llm_engine: AsyncLLMEngine | None = None,
+    llm_engine: AsyncLLM | None = None,
 ) -> FastAPI:
     """
     Initialize the application and vLLM engine.
@@ -513,7 +513,7 @@ async def init_app(
     engine = (
         llm_engine
         if llm_engine is not None
-        else AsyncLLMEngine.from_engine_args(
+        else AsyncLLM.from_engine_args(
             engine_args, usage_context=UsageContext.API_SERVER
         )
     )
@@ -555,7 +555,7 @@ def _export_state_dict_info(args: Namespace) -> None:
 
 
 async def run_server(
-    args: Namespace, llm_engine: AsyncLLMEngine | None = None, **uvicorn_kwargs: Any
+    args: Namespace, llm_engine: AsyncLLM | None = None, **uvicorn_kwargs: Any
 ) -> None:
     """
     Run the vLLM API server.
