@@ -3,3 +3,4 @@ torch
 transformers
 datasets
 accelerate
+peft
