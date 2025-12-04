@@ -18,7 +18,6 @@ from atroposlib.envs.base import (
     Item,
     ScoredDataGroup,
 )
-from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 # Import NLTK words corpus for large-scale word list
 try:
@@ -1365,13 +1364,17 @@ class LetterCountingEnv(BaseEnv):
             messages, add_generation_prompt=True, tokenize=False
         )
 
-        # Get completions from the model
-        completions = await self.server.completion(
-            prompt=prompt,
-            n=self.config.group_size,
-            max_tokens=self.config.max_generation_tokens,
-            temperature=self.config.generation_temperature,
-        )
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+            # Get completions from the model
+            completions = await managed.completion(
+                prompt=prompt,
+                n=self.config.group_size,
+                max_tokens=self.config.max_generation_tokens,
+                temperature=self.config.generation_temperature,
+            )
+
+            state = managed.get_state()
+            nodes = state["nodes"]
 
         to_score = list()
 
@@ -1388,13 +1391,16 @@ class LetterCountingEnv(BaseEnv):
 
             # Add to scoring queue with expected answer and metadata
             to_score.append(
-                (
-                    tuple(trajectory_messages),
-                    item[1],  # correct_counts (dict)
-                    item[2],  # text (word or sentence)
-                    item[3],  # target_letters (list)
-                    completion_choice.finish_reason,  # stop reason
-                )
+                {
+                    "messages": tuple(trajectory_messages),
+                    "correct_counts": item[1],  # correct_counts (dict)
+                    "text": item[2],  # text (word or sentence)
+                    "target_letters": item[3],  # target_letters (list)
+                    "finish_reason": completion_choice.finish_reason,  # stop reason
+                    "tokens": nodes[i].tokens,
+                    "masks": nodes[i].masked_tokens,
+                    "logprobs": nodes[i].logprobs,
+                }
             )
 
         # Call score to get the scored data
@@ -1407,10 +1413,10 @@ class LetterCountingEnv(BaseEnv):
             temp_scores = []
             for score_item in to_score:
                 # Extract the model's response and score it
-                model_response = score_item[0][-1]["content"]
-                stop_reason = score_item[4]
-                expected_counts = score_item[1]
-                target_letters = score_item[3]
+                model_response = score_item["messages"][-1]["content"]
+                stop_reason = score_item["finish_reason"]
+                expected_counts = score_item["correct_counts"]
+                target_letters = score_item["target_letters"]
 
                 # Handle legacy format
                 if isinstance(target_letters, str):
@@ -1460,11 +1466,11 @@ class LetterCountingEnv(BaseEnv):
                 rollouts_with_scores_to_save = []
 
                 for i, score_for_rollout in enumerate(temp_scores):
-                    conversation_messages = to_score[i][0]
-                    correct_counts = to_score[i][1]
-                    text = to_score[i][2]
-                    target_letters = to_score[i][3]
-                    stop_reason = to_score[i][4]
+                    conversation_messages = to_score[i]["messages"]
+                    correct_counts = to_score[i]["correct_counts"]
+                    text = to_score[i]["text"]
+                    target_letters = to_score[i]["target_letters"]
+                    stop_reason = to_score[i]["finish_reason"]
 
                     rollouts_with_scores_to_save.append(
                         {
@@ -1645,16 +1651,19 @@ class LetterCountingEnv(BaseEnv):
         scores["tokens"] = list()
         scores["masks"] = list()
         scores["scores"] = list()
+        scores["inference_logprobs"] = list()
 
         if not rollout_group_data:
             return None
 
         # Get the expected answer from first item
         expected_counts = rollout_group_data[0][
-            1
+            "correct_counts"
         ]  # correct counts (dict for multi, int for single - legacy)
-        text = rollout_group_data[0][2]  # text (word or sentence)
-        target_letters = rollout_group_data[0][3]  # target letters (list)
+        text = rollout_group_data[0]["text"]  # text (word or sentence)
+        target_letters = rollout_group_data[0][
+            "target_letters"
+        ]  # target letters (list)
 
         # Handle legacy format (single letter as string, single count as int)
         if isinstance(target_letters, str):
@@ -1683,8 +1692,8 @@ class LetterCountingEnv(BaseEnv):
 
         for item in rollout_group_data:
             # Extract the model's response
-            model_response = item[0][-1]["content"]
-            stop_reason = item[4]  # Get the stop reason
+            model_response = item["messages"][-1]["content"]
+            stop_reason = item["finish_reason"]  # Get the stop reason
 
             # If the response was cut off due to length, give it a score of 0
             if stop_reason == "length":
@@ -1750,10 +1759,9 @@ class LetterCountingEnv(BaseEnv):
                                     f"Text '{text[:50]}...' letters {target_letters}: Wrong answer {model_answer} (expected {expected_counts}), score=0"  # noqa
                                 )
 
-            # Tokenize the conversation for learning
-            out_dict = tokenize_for_trainer(self.tokenizer, item[0])
-            tokens = out_dict["tokens"]
-            masks = out_dict["masks"]
+            tokens = item["tokens"]
+            masks = item["masks"]
+            logprobs = item["logprobs"]
 
             # Remove examples with insufficient context
             if len([1 for i in masks if i != -100]) < 10:
@@ -1761,6 +1769,7 @@ class LetterCountingEnv(BaseEnv):
 
             scores["tokens"].append(tokens)
             scores["masks"].append(masks)
+            scores["inference_logprobs"].append(logprobs)
             scores["scores"].append(1.0 if reward else 0.0)
 
             # Break once we have enough examples
@@ -1905,14 +1914,15 @@ class LetterCountingEnv(BaseEnv):
             messages, add_generation_prompt=True, tokenize=False
         )
 
-        # Get model completion
-        completion = await self.server.completion(
-            prompt=prompt,
-            n=1,
-            max_tokens=self.config.max_generation_tokens,
-            temperature=self.config.eval_temperature,
-            split="eval",
-        )
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+            # Get model completion
+            completion = await managed.completion(
+                prompt=prompt,
+                n=1,
+                max_tokens=self.config.max_generation_tokens,
+                temperature=self.config.eval_temperature,
+                split="eval",
+            )
 
         # Extract the model's response from the completion
         model_response = completion.choices[0].text

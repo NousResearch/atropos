@@ -171,6 +171,8 @@ pre-commit install
 
   You should edit the config_init section of the environment file you want ([For example, in GSM8K Environment](https://github.com/NousResearch/atropos/blob/main/environments/gsm8k_server.py#L53)) to point to a running VLLM or SGLang inference server as well as any other [configuration changes](CONFIG.md) you'd like to make, such as the group size, then:
 
+  > **Note:** By default, Atropos uses the OpenAI-compatible API endpoint which works with any provider. For enhanced features, use `VLLMServer` (atroposlib/envs/server_handling/vllm_server.py) or `SGLangServer` (atroposlib/envs/server_handling/sglang_server.py) for direct access to native APIs with full token and logprob tracking.
+
    ```bash
    # Start the API server
    run-api
@@ -216,7 +218,21 @@ Axolotl is a powerful tool for fine-tuning a wide range of AI models, supporting
 The [Atropos plugin for Axolotl](https://github.com/axolotl-ai-cloud/plugin-atropos) seamlessly integrates Atropos' RL environments into Axolotl's training pipelines.
 This allows you to leverage Atropos for reinforcement learning while utilizing Axolotl's extensive features for model fine-tuning.
 
-To use, follow the readme on the [plugin repository](https://github.com/axolotl-ai-cloud/plugin-atropos).
+To use, follow the README on the [plugin repository](https://github.com/axolotl-ai-cloud/plugin-atropos).
+
+## Tinker
+<a href="https://github.com/NousResearch/tinker-atropos">
+  <img
+    src="https://github.com/user-attachments/assets/6c226187-4df8-4094-be5d-72f3f58de423"
+    alt="Atropos Tinker logo"
+    width="50%">
+</a>
+
+The Tinker API is a simple and flexible LoRA trainer framework for researchers and developers to quickly build out their ideas without worrying about the complexities of distributed training. Users write a simple loop that runs on their CPU, and Tinker manages the backend computation on their GPUs, while still providing full control over the training and algorithmic details.
+
+The [Tinker-Atropos](https://github.com/NousResearch/tinker-atropos) integration layer enables all Atropos environments to leverage the power of Tinker for their RL experiments. This allows users with little or no compute to develop and build Atropos environments with minimal worry about the underlying compute behavior, as well as providing an easy environment integration point for Tinker users.
+
+To get started, check out the README at the [project repository](https://github.com/NousResearch/tinker-atropos).
 
 ## Atropos' Example Trainer
 Atropos repo contains an example trainer that should primarily be used as a reference example to show how a trainer and inference provider can be integrated with Atropos to complete the RL Training Loop.

@@ -4,6 +4,8 @@
 
 `ManagedServer` is a wrapper around `APIServer` that automatically tracks text sequences with aligned tokens and logprobs. It eliminates the need for manual token extraction, alignment, and masking in your environment code, making it **the recommended approach** for handling inference in Atropos environments.
 
+**Server Compatibility:** ManagedServer works with all Atropos server types - `OpenAIServer`, `VLLMServer`, `SGLangServer`, and `TrlVllmServer`. Simply set the `server_type` field in your `APIServerConfig` to `"openai"` (default), `"vllm"`, `"sglang"`, or `"trl"` to use the appropriate backend with automatic server class selection.
+
 ### Why Use ManagedServer?
 
 **Before ManagedServer** (manual approach):
@@ -686,7 +688,7 @@ The context manager:
 
 - [ManagedServer Source Code](managed_server.py)
 - [ManagedServer Tests](../../tests/test_managed_server.py)
-- [Example: math_server_zero.py](../../../../environments/math_server_zero.py#L320-L332)
-- [Example: math_server.py](../../../../environments/math_server.py#L377-L387)
+- [Example: math_server_zero.py](../../../environments/math_server_zero.py#L320-L332)
+- [Example: math_server.py](../../../environments/math_server.py#L377-L387)
 - [BaseEnv Documentation](../README.md)
 - [API Server Documentation](../../api/README.md)
