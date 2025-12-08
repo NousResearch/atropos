@@ -156,7 +156,17 @@ python example_trainer/grpo.py \
   --wandb-project gsm8k-grpo-shared
 ```
 
-### What Happens
+### What Happens (Local Mode - num_inference_nodes=0)
+
+1. vLLM server starts on port 9001
+2. Trainer initializes bridge in LOCAL MODE (HTTP-based, no NCCL)
+3. Trainer loads its own model copy and trains normally
+4. After each `optimizer.step()`:
+   - `bridge.notify_update()` sends HTTP POST to vLLM
+   - Periodic checkpoint saves sync weights to disk
+5. Much simpler than distributed mode!
+
+### What Happens (Distributed Mode - num_inference_nodes>0)
 
 1. vLLM server starts, writes parameter mapping to `$LOGDIR/vllm_bridge_config.json`
 2. Trainer reads mapping, joins NCCL process group with vLLM
@@ -164,7 +174,7 @@ python example_trainer/grpo.py \
 4. Training loop:
    - Forward pass uses shared weights
    - `optimizer.step()` modifies shared tensors in-place
-   - `bridge.notify_update()` signals vLLM (optional coordination)
+   - `bridge.notify_update()` broadcasts via Gloo
    - vLLM immediately uses new weights for next inference
 5. No restarts needed!
 
