@@ -682,9 +682,37 @@ def log_metrics(
         wandb.log(log_dict, step=step)
 
 
-def finalize_training(use_wandb: bool) -> None:
-    """Clean up after training completes."""
+def finalize_training(
+    use_wandb: bool,
+    training_start_time: Optional[float] = None,
+    mode: str = "unknown",
+    total_steps: int = 0,
+) -> None:
+    """Clean up after training and log benchmark summary."""
     print("\nTraining finished.")
+    
+    # Log benchmark summary
+    if training_start_time is not None:
+        total_time = time.time() - training_start_time
+        gpu_mem_gb = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0
+        
+        print(f"\n{'='*60}")
+        print(f"BENCHMARK SUMMARY ({mode})")
+        print(f"{'='*60}")
+        print(f"  Total training time: {total_time:.2f}s ({total_time/60:.2f} min)")
+        print(f"  Total steps: {total_steps}")
+        print(f"  Avg time per step: {total_time/max(total_steps,1):.2f}s")
+        print(f"  Peak GPU memory: {gpu_mem_gb:.2f} GB")
+        print(f"{'='*60}\n")
+        
+        if use_wandb:
+            wandb.summary["benchmark/total_time_seconds"] = total_time
+            wandb.summary["benchmark/total_time_minutes"] = total_time / 60
+            wandb.summary["benchmark/avg_step_time_seconds"] = total_time / max(total_steps, 1)
+            wandb.summary["benchmark/peak_gpu_memory_gb"] = gpu_mem_gb
+            wandb.summary["benchmark/mode"] = mode
+            wandb.summary["benchmark/total_steps"] = total_steps
+    
     if use_wandb:
         wandb.finish()
 
@@ -697,6 +725,7 @@ def train(config: TrainingConfig):
     Use weight_bridge_mode='shared_vllm' for in-place weight updates without restarts.
     """
     global vllm_process
+    training_start_time = time.time()
 
     # === Setup ===
     use_wandb = setup_wandb(config)
@@ -708,6 +737,7 @@ def train(config: TrainingConfig):
     print(f"{'='*60}")
     print(f"Training for {config.training_steps} steps on {config.device}")
     print(f"vLLM restart interval: every {config.vllm_restart_interval} steps")
+    print(f"Save path: {config.save_path}")
     print(f"{'='*60}\n")
 
     os.makedirs(config.save_path, exist_ok=True)
@@ -753,8 +783,8 @@ def train(config: TrainingConfig):
         _check_vllm_health()
 
     # === Cleanup ===
-    finalize_training(use_wandb)
     save_checkpoint(model, tokenizer, config.save_path, config.training_steps, is_final=True)
+    finalize_training(use_wandb, training_start_time, "legacy", config.training_steps)
 
 
 # =============================================================================
@@ -846,6 +876,8 @@ def train_shared_vllm(config: TrainingConfig):
             "Ensure vllm_weight_bridge.py is in the same directory."
         )
 
+    training_start_time = time.time()
+
     # === Setup ===
     use_wandb = setup_wandb(config)
 
@@ -856,6 +888,7 @@ def train_shared_vllm(config: TrainingConfig):
     print(f"Distributed: rank={config.trainer_rank}/{config.world_size}")
     print(f"Init method: {config.init_method}")
     print(f"Inference nodes: {config.num_inference_nodes}")
+    print(f"Save path: {config.save_path}")
     print(f"{'='*60}\n")
 
     # Initialize weight bridge
@@ -907,8 +940,8 @@ def train_shared_vllm(config: TrainingConfig):
 
     # === Cleanup ===
     bridge.cleanup()
-    finalize_training(use_wandb)
     save_checkpoint(model, tokenizer, config.save_path, config.training_steps, is_final=True)
+    finalize_training(use_wandb, training_start_time, "shared_vllm", config.training_steps)
 
 
 def train_lora(config: TrainingConfig):
@@ -926,6 +959,8 @@ def train_lora(config: TrainingConfig):
             "PEFT library required for LoRA mode. Install with: pip install peft"
         )
 
+    training_start_time = time.time()
+
     # === Setup ===
     use_wandb = setup_wandb(config)
 
@@ -934,6 +969,7 @@ def train_lora(config: TrainingConfig):
     print(f"{'='*60}")
     print(f"Base model: {config.model_name}")
     print(f"LoRA config: r={config.lora_r}, alpha={config.lora_alpha}")
+    print(f"Save path: {config.save_path}")
     print(f"{'='*60}\n")
 
     # Load model with LoRA adapters
@@ -984,10 +1020,10 @@ def train_lora(config: TrainingConfig):
 
     # === Cleanup ===
     _terminate_vllm_process()
-    finalize_training(use_wandb)
 
     # Save final adapter
     save_lora_checkpoint(model, config.save_path, config.training_steps, is_final=True)
+    finalize_training(use_wandb, training_start_time, "lora_only", config.training_steps)
 
     # Also save tokenizer for convenience
     tokenizer_path = os.path.join(config.save_path, "tokenizer")
