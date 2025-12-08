@@ -408,7 +408,7 @@ def _load_model_with_lora(config: TrainingConfig) -> torch.nn.Module:
     if not PEFT_AVAILABLE:
         raise RuntimeError(
             "PEFT library not available. Install with: pip install peft"
-        )
+    )
 
     print("[Setup] Loading base model for LoRA mode...")
     base_model = AutoModelForCausalLM.from_pretrained(
@@ -597,15 +597,15 @@ def run_training_step(
         total_neg += metrics["neg_count"]
 
     # Gradient clipping and optimizer step
-    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-    optimizer.step()
-    optimizer.zero_grad()
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+        optimizer.zero_grad()
 
     # Normalize metrics
-    if total_pos > 0:
-        total_pos_logp /= total_pos
-    if total_neg > 0:
-        total_neg_logp /= total_neg
+        if total_pos > 0:
+            total_pos_logp /= total_pos
+        if total_neg > 0:
+            total_neg_logp /= total_neg
 
     return {
         "loss": total_loss,
