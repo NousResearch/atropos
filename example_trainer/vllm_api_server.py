@@ -1,6 +1,4 @@
-# Based on https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/api_server.py
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+
 """
 Custom vLLM API server with weight bridge hooks for shared-memory training.
 
@@ -232,7 +230,7 @@ async def _generate(request_dict: dict, raw_request: Request) -> Response:
     assert engine is not None
     results_generator = engine.generate(prompt, sampling_params, request_id)
 
-    # Streaming: yield results as they're generated
+    # Streaming: yield results as theyre generated
     async def stream_results() -> AsyncGenerator[bytes, None]:
         async for request_output in results_generator:
             prompt_text = request_output.prompt
