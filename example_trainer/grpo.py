@@ -954,15 +954,55 @@ def train_shared_vllm(config: TrainingConfig):
     finalize_training(use_wandb, training_start_time, "shared_vllm", config.training_steps)
 
 
+def _check_vllm_health(port: int) -> bool:
+    """Check if external vLLM server is running and healthy."""
+    try:
+        response = requests.get(f"http://localhost:{port}/health", timeout=5)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
+def _hotswap_lora_adapter(port: int, adapter_path: str) -> bool:
+    """
+    Request vLLM to hot-swap to a new LoRA adapter.
+    
+    Args:
+        port: vLLM server port
+        adapter_path: Path to the saved adapter directory
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        response = requests.post(
+            f"http://localhost:{port}/lora/load",
+            json={"adapter_path": adapter_path},
+            timeout=30,
+        )
+        if response.status_code == 200:
+            print(f"  [LORA] Hot-swapped adapter: {adapter_path}")
+            return True
+        else:
+            print(f"  [LORA] Hot-swap failed: {response.text}")
+            return False
+    except Exception as e:
+        print(f"  [LORA] Hot-swap request failed: {e}")
+        return False
+
+
 def train_lora(config: TrainingConfig):
     """
     GRPO training with LoRA adapters.
 
     This mode keeps the base model frozen and only trains LoRA adapter weights.
+    
+    REQUIRES: External vLLM server running via vllm_api_server.py
+    
     Benefits:
     - Much faster training (fewer parameters)
     - Smaller checkpoint sizes (adapter only, not full model)
-    - Adapters can be hot-swapped in vLLM without full restart
+    - Adapters can be hot-swapped in vLLM via /lora/load endpoint
     """
     if not PEFT_AVAILABLE:
         raise RuntimeError(
@@ -980,24 +1020,36 @@ def train_lora(config: TrainingConfig):
     print(f"Base model: {config.model_name}")
     print(f"LoRA config: r={config.lora_r}, alpha={config.lora_alpha}")
     print(f"Save path: {config.save_path}")
+    print(f"vLLM port: {config.vllm_port}")
     print(f"{'='*60}\n")
 
+    # Check that external vLLM is running
+    print("[1/3] Checking external vLLM server...")
+    if not _check_vllm_health(config.vllm_port):
+        print(f"\nERROR: vLLM server not running on port {config.vllm_port}")
+        print("\nLoRA mode requires an external vLLM server. Start it first:")
+        print(f"  python example_trainer/vllm_api_server.py \\")
+        print(f"    --model {config.model_name} \\")
+        print(f"    --port {config.vllm_port} \\")
+        print(f"    --gpu-memory-utilization 0.45")
+        raise RuntimeError(f"External vLLM server required on port {config.vllm_port}")
+    print(f"vLLM server healthy on port {config.vllm_port}")
+
     # Load model with LoRA adapters
-    print("[1/2] Loading model with LoRA adapters...")
+    print("[2/3] Loading model with LoRA adapters...")
     model, tokenizer = load_model_and_tokenizer(config)
 
     # Only optimize LoRA parameters (base model is frozen)
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     optimizer = AdamW(trainable_params, lr=config.lr)
 
-    print(f"[2/2] Starting training for {config.training_steps} steps")
+    print(f"[3/3] Starting training for {config.training_steps} steps")
     print("-" * 60)
 
     os.makedirs(config.save_path, exist_ok=True)
     register_trainer(config)
 
-    # Launch vLLM with base model (adapters loaded separately)
-    _launch_vllm_server(config, config.model_name)
+    # NOTE: No vLLM launch here - using external vLLM server
 
     # === Training Loop ===
     batches = []
@@ -1022,17 +1074,21 @@ def train_lora(config: TrainingConfig):
             "lora/trainable_params": sum(p.numel() for p in trainable_params),
         })
 
-        # Periodic adapter save
+        # Periodic adapter save and hot-swap
         if (step + 1) % config.vllm_restart_interval == 0:
             adapter_path = save_lora_checkpoint(model, config.save_path, step + 1)
-            print(f"  [LORA] Adapter ready for hot-swap at: {adapter_path}")
-            # Note: vLLM adapter hot-swap would be triggered here via API call
+            # Try to hot-swap the adapter in vLLM (non-blocking, best effort)
+            _hotswap_lora_adapter(config.vllm_port, adapter_path)
 
     # === Cleanup ===
-    _terminate_vllm_process()
+    # NOTE: No vLLM termination - external server keeps running
 
     # Save final adapter
-    save_lora_checkpoint(model, config.save_path, config.training_steps, is_final=True)
+    final_adapter_path = save_lora_checkpoint(model, config.save_path, config.training_steps, is_final=True)
+    
+    # Hot-swap to final adapter
+    _hotswap_lora_adapter(config.vllm_port, final_adapter_path)
+    
     finalize_training(use_wandb, training_start_time, "lora_only", config.training_steps)
 
     # Also save tokenizer for convenience
