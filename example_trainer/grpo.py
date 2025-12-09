@@ -607,15 +607,15 @@ def run_training_step(
         total_neg += metrics["neg_count"]
 
     # Gradient clipping and optimizer step
-        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
-        optimizer.zero_grad()
+    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+    optimizer.step()
+    optimizer.zero_grad()
 
     # Normalize metrics
-        if total_pos > 0:
-            total_pos_logp /= total_pos
-        if total_neg > 0:
-            total_neg_logp /= total_neg
+    if total_pos > 0:
+        total_pos_logp /= total_pos
+    if total_neg > 0:
+        total_neg_logp /= total_neg
 
     return {
         "loss": total_loss,
