@@ -432,8 +432,8 @@ def _load_model_with_lora(config: TrainingConfig) -> torch.nn.Module:
         # Default modules for most transformer models
         target_modules = ["q_proj", "v_proj"]
 
-    print(f"[Setup] Applying LoRA: r={config.lora_r}, alpha={config.lora_alpha}")
-    print(f"[Setup] Target modules: {target_modules}")
+    print(f"Applying LoRA: r={config.lora_r}, alpha={config.lora_alpha}")
+    print(f"Target modules: {target_modules}")
 
     lora_config = LoraConfig(
         task_type=TaskType.CAUSAL_LM,
