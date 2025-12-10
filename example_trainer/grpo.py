@@ -678,7 +678,18 @@ def log_metrics(
         use_wandb: Whether to log to wandb
         extra_metrics: Optional additional metrics to log
     """
-    print(f"  Loss: {metrics['loss']:.4f}, Grad norm: {metrics['grad_norm']:.4f}")
+    # Console output with timing info
+    timing_str = ""
+    if "step_time" in metrics:
+        timing_str += f", Step time: {metrics['step_time']:.2f}s"
+    if "sync_time" in metrics and metrics["sync_time"] > 0:
+        timing_str += f", Sync time: {metrics['sync_time']:.2f}s"
+    if "data_fetch_time" in metrics:
+        timing_str += f", Data fetch: {metrics['data_fetch_time']:.2f}s"
+    if "gpu_memory_gb" in metrics:
+        timing_str += f", GPU mem: {metrics['gpu_memory_gb']:.2f}GB"
+    
+    print(f"  Loss: {metrics['loss']:.4f}, Grad norm: {metrics['grad_norm']:.4f}{timing_str}")
 
     if use_wandb:
         log_dict = {
@@ -687,6 +698,17 @@ def log_metrics(
             "train/pos_logp": metrics["pos_logp"],
             "train/neg_logp": metrics["neg_logp"],
         }
+        # Add timing metrics if present
+        if "step_time" in metrics:
+            log_dict["train/step_time"] = metrics["step_time"]
+        if "sync_time" in metrics:
+            log_dict["train/sync_time"] = metrics["sync_time"]
+        if "data_fetch_time" in metrics:
+            log_dict["train/data_fetch_time"] = metrics["data_fetch_time"]
+        if "gpu_memory_gb" in metrics:
+            log_dict["train/gpu_memory_gb"] = metrics["gpu_memory_gb"]
+        if "gpu_memory_reserved_gb" in metrics:
+            log_dict["train/gpu_memory_reserved_gb"] = metrics["gpu_memory_reserved_gb"]
         if extra_metrics:
             log_dict.update(extra_metrics)
         wandb.log(log_dict, step=step)
@@ -697,31 +719,88 @@ def finalize_training(
     training_start_time: Optional[float] = None,
     mode: str = "unknown",
     total_steps: int = 0,
+    benchmark_stats: Optional[dict] = None,
 ) -> None:
-    """Clean up after training and log benchmark summary."""
+    """Clean up after training and log benchmark summary.
+    
+    Args:
+        use_wandb: Whether wandb is enabled
+        training_start_time: Start time of training
+        mode: Training mode name
+        total_steps: Total steps completed
+        benchmark_stats: Dict with lists of per-step metrics:
+            - step_times: List of step durations
+            - sync_times: List of sync durations
+            - data_fetch_times: List of data fetch durations
+            - gpu_memories: List of GPU memory readings (GB)
+    """
     print("\nTraining finished.")
+    
+    # Default empty stats
+    if benchmark_stats is None:
+        benchmark_stats = {}
     
     # Log benchmark summary
     if training_start_time is not None:
         total_time = time.time() - training_start_time
-        gpu_mem_gb = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0
+        peak_gpu_mem_gb = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0
         
-        print(f"\n{'='*60}")
+        # Calculate averages from collected stats
+        step_times = benchmark_stats.get("step_times", [])
+        sync_times = benchmark_stats.get("sync_times", [])
+        data_fetch_times = benchmark_stats.get("data_fetch_times", [])
+        gpu_memories = benchmark_stats.get("gpu_memories", [])
+        
+        avg_step_time = sum(step_times) / len(step_times) if step_times else 0
+        total_step_time = sum(step_times)
+        avg_sync_time = sum(sync_times) / len(sync_times) if sync_times else 0
+        total_sync_time = sum(sync_times)
+        avg_data_fetch = sum(data_fetch_times) / len(data_fetch_times) if data_fetch_times else 0
+        total_data_fetch = sum(data_fetch_times)
+        avg_gpu_mem = sum(gpu_memories) / len(gpu_memories) if gpu_memories else 0
+        
+        print(f"\n{'='*70}")
         print(f"BENCHMARK SUMMARY ({mode})")
-        print(f"{'='*60}")
-        print(f"  Total training time: {total_time:.2f}s ({total_time/60:.2f} min)")
-        print(f"  Total steps: {total_steps}")
-        print(f"  Avg time per step: {total_time/max(total_steps,1):.2f}s")
-        print(f"  Peak GPU memory: {gpu_mem_gb:.2f} GB")
-        print(f"{'='*60}\n")
+        print(f"{'='*70}")
+        print(f"  Total training time:     {total_time:.2f}s ({total_time/60:.2f} min)")
+        print(f"  Total steps:             {total_steps}")
+        print(f"  ")
+        print(f"  TIMING BREAKDOWN:")
+        print(f"    Avg step time:         {avg_step_time:.2f}s")
+        print(f"    Total step time:       {total_step_time:.2f}s")
+        print(f"    Avg sync time:         {avg_sync_time:.2f}s (x{len(sync_times)} syncs)")
+        print(f"    Total sync time:       {total_sync_time:.2f}s")
+        print(f"    Avg data fetch time:   {avg_data_fetch:.2f}s")
+        print(f"    Total data fetch time: {total_data_fetch:.2f}s")
+        print(f"  ")
+        print(f"  MEMORY:")
+        print(f"    Peak GPU memory:       {peak_gpu_mem_gb:.2f} GB")
+        print(f"    Avg GPU memory:        {avg_gpu_mem:.2f} GB")
+        print(f"{'='*70}\n")
         
         if use_wandb:
+            # Total time metrics
             wandb.summary["benchmark/total_time_seconds"] = total_time
             wandb.summary["benchmark/total_time_minutes"] = total_time / 60
-            wandb.summary["benchmark/avg_step_time_seconds"] = total_time / max(total_steps, 1)
-            wandb.summary["benchmark/peak_gpu_memory_gb"] = gpu_mem_gb
             wandb.summary["benchmark/mode"] = mode
             wandb.summary["benchmark/total_steps"] = total_steps
+            
+            # Step timing metrics
+            wandb.summary["benchmark/avg_step_time_seconds"] = avg_step_time
+            wandb.summary["benchmark/total_step_time_seconds"] = total_step_time
+            
+            # Sync timing metrics
+            wandb.summary["benchmark/avg_sync_time_seconds"] = avg_sync_time
+            wandb.summary["benchmark/total_sync_time_seconds"] = total_sync_time
+            wandb.summary["benchmark/num_syncs"] = len(sync_times)
+            
+            # Data fetch timing metrics
+            wandb.summary["benchmark/avg_data_fetch_time_seconds"] = avg_data_fetch
+            wandb.summary["benchmark/total_data_fetch_time_seconds"] = total_data_fetch
+            
+            # Memory metrics
+            wandb.summary["benchmark/peak_gpu_memory_gb"] = peak_gpu_mem_gb
+            wandb.summary["benchmark/avg_gpu_memory_gb"] = avg_gpu_mem
     
     if use_wandb:
         wandb.finish()
@@ -756,20 +835,34 @@ def train(config: TrainingConfig):
     # Launch initial vLLM server
     vllm_process = _launch_vllm_server(config, config.model_name)
 
+    # === Benchmark tracking ===
+    benchmark_stats = {
+        "step_times": [],
+        "sync_times": [],
+        "data_fetch_times": [],
+        "gpu_memories": [],
+    }
+
     # === Training Loop ===
     batches = []
     for step in range(config.training_steps):
         print(f"\nStep {step+1}/{config.training_steps}")
 
-        # Get training data
+        # Track data fetch time
+        data_fetch_start = time.time()
         if len(batches) == 0:
             batches = get_data(config.batch_size, config.seq_len)
         token_batches, label_batches, advantage_batches, temperature_batches = batches.pop(0)
+        data_fetch_time = time.time() - data_fetch_start
+        benchmark_stats["data_fetch_times"].append(data_fetch_time)
 
         # Terminate vLLM before training step (to free GPU memory)
         should_sync = (step + 1) % config.vllm_restart_interval == 0 or step == config.training_steps - 1
         if should_sync:
             _terminate_vllm_process()
+
+        # Track step time
+        step_start = time.time()
 
         # Run training step using common helper
         metrics = run_training_step(
@@ -778,23 +871,46 @@ def train(config: TrainingConfig):
             config
         )
 
+        step_time = time.time() - step_start
+        benchmark_stats["step_times"].append(step_time)
+
+        # Track GPU memory
+        if torch.cuda.is_available():
+            gpu_mem_gb = torch.cuda.memory_allocated() / 1e9
+            gpu_mem_reserved_gb = torch.cuda.memory_reserved() / 1e9
+            benchmark_stats["gpu_memories"].append(gpu_mem_gb)
+        else:
+            gpu_mem_gb = 0
+            gpu_mem_reserved_gb = 0
+
+        # Track sync time
+        sync_time = 0
+        if should_sync:
+            sync_start = time.time()
+            checkpoint_path = save_checkpoint(model, tokenizer, config.save_path, step + 1)
+            torch.cuda.empty_cache()
+            vllm_process = _launch_vllm_server(config, checkpoint_path)
+            sync_time = time.time() - sync_start
+            benchmark_stats["sync_times"].append(sync_time)
+
+        # Add timing metrics
+        metrics["step_time"] = step_time
+        metrics["sync_time"] = sync_time
+        metrics["data_fetch_time"] = data_fetch_time
+        metrics["gpu_memory_gb"] = gpu_mem_gb
+        metrics["gpu_memory_reserved_gb"] = gpu_mem_reserved_gb
+
         # Log metrics
         log_metrics(metrics, step + 1, use_wandb, {
             "train/learning_rate": optimizer.param_groups[0]["lr"],
         })
-
-        # Save checkpoint and restart vLLM
-        if should_sync:
-            checkpoint_path = save_checkpoint(model, tokenizer, config.save_path, step + 1)
-            torch.cuda.empty_cache()
-            vllm_process = _launch_vllm_server(config, checkpoint_path)
 
         # Check for unexpected vLLM termination
         _check_vllm_health()
 
     # === Cleanup ===
     save_checkpoint(model, tokenizer, config.save_path, config.training_steps, is_final=True)
-    finalize_training(use_wandb, training_start_time, "legacy", config.training_steps)
+    finalize_training(use_wandb, training_start_time, "legacy", config.training_steps, benchmark_stats)
 
 
 # =============================================================================
@@ -917,15 +1033,29 @@ def train_shared_vllm(config: TrainingConfig):
     os.makedirs(config.save_path, exist_ok=True)
     register_trainer(config)
 
+    # === Benchmark tracking ===
+    benchmark_stats = {
+        "step_times": [],
+        "sync_times": [],  # For shared mode, this is the notify_update time
+        "data_fetch_times": [],
+        "gpu_memories": [],
+    }
+
     # === Training Loop ===
     batches = []
     for step in range(config.training_steps):
         print(f"\nStep {step+1}/{config.training_steps}")
 
-        # Get training data
+        # Track data fetch time
+        data_fetch_start = time.time()
         if len(batches) == 0:
             batches = get_data(config.batch_size, config.seq_len)
         token_batches, label_batches, advantage_batches, temperature_batches = batches.pop(0)
+        data_fetch_time = time.time() - data_fetch_start
+        benchmark_stats["data_fetch_times"].append(data_fetch_time)
+
+        # Track step time
+        step_start = time.time()
 
         # Run training step using common helper
         metrics = run_training_step(
@@ -934,9 +1064,31 @@ def train_shared_vllm(config: TrainingConfig):
             config
         )
 
-        # Notify vLLM that weights have been updated
+        step_time = time.time() - step_start
+        benchmark_stats["step_times"].append(step_time)
+
+        # Track GPU memory
+        if torch.cuda.is_available():
+            gpu_mem_gb = torch.cuda.memory_allocated() / 1e9
+            gpu_mem_reserved_gb = torch.cuda.memory_reserved() / 1e9
+            benchmark_stats["gpu_memories"].append(gpu_mem_gb)
+        else:
+            gpu_mem_gb = 0
+            gpu_mem_reserved_gb = 0
+
+        # Track notify update time (this is the "sync" for shared mode - should be ~0ms)
+        sync_start = time.time()
         bridge.notify_update()
-        print(f"  [SHARED] Weights updated in-place - vLLM now using step {step+1} weights")
+        sync_time = time.time() - sync_start
+        benchmark_stats["sync_times"].append(sync_time)
+        print(f"  [SHARED] Weights updated in-place - vLLM now using step {step+1} weights (sync: {sync_time*1000:.1f}ms)")
+
+        # Add timing metrics
+        metrics["step_time"] = step_time
+        metrics["sync_time"] = sync_time
+        metrics["data_fetch_time"] = data_fetch_time
+        metrics["gpu_memory_gb"] = gpu_mem_gb
+        metrics["gpu_memory_reserved_gb"] = gpu_mem_reserved_gb
 
         # Log metrics
         log_metrics(metrics, step + 1, use_wandb, {
@@ -951,7 +1103,7 @@ def train_shared_vllm(config: TrainingConfig):
     # === Cleanup ===
     bridge.cleanup()
     save_checkpoint(model, tokenizer, config.save_path, config.training_steps, is_final=True)
-    finalize_training(use_wandb, training_start_time, "shared_vllm", config.training_steps)
+    finalize_training(use_wandb, training_start_time, "shared_vllm", config.training_steps, benchmark_stats)
 
 
 def _check_vllm_health(port: int) -> bool:
@@ -1051,15 +1203,29 @@ def train_lora(config: TrainingConfig):
 
     # NOTE: No vLLM launch here - using external vLLM server
 
+    # === Benchmark tracking ===
+    benchmark_stats = {
+        "step_times": [],
+        "sync_times": [],  # For LoRA mode, this is adapter save + hot-swap time
+        "data_fetch_times": [],
+        "gpu_memories": [],
+    }
+
     # === Training Loop ===
     batches = []
     for step in range(config.training_steps):
         print(f"\nStep {step+1}/{config.training_steps}")
 
-        # Get training data
+        # Track data fetch time
+        data_fetch_start = time.time()
         if len(batches) == 0:
             batches = get_data(config.batch_size, config.seq_len)
         token_batches, label_batches, advantage_batches, temperature_batches = batches.pop(0)
+        data_fetch_time = time.time() - data_fetch_start
+        benchmark_stats["data_fetch_times"].append(data_fetch_time)
+
+        # Track step time
+        step_start = time.time()
 
         # Run training step
         metrics = run_training_step(
@@ -1068,28 +1234,55 @@ def train_lora(config: TrainingConfig):
             config
         )
 
+        step_time = time.time() - step_start
+        benchmark_stats["step_times"].append(step_time)
+
+        # Track GPU memory
+        if torch.cuda.is_available():
+            gpu_mem_gb = torch.cuda.memory_allocated() / 1e9
+            gpu_mem_reserved_gb = torch.cuda.memory_reserved() / 1e9
+            benchmark_stats["gpu_memories"].append(gpu_mem_gb)
+        else:
+            gpu_mem_gb = 0
+            gpu_mem_reserved_gb = 0
+
+        # Track sync time (adapter save + hot-swap)
+        sync_time = 0
+        should_sync = (step + 1) % config.vllm_restart_interval == 0
+        if should_sync:
+            sync_start = time.time()
+            adapter_path = save_lora_checkpoint(model, config.save_path, step + 1)
+            # Try to hot-swap the adapter in vLLM (non-blocking, best effort)
+            _hotswap_lora_adapter(config.vllm_port, adapter_path)
+            sync_time = time.time() - sync_start
+            benchmark_stats["sync_times"].append(sync_time)
+
+        # Add timing metrics
+        metrics["step_time"] = step_time
+        metrics["sync_time"] = sync_time
+        metrics["data_fetch_time"] = data_fetch_time
+        metrics["gpu_memory_gb"] = gpu_mem_gb
+        metrics["gpu_memory_reserved_gb"] = gpu_mem_reserved_gb
+
         # Log metrics
         log_metrics(metrics, step + 1, use_wandb, {
             "train/learning_rate": optimizer.param_groups[0]["lr"],
             "lora/trainable_params": sum(p.numel() for p in trainable_params),
         })
 
-        # Periodic adapter save and hot-swap
-        if (step + 1) % config.vllm_restart_interval == 0:
-            adapter_path = save_lora_checkpoint(model, config.save_path, step + 1)
-            # Try to hot-swap the adapter in vLLM (non-blocking, best effort)
-            _hotswap_lora_adapter(config.vllm_port, adapter_path)
-
     # === Cleanup ===
     # NOTE: No vLLM termination - external server keeps running
 
-    # Save final adapter
+    # Save final adapter (track this sync time too)
+    final_sync_start = time.time()
     final_adapter_path = save_lora_checkpoint(model, config.save_path, config.training_steps, is_final=True)
     
     # Hot-swap to final adapter
     _hotswap_lora_adapter(config.vllm_port, final_adapter_path)
+    final_sync_time = time.time() - final_sync_start
+    benchmark_stats["sync_times"].append(final_sync_time)
     
-    finalize_training(use_wandb, training_start_time, "lora_only", config.training_steps)
+    finalize_training(use_wandb, training_start_time, "lora_only", config.training_steps, benchmark_stats)
 
     # Also save tokenizer for convenience
     tokenizer_path = os.path.join(config.save_path, "tokenizer")
