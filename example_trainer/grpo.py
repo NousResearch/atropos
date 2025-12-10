@@ -909,7 +909,7 @@ def train(config: TrainingConfig):
         })
 
         # Check for unexpected vLLM termination
-        _check_vllm_health()
+        _check_vllm_process_health()
 
     # === Cleanup ===
     save_checkpoint(model, tokenizer, config.save_path, config.training_steps, is_final=True)
@@ -989,8 +989,8 @@ def _terminate_vllm_process() -> None:
     vllm_process = None
 
 
-def _check_vllm_health() -> None:
-    """Check if vLLM process terminated unexpectedly."""
+def _check_vllm_process_health() -> None:
+    """Check if vLLM process terminated unexpectedly (legacy mode)."""
     global vllm_process
 
     if vllm_process is not None and vllm_process.poll() is not None:
