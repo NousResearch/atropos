@@ -89,6 +89,9 @@ class TrainingConfig(BaseModel):
         3, description="Restart vLLM every N training steps"
     )
     vllm_port: int = Field(9001, description="Port for the vLLM server")
+    vllm_gpu_memory_utilization: float = Field(
+        0.45, description="GPU memory utilization for vLLM server (0.0-1.0)"
+    )
 
     # Wandb configuration
     use_wandb: bool = Field(
@@ -1369,6 +1372,12 @@ def parse_args() -> argparse.Namespace:
         default=9001,
         help="Port for the vLLM server",
     )
+    parser.add_argument(
+        "--vllm-gpu-memory-utilization",
+        type=float,
+        default=0.45,
+        help="GPU memory utilization for vLLM server (0.0-1.0)",
+    )
 
     # --- Wandb arguments ---
     parser.add_argument(
@@ -1470,6 +1479,7 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         save_path=args.save_path,
         vllm_restart_interval=args.vllm_restart_interval,
         vllm_port=args.vllm_port,
+        vllm_gpu_memory_utilization=args.vllm_gpu_memory_utilization,
         use_wandb=args.use_wandb,
         wandb_project=args.wandb_project,
         wandb_group=args.wandb_group,
