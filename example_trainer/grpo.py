@@ -145,6 +145,16 @@ class TrainingConfig(BaseModel):
             "If None, defaults to ['q_proj', 'v_proj'] for most models."
         ),
     )
+    
+    # CUDA IPC mode (for shared_vllm mode - true shared GPU memory)
+    use_cuda_ipc: bool = Field(
+        False,
+        description=(
+            "Enable CUDA IPC for true shared GPU memory with vLLM. "
+            "This allows trainer to use vLLM's model weights directly without loading a copy. "
+            "Requires both processes on the SAME GPU. Saves ~8GB for 3B model."
+        ),
+    )
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=15))
@@ -375,12 +385,19 @@ def load_model_and_tokenizer(
     tokenizer = AutoTokenizer.from_pretrained(config.model_name)
 
     if config.weight_bridge_mode == "shared_vllm" and bridge is not None:
-        print("[Setup] Loading model for shared vLLM mode...")
-        model = AutoModelForCausalLM.from_pretrained(
-            config.model_name, torch_dtype=torch.bfloat16
-        )
-        model.to(config.device)
-        bridge.attach_to_vllm_weights(dict(model.named_parameters()))
+        if config.use_cuda_ipc:
+            # CUDA IPC mode: use vLLM's weights directly (NO NEW MEMORY!)
+            print("[Setup] Using CUDA IPC shared memory mode...")
+            print("[Setup] Trainer will use vLLM's model weights directly!")
+            model = bridge.get_trainable_model()
+        else:
+            # Standard shared mode: load own copy, notify via HTTP
+            print("[Setup] Loading model for shared vLLM mode...")
+            model = AutoModelForCausalLM.from_pretrained(
+                config.model_name, torch_dtype=torch.bfloat16
+            )
+            model.to(config.device)
+            bridge.attach_to_vllm_weights(dict(model.named_parameters()))
 
     elif config.weight_bridge_mode == "lora_only":
         model = _load_model_with_lora(config)
@@ -394,14 +411,17 @@ def load_model_and_tokenizer(
 
     # Enable gradient checkpointing (saves memory)
     # For LoRA, use PEFT's method; for others, use standard method
+    # NOTE: Skip for CUDA IPC as the model structure is different
     if config.weight_bridge_mode == "lora_only":
         # PEFT models need gradient_checkpointing enabled on base model
         # and require use_reentrant=False for proper gradient flow
         if hasattr(model, "enable_input_require_grads"):
             model.enable_input_require_grads()
         model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
-    else:
+    elif not config.use_cuda_ipc:
+        # Standard gradient checkpointing for non-IPC modes
         model.gradient_checkpointing_enable()
+    # CUDA IPC mode: gradient checkpointing may not work with shared tensors
     
     model.train()
 
@@ -1020,9 +1040,14 @@ def train_shared_vllm(config: TrainingConfig):
     use_wandb = setup_wandb(config)
 
     print(f"\n{'='*60}")
-    print("SHARED VLLM MODE (in-place weight updates)")
+    if config.use_cuda_ipc:
+        print("SHARED VLLM MODE (CUDA IPC - TRUE SHARED MEMORY)")
+        print(">>> NO MODEL COPY - using vLLM's weights directly!")
+    else:
+        print("SHARED VLLM MODE (HTTP notifications)")
     print(f"{'='*60}")
     print(f"Model: {config.model_name}")
+    print(f"CUDA IPC: {config.use_cuda_ipc}")
     print(f"Distributed: rank={config.trainer_rank}/{config.world_size}")
     print(f"Init method: {config.init_method}")
     print(f"Inference nodes: {config.num_inference_nodes}")
@@ -1462,6 +1487,17 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Module names to apply LoRA to (default: q_proj v_proj)",
     )
+    
+    # --- CUDA IPC arguments ---
+    parser.add_argument(
+        "--use-cuda-ipc",
+        action="store_true",
+        help=(
+            "Enable CUDA IPC for true shared GPU memory with vLLM (shared_vllm mode only). "
+            "Trainer uses vLLM's model weights directly - no copy needed! "
+            "Requires both processes on SAME GPU. Saves ~8GB for 3B model."
+        ),
+    )
 
     return parser.parse_args()
 
@@ -1492,6 +1528,7 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
         lora_target_modules=args.lora_target_modules,
+        use_cuda_ipc=args.use_cuda_ipc,
     )
 
 
