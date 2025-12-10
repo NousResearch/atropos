@@ -919,16 +919,25 @@ def train(config: TrainingConfig):
 
 
 def _launch_vllm_server(config: TrainingConfig, model_path: str) -> Optional[subprocess.Popen]:
-    """Launch a vLLM server process."""
+    """Launch a vLLM server process using our custom vllm_api_server.py.
+    
+    Uses the custom server instead of standard vLLM because:
+    - Standard vLLM only has /v1/completions (OpenAI-compatible)
+    - Our custom server has /generate endpoint needed by VLLMServer class
+    - This allows proper tokens_and_logprobs_completion support
+    """
     global vllm_process
 
+    # Use our custom vllm_api_server.py instead of standard vLLM
+    # This provides the /generate endpoint that VLLMServer needs
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    custom_server_path = os.path.join(script_dir, "vllm_api_server.py")
+    
     vllm_command = [
-        "python", "-m", "vllm.entrypoints.openai.api_server",
+        "python", custom_server_path,
         "--model", model_path,
         "--port", str(config.vllm_port),
-        "--dtype", "auto",
-        "--gpu-memory-utilization", "0.45",
-        "--disable-log-requests",
+        "--gpu-memory-utilization", str(config.vllm_gpu_memory_utilization),
     ]
     # Add served-model-name if using checkpoint path
     if model_path != config.model_name:
