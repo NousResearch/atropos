@@ -1,30 +1,40 @@
+"""
+Profile Registry for Cline Docker Images
+
+Maps programming languages to Docker image profiles for Modal execution.
+"""
+
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, Iterable
 
-BASE_DIR = Path(__file__).resolve().parent
-CLINE_DEV_DIR = BASE_DIR / "cline_dev"
-GENERIC_BOOTSTRAP = CLINE_DEV_DIR / "examples" / "generic" / "bootstrap.sh"
+# Docker registry configuration
+DOCKER_REGISTRY = "nousresearch"
+DOCKER_TAG = "latest"
 
 
 @dataclass(frozen=True)
 class ProfileConfig:
+    """Configuration for a language profile Docker image."""
     profile_key: str
-    profile_dir: Path
-    bootstrap_script: Path
+    image_name: str
+    
+    @property
+    def full_image_name(self) -> str:
+        return f"{DOCKER_REGISTRY}/cline-{self.profile_key}:{DOCKER_TAG}"
 
 
-def _profile(profile_key: str, bootstrap_script: Path = GENERIC_BOOTSTRAP) -> ProfileConfig:
+def _profile(profile_key: str) -> ProfileConfig:
     return ProfileConfig(
         profile_key=profile_key,
-        profile_dir=CLINE_DEV_DIR / "profiles" / profile_key,
-        bootstrap_script=bootstrap_script,
+        image_name=f"cline-{profile_key}",
     )
 
 
+# Available Docker image profiles
 PROFILE_REGISTRY: Dict[str, ProfileConfig] = {
-    "rust": _profile("rust"),
+    "base": _profile("base"),
     "python": _profile("python"),
+    "rust": _profile("rust"),
     "node": _profile("node"),
     "go": _profile("go"),
     "cpp": _profile("cpp"),
@@ -45,6 +55,7 @@ PROFILE_REGISTRY: Dict[str, ProfileConfig] = {
 }
 
 
+# Map dataset language names to Docker profile keys
 LANGUAGE_TO_PROFILE: Dict[str, str] = {
     "Rust": "rust",
     "Python": "python",
@@ -63,23 +74,30 @@ LANGUAGE_TO_PROFILE: Dict[str, str] = {
     "Lua": "lua",
     "Elixir": "elixir",
     "Jupyter Notebook": "jupyter",
-    # Note: "Python Notebook" removed - dataset uses "Jupyter Notebook" only
     "Haskell": "haskell",
     "Swift": "swift",
     "Shell": "shell",
-    "HTML": "node",
+    "HTML": "node",  # HTML tasks use Node.js environment
 }
 
 
 def supported_languages() -> Iterable[str]:
+    """Return all supported dataset languages."""
     return LANGUAGE_TO_PROFILE.keys()
 
 
 def get_profile_config(language: str) -> ProfileConfig:
+    """Get the Docker profile config for a dataset language."""
     profile_key = LANGUAGE_TO_PROFILE.get(language)
     if not profile_key:
-        raise KeyError(f"Language '{language}' is not mapped to a Cline profile")
+        raise KeyError(f"Language '{language}' is not mapped to a Docker profile")
     config = PROFILE_REGISTRY.get(profile_key)
     if not config:
         raise KeyError(f"Profile '{profile_key}' is not defined")
     return config
+
+
+def get_docker_image(language: str) -> str:
+    """Get the full Docker image name for a language."""
+    config = get_profile_config(language)
+    return config.full_image_name

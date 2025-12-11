@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Launch rejection sampling for Cline trajectories.
+Launch rejection sampling for Cline trajectories using Modal.
 
 This script collects multiple parallel rollouts per item (group_size) and saves
 them to a JSONL file. Each row contains a ScoredDataGroup with:
@@ -25,13 +25,11 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 
 load_dotenv()
-
-from atroposlib.envs.base import APIServerConfig
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,65 +38,100 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def run_modal_task(
+    item: Dict[str, Any],
+    language: str,
+    task_timeout_s: float = 300.0,
+) -> Optional[Dict[str, Any]]:
+    """Run a single task on Modal and return the result."""
+    try:
+        from environments.cline_env.modal_worker import get_function_for_language
+        
+        func = get_function_for_language(language)
+        
+        # Run on Modal
+        result = func.remote(
+            issue_text=item.get("issue_text", ""),
+            task_timeout_s=task_timeout_s,
+        )
+        
+        return result
+    except Exception as e:
+        logger.error("Modal task failed: %s", e)
+        return None
+
+
 async def process_single_item(
-    env,
-    item,
+    item: Dict[str, Any],
     item_idx: int,
     num_items: int,
-) -> Optional[dict]:
+    group_size: int,
+    task_timeout_s: float = 300.0,
+) -> Optional[Dict[str, Any]]:
     """Process a single item and return the result row."""
     try:
+        instance_id = item.get("instance_id", f"item_{item_idx}")
+        language = item.get("language", "Python")
+        
         logger.info(
             "Processing item %d/%d: instance_id=%s, language=%s",
             item_idx + 1,
             num_items,
-            item.get("instance_id"),
-            item.get("language"),
+            instance_id,
+            language,
         )
         
-        # Collect group_size parallel trajectories
-        scored_group, backlog = await env.collect_trajectories(item)
+        # Run group_size parallel tasks on Modal
+        tasks = [
+            run_modal_task(item, language, task_timeout_s)
+            for _ in range(group_size)
+        ]
         
-        if scored_group is None:
-            logger.warning(
-                "No trajectories collected for item %s",
-                item.get("instance_id"),
-            )
-            return None
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        # Check for messages or scores (tokens may be empty when skip_tokenization=True)
-        has_data = scored_group.get("messages") or scored_group.get("scores")
-        if not has_data:
-            logger.warning(
-                "No data in scored_group for item %s",
-                item.get("instance_id"),
-            )
-            return None
+        # Process results
+        scores = []
+        messages = []
+        conversation_histories = []
+        
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.warning("Task %d failed with exception: %s", i, result)
+                scores.append(0.0)
+                messages.append([])
+                conversation_histories.append([])
+            elif result is None:
+                logger.warning("Task %d returned None", i)
+                scores.append(0.0)
+                messages.append([])
+                conversation_histories.append([])
+            else:
+                # Score based on success and files created
+                success = result.get("success", False)
+                files_created = result.get("files_created", [])
+                score = 1.0 if success and files_created else 0.0
+                
+                scores.append(score)
+                messages.append(result.get("conversation_history", []))
+                conversation_histories.append(result.get("conversation_history", []))
         
         # Build output row
-        # Calculate group_size from messages or scores (tokens may be empty)
-        scores = scored_group.get("scores", [])
-        messages = scored_group.get("messages")
-        actual_group_size = len(scores) if scores else (len(messages) if messages else 0)
-        
         row = {
-            "instance_id": item.get("instance_id"),
-            "language": item.get("language"),
+            "instance_id": instance_id,
+            "language": language,
             "repo_name": item.get("repo_name"),
             "issue_text": item.get("issue_text"),
-            "group_size": actual_group_size,
+            "group_size": group_size,
             "scores": scores,
-            "messages": scored_group.get("messages"),
-            "tokens": scored_group.get("tokens"),
-            "masks": scored_group.get("masks"),
-            "overrides": scored_group.get("overrides"),
+            "messages": messages,
+            "conversation_histories": conversation_histories,
         }
         
         logger.info(
             "Collected %d trajectories for item %s (scores: %s)",
-            row["group_size"],
-            item.get("instance_id"),
-            row["scores"],
+            group_size,
+            instance_id,
+            scores,
         )
         return row
         
@@ -113,57 +146,35 @@ async def run_rejection_sampling(
     num_items: int,
     max_concurrent_items: int,
     output_path: Path,
-    use_nomad: bool = True,
+    task_timeout_s: float = 300.0,
 ) -> None:
-    """Collect rejection sampling data with parallel rollouts per item.
+    """Collect rejection sampling data with parallel rollouts on Modal.
     
     Parallelism:
     - max_concurrent_items: How many items to process in parallel
-    - group_size: How many rollouts per item (parallel Nomad workers per item)
+    - group_size: How many rollouts per item (parallel Modal workers per item)
     - Total concurrent workers = max_concurrent_items × group_size
     
-    Example: --max-concurrent-items 2 --group-size 2 = 4 concurrent Nomad workers
+    Example: --max-concurrent-items 2 --group-size 2 = 4 concurrent Modal workers
     """
     
-    # Import here to ensure dotenv is loaded first
-    from environments.cline_env.cline_agent_env import ClineAgentEnv, ClineAgentEnvConfig
     from environments.cline_env.profile_registry import supported_languages
+    from datasets import load_dataset
     
-    # Set CLINE_USE_NOMAD environment for worker manager
-    if use_nomad:
-        os.environ["CLINE_USE_NOMAD"] = "true"
+    # Load dataset
+    dataset = load_dataset("NousResearch/cline_synthetic_1k", split="train")
     
-    # Configure environment
-    # Use a tokenizer with chat template support (Instruct model required)
-    env_config = ClineAgentEnvConfig(
-        tokenizer_name=os.getenv("TOKENIZER_NAME", "NousResearch/DeepHermes-3-Llama-3-8B-Preview"),
-        group_size=group_size,
-        use_wandb=False,
-        use_cline_worker=True,
-        allowed_languages=languages or list(supported_languages()),
-        include_messages=True,
-    )
+    # Filter by languages if specified
+    allowed_langs = set(languages) if languages else set(supported_languages())
+    items = []
+    for row in dataset:
+        if row.get("language") in allowed_langs:
+            items.append(row)
+            if len(items) >= num_items:
+                break
     
-    # Configure API server (Anthropic via Cline worker)
-    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-    anthropic_model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
-    anthropic_base_url = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1")
-    
-    if not anthropic_api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY must be set in environment or .env file")
-    
-    server_configs = [
-        APIServerConfig(
-            model_name=anthropic_model,
-            base_url=anthropic_base_url,
-            api_key=anthropic_api_key,
-            num_requests_for_eval=0,
-        )
-    ]
-    
-    # Create environment
-    env = ClineAgentEnv(env_config, server_configs, slurm=False, testing=True)
-    await env.setup()
+    if len(items) < num_items:
+        logger.warning("Only found %d items (requested %d)", len(items), num_items)
     
     total_concurrent = max_concurrent_items * group_size
     logger.info(
@@ -172,30 +183,25 @@ async def run_rejection_sampling(
         group_size,
         max_concurrent_items,
         total_concurrent,
-        num_items,
+        len(items),
         languages or "all",
     )
     
     # Ensure output directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    # Get all items first
-    items = []
-    for _ in range(num_items):
-        item = await env.get_next_item()
-        items.append(item)
-    
     # Process items in parallel batches
     completed = 0
     failed = 0
-    results = []
     
     # Use semaphore to limit concurrent items
     semaphore = asyncio.Semaphore(max_concurrent_items)
     
     async def process_with_semaphore(item, idx):
         async with semaphore:
-            return await process_single_item(env, item, idx, num_items)
+            return await process_single_item(
+                item, idx, len(items), group_size, task_timeout_s
+            )
     
     # Launch all tasks
     tasks = [
@@ -229,7 +235,7 @@ async def run_rejection_sampling(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Collect rejection sampling data with parallel Cline rollouts."
+        description="Collect rejection sampling data with parallel Cline rollouts on Modal."
     )
     parser.add_argument(
         "--group-size",
@@ -264,9 +270,10 @@ def main():
         help="Output JSONL file path (default: data/rejection_sampling.jsonl)",
     )
     parser.add_argument(
-        "--no-nomad",
-        action="store_true",
-        help="Use local worker instead of Nomad (not recommended for parallel)",
+        "--task-timeout",
+        type=float,
+        default=300.0,
+        help="Timeout per task in seconds (default: 300)",
     )
     
     args = parser.parse_args()
@@ -283,7 +290,7 @@ def main():
             num_items=args.num_items,
             max_concurrent_items=args.max_concurrent_items,
             output_path=output_path,
-            use_nomad=not args.no_nomad,
+            task_timeout_s=args.task_timeout,
         )
     )
 
