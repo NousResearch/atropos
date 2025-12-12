@@ -281,17 +281,53 @@ def run_cline_task_cli(
                     except json.JSONDecodeError:
                         pass
         
-        # Build assistant content from conversation
+        # Build assistant content from conversation, including tool calls and results
         assistant_parts: List[str] = []
         for msg in conversation_history:
-            if msg.get("role") == "assistant":
-                content = msg.get("content", [])
-                for item in content:
-                    if isinstance(item, dict):
-                        if item.get("type") == "text":
-                            assistant_parts.append(item.get("text", ""))
-                        elif item.get("type") == "thinking":
-                            assistant_parts.append(f"<thinking>{item.get('thinking', '')}</thinking>")
+            role = msg.get("role")
+            content = msg.get("content", [])
+            
+            # Handle both list and string content formats
+            if isinstance(content, str):
+                if role == "assistant":
+                    assistant_parts.append(content)
+                continue
+            
+            for item in content:
+                if isinstance(item, dict):
+                    item_type = item.get("type")
+                    
+                    if item_type == "text":
+                        text = item.get("text", "")
+                        if role == "assistant" and text:
+                            assistant_parts.append(text)
+                    elif item_type == "thinking":
+                        thinking = item.get("thinking", "")
+                        if thinking:
+                            assistant_parts.append(f"<thinking>{thinking}</thinking>")
+                    elif item_type == "tool_use":
+                        # Format tool call for training data (assistant turn)
+                        tool_name = item.get("name", "")
+                        tool_input = item.get("input", {})
+                        tool_id = item.get("id", "")
+                        tool_input_str = json.dumps(tool_input, indent=2) if isinstance(tool_input, dict) else str(tool_input)
+                        tool_call_xml = f"<tool_use id=\"{tool_id}\" name=\"{tool_name}\">\n{tool_input_str}\n</tool_use>"
+                        assistant_parts.append(tool_call_xml)
+                    elif item_type == "tool_result":
+                        # Format tool result for training data (user turn containing result)
+                        tool_use_id = item.get("tool_use_id", "")
+                        result_content = item.get("content", "")
+                        # Handle content that might be a list of text blocks
+                        if isinstance(result_content, list):
+                            result_parts = []
+                            for rc in result_content:
+                                if isinstance(rc, dict) and rc.get("type") == "text":
+                                    result_parts.append(rc.get("text", ""))
+                                elif isinstance(rc, str):
+                                    result_parts.append(rc)
+                            result_content = "\n".join(result_parts)
+                        tool_result_xml = f"<tool_result id=\"{tool_use_id}\">\n{result_content}\n</tool_result>"
+                        assistant_parts.append(tool_result_xml)
         
         assistant_content = "\n\n".join(assistant_parts)
         

@@ -23,6 +23,7 @@ from atroposlib.type_definitions import Item, Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 from environments.cline_env.worker_manager import get_worker_manager, WorkerHandle
 from environments.cline_env.profile_registry import get_profile_config, ProfileConfig, supported_languages
+from environments.cline_env.modal_worker import get_function_for_language, LANGUAGE_FUNCTIONS
 from environments.cline_env.scoring import (
     score_trajectory,
     extract_trajectory_summary,
@@ -47,6 +48,11 @@ class ClineAgentEnvConfig(BaseEnvConfig):
     # Whether to route rollouts through a Cline worker (gRPC) instead of
     # directly calling the policy LLM. For now only Rust is supported.
     use_cline_worker: bool = False
+    # Whether to use Modal-based workers instead of local Nomad workers.
+    # Modal workers run in cloud containers and are recommended for scalable datagen.
+    use_modal_worker: bool = False
+    # Timeout for Modal worker tasks (seconds)
+    modal_task_timeout_s: float = 300.0
     system_prompt: str = (
         "You are a senior software engineer helping to resolve a GitHub issue. "
         "Read the issue description carefully and propose a clear, concrete patch "
@@ -145,7 +151,40 @@ class ClineAgentEnv(BaseEnv):
         assistant_content: Optional[str] = None
         cline_metadata: Optional[Dict[str, Any]] = None
         profile_key: Optional[str] = None
-        if self.config.use_cline_worker:
+        
+        # Choose worker type: Modal (cloud) > local Cline worker > direct LLM
+        if self.config.use_modal_worker:
+            # Use Modal-based cloud workers (recommended for scalable datagen)
+            profile_key = language.lower()
+            max_attempts = 3
+            backoff_s = 1.0
+            for attempt in range(1, max_attempts + 1):
+                assistant_content, cline_metadata = await self._run_modal_cline_worker(
+                    item, issue_text
+                )
+                if assistant_content or cline_metadata is not None:
+                    break
+                logger.warning(
+                    "Modal worker attempt %d/%d for language '%s' (instance_id=%s) returned no content",
+                    attempt,
+                    max_attempts,
+                    language,
+                    item.get("instance_id"),
+                )
+                if attempt < max_attempts:
+                    await asyncio.sleep(backoff_s)
+                    backoff_s *= 2.0
+
+            if not assistant_content and cline_metadata is None:
+                logger.error(
+                    "Modal worker failed after %d attempts for language '%s'; skipping episode instance_id=%s",
+                    max_attempts,
+                    language,
+                    item.get("instance_id"),
+                )
+                return None, []
+        elif self.config.use_cline_worker:
+            # Use local Nomad-based Cline workers
             try:
                 profile_config = get_profile_config(language)
             except KeyError as exc:
@@ -687,6 +726,78 @@ class ClineAgentEnv(BaseEnv):
                 filtered.append(msg)
         
         return filtered
+
+    async def _run_modal_cline_worker(
+        self,
+        item: Item,
+        issue_text: str,
+    ) -> Tuple[str, Optional[Dict[str, Any]]]:
+        """Run a Cline task on Modal cloud infrastructure.
+        
+        This method uses Modal-based workers to execute Cline tasks in isolated
+        cloud containers. It's the recommended approach for scalable data generation.
+        
+        Args:
+            item: The dataset item containing task information
+            issue_text: The issue/task description to solve
+            
+        Returns:
+            Tuple of (assistant_content, cline_metadata)
+        """
+        language = item.get("language", "unknown")
+        repo_url = item.get("repo_url") or None
+        repo_branch = item.get("repo_branch") or None
+        
+        try:
+            # Get the appropriate Modal function for this language
+            modal_func = get_function_for_language(language)
+            
+            # Call Modal function remotely
+            # Note: .remote() returns a Future, we need to await it
+            result = modal_func.remote(
+                issue_text=issue_text,
+                repo_url=repo_url,
+                repo_branch=repo_branch,
+                task_timeout_s=self.config.modal_task_timeout_s,
+            )
+            
+            # Extract results
+            assistant_content = result.get("assistant_content", "")
+            conversation_history = result.get("conversation_history", [])
+            
+            cline_metadata: Dict[str, Any] = {
+                "task_id": result.get("task_id", ""),
+                "profile": language.lower(),
+                "ui_messages": conversation_history,  # Full conversation including tool calls
+                "conversation_history": conversation_history,
+                "repo_name": item.get("repo_name", ""),
+                "repo_url": repo_url or "",
+                "workspace_root": result.get("workspace_path", ""),
+                "files_created": result.get("files_created", []),
+                "execution_time_s": result.get("execution_time_s", 0.0),
+                "success": result.get("success", False),
+                "error": result.get("error"),
+                "modal_worker": True,  # Flag to indicate this came from Modal
+            }
+            
+            if result.get("error"):
+                logger.warning(
+                    "Modal worker error for %s (%s): %s",
+                    item.get("instance_id"),
+                    language,
+                    result["error"],
+                )
+            
+            return assistant_content, cline_metadata
+            
+        except Exception as exc:
+            logger.exception(
+                "Modal worker invocation failed for %s (%s): %s",
+                item.get("instance_id"),
+                language,
+                exc,
+            )
+            return "", None
 
     async def evaluate(self, *args, **kwargs):
         eval_outcomes: List[float] = []
