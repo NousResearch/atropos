@@ -18,12 +18,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def collect_language(language: str, num_episodes: int, output_path: Path) -> None:
+async def collect_language(
+    language: str, 
+    num_episodes: int, 
+    output_path: Path, 
+    task_timeout_s: float = 300.0,
+) -> None:
     env_config, _ = ClineAgentEnv.config_init()
     env_config.use_wandb = False
     env_config.group_size = 1
-    env_config.use_cline_worker = True
     env_config.allowed_languages = [language]
+    
+    # Always use Modal workers for scalable datagen
+    env_config.use_modal_worker = True
+    env_config.use_cline_worker = False
+    env_config.modal_task_timeout_s = task_timeout_s
+    logger.info("Using Modal cloud workers (timeout=%ds)", task_timeout_s)
 
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
     anthropic_model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
@@ -99,6 +109,12 @@ def main() -> None:
         default="cline_{language}_trajectories.jsonl",
         help="Filename template when multiple languages are specified (supports {language}).",
     )
+    parser.add_argument(
+        "--task-timeout",
+        type=float,
+        default=900.0,
+        help="Timeout in seconds for Modal worker tasks (default: 900 = 15 min).",
+    )
     args = parser.parse_args()
 
     if args.languages:
@@ -132,7 +148,12 @@ def main() -> None:
             out_path = base_dir / "data" / out_path
 
         logger.info("Collecting %d episode(s) for language %s -> %s", args.num_episodes, language, out_path)
-        asyncio.run(collect_language(language, args.num_episodes, out_path))
+        asyncio.run(collect_language(
+            language, 
+            args.num_episodes, 
+            out_path,
+            task_timeout_s=args.task_timeout,
+        ))
 
 
 if __name__ == "__main__":

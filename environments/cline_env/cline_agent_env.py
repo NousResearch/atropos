@@ -21,9 +21,7 @@ from google.protobuf import descriptor_pb2, descriptor_pool, json_format, messag
 from atroposlib.envs.base import APIServerConfig, BaseEnv, BaseEnvConfig, ScoredDataItem
 from atroposlib.type_definitions import Item, Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
-from environments.cline_env.worker_manager import get_worker_manager, WorkerHandle
 from environments.cline_env.profile_registry import get_profile_config, ProfileConfig, supported_languages
-from environments.cline_env.modal_worker import get_function_for_language, LANGUAGE_FUNCTIONS
 from environments.cline_env.scoring import (
     score_trajectory,
     extract_trajectory_summary,
@@ -51,8 +49,8 @@ class ClineAgentEnvConfig(BaseEnvConfig):
     # Whether to use Modal-based workers instead of local Nomad workers.
     # Modal workers run in cloud containers and are recommended for scalable datagen.
     use_modal_worker: bool = False
-    # Timeout for Modal worker tasks (seconds)
-    modal_task_timeout_s: float = 300.0
+    # Timeout for Modal worker tasks (seconds) - default 15 min for complex tasks
+    modal_task_timeout_s: float = 900.0
     system_prompt: str = (
         "You are a senior software engineer helping to resolve a GitHub issue. "
         "Read the issue description carefully and propose a clear, concrete patch "
@@ -370,7 +368,13 @@ class ClineAgentEnv(BaseEnv):
         - Returns:
             * assistant_content: concatenation of reasoning/text fields for all UI messages.
             * cline_metadata: dict containing task_id, profile, and the full ui_messages list.
+        
+        Note: This method requires the worker_manager module which is only used for local
+        Nomad-based workers. For Modal cloud workers, use _run_modal_cline_worker instead.
         """
+        # Lazy import - only needed for local Nomad workers
+        from environments.cline_env.worker_manager import get_worker_manager, WorkerHandle
+        
         repo_name = item.get("repo_name") or f"task-{item.get('instance_id', 'repo')}"
         repo_slug = repo_name.replace("/", "__")
         repo_url = item.get("repo_url") or ""
@@ -737,6 +741,9 @@ class ClineAgentEnv(BaseEnv):
         This method uses Modal-based workers to execute Cline tasks in isolated
         cloud containers. It's the recommended approach for scalable data generation.
         
+        Note: Requires the Modal app "cline-workers" to be deployed first via:
+            modal deploy environments/cline_env/modal_worker.py
+        
         Args:
             item: The dataset item containing task information
             issue_text: The issue/task description to solve
@@ -744,16 +751,46 @@ class ClineAgentEnv(BaseEnv):
         Returns:
             Tuple of (assistant_content, cline_metadata)
         """
+        import modal
+        
         language = item.get("language", "unknown")
         repo_url = item.get("repo_url") or None
         repo_branch = item.get("repo_branch") or None
         
+        # Map language to Modal function name
+        lang_lower = language.lower()
+        function_name_map = {
+            "python": "run_python_task",
+            "rust": "run_rust_task",
+            "typescript": "run_typescript_task",
+            "javascript": "run_javascript_task",
+            "go": "run_go_task",
+            "c": "run_c_task",
+            "cpp": "run_cpp_task",
+            "c++": "run_cpp_task",
+            "java": "run_java_task",
+            "ruby": "run_ruby_task",
+            "php": "run_php_task",
+            "c#": "run_csharp_task",
+            "csharp": "run_csharp_task",
+            "swift": "run_swift_task",
+            "kotlin": "run_kotlin_task",
+            "scala": "run_scala_task",
+            "haskell": "run_haskell_task",
+            "elixir": "run_elixir_task",
+            "dart": "run_dart_task",
+            "lua": "run_lua_task",
+            "shell": "run_shell_task",
+            "bash": "run_shell_task",
+        }
+        
+        func_name = function_name_map.get(lang_lower, "run_python_task")
+        
         try:
-            # Get the appropriate Modal function for this language
-            modal_func = get_function_for_language(language)
+            # Look up the deployed Modal function by name
+            modal_func = modal.Function.from_name("cline-workers", func_name)
             
             # Call Modal function remotely
-            # Note: .remote() returns a Future, we need to await it
             result = modal_func.remote(
                 issue_text=issue_text,
                 repo_url=repo_url,
