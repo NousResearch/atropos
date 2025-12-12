@@ -18,6 +18,7 @@ Usage:
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -38,6 +39,30 @@ anthropic_secret = modal.Secret.from_name("anthropic-key")
 REGISTRY = os.getenv("DOCKER_REGISTRY", "nousresearch")
 TAG = os.getenv("DOCKER_TAG", "latest")
 
+# All supported language profiles
+SUPPORTED_PROFILES = [
+    "base",
+    "python",
+    "rust",
+    "node",
+    "go",
+    "cpp",
+    "c",
+    "java",
+    "csharp",
+    "kotlin",
+    "php",
+    "scala",
+    "ruby",
+    "dart",
+    "lua",
+    "elixir",
+    "jupyter",
+    "haskell",
+    "swift",
+    "shell",
+]
+
 
 def get_image_for_profile(profile_key: str) -> modal.Image:
     """Get Modal Image for a language profile.
@@ -48,15 +73,11 @@ def get_image_for_profile(profile_key: str) -> modal.Image:
     return (
         modal.Image.from_registry(
             image_name,
-            secret=dockerhub_secret
+            secret=dockerhub_secret,
+            force_build=True,  # Force pull latest image (bypass cache)
         )
         .entrypoint([])  # Clear entrypoint so Modal can run our function
     )
-
-
-# Pre-define images for common profiles
-python_image = get_image_for_profile("python")
-base_image = get_image_for_profile("base")
 
 
 @dataclass
@@ -112,11 +133,53 @@ def run_cline_task_cli(
     env = os.environ.copy()
     env["HOME"] = str(Path.home())
     
+    # npm global bin locations - covers various Node.js installation methods
+    npm_bin_paths = [
+        "/usr/local/bin",
+        "/usr/bin",
+        "/usr/lib/node_modules/.bin",
+        "/opt/homebrew/bin",
+        str(Path.home() / ".npm" / "bin"),
+        str(Path.home() / ".npm-global" / "bin"),
+    ]
+    env["PATH"] = ":".join(npm_bin_paths) + ":" + env.get("PATH", "")
+    
+    # Find cline binary - first check common locations directly
+    cline_bin = None
+    candidate_paths = [
+        "/usr/bin/cline",
+        "/usr/local/bin/cline",
+        "/usr/lib/node_modules/.bin/cline",
+        "/usr/lib/node_modules/cline/dist/cli.js",
+    ]
+    for path in candidate_paths:
+        if Path(path).exists():
+            cline_bin = path
+            break
+    
+    # Fall back to shutil.which
+    if not cline_bin:
+        cline_bin = shutil.which("cline", path=env["PATH"])
+    
+    if not cline_bin:
+        # Debug: list what's in /usr/bin
+        usr_bin_files = []
+        try:
+            usr_bin_files = sorted([f.name for f in Path("/usr/bin").iterdir() if "cline" in f.name.lower() or "node" in f.name.lower()])[:20]
+        except Exception:
+            pass
+        return ClineTaskResult(
+            task_id="",
+            success=False,
+            assistant_content="",
+            error=f"Could not find 'cline' binary. Candidates: {candidate_paths}. PATH: {env['PATH'][:200]}... Relevant /usr/bin files: {usr_bin_files}",
+        )
+    
     try:
         # Configure API provider
         if anthropic_key:
             auth_cmd = [
-                "cline", "auth",
+                cline_bin, "auth",
                 "-p", "anthropic",
                 "-k", anthropic_key,
                 "-m", anthropic_model,
@@ -125,7 +188,7 @@ def run_cline_task_cli(
         elif openai_key and openai_base_url:
             # Custom OpenAI-compatible endpoint (e.g., vLLM)
             auth_cmd = [
-                "cline", "auth",
+                cline_bin, "auth",
                 "-p", "openai-compatible",
                 "-k", openai_key,
                 "-m", os.environ.get("CLINE_MODEL", "gpt-4"),
@@ -134,7 +197,7 @@ def run_cline_task_cli(
             ]
         elif openai_key:
             auth_cmd = [
-                "cline", "auth",
+                cline_bin, "auth",
                 "-p", "openai-native",
                 "-k", openai_key,
                 "-m", os.environ.get("CLINE_MODEL", "gpt-4o"),
@@ -180,7 +243,7 @@ def run_cline_task_cli(
         
         # Run the Cline task in YOLO mode
         task_cmd = [
-            "cline",
+            cline_bin,
             issue_text,
             "-y",  # YOLO mode (auto-approve)
             "-o",  # Oneshot mode (full autonomy)
@@ -267,86 +330,9 @@ def run_cline_task_cli(
         )
 
 
-@app.function(
-    image=python_image,
-    secrets=[dockerhub_secret, anthropic_secret],
-    timeout=600,  # 10 minutes max per task
-    memory=4096,  # 4GB RAM
-    cpu=2.0,
-)
-def run_python_task(
-    issue_text: str,
-    repo_url: Optional[str] = None,
-    repo_branch: Optional[str] = None,
-    task_timeout_s: float = 300.0,
-) -> Dict[str, Any]:
-    """Run a Python Cline task on Modal."""
-    result = run_cline_task_cli(
-        issue_text=issue_text,
-        language="Python",
-        repo_url=repo_url,
-        repo_branch=repo_branch,
-        task_timeout_s=task_timeout_s,
-    )
-    return {
-        "task_id": result.task_id,
-        "success": result.success,
-        "assistant_content": result.assistant_content,
-        "conversation_history": result.conversation_history,
-        "error": result.error,
-        "workspace_path": result.workspace_path,
-        "files_created": result.files_created,
-        "execution_time_s": result.execution_time_s,
-    }
-
-
-@app.function(
-    image=base_image,
-    secrets=[dockerhub_secret, anthropic_secret],
-    timeout=600,
-    memory=4096,
-    cpu=2.0,
-)
-def run_base_task(
-    issue_text: str,
-    language: str = "Python",
-    repo_url: Optional[str] = None,
-    repo_branch: Optional[str] = None,
-    task_timeout_s: float = 300.0,
-) -> Dict[str, Any]:
-    """Run a generic Cline task on Modal (base image)."""
-    result = run_cline_task_cli(
-        issue_text=issue_text,
-        language=language,
-        repo_url=repo_url,
-        repo_branch=repo_branch,
-        task_timeout_s=task_timeout_s,
-    )
-    return {
-        "task_id": result.task_id,
-        "success": result.success,
-        "assistant_content": result.assistant_content,
-        "conversation_history": result.conversation_history,
-        "error": result.error,
-        "workspace_path": result.workspace_path,
-        "files_created": result.files_created,
-        "execution_time_s": result.execution_time_s,
-    }
-
-
-# Create functions for each language profile
-def create_language_function(profile_key: str):
-    """Factory to create Modal functions for different language profiles."""
-    image = get_image_for_profile(profile_key)
-    
-    @app.function(
-        image=image,
-        secrets=[dockerhub_secret, anthropic_secret],
-        timeout=600,
-        memory=4096,
-        cpu=2.0,
-    )
-    def run_task(
+def _make_task_handler(profile_key: str):
+    """Create the inner task handler function for a profile."""
+    def task_handler(
         issue_text: str,
         repo_url: Optional[str] = None,
         repo_branch: Optional[str] = None,
@@ -369,29 +355,292 @@ def create_language_function(profile_key: str):
             "files_created": result.files_created,
             "execution_time_s": result.execution_time_s,
         }
-    
-    return run_task
+    return task_handler
 
 
-# Pre-create common language functions
-LANGUAGE_FUNCTIONS = {
+# Pre-create images for all profiles
+_PROFILE_IMAGES = {profile: get_image_for_profile(profile) for profile in SUPPORTED_PROFILES}
+
+# Define Modal functions explicitly at module level for each profile
+# Using explicit definitions to avoid serialization issues
+
+
+@app.function(
+    image=_PROFILE_IMAGES["base"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_base_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("base")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["python"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_python_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("python")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["rust"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_rust_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("rust")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["node"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_node_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("node")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["go"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_go_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("go")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["cpp"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_cpp_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("cpp")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["c"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_c_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("c")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["java"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_java_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("java")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["csharp"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_csharp_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("csharp")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["kotlin"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_kotlin_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("kotlin")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["php"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_php_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("php")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["scala"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_scala_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("scala")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["ruby"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_ruby_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("ruby")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["dart"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_dart_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("dart")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["lua"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_lua_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("lua")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["elixir"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_elixir_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("elixir")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["jupyter"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_jupyter_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("jupyter")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["haskell"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_haskell_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("haskell")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["swift"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_swift_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("swift")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+@app.function(
+    image=_PROFILE_IMAGES["shell"],
+    secrets=[dockerhub_secret, anthropic_secret],
+    timeout=600,
+    memory=4096,
+    cpu=2.0,
+)
+def run_shell_task(issue_text: str, repo_url: Optional[str] = None, repo_branch: Optional[str] = None, task_timeout_s: float = 300.0) -> Dict[str, Any]:
+    return _make_task_handler("shell")(issue_text, repo_url, repo_branch, task_timeout_s)
+
+
+# Map profile keys to Modal functions
+LANGUAGE_FUNCTIONS: Dict[str, Any] = {
+    "base": run_base_task,
     "python": run_python_task,
-    "rust": create_language_function("rust"),
-    "go": create_language_function("go"),
-    "node": create_language_function("node"),
-    "java": create_language_function("java"),
-    "cpp": create_language_function("cpp"),
-    "c": create_language_function("c"),
+    "rust": run_rust_task,
+    "node": run_node_task,
+    "go": run_go_task,
+    "cpp": run_cpp_task,
+    "c": run_c_task,
+    "java": run_java_task,
+    "csharp": run_csharp_task,
+    "kotlin": run_kotlin_task,
+    "php": run_php_task,
+    "scala": run_scala_task,
+    "ruby": run_ruby_task,
+    "dart": run_dart_task,
+    "lua": run_lua_task,
+    "elixir": run_elixir_task,
+    "jupyter": run_jupyter_task,
+    "haskell": run_haskell_task,
+    "swift": run_swift_task,
+    "shell": run_shell_task,
 }
 
 
 def get_function_for_language(language: str):
-    """Get the Modal function for a specific language."""
+    """Get the Modal function for a specific language.
+    
+    Args:
+        language: Language name (e.g., "Python", "rust", "TypeScript")
+        
+    Returns:
+        Modal function for the language, or base function as fallback
+    """
     lang_key = language.lower()
+    
+    # Handle common aliases
+    if lang_key in ("typescript", "javascript"):
+        lang_key = "node"
+    elif lang_key == "c++":
+        lang_key = "cpp"
+    elif lang_key == "c#":
+        lang_key = "csharp"
+    elif lang_key == "jupyter notebook":
+        lang_key = "jupyter"
+    
     if lang_key in LANGUAGE_FUNCTIONS:
         return LANGUAGE_FUNCTIONS[lang_key]
-    # Fall back to base image
-    return run_base_task
+    
+    # Fall back to base image for unknown languages
+    return LANGUAGE_FUNCTIONS["base"]
+
+
+def list_available_profiles() -> List[str]:
+    """Return list of all available language profiles."""
+    return SUPPORTED_PROFILES.copy()
 
 
 # Local test entrypoint
@@ -399,8 +648,10 @@ def get_function_for_language(language: str):
 def main():
     """Test Modal Cline worker."""
     print("Testing Modal Cline Worker (CLI-based)...")
+    print(f"Available profiles: {', '.join(SUPPORTED_PROFILES)}")
     
-    issue_text = "Create a simple Python file called hello.py that prints 'Hello, World!'"
+    # Simple infra test - just create a hello world file
+    issue_text = "We're testing infrastructure. Please create a file at /workspace/hello.py with a simple print('Hello, World!') statement. Keep it minimal."
     
     result = run_python_task.remote(
         issue_text=issue_text,
