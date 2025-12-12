@@ -120,6 +120,12 @@ def run_cline_task_cli(
         ClineTaskResult with the task outcome
     """
     start_time = time.time()
+    
+    # Log for Modal visibility (print goes to stdout which Modal captures)
+    print(f"[CLINE] Starting task for language={language}, timeout={task_timeout_s}s")
+    print(f"[CLINE] Issue text (first 200 chars): {issue_text[:200]}...")
+    if repo_url:
+        print(f"[CLINE] Repo: {repo_url} branch={repo_branch}")
     workspace_dir = Path(tempfile.mkdtemp(prefix=f"cline-{language.lower()}-"))
     cline_data_dir = Path.home() / ".cline" / "data" / "tasks"
     
@@ -212,6 +218,7 @@ def run_cline_task_cli(
             )
         
         # Run auth command
+        print(f"[CLINE] Running auth with provider: {'anthropic' if anthropic_key else 'openai'}")
         auth_result = subprocess.run(
             auth_cmd,
             capture_output=True,
@@ -221,12 +228,14 @@ def run_cline_task_cli(
         )
         
         if auth_result.returncode != 0:
+            print(f"[CLINE] Auth failed: {auth_result.stderr}")
             return ClineTaskResult(
                 task_id="",
                 success=False,
                 assistant_content="",
                 error=f"Auth failed: {auth_result.stderr}",
             )
+        print("[CLINE] Auth successful")
         
         # Clone repo if provided
         if repo_url:
@@ -277,9 +286,14 @@ def run_cline_task_cli(
                 conv_file = task_dir / "api_conversation_history.json"
                 if conv_file.exists():
                     try:
-                        conversation_history = json.loads(conv_file.read_text())
-                    except json.JSONDecodeError:
-                        pass
+                        # Use errors='replace' to handle any non-UTF-8 bytes
+                        content = conv_file.read_text(encoding='utf-8', errors='replace')
+                        conversation_history = json.loads(content)
+                        print(f"[CLINE] Loaded conversation history: {len(conversation_history)} messages")
+                    except json.JSONDecodeError as e:
+                        print(f"[CLINE] Failed to parse conversation history JSON: {e}")
+                    except Exception as e:
+                        print(f"[CLINE] Error reading conversation history: {e}")
         
         # Build assistant content from conversation, including tool calls and results
         assistant_parts: List[str] = []
@@ -348,6 +362,9 @@ def run_cline_task_cli(
                     if rel_path not in files_created:
                         files_created.append(f"/workspace/{rel_path}")
         
+        print(f"[CLINE] Task completed: success={task_result.returncode == 0}, time={execution_time:.1f}s")
+        print(f"[CLINE] Task ID: {task_id}, files_created: {len(files_created)}, conv_messages: {len(conversation_history)}")
+        
         return ClineTaskResult(
             task_id=task_id,
             success=task_result.returncode == 0,
@@ -360,6 +377,7 @@ def run_cline_task_cli(
         )
         
     except subprocess.TimeoutExpired:
+        print(f"[CLINE] Task TIMEOUT after {task_timeout_s}s")
         return ClineTaskResult(
             task_id="",
             success=False,

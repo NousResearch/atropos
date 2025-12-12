@@ -80,7 +80,7 @@ class ClineAgentEnv(BaseEnv):
     @classmethod
     def config_init(cls) -> Tuple[ClineAgentEnvConfig, List[APIServerConfig]]:
         tokenizer_name = os.getenv("TOKENIZER_NAME", "NousResearch/Meta-Llama-3-8B")
-
+        # todo: change this to ManagedServer and add proxy, currently just testing agent data capture
         env_config = ClineAgentEnvConfig(
             tokenizer_name=tokenizer_name,
             group_size=4,
@@ -894,9 +894,13 @@ class ClineAgentEnv(BaseEnv):
         with a conversation containing:
           - system prompt
           - user issue text
-          - full assistant trajectory reconstructed from Cline UI messages (if available)
+          - full assistant/user trajectory reconstructed from Cline messages
         and attaches raw Cline metadata (including the full `ui_messages` list) under
         `cline_metadata`.
+        
+        Supports two message formats:
+        1. Old UI format: messages with `reasoning` and `text` keys
+        2. Anthropic API format (from Modal): messages with `role` and `content` list
         """
         if self.dataset is None:
             raise RuntimeError("Dataset not loaded; call setup() first")
@@ -918,27 +922,38 @@ class ClineAgentEnv(BaseEnv):
         overrides = scored.get("overrides") if scored else None
         cline_meta = overrides.get("cline_metadata") if isinstance(overrides, dict) else None
 
-        # If we have Cline UI messages, reconstruct the full assistant trajectory from them.
-        # IMPORTANT: Filter out partial (streaming) messages - only keep complete messages.
-        # Partial messages are incremental token updates; we want the final complete version.
+        # If we have Cline UI messages, reconstruct the full trajectory from them.
         if isinstance(cline_meta, dict) and isinstance(
             cline_meta.get("ui_messages"), list
         ):
             ui_messages = cline_meta["ui_messages"]
-            # Group messages by timestamp and only keep the last (most complete) version
-            # of each message within the same timestamp group, or filter to non-partial only.
-            filtered_messages = self._filter_complete_ui_messages(ui_messages)
-            for msg in filtered_messages:
-                if not isinstance(msg, dict):
-                    continue
-                reasoning = msg.get("reasoning") or ""
-                text = msg.get("text") or ""
-                parts = [p for p in (reasoning, text) if p]
-                if not parts:
-                    continue
-                conversations.append(
-                    {"from": "assistant", "value": "\n\n".join(parts)}
-                )
+            
+            # Detect format: Anthropic API format has 'role' and 'content' (list)
+            # Old UI format has 'reasoning' and 'text' keys
+            is_anthropic_format = (
+                ui_messages and 
+                isinstance(ui_messages[0], dict) and 
+                "role" in ui_messages[0] and 
+                isinstance(ui_messages[0].get("content"), list)
+            )
+            
+            if is_anthropic_format:
+                # Handle Anthropic API conversation history format
+                conversations.extend(self._convert_anthropic_messages_to_conversations(ui_messages))
+            else:
+                # Handle old UI message format with reasoning/text keys
+                filtered_messages = self._filter_complete_ui_messages(ui_messages)
+                for msg in filtered_messages:
+                    if not isinstance(msg, dict):
+                        continue
+                    reasoning = msg.get("reasoning") or ""
+                    text = msg.get("text") or ""
+                    parts = [p for p in (reasoning, text) if p]
+                    if not parts:
+                        continue
+                    conversations.append(
+                        {"from": "assistant", "value": "\n\n".join(parts)}
+                    )
             out_row["cline_metadata"] = cline_meta
         else:
             # Fallback: use the assistant message stored in scored["messages"], if any.
@@ -958,6 +973,88 @@ class ClineAgentEnv(BaseEnv):
             out_row["score"] = None
 
         return out_row
+
+    def _convert_anthropic_messages_to_conversations(
+        self, messages: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Convert Anthropic API conversation history to conversations format.
+        
+        The Anthropic API format has messages with:
+        - role: "user" or "assistant"
+        - content: list of {type: "text"|"thinking"|"tool_use"|"tool_result", ...}
+        
+        This converts them to the standard conversations format with:
+        - from: "assistant" or "user" 
+        - value: text content with XML-formatted tool calls/results
+        """
+        conversations: List[Dict[str, Any]] = []
+        
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+                
+            role = msg.get("role")
+            content = msg.get("content", [])
+            
+            if not content:
+                continue
+            
+            # Map role to from field
+            from_field = "assistant" if role == "assistant" else "user"
+            
+            # Build value from content items
+            parts: List[str] = []
+            
+            # Handle both list and string content formats
+            if isinstance(content, str):
+                parts.append(content)
+            elif isinstance(content, list):
+                for item in content:
+                    if not isinstance(item, dict):
+                        continue
+                    
+                    item_type = item.get("type")
+                    
+                    if item_type == "text":
+                        text = item.get("text", "")
+                        if text:
+                            parts.append(text)
+                    elif item_type == "thinking":
+                        thinking = item.get("thinking", "")
+                        if thinking:
+                            parts.append(f"<thinking>{thinking}</thinking>")
+                    elif item_type == "tool_use":
+                        # Format tool call as XML
+                        tool_name = item.get("name", "")
+                        tool_input = item.get("input", {})
+                        tool_id = item.get("id", "")
+                        tool_input_str = json.dumps(tool_input, indent=2) if isinstance(tool_input, dict) else str(tool_input)
+                        parts.append(f"<tool_use id=\"{tool_id}\" name=\"{tool_name}\">\n{tool_input_str}\n</tool_use>")
+                    elif item_type == "tool_result":
+                        # Format tool result as XML
+                        tool_use_id = item.get("tool_use_id", "")
+                        result_content = item.get("content", "")
+                        # Handle content that might be a list of text blocks
+                        if isinstance(result_content, list):
+                            result_parts = []
+                            for rc in result_content:
+                                if isinstance(rc, dict) and rc.get("type") == "text":
+                                    result_parts.append(rc.get("text", ""))
+                                elif isinstance(rc, str):
+                                    result_parts.append(rc)
+                            result_content = "\n".join(result_parts)
+                        # Truncate very long tool results
+                        if len(result_content) > 10000:
+                            result_content = result_content[:10000] + "\n... [truncated]"
+                        parts.append(f"<tool_result id=\"{tool_use_id}\">\n{result_content}\n</tool_result>")
+            
+            if parts:
+                conversations.append({
+                    "from": from_field,
+                    "value": "\n\n".join(parts)
+                })
+        
+        return conversations
 
 
 if __name__ == "__main__":
