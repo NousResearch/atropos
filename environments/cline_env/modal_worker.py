@@ -295,11 +295,22 @@ def run_cline_task_cli(
         
         assistant_content = "\n\n".join(assistant_parts)
         
-        # List files created in workspace
+        # List files created in workspace (check both the cwd and /workspace)
         files_created = []
+        
+        # Check temp workspace directory
         for f in workspace_dir.rglob("*"):
             if f.is_file() and not str(f.relative_to(workspace_dir)).startswith(".git"):
                 files_created.append(str(f.relative_to(workspace_dir)))
+        
+        # Also check Docker's /workspace directory (if different from cwd)
+        docker_workspace = Path("/workspace")
+        if docker_workspace.exists() and docker_workspace != workspace_dir:
+            for f in docker_workspace.rglob("*"):
+                if f.is_file() and not str(f.relative_to(docker_workspace)).startswith(".git"):
+                    rel_path = str(f.relative_to(docker_workspace))
+                    if rel_path not in files_created:
+                        files_created.append(f"/workspace/{rel_path}")
         
         return ClineTaskResult(
             task_id=task_id,
@@ -650,8 +661,8 @@ def main():
     print("Testing Modal Cline Worker (CLI-based)...")
     print(f"Available profiles: {', '.join(SUPPORTED_PROFILES)}")
     
-    # Simple infra test - just create a hello world file
-    issue_text = "We're testing infrastructure. Please create a file at /workspace/hello.py with a simple print('Hello, World!') statement. Keep it minimal."
+    # Simple infra test - just create a hello world file in the current directory
+    issue_text = "Create a file named hello.py in the current directory with: print('Hello, World!'). Just create the file, nothing else."
     
     result = run_python_task.remote(
         issue_text=issue_text,
