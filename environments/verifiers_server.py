@@ -5,12 +5,12 @@
 # 3. prime env install will/wordle (or any owner/environment)
 #
 import asyncio
-import time
 import os
-from tqdm.asyncio import tqdm_asyncio
+import time
 from typing import Dict, List, Optional, Tuple, TypedDict, Union
 
 import verifiers as vf
+from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
     APIServerConfig,
@@ -45,8 +45,7 @@ class VerifiersEnv(BaseEnv):
         self.reward_funcs = self.rubric.get_reward_funcs()
         self.reward_weights = self.rubric.get_reward_weights()
         self.reward_scales = [
-            weight / sum(self.reward_weights)
-            for weight in self.reward_weights
+            weight / sum(self.reward_weights) for weight in self.reward_weights
         ]
         self.system_prompt = self.vf_env.system_prompt
 
@@ -148,9 +147,7 @@ class VerifiersEnv(BaseEnv):
         for item in self.test:
             eval_tasks.append(
                 self.rollout_and_score_eval(
-                    item["question"], 
-                    item["answer"],
-                    system_prompt=self.system_prompt
+                    item["question"], item["answer"], system_prompt=self.system_prompt
                 )
             )
         results = await tqdm_asyncio.gather(*eval_tasks)
@@ -164,23 +161,20 @@ class VerifiersEnv(BaseEnv):
 
         self.eval_metrics.append(("eval/avg_total_score", avg_total_score))
 
-        eval_metrics = {
-            "eval/avg_total_score": avg_total_score
-        }
+        eval_metrics = {"eval/avg_total_score": avg_total_score}
 
         await self.evaluate_log(
             metrics=eval_metrics,
             samples=samples,
             start_time=start_time,
             end_time=end_time,
-            generation_parameters = {
+            generation_parameters={
                 "temperature": 0.0,
-                "max_tokens": self.config.max_token_length
-            }
+                "max_tokens": self.config.max_token_length,
+            },
         )
 
         return eval_metrics
-
 
     async def get_next_item(self):
         next_item = self.train[self.iter % len(self.train)]
