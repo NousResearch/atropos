@@ -53,8 +53,6 @@ class VerifiersEnv(BaseEnv):
 
 
         self.vf_env = vf.load_environment(config.vf_env_name, **config.env_args)
-
-
         self.rubric = self.vf_env.rubric
 
         self.parser = self.rubric.parser
