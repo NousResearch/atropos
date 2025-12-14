@@ -36,9 +36,7 @@ class VerifiersEnv(BaseEnv):
         super().__init__(config, server_configs, slurm, testing)
         self.eval_metrics = list()
 
-        self.vf_env = vf.load_environment(
-            config.vf_env_name, **config.env_args
-        )
+        self.vf_env = vf.load_environment(config.vf_env_name, **config.env_args)
         self.rubric = self.vf_env.rubric
 
         self.parser = self.rubric.parser
