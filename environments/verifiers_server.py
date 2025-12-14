@@ -1,3 +1,9 @@
+#
+# To install a Verifiers/Prime environment:
+# 1. uv tool install prime
+# 2. prime login
+# 3. prime env install will/wordle (or any owner/environment)
+#
 import asyncio
 import time
 import os
@@ -22,9 +28,8 @@ class VfEnvConfig(BaseEnvConfig):
 class VerifiersEnv(BaseEnv):
     def __init__(
         self,
-        config: BaseEnvConfig,
+        config: VfEnvConfig,
         server_configs: List[APIServerConfig],
-        vf_env_config: VfEnvConfig,
         slurm=False,
         testing=False,
     ):
@@ -32,7 +37,7 @@ class VerifiersEnv(BaseEnv):
         self.eval_metrics = list()
 
         self.vf_env = vf.load_environment(
-            vf_env_config["vf_env_name"], **vf_env_config["env_args"]
+            config.vf_env_name, **config.env_args
         )
         self.rubric = self.vf_env.rubric
 
@@ -46,8 +51,8 @@ class VerifiersEnv(BaseEnv):
         self.system_prompt = self.vf_env.system_prompt
 
     @classmethod
-    def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
-        env_config = BaseEnvConfig(
+    def config_init(cls) -> Tuple[VfEnvConfig, List[APIServerConfig]]:
+        env_config = VfEnvConfig(
             group_size=8,
             use_wandb=False,
             rollout_server_url="http://localhost:8010",
@@ -185,26 +190,23 @@ class VerifiersEnv(BaseEnv):
 
 async def main():
     env_config, server_configs = VerifiersEnv.config_init()
-
-    vf_env_config = {"vf_env_name": "wordle", "env_args": {"use_think": False}}
+    env_config.vf_env_name = "wordle"
+    env_config.env_args = {}
 
     env = VerifiersEnv(
         config=env_config,
         server_configs=server_configs,
-        vf_env_config=vf_env_config,
     )
 
     await env.setup()
 
     item = await env.get_next_item()
-    print(item)
 
     roll = await env.rollout_and_score_eval(
         question=item["question"],
         answer=item["answer"],
         system_prompt=env.system_prompt,
     )
-    print(roll)
 
     print("Starting evaluate")
 
