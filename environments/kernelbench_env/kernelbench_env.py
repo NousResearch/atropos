@@ -21,9 +21,9 @@ These environment variables will be used to configure the evaluation environment
 
 import multiprocessing as mp
 import os
+from multiprocessing.context import TimeoutError  # SECURITY FIX
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, TypedDict, Union
-from multiprocessing.context import TimeoutError  # SECURITY FIX
 
 from datasets import load_dataset
 
