@@ -973,11 +973,13 @@ class BaseEnv(ABC):
         # do a rollout with item
         try:
             if weave is not None and getattr(self, "env_id", None) is not None:
-                ctx = weave.attributes({
-                    "env_id": self.env_id,
-                    "env_name": self.wandb_prepend,
-                    "env_type": self.config.wandb_name,
-                })
+                ctx = weave.attributes(
+                    {
+                        "env_id": self.env_id,
+                        "env_name": self.wandb_prepend,
+                        "env_type": self.config.wandb_name,
+                    }
+                )
             else:
                 ctx = nullcontext()
 

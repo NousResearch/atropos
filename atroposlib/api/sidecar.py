@@ -33,7 +33,9 @@ class ZMQLogAggregator:
         self.thread = None
 
         self.registered_envs: Dict[str, Set[str]] = defaultdict(set)
-        self.pending_metrics: Dict[Tuple[int, str], Dict[str, List[Tuple[str, Any]]]] = {}
+        self.pending_metrics: Dict[
+            Tuple[int, str], Dict[str, List[Tuple[str, Any]]]
+        ] = {}
         self.env_reported: Dict[Tuple[int, str], Set[str]] = defaultdict(set)
         self.pending_timestamps: Dict[Tuple[int, str], float] = {}
 
@@ -148,12 +150,20 @@ class ZMQLogAggregator:
 
             numeric_values = [v for _, v in values if isinstance(v, (int, float))]
             if numeric_values:
-                # just some extra stats on top of the individual instance metrics 
-                final_metrics[f"{env_type}/aggregated/{metric_name}_mean"] = np.mean(numeric_values)
-                final_metrics[f"{env_type}/aggregated/{metric_name}_std"] = np.std(numeric_values)
-                final_metrics[f"{env_type}/aggregated/{metric_name}_min"] = np.min(numeric_values)
+                # just some extra stats on top of the individual instance metrics
+                final_metrics[f"{env_type}/aggregated/{metric_name}_mean"] = np.mean(
+                    numeric_values
+                )
+                final_metrics[f"{env_type}/aggregated/{metric_name}_std"] = np.std(
+                    numeric_values
+                )
+                final_metrics[f"{env_type}/aggregated/{metric_name}_min"] = np.min(
+                    numeric_values
+                )
 
-                final_metrics[f"{env_type}/aggregated/{metric_name}_max"] = np.max(numeric_values)
+                final_metrics[f"{env_type}/aggregated/{metric_name}_max"] = np.max(
+                    numeric_values
+                )
 
         if wandb.run is not None and final_metrics:
             wandb.log(final_metrics, step=step)
@@ -162,7 +172,8 @@ class ZMQLogAggregator:
     def _check_timeouts(self):
         now = time.time()
         stale_keys = [
-            k for k, ts in self.pending_timestamps.items()
+            k
+            for k, ts in self.pending_timestamps.items()
             if now - ts > AGGREGATION_TIMEOUT
         ]
         for key in stale_keys:
