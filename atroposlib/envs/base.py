@@ -681,31 +681,19 @@ class BaseEnv(ABC):
         self.rollouts_for_wandb = []
         self.completion_lengths = []
         if self.config.use_wandb:
-            if self.wandb_prepend is not None:
-                wandb_metrics = {
-                    f"{self.wandb_prepend}_{k}": v for k, v in wandb_metrics.items()
-                }
-            # add server metrics to wandb without prepend to collate them all
             wandb_metrics.update(server_wandb_metrics)
             if self.zmq_logger is not None:
-
-                self.zmq_logger.log(wandb_metrics, step=self.curr_step)
-
-                unprefixed_metrics = {}
-                prefix_len = len(self.wandb_prepend) + 1
-                for k, v in wandb_metrics.items():
-                    if k.startswith(f"{self.wandb_prepend}_"):
-                        short_key = k[prefix_len:]
-                        # Log with the base environment name
-                        # allows overlaying all instances on one plot.
-                        unprefixed_metrics[
-                            f"{self.config.desired_name}/{short_key}"
-                        ] = v
-
-                if unprefixed_metrics:
-                    self.zmq_logger.log(unprefixed_metrics, step=self.curr_step)
-
+                self.zmq_logger.log(
+                    wandb_metrics,
+                    step=self.curr_step,
+                    env_type=self.config.wandb_name,
+                    instance_name=self.wandb_prepend,
+                )
             else:
+                if self.wandb_prepend is not None:
+                    wandb_metrics = {
+                        f"{self.wandb_prepend}_{k}": v for k, v in wandb_metrics.items()
+                    }
                 wandb.log(wandb_metrics, step=self.curr_step)
 
     async def evaluate_log(
@@ -984,11 +972,12 @@ class BaseEnv(ABC):
         logger.debug(f"handle_env: Starting with item: {item}")
         # do a rollout with item
         try:
-            # Add weave attributes for filtering
             if weave is not None and getattr(self, "env_id", None) is not None:
-                ctx = weave.attributes(
-                    {"env_id": self.env_id, "env_name": self.wandb_prepend}
-                )
+                ctx = weave.attributes({
+                    "env_id": self.env_id,
+                    "env_name": self.wandb_prepend,
+                    "env_type": self.config.wandb_name,
+                })
             else:
                 ctx = nullcontext()
 

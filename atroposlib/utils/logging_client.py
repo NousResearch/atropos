@@ -21,10 +21,7 @@ class ZMQLogger:
         """
         self.context = context or zmq.Context()
         self.socket = self.context.socket(zmq.PUSH)
-
-        # 10 secs
         self.socket.setsockopt(zmq.SNDHWM, 10000)
-
         self.socket.setsockopt(zmq.LINGER, 1000)
 
         logger.info(f"Connecting ZMQLogger to {address}")
@@ -34,6 +31,8 @@ class ZMQLogger:
         self,
         data: Dict[str, Any],
         step: Optional[int] = None,
+        env_type: Optional[str] = None,
+        instance_name: Optional[str] = None,
         commit: Optional[bool] = None,
     ):
         """
@@ -41,14 +40,19 @@ class ZMQLogger:
 
         Args:
             data: Dictionary of metrics to log
-            step: Optional step number (wandb.log supports this)
-            commit: Optional commit flag (wandb.log supports this)
+            step: Optional step number
+            env_type: Environment type / name for aggregation (math)
+            instance_name: Instance number (math_1)
+            commit: Optional commit flag (wandb.log compatibility)
         """
         if step is not None:
             data["_step"] = step
+        if env_type is not None:
+            data["_env_type"] = env_type
+        if instance_name is not None:
+            data["_instance"] = instance_name
 
         try:
-            # pyobj in case we do some other data stuff later
             self.socket.send_pyobj(data, flags=zmq.NOBLOCK)
         except zmq.Again:
             logger.warning("ZMQLogger buffer full, dropping log packet")

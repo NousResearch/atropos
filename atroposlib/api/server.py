@@ -353,6 +353,17 @@ async def register_env_url(register_env: RegisterEnv):
             "group_size": register_env.group_size,
         }
     )
+
+    if hasattr(app.state, "zmq_port"):
+        send_to_sidecar(
+            {
+                "_type": "env_register",
+                "env_type": register_env.desired_name,
+                "instance": real_name,
+            },
+            app.state.zmq_port,
+        )
+
     return {
         "status": "success",
         "env_id": registered_id,
@@ -367,7 +378,19 @@ async def register_env_url(register_env: RegisterEnv):
 @app.post("/disconnect-env")
 async def disconnect_env(disconnect_env: EnvIdentifier):
     try:
-        app.state.envs[disconnect_env.env_id]["connected"] = False
+        env = app.state.envs[disconnect_env.env_id]
+        env["connected"] = False
+
+        if hasattr(app.state, "zmq_port"):
+            send_to_sidecar(
+                {
+                    "_type": "env_disconnect",
+                    "env_type": env["desired_name"],
+                    "instance": env["real_name"],
+                },
+                app.state.zmq_port,
+            )
+
         return {"status": "success"}
     except (AttributeError, IndexError) as e:
         return {"status": "failure", "error": str(e)}
