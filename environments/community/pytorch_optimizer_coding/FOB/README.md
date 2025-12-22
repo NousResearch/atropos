@@ -25,7 +25,7 @@ Instructions on how to write your own task can be found [here](pytorch_fob/tasks
 | [segmentation](baselines/segmentation.yaml) | [MIT Scene Parse](http://sceneparsing.csail.mit.edu/) | [SegFormer](https://arxiv.org/abs/2105.15203) | Semantic Segmentation | Intersection over Union (IoU) | 35.6 | 5h | 4 gpu |
 | [graph](baselines/graph.yaml) | [ogbg-molhiv](https://ogb.stanford.edu/docs/graphprop/#ogbg-mol) | [Graph Isomorphism Network (GIN)](https://arxiv.org/pdf/1810.00826.pdf) | Graph Property Prediction | ROC-AUC | 0.77 | 20min | 1 gpu |
 | [graph_tiny](baselines/graph_tiny.yaml) | [Cora](https://paperswithcode.com/sota/node-classification-on-cora) | [GCN](https://arxiv.org/abs/1609.02907) | Node Classification | Accuracy | 0.82 | 1min | 1 gpu |
-| [tabular](pytorch_fob/tasks/tabular) | [California Housing](https://www.dcc.fc.up.pt/~ltorgo/Regression/cal_housing.html) | [FT Transformer](https://arxiv.org/pdf/2106.11959.pdf) | Tabular Regression | Test RMSE | 0.40 | 2 min | 1 gpu |
+| [tabular](baselines/tabular.yaml) | [California Housing](https://www.dcc.fc.up.pt/~ltorgo/Regression/cal_housing.html) | [FT Transformer](https://arxiv.org/pdf/2106.11959.pdf) | Tabular Regression | Test RMSE | 0.40 | 2 min | 1 gpu |
 | [translation](pytorch_fob/tasks/translation) | [WMT17(en-de)](https://machinetranslate.org/wmt17) | [T5 small](https://jmlr.org/papers/volume21/20-074/20-074.pdf) | Machine Translation | BLEU (sacrebleu) | 26.3 | 6h | 4 gpus |
 
 ## Optimizer and Scheduler
