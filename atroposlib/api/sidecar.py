@@ -5,7 +5,6 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
-import wandb
 import zmq
 
 logging.basicConfig(
@@ -20,9 +19,8 @@ AGGREGATION_TIMEOUT = 60.0
 class ZMQLogAggregator:
     """
     Sidecar service that aggregates metrics from multiple environment instances
-    by (step, env_type) and listens for log data over ZeroMQ and aggregates it
-    into the centralized WandB run.
-
+    by (step, env_type) and routes aggregated data to the leader instance for
+    each env_type. The leader is responsible for logging to wandb.
     """
 
     def __init__(self, port: int = 5555, context: Optional[zmq.Context] = None):
@@ -30,12 +28,16 @@ class ZMQLogAggregator:
         self.context = context or zmq.Context()
         self.socket = self.context.socket(zmq.PULL)
         self.running = False
-        self.thread = None
 
         self.registered_envs: Dict[str, Set[str]] = defaultdict(set)
-        self.pending_metrics: Dict[Tuple[int, str], Dict[str, List[Tuple[str, Any]]]] = {}
+        self.pending_metrics: Dict[
+            Tuple[int, str], Dict[str, List[Tuple[str, Any]]]
+        ] = {}
         self.env_reported: Dict[Tuple[int, str], Set[str]] = defaultdict(set)
         self.pending_timestamps: Dict[Tuple[int, str], float] = {}
+
+        # Leader info per env_type: {env_type: {"port": int, "socket": zmq.Socket}}
+        self.leaders: Dict[str, Dict[str, Any]] = {}
 
     def start(self):
         if self.running:
@@ -57,49 +59,66 @@ class ZMQLogAggregator:
             self.socket.close()
         except Exception:
             pass
+        for leader_info in self.leaders.values():
+            try:
+                leader_info.get("socket", None).close()
+            except Exception:
+                pass
+
+    def _connect_to_leader(self, env_type: str, port: int):
+        """Create a ZMQ PUSH socket to send aggregated data to the leader."""
+        if env_type in self.leaders:
+            return
+
+        try:
+            socket = self.context.socket(zmq.PUSH)
+            socket.setsockopt(zmq.SNDHWM, 10000)
+            socket.setsockopt(zmq.LINGER, 1000)
+            socket.connect(f"tcp://localhost:{port}")
+            self.leaders[env_type] = {"port": port, "socket": socket}
+            logger.info(f"Connected to leader for {env_type} on port {port}")
+        except Exception as e:
+            logger.error(f"Failed to connect to leader for {env_type}: {e}")
 
     def _handle_control_message(self, payload: Dict[str, Any]):
         msg_type = payload.get("_type")
 
-        if msg_type == "init":
-            config = payload.get("config", {})
-            logger.info(f"Received INIT: {config.get('group', 'unknown')}")
-
-            if wandb.run is not None:
-                logger.info("Finishing existing WandB run")
-                wandb.finish()
-
-            try:
-                wandb.init(**config)
-                logger.info(f"WandB run initialized: {wandb.run.id}")
-            except Exception as e:
-                logger.error(f"Failed to initialize WandB: {e}")
-
-        elif msg_type == "reset":
-            logger.info("Received RESET")
-            if wandb.run is not None:
-                wandb.finish()
-
-        elif msg_type == "env_register":
+        if msg_type == "env_register":
             env_type = payload.get("env_type")
             instance = payload.get("instance")
+            is_leader = payload.get("is_leader", False)
+            leader_receive_port = payload.get("leader_receive_port")
+
             if env_type and instance:
                 self.registered_envs[env_type].add(instance)
                 logger.info(f"Registered {instance} for {env_type}")
 
+                if is_leader and leader_receive_port:
+                    self._connect_to_leader(env_type, leader_receive_port)
+
         elif msg_type == "env_disconnect":
             env_type = payload.get("env_type")
             instance = payload.get("instance")
+            was_leader = payload.get("was_leader", False)
+
             if env_type and instance:
                 self.registered_envs[env_type].discard(instance)
                 logger.info(f"Disconnected {instance} from {env_type}")
                 self._check_pending_after_disconnect(env_type)
 
+                if was_leader and env_type in self.leaders:
+                    try:
+                        self.leaders[env_type]["socket"].close()
+                    except Exception:
+                        pass
+                    del self.leaders[env_type]
+                    logger.info(f"Removed leader connection for {env_type}")
+
     def _check_pending_after_disconnect(self, env_type: str):
         keys_to_check = [k for k in self.pending_metrics if k[1] == env_type]
         for key in keys_to_check:
             if self._all_reported(key):
-                self._aggregate_and_log(key)
+                self._aggregate_and_send(key)
 
     def _all_reported(self, key: Tuple[int, str]) -> bool:
         step, env_type = key
@@ -113,8 +132,7 @@ class ZMQLogAggregator:
         instance = payload.pop("_instance", None)
 
         if env_type is None or instance is None:
-            if wandb.run is not None:
-                wandb.log(payload, step=step)
+            logger.warning("Received log without env_type or instance, dropping")
             return
 
         key = (step, env_type)
@@ -129,9 +147,10 @@ class ZMQLogAggregator:
         self.env_reported[key].add(instance)
 
         if self._all_reported(key):
-            self._aggregate_and_log(key)
+            self._aggregate_and_send(key)
 
-    def _aggregate_and_log(self, key: Tuple[int, str]):
+    def _aggregate_and_send(self, key: Tuple[int, str]):
+        """Aggregate metrics and send to the leader for this env_type."""
         step, env_type = key
         metrics = self.pending_metrics.pop(key, {})
         self.env_reported.pop(key, None)
@@ -148,27 +167,53 @@ class ZMQLogAggregator:
 
             numeric_values = [v for _, v in values if isinstance(v, (int, float))]
             if numeric_values:
-                # just some extra stats on top of the individual instance metrics 
-                final_metrics[f"{env_type}/aggregated/{metric_name}_mean"] = np.mean(numeric_values)
-                final_metrics[f"{env_type}/aggregated/{metric_name}_std"] = np.std(numeric_values)
-                final_metrics[f"{env_type}/aggregated/{metric_name}_min"] = np.min(numeric_values)
+                final_metrics[f"{env_type}/aggregated/{metric_name}_mean"] = np.mean(
+                    numeric_values
+                )
+                final_metrics[f"{env_type}/aggregated/{metric_name}_std"] = np.std(
+                    numeric_values
+                )
+                final_metrics[f"{env_type}/aggregated/{metric_name}_min"] = np.min(
+                    numeric_values
+                )
+                final_metrics[f"{env_type}/aggregated/{metric_name}_max"] = np.max(
+                    numeric_values
+                )
 
-                final_metrics[f"{env_type}/aggregated/{metric_name}_max"] = np.max(numeric_values)
+        if not final_metrics:
+            return
 
-        if wandb.run is not None and final_metrics:
-            wandb.log(final_metrics, step=step)
-            logger.debug(f"Logged aggregated metrics for {env_type} step {step}")
+        final_metrics["_step"] = step
+
+        leader_info = self.leaders.get(env_type)
+        if leader_info and leader_info.get("socket"):
+            try:
+                leader_info["socket"].send_pyobj(final_metrics, flags=zmq.NOBLOCK)
+                logger.debug(
+                    f"Sent aggregated metrics for {env_type} step {step} to leader"
+                )
+            except zmq.Again:
+                logger.warning(
+                    f"Leader buffer full for {env_type}, dropping aggregated data"
+                )
+            except Exception as e:
+                logger.error(f"Failed to send to leader for {env_type}: {e}")
+        else:
+            logger.warning(
+                f"No leader connected for {env_type}, dropping aggregated data"
+            )
 
     def _check_timeouts(self):
         now = time.time()
         stale_keys = [
-            k for k, ts in self.pending_timestamps.items()
+            k
+            for k, ts in self.pending_timestamps.items()
             if now - ts > AGGREGATION_TIMEOUT
         ]
         for key in stale_keys:
             step, env_type = key
-            logger.warning(f"Timeout for {env_type} step {step}, logging partial data")
-            self._aggregate_and_log(key)
+            logger.warning(f"Timeout for {env_type} step {step}, sending partial data")
+            self._aggregate_and_send(key)
 
     def _loop(self):
         poller = zmq.Poller()

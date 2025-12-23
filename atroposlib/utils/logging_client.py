@@ -63,6 +63,45 @@ class ZMQLogger:
         self.socket.close()
 
 
+class ZMQLogReceiver:
+    """
+    A receiver for aggregated log data. Used by leader instances to receive
+    aggregated metrics from the sidecar and log them to wandb.
+    """
+
+    def __init__(self, port: int, context: Optional[zmq.Context] = None):
+        """
+        Args:
+            port: Port to bind to for receiving aggregated data
+            context: Optional existing ZMQ context
+        """
+        self.port = port
+        self.context = context or zmq.Context()
+        self.socket = self.context.socket(zmq.PULL)
+        self.socket.setsockopt(zmq.RCVHWM, 10000)
+        self.socket.bind(f"tcp://*:{port}")
+        self.running = False
+        logger.info(f"ZMQLogReceiver bound to port {port}")
+
+    def recv_nowait(self) -> Optional[Dict[str, Any]]:
+        """
+        Non-blocking receive of aggregated data.
+
+        Returns:
+            Dictionary of aggregated metrics if available, None otherwise
+        """
+        try:
+            return self.socket.recv_pyobj(flags=zmq.NOBLOCK)
+        except zmq.Again:
+            return None
+        except Exception as e:
+            logger.error(f"Failed to receive log data: {e}")
+            return None
+
+    def close(self):
+        self.socket.close()
+
+
 def setup_weave_for_worker(
     project_name: str, group_name: Optional[str] = None, run_id: Optional[str] = None
 ):

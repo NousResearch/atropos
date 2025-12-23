@@ -44,7 +44,11 @@ from atroposlib.utils.cli import (
     merge_dicts,
 )
 from atroposlib.utils.io import parse_http_response
-from atroposlib.utils.logging_client import ZMQLogger, setup_weave_for_worker
+from atroposlib.utils.logging_client import (
+    ZMQLogger,
+    ZMQLogReceiver,
+    setup_weave_for_worker,
+)
 from atroposlib.utils.metrics import get_std_min_max_avg
 
 from ..type_definitions import Item, Message
@@ -234,6 +238,8 @@ class BaseEnv(ABC):
         self.checkpoint_dir = ""
         self.checkpoint_interval = -1
         self.zmq_logger = None
+        self.is_leader = False
+        self.log_receiver = None
         if self.config.data_path_to_save_groups is not None:
             Path(self.config.data_path_to_save_groups).parent.mkdir(
                 parents=True, exist_ok=True
@@ -462,32 +468,35 @@ class BaseEnv(ABC):
                         zmq_addr = f"tcp://{server_host}:{zmq_port}"
                         self.zmq_logger = ZMQLogger(address=zmq_addr)
                         logger.info(f"Using ZMQ Logger connected to {zmq_addr}")
-                        break
                     except Exception as e:
                         logger.error(f"Failed to init ZMQ Logger: {e}")
                         self.zmq_logger = None
-
-                wandb_run_name = None
-                if self.config.wandb_name:
-                    random_id = "".join(random.choices(string.ascii_lowercase, k=6))
-                    current_date = datetime.now().strftime("%Y-%m-%d")
-                    wandb_run_name = (
-                        f"{self.config.wandb_name}-{current_date}-{random_id}"
-                    )
-
-                if weave is not None:
-                    try:
-                        weave.init(self.wandb_project)
-                    except Exception as e:
-                        logger.warning(f"Failed to initialize Weave: {e}")
-
-                wandb.init(
-                    name=wandb_run_name,
-                    project=self.wandb_project,
-                    group=self.wandb_group,
-                    config=self.config.model_dump(),
-                )
                 break
+
+    def _init_wandb_for_leader(self):
+        """Initialize wandb for a leader instance. Called after registration."""
+        if not self.is_leader or not self.config.use_wandb:
+            return
+
+        wandb_run_name = None
+        if self.config.wandb_name:
+            random_id = "".join(random.choices(string.ascii_lowercase, k=6))
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            wandb_run_name = f"{self.config.wandb_name}-{current_date}-{random_id}"
+
+        if weave is not None:
+            try:
+                weave.init(self.wandb_project)
+            except Exception as e:
+                logger.warning(f"Failed to initialize Weave: {e}")
+
+        wandb.init(
+            name=wandb_run_name,
+            project=self.wandb_project,
+            group=self.wandb_group,
+            config=self.config.model_dump(),
+        )
+        logger.info(f"Leader {self.wandb_prepend} initialized wandb")
 
     @retry(
         stop=stop_after_attempt(3),
@@ -527,10 +536,20 @@ class BaseEnv(ABC):
             self.curr_step = data["starting_step"]
             self.checkpoint_dir = data["checkpoint_dir"]
             self.checkpoint_interval = data["checkpoint_interval"]
+            self.is_leader = data.get("is_leader", False)
+            leader_receive_port = data.get("leader_receive_port")
+
+            if self.is_leader and leader_receive_port:
+                self.log_receiver = ZMQLogReceiver(port=leader_receive_port)
+                logger.info(
+                    f"Leader {self.wandb_prepend} listening on port {leader_receive_port}"
+                )
+                self._init_wandb_for_leader()
+
             if self.zmq_logger is not None and self.wandb_project:
                 setup_weave_for_worker(
                     self.wandb_project,
-                    group_name=self.wandb_prepend,  # Pass the unique env ID as the 'group' for Weave traces
+                    group_name=self.wandb_prepend,
                     run_id=getattr(self, "wandb_run_id", None),
                 )
                 if weave is not None:
@@ -548,7 +567,8 @@ class BaseEnv(ABC):
                 f"Initialized env with id {self.env_id}: "
                 f"curr_step: {self.curr_step}, "
                 f"checkpoint_dir: {self.checkpoint_dir}, "
-                f"checkpoint_interval: {self.checkpoint_interval}"
+                f"checkpoint_interval: {self.checkpoint_interval}, "
+                f"is_leader: {self.is_leader}"
             )
             if self.curr_step > 0:
                 self.load_checkpoint()
@@ -695,6 +715,21 @@ class BaseEnv(ABC):
                         f"{self.wandb_prepend}_{k}": v for k, v in wandb_metrics.items()
                     }
                 wandb.log(wandb_metrics, step=self.curr_step)
+
+    def process_aggregated_logs(self):
+        """
+        Process aggregated log data received from the sidecar (leader only).
+        Called periodically in the main loop.
+        """
+        if not self.is_leader or self.log_receiver is None:
+            return
+
+        while True:
+            data = self.log_receiver.recv_nowait()
+            if data is None:
+                break
+            step = data.pop("_step", None)
+            wandb.log(data, step=step)
 
     async def evaluate_log(
         self,
@@ -973,11 +1008,13 @@ class BaseEnv(ABC):
         # do a rollout with item
         try:
             if weave is not None and getattr(self, "env_id", None) is not None:
-                ctx = weave.attributes({
-                    "env_id": self.env_id,
-                    "env_name": self.wandb_prepend,
-                    "env_type": self.config.wandb_name,
-                })
+                ctx = weave.attributes(
+                    {
+                        "env_id": self.env_id,
+                        "env_name": self.wandb_prepend,
+                        "env_type": self.config.wandb_name,
+                    }
+                )
             else:
                 ctx = nullcontext()
 
@@ -1276,6 +1313,8 @@ class BaseEnv(ABC):
                         self.running_items.pop(item_uuid)
                         # Do we want to retry? probably not...
                         # self.backlog.append(item["item"])
+            # Process aggregated logs if this is a leader
+            self.process_aggregated_logs()
             await asyncio.sleep(0.1)
 
     async def process_manager(self):

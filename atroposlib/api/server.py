@@ -323,23 +323,35 @@ async def register(registration: Registration):
 
 @app.post("/register-env")
 async def register_env_url(register_env: RegisterEnv):
-    # Check if trainer has started
     if not hasattr(app.state, "started") or not app.state.started:
-        return {
-            "status": "wait for trainer to start",
-        }
+        return {"status": "wait for trainer to start"}
 
-    # Initialize envs list if not already done
     if not hasattr(app.state, "envs"):
         app.state.envs = []
+    if not hasattr(app.state, "env_leaders"):
+        app.state.env_leaders = {}
+    if not hasattr(app.state, "next_leader_port"):
+        app.state.next_leader_port = 5600
 
-    # Get checkpoint directory safely
     checkpoint_dir = getattr(app.state, "checkpoint_dir", "")
-    real_name = (
-        f"{register_env.desired_name}_"
-        f"{len([x for x in app.state.envs if x['desired_name'] == register_env.desired_name])}"
+    instance_index = len(
+        [x for x in app.state.envs if x["desired_name"] == register_env.desired_name]
     )
+    real_name = f"{register_env.desired_name}_{instance_index}"
     registered_id = len(app.state.envs)
+
+    is_leader = register_env.desired_name not in app.state.env_leaders
+    leader_receive_port = None
+
+    if is_leader:
+        leader_receive_port = app.state.next_leader_port
+        app.state.next_leader_port += 1
+        app.state.env_leaders[register_env.desired_name] = {
+            "instance": real_name,
+            "env_id": registered_id,
+            "receive_port": leader_receive_port,
+        }
+
     app.state.envs.append(
         {
             "max_context_len": register_env.max_token_length,
@@ -351,18 +363,20 @@ async def register_env_url(register_env: RegisterEnv):
             "connected": True,
             "min_batch_allocation": register_env.min_batch_allocation,
             "group_size": register_env.group_size,
+            "is_leader": is_leader,
         }
     )
 
     if hasattr(app.state, "zmq_port"):
-        send_to_sidecar(
-            {
-                "_type": "env_register",
-                "env_type": register_env.desired_name,
-                "instance": real_name,
-            },
-            app.state.zmq_port,
-        )
+        msg = {
+            "_type": "env_register",
+            "env_type": register_env.desired_name,
+            "instance": real_name,
+            "is_leader": is_leader,
+        }
+        if is_leader:
+            msg["leader_receive_port"] = leader_receive_port
+        send_to_sidecar(msg, app.state.zmq_port)
 
     return {
         "status": "success",
@@ -372,6 +386,10 @@ async def register_env_url(register_env: RegisterEnv):
         "starting_step": app.state.status_dict["step"],
         "checkpoint_interval": app.state.save_checkpoint_interval,
         "num_steps": app.state.num_steps,
+        "is_leader": is_leader,
+        "leader_receive_port": leader_receive_port,
+        "wandb_project": getattr(app.state, "project", None),
+        "wandb_group": getattr(app.state, "group", None),
     }
 
 
@@ -387,9 +405,13 @@ async def disconnect_env(disconnect_env: EnvIdentifier):
                     "_type": "env_disconnect",
                     "env_type": env["desired_name"],
                     "instance": env["real_name"],
+                    "was_leader": env.get("is_leader", False),
                 },
                 app.state.zmq_port,
             )
+
+        if env.get("is_leader") and hasattr(app.state, "env_leaders"):
+            app.state.env_leaders.pop(env["desired_name"], None)
 
         return {"status": "success"}
     except (AttributeError, IndexError) as e:
