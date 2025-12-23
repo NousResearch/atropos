@@ -1,4 +1,5 @@
 """Tests for the ZMQ sidecar aggregation and leader routing."""
+
 import time
 from collections import defaultdict
 from unittest.mock import MagicMock, patch
@@ -62,13 +63,15 @@ class TestZMQLogAggregator:
         from atroposlib.api.sidecar import ZMQLogAggregator
 
         aggregator = ZMQLogAggregator(port=5710)
-        aggregator._handle_control_message({
-            "_type": "env_register",
-            "env_type": "math",
-            "instance": "math_0",
-            "is_leader": True,
-            "leader_receive_port": 5800,
-        })
+        aggregator._handle_control_message(
+            {
+                "_type": "env_register",
+                "env_type": "math",
+                "instance": "math_0",
+                "is_leader": True,
+                "leader_receive_port": 5800,
+            }
+        )
         assert "math_0" in aggregator.registered_envs["math"]
         assert "math" in aggregator.leaders
 
@@ -80,12 +83,14 @@ class TestZMQLogAggregator:
         aggregator.registered_envs["math"].add("math_0")
         aggregator.registered_envs["math"].add("math_1")
 
-        aggregator._handle_control_message({
-            "_type": "env_disconnect",
-            "env_type": "math",
-            "instance": "math_0",
-            "was_leader": False,
-        })
+        aggregator._handle_control_message(
+            {
+                "_type": "env_disconnect",
+                "env_type": "math",
+                "instance": "math_0",
+                "was_leader": False,
+            }
+        )
         assert "math_0" not in aggregator.registered_envs["math"]
         assert "math_1" in aggregator.registered_envs["math"]
 
@@ -110,12 +115,14 @@ class TestZMQLogAggregator:
         aggregator = ZMQLogAggregator(port=5713)
         aggregator.registered_envs["math"] = {"math_0", "math_1"}
 
-        aggregator._handle_log_payload({
-            "_step": 10,
-            "_env_type": "math",
-            "_instance": "math_0",
-            "accuracy": 0.8,
-        })
+        aggregator._handle_log_payload(
+            {
+                "_step": 10,
+                "_env_type": "math",
+                "_instance": "math_0",
+                "accuracy": 0.8,
+            }
+        )
 
         key = (10, "math")
         assert key in aggregator.pending_metrics
@@ -133,18 +140,22 @@ class TestZMQLogAggregator:
         aggregator.leaders["math"] = {"port": 5800, "socket": mock_socket}
 
         # Send logs from both instances
-        aggregator._handle_log_payload({
-            "_step": 10,
-            "_env_type": "math",
-            "_instance": "math_0",
-            "accuracy": 0.8,
-        })
-        aggregator._handle_log_payload({
-            "_step": 10,
-            "_env_type": "math",
-            "_instance": "math_1",
-            "accuracy": 0.9,
-        })
+        aggregator._handle_log_payload(
+            {
+                "_step": 10,
+                "_env_type": "math",
+                "_instance": "math_0",
+                "accuracy": 0.8,
+            }
+        )
+        aggregator._handle_log_payload(
+            {
+                "_step": 10,
+                "_env_type": "math",
+                "_instance": "math_1",
+                "accuracy": 0.9,
+            }
+        )
 
         # Verify aggregation was triggered (socket.send_pyobj was called)
         mock_socket.send_pyobj.assert_called_once()
@@ -158,7 +169,7 @@ class TestZMQLogAggregator:
 
     def test_aggregator_timeout(self):
         """Test timeout handling for slow instances."""
-        from atroposlib.api.sidecar import ZMQLogAggregator, AGGREGATION_TIMEOUT
+        from atroposlib.api.sidecar import AGGREGATION_TIMEOUT, ZMQLogAggregator
 
         aggregator = ZMQLogAggregator(port=5715)
         aggregator.registered_envs["math"] = {"math_0", "math_1"}
@@ -168,12 +179,14 @@ class TestZMQLogAggregator:
         aggregator.leaders["math"] = {"port": 5800, "socket": mock_socket}
 
         # Only one instance reports
-        aggregator._handle_log_payload({
-            "_step": 10,
-            "_env_type": "math",
-            "_instance": "math_0",
-            "accuracy": 0.8,
-        })
+        aggregator._handle_log_payload(
+            {
+                "_step": 10,
+                "_env_type": "math",
+                "_instance": "math_0",
+                "accuracy": 0.8,
+            }
+        )
 
         key = (10, "math")
         aggregator.pending_timestamps[key] = time.time() - AGGREGATION_TIMEOUT - 1
@@ -194,20 +207,27 @@ class TestZMQLogAggregator:
         mock_math_socket = MagicMock()
         mock_crossword_socket = MagicMock()
         aggregator.leaders["math"] = {"port": 5800, "socket": mock_math_socket}
-        aggregator.leaders["crossword"] = {"port": 5801, "socket": mock_crossword_socket}
+        aggregator.leaders["crossword"] = {
+            "port": 5801,
+            "socket": mock_crossword_socket,
+        }
 
-        aggregator._handle_log_payload({
-            "_step": 10,
-            "_env_type": "math",
-            "_instance": "math_0",
-            "accuracy": 0.8,
-        })
-        aggregator._handle_log_payload({
-            "_step": 10,
-            "_env_type": "crossword",
-            "_instance": "crossword_0",
-            "accuracy": 0.9,
-        })
+        aggregator._handle_log_payload(
+            {
+                "_step": 10,
+                "_env_type": "math",
+                "_instance": "math_0",
+                "accuracy": 0.8,
+            }
+        )
+        aggregator._handle_log_payload(
+            {
+                "_step": 10,
+                "_env_type": "crossword",
+                "_instance": "crossword_0",
+                "accuracy": 0.9,
+            }
+        )
 
         # Both should be sent to their respective leaders
         mock_math_socket.send_pyobj.assert_called_once()
@@ -259,6 +279,7 @@ class TestLeaderElection:
     @pytest.fixture
     def app_state(self):
         """Create a mock app state."""
+
         class MockAppState:
             started = True
             envs = []
@@ -277,7 +298,9 @@ class TestLeaderElection:
         """Test that first instance of an env_type becomes leader."""
         # Simulate the logic from register_env endpoint
         desired_name = "math"
-        instance_index = len([x for x in app_state.envs if x["desired_name"] == desired_name])
+        instance_index = len(
+            [x for x in app_state.envs if x["desired_name"] == desired_name]
+        )
         real_name = f"{desired_name}_{instance_index}"
         registered_id = len(app_state.envs)
 
@@ -309,7 +332,9 @@ class TestLeaderElection:
 
         # Second instance
         desired_name = "math"
-        instance_index = len([x for x in app_state.envs if x["desired_name"] == desired_name])
+        instance_index = len(
+            [x for x in app_state.envs if x["desired_name"] == desired_name]
+        )
         real_name = f"{desired_name}_{instance_index}"
 
         is_leader = desired_name not in app_state.env_leaders
@@ -331,7 +356,9 @@ class TestLeaderElection:
 
         # crossword - should get its own leader
         desired_name = "crossword"
-        instance_index = len([x for x in app_state.envs if x["desired_name"] == desired_name])
+        instance_index = len(
+            [x for x in app_state.envs if x["desired_name"] == desired_name]
+        )
         real_name = f"{desired_name}_{instance_index}"
         registered_id = len(app_state.envs)
 
