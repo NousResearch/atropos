@@ -19,6 +19,11 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+from eval_helpers import (
+    get_default_thinking_prompt,
+    create_system_content,
+    save_eval_results,
+)
 
 
 class ArenaHardConfig(BaseEnvConfig):
@@ -63,8 +68,8 @@ class ArenaHardConfig(BaseEnvConfig):
     )
 
     judge_max_tokens: int = Field(
-        default=4096,
-        description="Maximum tokens for judge completions.",
+        default=0,
+        description="Maximum tokens for judge completions (0 = use model default).",
     )
 
     # Retry configuration for judge calls
@@ -98,8 +103,8 @@ class ArenaHardConfig(BaseEnvConfig):
     )
 
     eval_max_tokens: int = Field(
-        default=40960,
-        description="Maximum tokens for evaluation completions.",
+        default=0,
+        description="Maximum tokens for evaluation completions (0 = use model default).",
     )
 
     train_max_tokens: int = Field(
@@ -233,21 +238,20 @@ class ArenaHardEnv(BaseEnv):
 
     def _get_thinking_prompt(self) -> str:
         """Get thinking system prompt for model responses."""
-        base_thinking_prompt = (
-            self.config.custom_thinking_prompt
-            if self.config.custom_thinking_prompt
-            else "You are a deep thinking AI assistant. Before providing your response, you should think through the problem carefully. Use <think></think> tags to enclose your internal reasoning and thought process, then provide your final response after the thinking tags."  # noqa
-        )
-
-        # Append custom system prompt if provided
-        if self.config.custom_system_prompt:
-            return f"{base_thinking_prompt}\n\n{self.config.custom_system_prompt}"
-        else:
-            return base_thinking_prompt
+        # Arena Hard uses a slightly different default thinking prompt
+        return get_default_thinking_prompt(self.config.custom_thinking_prompt)
 
     def _get_system_prompt(self) -> Optional[str]:
         """Get system prompt for non-thinking mode."""
         return self.config.custom_system_prompt
+    
+    def _create_system_content(self) -> Optional[str]:
+        """Create system message content based on thinking mode."""
+        return create_system_content(
+            self.config.thinking_mode,
+            self.config.custom_thinking_prompt,
+            self.config.custom_system_prompt
+        )
 
     def _load_dataset(self, dataset_path: str, split: str = None) -> List[Dict]:
         """Load dataset using HuggingFace load_dataset."""
@@ -340,13 +344,13 @@ class ArenaHardEnv(BaseEnv):
             judge_base_url="https://api.anthropic.com/v1",
             judge_api_key_env="ANTHROPIC_API_KEY",
             judge_temperature=0.0,
-            judge_max_tokens=2048,
+            judge_max_tokens=0,  # Use model default
             judge_max_retries=3,
             judge_retry_multiplier=1.0,
             judge_retry_max_wait=10,
             eval_temperature=0.0,
             rollout_temperature=1.0,
-            eval_max_tokens=1024 * 16,
+            eval_max_tokens=0,  # Use model default
             train_max_tokens=1024 * 16,
             full_debug=True,
             max_retries=3,
@@ -555,21 +559,25 @@ class ArenaHardEnv(BaseEnv):
     )
     async def _judge_api_call(self, messages: List[Dict]):
         """Make a single judge API call with retry decorator."""
+        debug_params = {"temperature": self.config.judge_temperature}
+        if self.config.judge_max_tokens > 0:
+            debug_params["max_tokens"] = self.config.judge_max_tokens
+        
         self._log_full_debug_request(
             messages,
-            {
-                "temperature": self.config.judge_temperature,
-                "max_tokens": self.config.judge_max_tokens,
-            },
+            debug_params,
             "JUDGE API CALL",
         )
 
-        completion = await self.judge_client.chat.completions.create(
-            model=self.config.judge_model_name,
-            messages=messages,
-            temperature=self.config.judge_temperature,
-            max_tokens=self.config.judge_max_tokens,
-        )
+        kwargs = {
+            "model": self.config.judge_model_name,
+            "messages": messages,
+            "temperature": self.config.judge_temperature,
+        }
+        if self.config.judge_max_tokens > 0:
+            kwargs["max_tokens"] = self.config.judge_max_tokens
+        
+        completion = await self.judge_client.chat.completions.create(**kwargs)
 
         self._log_full_debug_response(completion, "JUDGE API CALL")
 
@@ -933,10 +941,11 @@ class ArenaHardEnv(BaseEnv):
 
             completion_params = {
                 "n": 1,
-                "max_tokens": self.config.eval_max_tokens,
                 "temperature": self.config.eval_temperature,
                 "split": "eval",
             }
+            if self.config.eval_max_tokens > 0:
+                completion_params["max_tokens"] = self.config.eval_max_tokens
 
             # Retry logic for evaluation
             for attempt in range(self.config.max_retries):

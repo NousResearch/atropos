@@ -20,6 +20,10 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+from eval_helpers import (
+    get_default_thinking_prompt,
+    create_system_content,
+)
 
 
 class RewardBenchCategory(str, Enum):
@@ -69,8 +73,8 @@ class PairwiseJudgementConfig(BaseEnvConfig):
     )
 
     eval_max_tokens: int = Field(
-        default=1024 * 16,
-        description="Maximum tokens for evaluation completions.",
+        default=0,
+        description="Maximum tokens for evaluation completions (0 = use model default).",
     )
 
     train_max_tokens: int = Field(
@@ -193,14 +197,7 @@ class PairwiseJudgementEnv(BaseEnv):
 
     def _get_thinking_prompt(self) -> str:
         """Get thinking system prompt."""
-        return (
-            self.config.custom_thinking_prompt
-            if self.config.custom_thinking_prompt
-            else "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the "
-            "problem and deliberate with yourself via systematic reasoning processes to help come to a correct "
-            "solution prior to answering. You should enclose your thoughts and internal monologue inside <think> "
-            "</think> tags, and then provide your solution or response to the problem."
-        )
+        return get_default_thinking_prompt(self.config.custom_thinking_prompt)
 
     def _get_judgment_prompt(self) -> str:
         """Get judgment system prompt."""
@@ -360,7 +357,7 @@ class PairwiseJudgementEnv(BaseEnv):
             batch_size=1024,
             steps_per_eval=25,
             train_max_tokens=1024 * 16,
-            eval_max_tokens=1024 * 16,
+            eval_max_tokens=0,  # Use model default
             inference_weight=1.0,
             wandb_name="pairwise_judgment",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
