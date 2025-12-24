@@ -1,125 +1,56 @@
+import asyncio
 import base64
 import io
-import os
 import re
-import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 from datasets import load_dataset
+from openai import AsyncOpenAI
 from PIL import Image
-from pydantic import Field
-from tqdm.asyncio import tqdm_asyncio
 
-from atroposlib.envs.base import (
-    APIServerConfig,
-    BaseEnv,
-    BaseEnvConfig,
-    Item,
-    ScoredDataGroup,
-)
+from environments.eval_environments.eval_base import EvalBase, eval_runner
 
 
-class ChartQAConfig(BaseEnvConfig):
-    subset: str = Field(
-        default="human",
-        description="Subset to evaluate: 'human' or 'augmented'",
-    )
-    images_path: Optional[str] = Field(
-        default=None,
-        description="Path to images folder. If None, uses HuggingFace dataset.",
-    )
-    relaxed_tolerance: float = Field(
-        default=0.05,
-        description="Tolerance for relaxed numeric matching (5% by default)",
-    )
-    eval_temperature: float = Field(
-        default=0.0,
-        description="Temperature for eval completions",
-    )
-    eval_max_tokens: int = Field(
-        default=2048,
-        description="Max tokens for eval completions (increased for thinking models)",
-    )
+class ChartQA(EvalBase):
+    """
+    ChartQA evaluation environment.
 
+    A benchmark for question answering about charts.
+    https://github.com/vis-nlp/ChartQA
+    """
 
-class ChartQAEnv(BaseEnv):
-    name = "chartqa"
-    env_config_cls = ChartQAConfig
+    def setup_data(self) -> list:
+        subset = getattr(self, "subset", "human")
+        dataset = load_dataset("ahmed-masry/ChartQA", split="test")
 
-    def __init__(
-        self,
-        config: ChartQAConfig,
-        server_configs: List[APIServerConfig],
-        slurm: bool = True,
-        testing: bool = False,
-    ):
-        super().__init__(config, server_configs, slurm, testing)
-        self.config: ChartQAConfig = config
+        if subset == "human":
+            dataset = dataset.filter(lambda x: x.get("type", "") == "human")
+        elif subset == "augmented":
+            dataset = dataset.filter(lambda x: x.get("type", "") == "augmented")
 
-    @classmethod
-    def config_init(cls) -> Tuple[ChartQAConfig, List[APIServerConfig]]:
-        config = ChartQAConfig(
-            tokenizer_name="NousResearch/Hermes-3-Llama-3.1-8B",
-            use_wandb=False,
-            data_dir_to_save_evals="./eval_results/chartqa",
-            max_eval_workers=32,
-        )
-        server_configs = [
-            APIServerConfig(
-                model_name="gpt-4o",
-                base_url="https://api.openai.com/v1",
-                api_key=os.environ.get("OPENAI_API_KEY", ""),
-                num_requests_for_eval=32,
-            )
-        ]
-        return config, server_configs
+        print(f"Loaded {len(dataset)} examples from ChartQA ({subset})")
+        return list(dataset)
 
-    async def setup(self):
-        self.dataset = load_dataset(
-            "ahmed-masry/ChartQA",
-            split="test",
-            trust_remote_code=True,
-        )
-
-        if self.config.subset == "human":
-            self.dataset = self.dataset.filter(lambda x: x.get("type", "") == "human")
-        elif self.config.subset == "augmented":
-            self.dataset = self.dataset.filter(
-                lambda x: x.get("type", "") == "augmented"
-            )
-
-        print(
-            f"Loaded {len(self.dataset)} examples from ChartQA ({self.config.subset})"
-        )
-
-    async def get_next_item(self) -> Item:
-        raise NotImplementedError("Eval-only environment")
-
-    async def collect_trajectories(self, item: Item) -> Tuple[ScoredDataGroup, List]:
-        raise NotImplementedError("Eval-only environment")
-
-    def encode_image_from_pil(self, pil_image: Image.Image) -> str:
+    def encode_image(self, pil_image: Image.Image) -> str:
         buffer = io.BytesIO()
         pil_image.save(buffer, format="PNG")
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-    def encode_image_from_path(self, path: str) -> str:
-        with open(path, "rb") as f:
-            return base64.b64encode(f.read()).decode("utf-8")
-
     def get_image_base64(self, item: dict) -> str:
-        if self.config.images_path:
+        images_path: Optional[str] = getattr(self, "images_path", None)
+        if images_path:
             imgname = item.get("imgname", "")
-            image_path = Path(self.config.images_path) / imgname
-            return self.encode_image_from_path(str(image_path))
+            image_path = Path(images_path) / imgname
+            with open(image_path, "rb") as f:
+                return base64.b64encode(f.read()).decode("utf-8")
 
         if "image" in item and item["image"] is not None:
             img = item["image"]
             if isinstance(img, bytes):
                 return base64.b64encode(img).decode("utf-8")
             elif isinstance(img, Image.Image):
-                return self.encode_image_from_pil(img)
+                return self.encode_image(img)
             else:
                 raise ValueError(f"Unknown image type: {type(img)}")
 
@@ -170,6 +101,8 @@ Question: {query}"""
         pred = prediction.strip()
         ans = answer.strip()
 
+        relaxed_tolerance = getattr(self, "relaxed_tolerance", 0.05)
+
         try:
             pred_clean = pred.replace(",", "").replace("%", "").replace("$", "")
             ans_clean = ans.replace(",", "").replace("%", "").replace("$", "")
@@ -180,28 +113,26 @@ Question: {query}"""
             if ans_num == 0:
                 return abs(pred_num) < 1e-6
 
-            return (
-                abs(pred_num - ans_num) / abs(ans_num) <= self.config.relaxed_tolerance
-            )
+            return abs(pred_num - ans_num) / abs(ans_num) <= relaxed_tolerance
         except ValueError:
             pass
 
         return pred.lower() == ans.lower()
 
-    async def evaluate_single(self, item: dict) -> dict:
+    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
         try:
-            messages = self.build_messages(item)
+            messages = self.build_messages(data_item)
 
-            completion = await self.server.chat_completion(
+            gen_params = self.get_generation_params()
+            completion = await client.chat.completions.create(
+                model=self.model_name,
                 messages=messages,
-                n=1,
-                max_tokens=self.config.eval_max_tokens,
-                temperature=self.config.eval_temperature,
-                split="eval",
+                temperature=gen_params["temperature"],
+                max_tokens=gen_params["max_tokens"],
             )
 
             if not completion.choices:
-                return {"correct": False, "error": "Empty response"}
+                return {"accuracy": 0.0}, {"error": "Empty response"}
 
             message = completion.choices[0].message
             response = message.content or ""
@@ -213,92 +144,32 @@ Question: {query}"""
                     response = reasoning
 
             if not response:
-                return {"correct": False, "error": "Empty response"}
+                return {"accuracy": 0.0}, {"error": "Empty response"}
+
             extracted = self.extract_answer(response)
-            answer = item.get("label", item.get("answer", ""))
+            answer = data_item.get("label", data_item.get("answer", ""))
             correct = self.score_relaxed(extracted, answer)
 
-            is_numeric = False
-            try:
-                float(answer.replace(",", "").replace("%", "").replace("$", ""))
-                is_numeric = True
-            except ValueError:
-                pass
-
-            return {
-                "question": item.get("query", item.get("question", "")),
+            sample = {
+                "question": data_item.get("query", data_item.get("question", "")),
                 "answer": answer,
-                "response": response,
-                "extracted": extracted,
+                "prediction": extracted,
                 "correct": correct,
-                "is_numeric": is_numeric,
             }
+
+            return {"accuracy": 1.0 if correct else 0.0}, sample
 
         except Exception as e:
-            return {"correct": False, "error": str(e)}
-
-    def compute_metrics(self, results: List[dict]) -> dict:
-        valid_results = [r for r in results if "error" not in r]
-        correct = sum(1 for r in valid_results if r["correct"])
-        total = len(valid_results)
-
-        metrics = {
-            "accuracy": correct / total if total > 0 else 0.0,
-            "correct": correct,
-            "total": total,
-            "errors": len(results) - len(valid_results),
-        }
-
-        numeric_results = [r for r in valid_results if r.get("is_numeric", False)]
-        text_results = [r for r in valid_results if not r.get("is_numeric", False)]
-
-        if numeric_results:
-            num_correct = sum(1 for r in numeric_results if r["correct"])
-            metrics["accuracy_numeric"] = num_correct / len(numeric_results)
-
-        if text_results:
-            text_correct = sum(1 for r in text_results if r["correct"])
-            metrics["accuracy_text"] = text_correct / len(text_results)
-
-        return metrics
-
-    async def evaluate(self, *args, **kwargs):
-        start_time = time.time()
-
-        tasks = [self.evaluate_single(item) for item in self.dataset]
-        results = await tqdm_asyncio.gather(
-            *tasks, desc=f"Evaluating ChartQA ({self.config.subset})"
-        )
-
-        metrics = self.compute_metrics(results)
-        end_time = time.time()
-
-        samples = [
-            {
-                "question": r.get("question", ""),
-                "answer": r.get("answer", ""),
-                "prediction": r.get("extracted", ""),
-                "correct": r.get("correct", False),
-                "is_numeric": r.get("is_numeric", False),
-            }
-            for r in results
-            if "error" not in r
-        ]
-
-        await self.evaluate_log(
-            metrics=metrics,
-            samples=samples,
-            start_time=start_time,
-            end_time=end_time,
-            task_name=f"chartqa_{self.config.subset}",
-            generation_parameters={
-                "temperature": self.config.eval_temperature,
-                "max_tokens": self.config.eval_max_tokens,
-                "subset": self.config.subset,
-                "relaxed_tolerance": self.config.relaxed_tolerance,
-            },
-        )
+            return {"accuracy": 0.0}, {"error": str(e)}
 
 
 if __name__ == "__main__":
-    ChartQAEnv.cli()
+    asyncio.run(
+        eval_runner(
+            ChartQA,
+            subset="human",
+            relaxed_tolerance=0.05,
+            temperature=0.0,
+            max_tokens=2048,
+        )
+    )

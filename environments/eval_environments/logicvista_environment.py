@@ -1,140 +1,131 @@
+import asyncio
 import base64
 import io
 import json
-import os
-import time
+import subprocess
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
+from openai import AsyncOpenAI
 from PIL import Image
-from pydantic import Field
-from tqdm.asyncio import tqdm_asyncio
 
-from atroposlib.envs.base import (
-    APIServerConfig,
-    BaseEnv,
-    BaseEnvConfig,
-    Item,
-    ScoredDataGroup,
-)
+from environments.eval_environments.eval_base import EvalBase, eval_runner
+
+LOGICVISTA_REPO = "https://github.com/Yijia-Xiao/LogicVista.git"
+DEFAULT_DATA_DIR = Path.home() / ".cache" / "logicvista"
 
 
-class LogicVistaConfig(BaseEnvConfig):
-    data_path: str = Field(
-        default="./data/dataset.json",
-        description="Path to LogicVista dataset JSON file",
-    )
-    images_base: str = Field(
-        default="./data",
-        description="Base path for images (image_path is relative to this)",
-    )
-    eval_temperature: float = Field(
-        default=0.0,
-        description="Temperature for eval completions",
-    )
-    eval_max_tokens: int = Field(
-        default=256,
-        description="Max tokens for eval completions",
-    )
+class LogicVista(EvalBase):
+    """
+    LogicVista evaluation environment.
 
+    A benchmark for logical reasoning in visual contexts.
+    https://logicvista.github.io/
 
-class LogicVistaEnv(BaseEnv):
-    name = "logicvista"
-    env_config_cls = LogicVistaConfig
+    448 visual multiple-choice questions across 5 reasoning skills:
+    - Inductive Reasoning
+    - Deductive Reasoning
+    - Numerical Reasoning
+    - Spatial Reasoning
+    - Mechanical Reasoning
+    """
 
     REASONING_SKILLS = [
-        "Inductive Reasoning",
-        "Deductive Reasoning",
-        "Numerical Reasoning",
-        "Spatial Reasoning",
-        "Mechanical Reasoning",
+        "inductive",
+        "deductive",
+        "numerical",
+        "spatial",
+        "mechanical",
     ]
 
     CAPABILITIES = [
-        "diagrams",
-        "OCR",
+        "diagram",
+        "ocr",
         "patterns",
         "graphs",
         "tables",
-        "3D Shapes",
+        "3d shapes",
         "puzzles",
         "sequences",
         "physics",
     ]
 
-    def __init__(
-        self,
-        config: LogicVistaConfig,
-        server_configs: List[APIServerConfig],
-        slurm: bool = True,
-        testing: bool = False,
-    ):
-        super().__init__(config, server_configs, slurm, testing)
-        self.config: LogicVistaConfig = config
+    def _download_data(self, data_dir: Path) -> None:
+        """Clone LogicVista repo if not present."""
+        if data_dir.exists() and (data_dir / "data" / "dataset.json").exists():
+            return
 
-    @classmethod
-    def config_init(cls) -> Tuple[LogicVistaConfig, List[APIServerConfig]]:
-        config = LogicVistaConfig(
-            tokenizer_name="NousResearch/Hermes-3-Llama-3.1-8B",
-            use_wandb=False,
-            data_dir_to_save_evals="./eval_results/logicvista",
-            max_eval_workers=32,
+        print(f"Downloading LogicVista dataset to {data_dir}...")
+        data_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        subprocess.run(
+            ["git", "clone", "--depth", "1", LOGICVISTA_REPO, str(data_dir)],
+            check=True,
+            capture_output=True,
         )
-        server_configs = [
-            APIServerConfig(
-                model_name="gpt-4o",
-                base_url="https://api.openai.com/v1",
-                api_key=os.environ.get("OPENAI_API_KEY", ""),
-                num_requests_for_eval=32,
-            )
-        ]
-        return config, server_configs
+        print("Download complete!")
 
-    async def setup(self):
-        data_path = Path(self.config.data_path)
-        if not data_path.exists():
-            raise FileNotFoundError(f"Dataset not found at {data_path}")
+    def setup_data(self) -> list:
+        """
+        Load and return dataset as a list.
+
+        Auto-downloads the LogicVista repo if data_path is not specified
+        or doesn't exist.
+        """
+        data_path = getattr(self, "data_path", None)
+
+        if data_path is None:
+            data_dir = DEFAULT_DATA_DIR
+            self._download_data(data_dir)
+            data_path = data_dir / "data" / "dataset.json"
+            self.images_base = str(data_dir / "data" / "images")
+        else:
+            data_path = Path(data_path)
+            if not data_path.exists():
+                raise FileNotFoundError(
+                    f"Dataset not found at {data_path}. "
+                    "Remove data_path argument to auto-download."
+                )
 
         with open(data_path, "r") as f:
-            self.dataset = json.load(f)
+            raw_data = json.load(f)
 
-        print(f"Loaded {len(self.dataset)} examples from LogicVista")
+        dataset = []
+        for item_id, item in raw_data.items():
+            dataset.append(
+                {
+                    "id": item_id,
+                    "imagename": item.get("imagename", ""),
+                    "question": item.get("question", ""),
+                    "answer": item.get("answer", ""),
+                    "reasoning": item.get("reasoning", ""),
+                    "skill": item.get("skill", []),
+                    "broad_capability": item.get("broad_capability", []),
+                }
+            )
 
-    async def get_next_item(self) -> Item:
-        raise NotImplementedError("Eval-only environment")
+        print(f"Loaded {len(dataset)} examples from LogicVista")
+        return dataset
 
-    async def collect_trajectories(self, item: Item) -> Tuple[ScoredDataGroup, List]:
-        raise NotImplementedError("Eval-only environment")
-
-    def encode_image_from_path(self, path: str) -> str:
-        with open(path, "rb") as f:
-            return base64.b64encode(f.read()).decode("utf-8")
-
-    def encode_image_from_pil(self, pil_image: Image.Image) -> str:
+    def encode_image(self, pil_image: Image.Image) -> str:
         buffer = io.BytesIO()
         pil_image.save(buffer, format="PNG")
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
     def get_image_base64(self, item: dict) -> str:
-        image_path = item.get("image_path", "")
-        full_path = Path(self.config.images_base) / image_path
-        return self.encode_image_from_path(str(full_path))
+        images_base = getattr(self, "images_base", "./data/images")
+        imagename = item.get("imagename", "")
+        full_path = Path(images_base) / imagename
+        with open(full_path, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
 
     def build_messages(self, item: dict) -> List[dict]:
         image_base64 = self.get_image_base64(item)
         question = item.get("question", "")
-        options = item.get("options", [])
-
-        options_text = "\n".join(
-            [f"({chr(65+i)}) {opt}" for i, opt in enumerate(options)]
-        )
 
         prompt = f"""Look at the image and answer the multiple choice question.
 
-Question: {question}
-
-Options:
-{options_text}
+{question}
 
 Answer with only the letter (A, B, C, or D)."""
 
@@ -151,122 +142,74 @@ Answer with only the letter (A, B, C, or D)."""
             }
         ]
 
-    def extract_answer(self, response: str) -> Optional[str]:
+    def extract_answer(self, response: str) -> str:
         response = response.strip().upper()
 
         for char in response:
             if char in "ABCD":
                 return char
 
-        return None
+        return ""
 
-    def score(self, prediction: Optional[str], answer_idx: int) -> bool:
-        if prediction is None:
+    def score(self, prediction: str, answer: str) -> bool:
+        if not prediction:
             return False
+        return prediction.upper() == answer.upper()
 
-        pred_idx = ord(prediction) - ord("A")
-        return pred_idx == answer_idx
-
-    async def evaluate_single(self, item: dict) -> dict:
+    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
         try:
-            messages = self.build_messages(item)
+            messages = self.build_messages(data_item)
 
-            completion = await self.server.chat_completion(
+            gen_params = self.get_generation_params()
+            completion = await client.chat.completions.create(
+                model=self.model_name,
                 messages=messages,
-                n=1,
-                max_tokens=self.config.eval_max_tokens,
-                temperature=self.config.eval_temperature,
-                split="eval",
+                temperature=gen_params["temperature"],
+                max_tokens=gen_params["max_tokens"],
             )
 
-            if not completion.choices or not completion.choices[0].message.content:
-                return {"correct": False, "error": "Empty response"}
+            if not completion.choices:
+                return {"accuracy": 0.0}, {"error": "Empty response"}
 
-            response = completion.choices[0].message.content
+            message = completion.choices[0].message
+            response = message.content or ""
+            if hasattr(message, "reasoning") and message.reasoning and not response:
+                response = message.reasoning
+            if not response and hasattr(message, "model_extra"):
+                reasoning = message.model_extra.get("reasoning", "")
+                if reasoning:
+                    response = reasoning
+
+            if not response:
+                return {"accuracy": 0.0}, {"error": "Empty response"}
+
             extracted = self.extract_answer(response)
-            answer_idx = item.get("answer", 0)
-            correct = self.score(extracted, answer_idx)
+            answer = data_item.get("answer", "")
+            correct = self.score(extracted, answer)
 
-            correct_letter = chr(65 + answer_idx)
+            skill = data_item.get("skill", [])
+            skill_str = skill[0] if skill else ""
 
-            return {
-                "index": item.get("index", ""),
-                "question": item.get("question", ""),
-                "options": item.get("options", []),
-                "answer": correct_letter,
-                "response": response,
-                "extracted": extracted,
+            sample = {
+                "id": data_item.get("id", ""),
+                "question": data_item.get("question", ""),
+                "answer": answer,
+                "prediction": extracted,
                 "correct": correct,
-                "skill": item.get("skill", ""),
-                "caps": item.get("caps", []),
+                "skill": skill_str,
             }
+
+            return {"accuracy": 1.0 if correct else 0.0}, sample
 
         except Exception as e:
-            return {"correct": False, "error": str(e)}
-
-    def compute_metrics(self, results: List[dict]) -> dict:
-        valid_results = [r for r in results if "error" not in r]
-        correct = sum(1 for r in valid_results if r["correct"])
-        total = len(valid_results)
-
-        metrics = {
-            "accuracy": correct / total if total > 0 else 0.0,
-            "correct": correct,
-            "total": total,
-            "errors": len(results) - len(valid_results),
-        }
-
-        for skill in self.REASONING_SKILLS:
-            skill_results = [r for r in valid_results if r.get("skill") == skill]
-            if skill_results:
-                skill_correct = sum(1 for r in skill_results if r["correct"])
-                key = skill.lower().replace(" ", "_")
-                metrics[f"accuracy_{key}"] = skill_correct / len(skill_results)
-
-        for cap in self.CAPABILITIES:
-            cap_results = [r for r in valid_results if cap in r.get("caps", [])]
-            if cap_results:
-                cap_correct = sum(1 for r in cap_results if r["correct"])
-                key = cap.lower().replace(" ", "_")
-                metrics[f"accuracy_{key}"] = cap_correct / len(cap_results)
-
-        return metrics
-
-    async def evaluate(self, *args, **kwargs):
-        start_time = time.time()
-
-        tasks = [self.evaluate_single(item) for item in self.dataset]
-        results = await tqdm_asyncio.gather(*tasks, desc="Evaluating LogicVista")
-
-        metrics = self.compute_metrics(results)
-        end_time = time.time()
-
-        samples = [
-            {
-                "index": r.get("index", ""),
-                "question": r.get("question", ""),
-                "answer": r.get("answer", ""),
-                "prediction": r.get("extracted", ""),
-                "correct": r.get("correct", False),
-                "skill": r.get("skill", ""),
-                "caps": r.get("caps", []),
-            }
-            for r in results
-            if "error" not in r
-        ]
-
-        await self.evaluate_log(
-            metrics=metrics,
-            samples=samples,
-            start_time=start_time,
-            end_time=end_time,
-            task_name="logicvista",
-            generation_parameters={
-                "temperature": self.config.eval_temperature,
-                "max_tokens": self.config.eval_max_tokens,
-            },
-        )
+            return {"accuracy": 0.0}, {"error": str(e)}
 
 
 if __name__ == "__main__":
-    LogicVistaEnv.cli()
+    asyncio.run(
+        eval_runner(
+            LogicVista,
+            temperature=0.0,
+            max_tokens=256,
+        )
+    )

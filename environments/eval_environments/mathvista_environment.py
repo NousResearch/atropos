@@ -1,111 +1,51 @@
+import asyncio
 import base64
 import io
-import os
 import re
-import time
 from typing import List, Tuple
 
 from datasets import load_dataset
+from openai import AsyncOpenAI
 from PIL import Image
-from pydantic import Field
-from tqdm.asyncio import tqdm_asyncio
 
-from atroposlib.envs.base import (
-    APIServerConfig,
-    BaseEnv,
-    BaseEnvConfig,
-    Item,
-    ScoredDataGroup,
-)
+from environments.eval_environments.eval_base import EvalBase, eval_runner
 
 
-class MathVistaConfig(BaseEnvConfig):
-    split: str = Field(
-        default="testmini",
-        description="Dataset split: 'testmini' (1000 examples with answers) or 'test' (5141, answers withheld)",
-    )
-    use_query: bool = Field(
-        default=True,
-        description="Use provided query prompts with task-specific hints",
-    )
-    eval_temperature: float = Field(
-        default=0.0,
-        description="Temperature for eval completions",
-    )
-    eval_max_tokens: int = Field(
-        default=4096,
-        description="Max tokens for eval completions (increased for thinking models)",
-    )
+class MathVista(EvalBase):
+    """
+    MathVista evaluation environment.
 
-
-class MathVistaEnv(BaseEnv):
-    name = "mathvista"
-    env_config_cls = MathVistaConfig
+    A benchmark for mathematical reasoning in visual contexts.
+    https://mathvista.github.io/
+    """
 
     TASK_TYPES = ["FQA", "GPS", "MWP", "TQA", "VQA"]
     SKILL_TYPES = ["ALG", "ARI", "GEO", "LOG", "NUM", "SCI", "STA"]
 
-    def __init__(
-        self,
-        config: MathVistaConfig,
-        server_configs: List[APIServerConfig],
-        slurm: bool = True,
-        testing: bool = False,
-    ):
-        super().__init__(config, server_configs, slurm, testing)
-        self.config: MathVistaConfig = config
+    def setup_data(self) -> list:
+        split = getattr(self, "split", "testmini")
+        dataset = load_dataset("AI4Math/MathVista", split=split)
+        print(f"Loaded {len(dataset)} examples from MathVista ({split})")
+        return list(dataset)
 
-    @classmethod
-    def config_init(cls) -> Tuple[MathVistaConfig, List[APIServerConfig]]:
-        config = MathVistaConfig(
-            tokenizer_name="NousResearch/Hermes-3-Llama-3.1-8B",
-            use_wandb=False,
-            data_dir_to_save_evals="./eval_results/mathvista",
-            max_eval_workers=32,
-        )
-        server_configs = [
-            APIServerConfig(
-                model_name="gpt-4o",
-                base_url="https://api.openai.com/v1",
-                api_key=os.environ.get("OPENAI_API_KEY", ""),
-                num_requests_for_eval=32,
-            )
-        ]
-        return config, server_configs
-
-    async def setup(self):
-        self.dataset = load_dataset(
-            "AI4Math/MathVista",
-            split=self.config.split,
-            trust_remote_code=True,
-        )
-        print(
-            f"Loaded {len(self.dataset)} examples from MathVista ({self.config.split})"
-        )
-
-    async def get_next_item(self) -> Item:
-        raise NotImplementedError("Eval-only environment")
-
-    async def collect_trajectories(self, item: Item) -> Tuple[ScoredDataGroup, List]:
-        raise NotImplementedError("Eval-only environment")
-
-    def encode_image_from_pil(self, pil_image: Image.Image) -> str:
+    def encode_image(self, pil_image: Image.Image) -> str:
         buffer = io.BytesIO()
         pil_image.save(buffer, format="PNG")
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
     def get_image_base64(self, item: dict) -> str:
         if "decoded_image" in item and item["decoded_image"] is not None:
-            return self.encode_image_from_pil(item["decoded_image"])
+            return self.encode_image(item["decoded_image"])
         if "image" in item and item["image"] is not None:
             if isinstance(item["image"], Image.Image):
-                return self.encode_image_from_pil(item["image"])
+                return self.encode_image(item["image"])
         raise ValueError(f"Could not find image for item {item.get('pid', 'unknown')}")
 
     def build_messages(self, item: dict) -> List[dict]:
         image_base64 = self.get_image_base64(item)
 
-        if self.config.use_query and "query" in item:
+        use_query = getattr(self, "use_query", True)
+        if use_query and "query" in item:
             prompt = item["query"]
         else:
             prompt = self._build_custom_prompt(item)
@@ -132,7 +72,10 @@ class MathVistaEnv(BaseEnv):
         if question_type == "multi_choice":
             choices = item.get("choices", [])
             choices_text = "\n".join(choices) if choices else ""
-            hint = "Please answer the question and provide the correct option letter, e.g., A, B, C, D, at the end."
+            hint = (
+                "Please answer the question and provide the correct option letter, "
+                "e.g., A, B, C, D, at the end."
+            )
             return f"Hint: {hint}\nQuestion: {question}\nChoices:\n{choices_text}"
 
         if answer_type == "integer":
@@ -215,20 +158,20 @@ class MathVistaEnv(BaseEnv):
 
         return pred.lower() == ans.lower()
 
-    async def evaluate_single(self, item: dict) -> dict:
+    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
         try:
-            messages = self.build_messages(item)
+            messages = self.build_messages(data_item)
 
-            completion = await self.server.chat_completion(
+            gen_params = self.get_generation_params()
+            completion = await client.chat.completions.create(
+                model=self.model_name,
                 messages=messages,
-                n=1,
-                max_tokens=self.config.eval_max_tokens,
-                temperature=self.config.eval_temperature,
-                split="eval",
+                temperature=gen_params["temperature"],
+                max_tokens=gen_params["max_tokens"],
             )
 
             if not completion.choices:
-                return {"correct": False, "error": "Empty response"}
+                return {"accuracy": 0.0}, {"error": "Empty response"}
 
             message = completion.choices[0].message
             response = message.content or ""
@@ -240,128 +183,39 @@ class MathVistaEnv(BaseEnv):
                     response = reasoning
 
             if not response:
-                return {"correct": False, "error": "Empty response"}
-            answer_type = item.get("answer_type", "text")
-            question_type = item.get("question_type", "free_form")
-            precision = item.get("precision", 0)
+                return {"accuracy": 0.0}, {"error": "Empty response"}
+
+            answer_type = data_item.get("answer_type", "text")
+            question_type = data_item.get("question_type", "free_form")
+            precision = data_item.get("precision", 0)
 
             extracted = self.extract_answer(response, answer_type, question_type)
-            answer = item.get("answer", "")
+            answer = data_item.get("answer", "")
             correct = self.score(extracted, answer, answer_type, precision)
 
-            metadata = item.get("metadata", {})
-            task = metadata.get("task", "")
-            skills = metadata.get("skills", [])
-
-            task_abbrev = ""
-            for abbrev in self.TASK_TYPES:
-                if (
-                    task.lower().startswith(abbrev.lower())
-                    or abbrev.lower() in task.lower()
-                ):
-                    task_abbrev = abbrev
-                    break
-
-            skill_abbrevs = []
-            for skill in skills:
-                skill_lower = skill.lower()
-                for abbrev in self.SKILL_TYPES:
-                    if abbrev.lower() in skill_lower or skill_lower.startswith(
-                        abbrev.lower()[:3]
-                    ):
-                        skill_abbrevs.append(abbrev)
-                        break
-
-            return {
-                "pid": item.get("pid", ""),
-                "question": item.get("question", ""),
+            sample = {
+                "pid": data_item.get("pid", ""),
+                "question": data_item.get("question", ""),
                 "answer": answer,
-                "response": response,
-                "extracted": extracted,
+                "prediction": extracted,
                 "correct": correct,
                 "question_type": question_type,
                 "answer_type": answer_type,
-                "task": task_abbrev,
-                "skills": skill_abbrevs,
             }
+
+            return {"accuracy": 1.0 if correct else 0.0}, sample
 
         except Exception as e:
-            return {"correct": False, "error": str(e)}
-
-    def compute_metrics(self, results: List[dict]) -> dict:
-        valid_results = [r for r in results if "error" not in r]
-        correct = sum(1 for r in valid_results if r["correct"])
-        total = len(valid_results)
-
-        metrics = {
-            "accuracy": correct / total if total > 0 else 0.0,
-            "correct": correct,
-            "total": total,
-            "errors": len(results) - len(valid_results),
-        }
-
-        for task in self.TASK_TYPES:
-            task_results = [r for r in valid_results if r.get("task") == task]
-            if task_results:
-                task_correct = sum(1 for r in task_results if r["correct"])
-                metrics[f"accuracy_{task}"] = task_correct / len(task_results)
-
-        for skill in self.SKILL_TYPES:
-            skill_results = [r for r in valid_results if skill in r.get("skills", [])]
-            if skill_results:
-                skill_correct = sum(1 for r in skill_results if r["correct"])
-                metrics[f"accuracy_{skill}"] = skill_correct / len(skill_results)
-
-        for qtype in ["multi_choice", "free_form"]:
-            qtype_results = [
-                r for r in valid_results if r.get("question_type") == qtype
-            ]
-            if qtype_results:
-                qtype_correct = sum(1 for r in qtype_results if r["correct"])
-                metrics[f"accuracy_{qtype}"] = qtype_correct / len(qtype_results)
-
-        return metrics
-
-    async def evaluate(self, *args, **kwargs):
-        start_time = time.time()
-
-        tasks = [self.evaluate_single(item) for item in self.dataset]
-        results = await tqdm_asyncio.gather(
-            *tasks, desc=f"Evaluating MathVista ({self.config.split})"
-        )
-
-        metrics = self.compute_metrics(results)
-        end_time = time.time()
-
-        samples = [
-            {
-                "pid": r.get("pid", ""),
-                "question": r.get("question", ""),
-                "answer": r.get("answer", ""),
-                "prediction": r.get("extracted", ""),
-                "correct": r.get("correct", False),
-                "question_type": r.get("question_type", ""),
-                "answer_type": r.get("answer_type", ""),
-                "task": r.get("task", ""),
-                "skills": r.get("skills", []),
-            }
-            for r in results
-            if "error" not in r
-        ]
-
-        await self.evaluate_log(
-            metrics=metrics,
-            samples=samples,
-            start_time=start_time,
-            end_time=end_time,
-            task_name=f"mathvista_{self.config.split}",
-            generation_parameters={
-                "temperature": self.config.eval_temperature,
-                "max_tokens": self.config.eval_max_tokens,
-                "use_query": self.config.use_query,
-            },
-        )
+            return {"accuracy": 0.0}, {"error": str(e)}
 
 
 if __name__ == "__main__":
-    MathVistaEnv.cli()
+    asyncio.run(
+        eval_runner(
+            MathVista,
+            split="testmini",
+            use_query=True,
+            temperature=0.0,
+            max_tokens=4096,
+        )
+    )

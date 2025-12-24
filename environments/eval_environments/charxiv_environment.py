@@ -1,130 +1,54 @@
+import asyncio
 import base64
 import io
 import os
 import re
-import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import openai
 from datasets import load_dataset
+from openai import AsyncOpenAI
 from PIL import Image
-from pydantic import Field
-from tqdm.asyncio import tqdm_asyncio
 
-from atroposlib.envs.base import (
-    APIServerConfig,
-    BaseEnv,
-    BaseEnvConfig,
-    Item,
-    ScoredDataGroup,
-)
+from environments.eval_environments.eval_base import EvalBase, eval_runner
 
 
-class CharXivConfig(BaseEnvConfig):
-    mode: str = Field(
-        default="reasoning",
-        description="Evaluation mode: 'descriptive' or 'reasoning'",
-    )
-    split: str = Field(default="val", description="Dataset split: 'val' or 'test'")
-    images_path: Optional[str] = Field(
-        default=None,
-        description="Path to images folder. If None, downloads from HuggingFace.",
-    )
-    judge_model: str = Field(
-        default="gpt-4o",
-        description="Model for grading descriptive answers",
-    )
-    judge_base_url: str = Field(
-        default="https://api.openai.com/v1",
-        description="Base URL for judge model API",
-    )
-    judge_api_key_env: str = Field(
-        default="OPENAI_API_KEY",
-        description="Environment variable for judge API key",
-    )
-    eval_temperature: float = Field(
-        default=0.0,
-        description="Temperature for eval completions",
-    )
-    eval_max_tokens: int = Field(
-        default=4096,
-        description="Max tokens for eval completions (increased for thinking models)",
-    )
+class CharXiv(EvalBase):
+    """
+    CharXiv evaluation environment.
 
-
-class CharXivEnv(BaseEnv):
-    name = "charxiv"
-    env_config_cls = CharXivConfig
+    A benchmark for chart reasoning from arXiv papers.
+    https://charxiv.github.io/
+    """
 
     CATEGORY_NAMES = {
         "descriptive": {
-            0: "INEX",  # Information Extraction
-            1: "ENUM",  # Enumeration
-            2: "PATT",  # Pattern Recognition
-            3: "CNTG",  # Counting
-            4: "COMP",  # Compositionality
+            0: "INEX",
+            1: "ENUM",
+            2: "PATT",
+            3: "CNTG",
+            4: "COMP",
         },
         "reasoning": {
-            0: "TC",  # Text-in-Chart
-            1: "TG",  # Text-in-General
-            2: "NC",  # Number-in-Chart
-            3: "NG",  # Number-in-General
+            0: "TC",
+            1: "TG",
+            2: "NC",
+            3: "NG",
         },
     }
 
-    def __init__(
-        self,
-        config: CharXivConfig,
-        server_configs: List[APIServerConfig],
-        slurm: bool = True,
-        testing: bool = False,
-    ):
-        super().__init__(config, server_configs, slurm, testing)
-        self.config: CharXivConfig = config
+    def setup_data(self) -> list:
+        mode = getattr(self, "mode", "reasoning")
+        split = getattr(self, "split", "val")
+        split_name = "validation" if split == "val" else "test"
 
-        judge_api_key = os.environ.get(self.config.judge_api_key_env)
-        if self.config.mode == "descriptive" and not judge_api_key:
-            raise ValueError(
-                f"Judge API key required for descriptive mode. Set {self.config.judge_api_key_env}"
-            )
+        raw_dataset = load_dataset("princeton-nlp/CharXiv", split=split_name)
 
-        if judge_api_key:
-            self.judge_client = openai.AsyncOpenAI(
-                api_key=judge_api_key,
-                base_url=self.config.judge_base_url,
-            )
-
-    @classmethod
-    def config_init(cls) -> Tuple[CharXivConfig, List[APIServerConfig]]:
-        config = CharXivConfig(
-            tokenizer_name="NousResearch/Hermes-3-Llama-3.1-8B",
-            use_wandb=False,
-            data_dir_to_save_evals="./eval_results/charxiv",
-            max_eval_workers=32,
-        )
-        server_configs = [
-            APIServerConfig(
-                model_name="gpt-4o",
-                base_url="https://api.openai.com/v1",
-                api_key=os.environ.get("OPENAI_API_KEY", ""),
-                num_requests_for_eval=32,
-            )
-        ]
-        return config, server_configs
-
-    async def setup(self):
-        dataset_name = "princeton-nlp/CharXiv"
-        split_name = "validation" if self.config.split == "val" else "test"
-
-        raw_dataset = load_dataset(dataset_name, split=split_name)
-
-        # Transform dataset based on mode
-        self.dataset = []
+        data = []
         for item in raw_dataset:
-            if self.config.mode == "reasoning":
-                # Reasoning mode: single question per image
-                self.dataset.append(
+            if mode == "reasoning":
+                data.append(
                     {
                         "image": item["image"],
                         "figure_id": item.get("original_id", ""),
@@ -135,12 +59,11 @@ class CharXivEnv(BaseEnv):
                     }
                 )
             else:
-                # Descriptive mode: up to 4 questions per image
                 for i in range(1, 5):
                     q_key = f"descriptive_q{i}"
                     a_key = f"descriptive_a{i}"
                     if item.get(q_key) and item.get(a_key):
-                        self.dataset.append(
+                        data.append(
                             {
                                 "image": item["image"],
                                 "figure_id": item.get("original_id", ""),
@@ -151,35 +74,26 @@ class CharXivEnv(BaseEnv):
                             }
                         )
 
-        print(
-            f"Loaded {len(self.dataset)} examples from CharXiv ({self.config.mode}, {self.config.split})"
-        )
+        print(f"Loaded {len(data)} examples from CharXiv ({mode}, {split})")
+        return data
 
-    async def get_next_item(self) -> Item:
-        raise NotImplementedError("Eval-only environment")
-
-    async def collect_trajectories(self, item: Item) -> Tuple[ScoredDataGroup, List]:
-        raise NotImplementedError("Eval-only environment")
-
-    def encode_image_from_pil(self, pil_image: Image.Image) -> str:
+    def encode_image(self, pil_image: Image.Image) -> str:
         buffer = io.BytesIO()
         pil_image.save(buffer, format="PNG")
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-    def encode_image_from_path(self, path: str) -> str:
-        with open(path, "rb") as f:
-            return base64.b64encode(f.read()).decode("utf-8")
-
     def get_image_base64(self, item: dict) -> str:
-        if self.config.images_path:
+        images_path: Optional[str] = getattr(self, "images_path", None)
+        if images_path:
             figure_id = item.get("figure_id", item.get("id", 0))
-            image_path = Path(self.config.images_path) / f"{figure_id}.png"
+            image_path = Path(images_path) / f"{figure_id}.png"
             if not image_path.exists():
-                image_path = Path(self.config.images_path) / f"{figure_id}.jpg"
-            return self.encode_image_from_path(str(image_path))
+                image_path = Path(images_path) / f"{figure_id}.jpg"
+            with open(image_path, "rb") as f:
+                return base64.b64encode(f.read()).decode("utf-8")
 
         if "image" in item and item["image"] is not None:
-            return self.encode_image_from_pil(item["image"])
+            return self.encode_image(item["image"])
 
         raise ValueError(
             f"Could not find image for item: {item.get('figure_id', 'unknown')}"
@@ -189,7 +103,8 @@ class CharXivEnv(BaseEnv):
         image_base64 = self.get_image_base64(item)
         query = item.get("query", item.get("question", ""))
 
-        if self.config.mode == "descriptive":
+        mode = getattr(self, "mode", "reasoning")
+        if mode == "descriptive":
             instruction = (
                 "Answer the question about this chart. Be concise and specific."
             )
@@ -226,6 +141,20 @@ class CharXivEnv(BaseEnv):
         return ans_clean in pred_clean or pred_clean == ans_clean
 
     async def score_descriptive(self, query: str, prediction: str, answer: str) -> bool:
+        judge_model = getattr(self, "judge_model", "gpt-4o")
+        judge_base_url = getattr(self, "judge_base_url", "https://api.openai.com/v1")
+        judge_api_key = os.environ.get(
+            getattr(self, "judge_api_key_env", "OPENAI_API_KEY"), ""
+        )
+
+        if not judge_api_key:
+            return self.score_reasoning(prediction, answer)
+
+        judge_client = openai.AsyncOpenAI(
+            api_key=judge_api_key,
+            base_url=judge_base_url,
+        )
+
         prompt = f"""Evaluate if the model's response correctly answers the question about the chart.
 
 Question: {query}
@@ -240,8 +169,8 @@ Does the model's response correctly answer the question? Consider:
 Output only "1" if the response is correct, or "0" if incorrect."""
 
         try:
-            response = await self.judge_client.chat.completions.create(
-                model=self.config.judge_model,
+            response = await judge_client.chat.completions.create(
+                model=judge_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.0,
                 max_tokens=10,
@@ -252,20 +181,20 @@ Output only "1" if the response is correct, or "0" if incorrect."""
             print(f"Judge error: {e}")
             return False
 
-    async def evaluate_single(self, item: dict) -> dict:
+    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
         try:
-            messages = self.build_messages(item)
+            messages = self.build_messages(data_item)
 
-            completion = await self.server.chat_completion(
+            gen_params = self.get_generation_params()
+            completion = await client.chat.completions.create(
+                model=self.model_name,
                 messages=messages,
-                n=1,
-                max_tokens=self.config.eval_max_tokens,
-                temperature=self.config.eval_temperature,
-                split="eval",
+                temperature=gen_params["temperature"],
+                max_tokens=gen_params["max_tokens"],
             )
 
             if not completion.choices:
-                return {"correct": False, "error": "Empty response"}
+                return {"accuracy": 0.0}, {"error": "Empty response"}
 
             message = completion.choices[0].message
             response = message.content or ""
@@ -277,22 +206,24 @@ Output only "1" if the response is correct, or "0" if incorrect."""
                     response = reasoning
 
             if not response:
-                return {"correct": False, "error": "Empty response"}
-            answer = item.get("answer", "")
-            query = item.get("query", item.get("question", ""))
+                return {"accuracy": 0.0}, {"error": "Empty response"}
 
-            if self.config.mode == "descriptive":
+            answer = data_item.get("answer", "")
+            query = data_item.get("query", data_item.get("question", ""))
+
+            mode = getattr(self, "mode", "reasoning")
+            if mode == "descriptive":
                 correct = await self.score_descriptive(query, response, answer)
             else:
                 correct = self.score_reasoning(response, answer)
 
-            category_id = item.get("inst_category", item.get("qa_source", 0))
-            category_name = self.CATEGORY_NAMES.get(self.config.mode, {}).get(
+            category_id = data_item.get("inst_category", data_item.get("qa_source", 0))
+            category_name = self.CATEGORY_NAMES.get(mode, {}).get(
                 category_id, "unknown"
             )
 
-            return {
-                "figure_id": item.get("figure_id", ""),
+            sample = {
+                "figure_id": data_item.get("figure_id", ""),
                 "question": query,
                 "answer": answer,
                 "prediction": response,
@@ -300,67 +231,19 @@ Output only "1" if the response is correct, or "0" if incorrect."""
                 "category": category_name,
             }
 
+            return {"accuracy": 1.0 if correct else 0.0}, sample
+
         except Exception as e:
-            return {"correct": False, "error": str(e)}
-
-    def compute_metrics(self, results: List[dict]) -> dict:
-        valid_results = [r for r in results if "error" not in r]
-        correct = sum(1 for r in valid_results if r["correct"])
-        total = len(valid_results)
-
-        metrics = {
-            "accuracy": correct / total if total > 0 else 0.0,
-            "correct": correct,
-            "total": total,
-            "errors": len(results) - len(valid_results),
-        }
-
-        categories = set(r.get("category", "unknown") for r in valid_results)
-        for cat in categories:
-            cat_results = [r for r in valid_results if r.get("category") == cat]
-            if cat_results:
-                cat_correct = sum(1 for r in cat_results if r["correct"])
-                metrics[f"accuracy_{cat}"] = cat_correct / len(cat_results)
-
-        return metrics
-
-    async def evaluate(self, *args, **kwargs):
-        start_time = time.time()
-
-        tasks = [self.evaluate_single(item) for item in self.dataset]
-        results = await tqdm_asyncio.gather(
-            *tasks, desc=f"Evaluating CharXiv ({self.config.mode})"
-        )
-
-        metrics = self.compute_metrics(results)
-        end_time = time.time()
-
-        samples = [
-            {
-                "figure_id": r.get("figure_id", ""),
-                "question": r.get("question", ""),
-                "answer": r.get("answer", ""),
-                "prediction": r.get("prediction", ""),
-                "correct": r.get("correct", False),
-                "category": r.get("category", ""),
-            }
-            for r in results
-            if "error" not in r
-        ]
-
-        await self.evaluate_log(
-            metrics=metrics,
-            samples=samples,
-            start_time=start_time,
-            end_time=end_time,
-            task_name=f"charxiv_{self.config.mode}",
-            generation_parameters={
-                "temperature": self.config.eval_temperature,
-                "max_tokens": self.config.eval_max_tokens,
-                "mode": self.config.mode,
-            },
-        )
+            return {"accuracy": 0.0}, {"error": str(e)}
 
 
 if __name__ == "__main__":
-    CharXivEnv.cli()
+    asyncio.run(
+        eval_runner(
+            CharXiv,
+            mode="reasoning",
+            split="val",
+            temperature=0.0,
+            max_tokens=4096,
+        )
+    )
