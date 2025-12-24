@@ -28,6 +28,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import wandb
 from datasets import load_dataset
+from eval_helpers import (
+    build_mcqa_fallback_patterns,
+    create_system_content,
+    extract_letter_from_answer_tag,
+    extract_thinking_content,
+    get_default_thinking_prompt,
+    save_eval_results,
+    validate_thinking_format,
+)
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
@@ -36,15 +45,6 @@ from atroposlib.envs.base import (
     BaseEnv,
     BaseEnvConfig,
     EvalHandlingEnum,
-)
-from eval_helpers import (
-    extract_letter_from_answer_tag,
-    validate_thinking_format,
-    extract_thinking_content,
-    get_default_thinking_prompt,
-    create_system_content,
-    save_eval_results,
-    build_mcqa_fallback_patterns,
 )
 
 
@@ -119,10 +119,10 @@ class SIQAEvalConfig(BaseEnvConfig):
 class SIQAEvalEnv(BaseEnv):
     """
     SIQA Evaluation Environment for Atropos.
-    
+
     Evaluates models on social commonsense reasoning with multiple choice.
     """
-    
+
     name = "siqa_eval"
     env_config_cls = SIQAEvalConfig
 
@@ -136,10 +136,10 @@ class SIQAEvalEnv(BaseEnv):
         super().__init__(config, server_configs, slurm, testing)
         self.config: SIQAEvalConfig = config
         self.eval_metrics = []
-        
+
         # Pre-build fallback patterns for 3-choice (A/B/C)
         self._fallback_patterns = build_mcqa_fallback_patterns(3)
-        self._valid_letters = {'A', 'B', 'C'}
+        self._valid_letters = {"A", "B", "C"}
 
     @classmethod
     def config_init(cls) -> Tuple[SIQAEvalConfig, List[APIServerConfig]]:
@@ -172,41 +172,45 @@ class SIQAEvalEnv(BaseEnv):
         print(f"  Evaluation split: {self.config.eval_split}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
         if self.config.thinking_mode:
-            print(f"  Thinking prompt: {get_default_thinking_prompt(self.config.custom_thinking_prompt)[:80]}...")
-        
+            print(
+                f"  Thinking prompt: {get_default_thinking_prompt(self.config.custom_thinking_prompt)[:80]}..."
+            )
+
         # Load dataset
         self.dataset = load_dataset(
             self.config.dataset_name,
             split=self.config.eval_split,
             trust_remote_code=True,
         )
-        
+
         self.eval_items = list(self.dataset)
         print(f"  Loaded {len(self.eval_items)} evaluation items")
 
     def _format_prompt(self, item: Dict) -> Tuple[str, List[str]]:
         """
         Format a SIQA item into a prompt.
-        
+
         SIQA has context, question, and three answers (A, B, C).
-        
+
         Returns the formatted prompt and list of choice texts.
         """
-        context = item['context']
-        question = item['question']
-        answer_a = item['answerA']
-        answer_b = item['answerB']
-        answer_c = item['answerC']
-        
+        context = item["context"]
+        question = item["question"]
+        answer_a = item["answerA"]
+        answer_b = item["answerB"]
+        answer_c = item["answerC"]
+
         # Build the question
-        query = "The following is a multiple choice question about social common sense.\n\n"
+        query = (
+            "The following is a multiple choice question about social common sense.\n\n"
+        )
         query += f"Context: {context}\n\n"
         query += f"Question: {question}\n"
         query += f"A. {answer_a}\n"
         query += f"B. {answer_b}\n"
         query += f"C. {answer_c}\n"
         query += "\nProvide your answer in <answer></answer> tags with only the letter (A, B, or C)."
-        
+
         return query, [answer_a, answer_b, answer_c]
 
     def _create_system_content(self) -> Optional[str]:
@@ -214,13 +218,15 @@ class SIQAEvalEnv(BaseEnv):
         return create_system_content(
             self.config.thinking_mode,
             self.config.custom_thinking_prompt,
-            self.config.custom_system_prompt
+            self.config.custom_system_prompt,
         )
 
-    def _extract_answer(self, response: str, choices: List[str] = None) -> Tuple[Optional[str], str]:
+    def _extract_answer(
+        self, response: str, choices: List[str] = None
+    ) -> Tuple[Optional[str], str]:
         """
         Extract the answer letter from the model's response.
-        
+
         Uses <answer> tags as primary method, with fallback patterns.
         """
         # Get content after </think> if in thinking mode
@@ -232,31 +238,43 @@ class SIQAEvalEnv(BaseEnv):
                 response_to_parse = response
         else:
             response_to_parse = response
-        
+
         # Primary: Try <answer></answer> tags
         letter, method = extract_letter_from_answer_tag(
             response_to_parse,
             self._valid_letters,
             debug=self.config.full_debug,
-            choices=choices
+            choices=choices,
         )
         if letter:
             return letter, method
-        
+
         # Fallback: Use regex patterns
         for priority, pattern, method_name in self._fallback_patterns:
             matches = pattern.findall(response_to_parse)
             if matches:
-                match = matches[-1] if method_name in ["final_answer_is", "the_answer_is", "answer_colon", "answer_space"] else matches[0]
+                match = (
+                    matches[-1]
+                    if method_name
+                    in [
+                        "final_answer_is",
+                        "the_answer_is",
+                        "answer_colon",
+                        "answer_space",
+                    ]
+                    else matches[0]
+                )
                 if isinstance(match, tuple):
                     match = match[0]
                 letter = match.strip("()").upper()
                 if letter in self._valid_letters:
                     return letter, f"fallback_{method_name}"
-        
+
         return None, "no_match"
 
-    async def _generate_with_retry(self, messages: List[Dict], item_id: str) -> Optional[str]:
+    async def _generate_with_retry(
+        self, messages: List[Dict], item_id: str
+    ) -> Optional[str]:
         """Generate response with retry logic."""
         for attempt in range(self.config.max_retries):
             try:
@@ -267,59 +285,65 @@ class SIQAEvalEnv(BaseEnv):
                 }
                 if self.config.eval_max_tokens > 0:
                     api_params["max_tokens"] = self.config.eval_max_tokens
-                
+
                 response = await self.client.chat.completions.create(**api_params)
-                
+
                 if response.choices and response.choices[0].message.content:
                     content = response.choices[0].message.content.strip()
                     if len(content) >= self.config.min_response_length:
                         return content
-                        
+
             except Exception as e:
                 if self.config.full_debug:
                     print(f"  Error on item {item_id} attempt {attempt + 1}: {e}")
                 if attempt < self.config.max_retries - 1:
                     await asyncio.sleep(self.config.retry_delay * (attempt + 1))
-        
+
         return None
 
     async def _evaluate_single_item(self, item: Dict, idx: int) -> Dict:
         """Evaluate a single SIQA item."""
         # Format prompt
         prompt, choices = self._format_prompt(item)
-        
+
         # Build messages
         messages = []
         system_content = self._create_system_content()
         if system_content:
             messages.append({"role": "system", "content": system_content})
         messages.append({"role": "user", "content": prompt})
-        
+
         # Generate response
         response = await self._generate_with_retry(messages, str(idx))
-        
+
         if response is None:
             return {
                 "index": idx,
                 "is_correct": False,
                 "extracted_answer": None,
-                "gold_answer": ascii_uppercase[int(item['label']) - 1] if item['label'] else None,
+                "gold_answer": (
+                    ascii_uppercase[int(item["label"]) - 1] if item["label"] else None
+                ),
                 "extraction_method": "generation_failed",
                 "error": "Failed to generate response",
             }
-        
+
         # Extract answer
         extracted_answer, extraction_method = self._extract_answer(response, choices)
-        
+
         # Determine gold answer (SIQA uses 1/2/3 for label)
         gold_answer = None
-        if item['label']:
-            gold_idx = int(item['label']) - 1  # Convert 1-indexed to 0-indexed
+        if item["label"]:
+            gold_idx = int(item["label"]) - 1  # Convert 1-indexed to 0-indexed
             gold_answer = ascii_uppercase[gold_idx]
-        
+
         # Score
-        is_correct = extracted_answer == gold_answer if extracted_answer and gold_answer else False
-        
+        is_correct = (
+            extracted_answer == gold_answer
+            if extracted_answer and gold_answer
+            else False
+        )
+
         result = {
             "index": idx,
             "is_correct": is_correct,
@@ -327,11 +351,11 @@ class SIQAEvalEnv(BaseEnv):
             "gold_answer": gold_answer,
             "extraction_method": extraction_method,
         }
-        
+
         if self.config.full_debug:
             result["response"] = response
             result["prompt"] = prompt
-        
+
         return result
 
     async def evaluate(self, *args, **kwargs):
@@ -342,32 +366,32 @@ class SIQAEvalEnv(BaseEnv):
         print(f"  Total questions: {len(self.eval_items)}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
         print("=" * 60)
-        
+
         # Evaluate all items
         tasks = [
             self._evaluate_single_item(item, idx)
             for idx, item in enumerate(self.eval_items)
         ]
-        
+
         results = await tqdm_asyncio.gather(*tasks, desc="Evaluating SIQA")
-        
+
         # Calculate metrics
         valid_results = [r for r in results if r.get("gold_answer") is not None]
-        
+
         if not valid_results:
             print("Warning: No valid evaluation results obtained")
             return
-        
+
         correct = sum(1 for r in valid_results if r["is_correct"])
         total = len(valid_results)
         accuracy = correct / total if total > 0 else 0.0
-        
+
         # Extraction method breakdown
         method_counts = {}
         for r in valid_results:
             method = r.get("extraction_method", "unknown")
             method_counts[method] = method_counts.get(method, 0) + 1
-        
+
         # Print summary
         print("\n" + "=" * 60)
         print("SIQA Evaluation Results")
@@ -380,7 +404,7 @@ class SIQAEvalEnv(BaseEnv):
         for method, count in sorted(method_counts.items(), key=lambda x: -x[1]):
             print(f"    {method}: {count} ({count/total:.1%})")
         print("=" * 60)
-        
+
         # Save results
         metrics = {
             "accuracy": accuracy,
@@ -388,17 +412,15 @@ class SIQAEvalEnv(BaseEnv):
             "correct": correct,
             "extraction_methods": method_counts,
         }
-        
-        save_eval_results(
-            self.config.data_dir_to_save_evals,
-            metrics,
-            results
-        )
-        
-        self.eval_metrics = [{
-            "accuracy": accuracy,
-            "total": total,
-        }]
+
+        save_eval_results(self.config.data_dir_to_save_evals, metrics, results)
+
+        self.eval_metrics = [
+            {
+                "accuracy": accuracy,
+                "total": total,
+            }
+        ]
 
     async def wandb_log(self, step: int):
         """Log metrics to wandb."""
@@ -419,4 +441,3 @@ class SIQAEvalEnv(BaseEnv):
 
 if __name__ == "__main__":
     SIQAEvalEnv.cli()
-

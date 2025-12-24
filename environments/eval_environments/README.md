@@ -587,7 +587,7 @@ for model in "${MODELS[@]}"; do
     for benchmark in "${BENCHMARKS[@]}"; do
         bench_name=$(basename "$benchmark" .py)
         echo "Running $bench_name on $model..."
-        
+
         python "$benchmark" evaluate \
             --openai.base_url https://api.openai.com/v1 \
             --openai.api_key $OPENAI_API_KEY \

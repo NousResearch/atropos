@@ -8,6 +8,10 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import wandb
 from datasets import load_dataset
+from eval_helpers import (
+    create_system_content,
+    get_default_thinking_prompt,
+)
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
@@ -20,10 +24,6 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
-from eval_helpers import (
-    get_default_thinking_prompt,
-    create_system_content,
-)
 
 
 class RewardBenchCategory(str, Enum):

@@ -7,6 +7,11 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import wandb
 from datasets import load_dataset
+from eval_helpers import (
+    create_system_content,
+    get_default_thinking_prompt,
+    save_eval_results,
+)
 from pydantic import Field
 from tenacity import (
     retry,
@@ -25,11 +30,6 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
-from eval_helpers import (
-    get_default_thinking_prompt,
-    create_system_content,
-    save_eval_results,
-)
 
 
 class RefusalBenchConfig(BaseEnvConfig):
@@ -620,7 +620,7 @@ class RefusalBenchEnv(BaseEnv):
             }
             if self.config.judge_max_tokens > 0:
                 kwargs["max_tokens"] = self.config.judge_max_tokens
-            
+
             result = await self.judge_client.chat.completions.create(**kwargs)
             print("   ✅ Judge API call successful")
             return result

@@ -1709,4 +1709,3 @@ def generate_keywords(num_keywords):
         list[str]: List of randomly selected keywords
     """
     return random.sample(WORD_LIST, k=num_keywords)
-
