@@ -1645,8 +1645,9 @@ def split_into_sentences(text):
     text = re.sub(" " + _SUFFIXES + "[.] " + _STARTERS, " \\1<stop> \\2", text)
     text = re.sub(" " + _SUFFIXES + "[.]", " \\1<prd>", text)
     text = re.sub(" " + _ALPHABETS + "[.]", " \\1<prd>", text)
-    if """ in text:
-        text = text.replace("."", "".")
+    # Handle Unicode right double quotation mark (U+201D)
+    if '"' in text:
+        text = text.replace('."', '".')
     if '"' in text:
         text = text.replace('."', '".')
     if "!" in text:
