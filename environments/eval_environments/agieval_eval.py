@@ -590,7 +590,11 @@ class AGIEvalEnv(BaseEnv):
                     )
                     if hasattr(e, "response"):
                         try:
-                            resp_text = e.response.text[:500] if hasattr(e.response, "text") else str(e.response)
+                            resp_text = (
+                                e.response.text[:500]
+                                if hasattr(e.response, "text")
+                                else str(e.response)
+                            )
                             print(f"    Response: {resp_text}")
                         except Exception:
                             pass
