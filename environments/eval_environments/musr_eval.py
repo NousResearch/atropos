@@ -25,17 +25,13 @@ import asyncio
 import os
 import re
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
-import wandb
 from datasets import load_dataset
 from eval_helpers import (
     create_system_content,
     extract_number_from_answer_tag,
-    extract_thinking_content,
     get_default_thinking_prompt,
-    save_eval_results,
-    validate_thinking_format,
 )
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
@@ -291,7 +287,7 @@ class MuSREvalEnv(BaseEnv):
         valid_numbers = ", ".join(str(i + 1) for i in range(num_choices))
 
         query = "Read the narrative and answer the question. Think step by step before answering.\n\n"
-        query += f"Provide your final answer within <answer></answer> tags, containing only the number ({valid_numbers}).\n\n"
+        query += f"Provide your final answer within <answer></answer> tags, containing only the number ({valid_numbers}).\n\n"  # noqa: E501
         query += "Example format:\n<answer>1</answer>\n\n"
         query += f"{narrative}\n\n{question}\n\n"
         for i, choice in enumerate(choices):

@@ -24,13 +24,11 @@ import asyncio
 import os
 import random
 import re
-import time
 from typing import Dict, List, Optional, Tuple
 
 import wandb
 from datasets import load_dataset
 from eval_helpers import (
-    THINK_CONTENT_AFTER_PATTERN,
     create_system_content,
     extract_thinking_content,
     get_default_thinking_prompt,
@@ -50,7 +48,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    EvalHandlingEnum,
 )
 
 # MT-Bench categories
@@ -87,7 +84,7 @@ Your job is to evaluate a task carried out by an AI system powered by a large la
 You will be provided with the inputs and output of the task, as well as the evaluation criteria and scoring rubric. Your task is to evaluate the output of the AI system based on the evaluation criteria and scoring rubric provided.
 
 # INPUT
-Below are the inputs required for performing the task:
+Below are the inputs required for performing the task:  # noqa: E501
 <inputs>
 {question}
 </inputs>
@@ -116,11 +113,11 @@ How well the response answers the question?{' ' + reference_text if reference_te
 1. Understand the task and criteria: Familiarize yourself with the task to be evaluated. Review the evaluation criteria and scoring rubric to understand the different levels of performance and the descriptions for each score.
 2. Review the inputs and output: Look at the inputs provided for the task. Examine the output generated from completing the task.
 3. Compare output to score descriptions: Compare the output against the criteria and score descriptions in the scoring rubric. For each criterion, decide which description best matches the output.
-4. After comparing the output to the score descriptions, pay attention to the small details that might impact the final score that you assign. Sometimes a small difference can dictate the final score.
-5. Write verbal feedback justifying your evaluation that includes a detailed rationale, referring to specific aspects of the output and comparing them to the rubric.
-6. Assign a final score based on the scoring rubric.
-
-## FORMAT FOR THE EVALUATION
+4. After comparing the output to the score descriptions, pay attention to the small details that might impact the final score that you assign. Sometimes a small difference can dictate the final score.  # noqa: E501
+5. Write verbal feedback justifying your evaluation that includes a detailed rationale, referring to specific aspects of the output and comparing them to the rubric.  # noqa: E501
+6. Assign a final score based on the scoring rubric.  # noqa: E501
+  # noqa: E501
+## FORMAT FOR THE EVALUATION  # noqa: E501
 - Write the verbal feedback inside <feedback> tags without any additional surrounding text.
 - Write the numeric score inside <score> tags, without any additional surrounding text and always after the feedback.
 
@@ -309,7 +306,7 @@ class MTBenchEvalEnv(BaseEnv):
         if not self._dataset_loaded:
             await self._load_dataset()
 
-        print(f"\nMT-Bench Evaluation Setup (Multi-Turn with LLM Judge):")
+        print("\nMT-Bench Evaluation Setup (Multi-Turn with LLM Judge):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Categories: {self.config.categories or 'all'}")
         print(f"  Evaluation split: {self.config.eval_split}")
@@ -556,7 +553,7 @@ class MTBenchEvalEnv(BaseEnv):
                 judge_question = turn_prompt
             else:
                 # For turn 2, include context from turn 1
-                judge_question = f"Context from previous turn:\nUser: {turns[0]}\nAssistant: {turn_responses[0]}\n\nCurrent turn:\nUser: {turn_prompt}"
+                judge_question = f"Context from previous turn:\nUser: {turns[0]}\nAssistant: {turn_responses[0]}\n\nCurrent turn:\nUser: {turn_prompt}"  # noqa: E501
 
             # Get reference for this turn if available
             turn_reference = (
@@ -690,12 +687,12 @@ class MTBenchEvalEnv(BaseEnv):
         if self.config.thinking_mode:
             print(f"  Format Compliance (T1): {format_valid_t1 / total:.2%}")
             print(f"  Format Compliance (T2): {format_valid_t2 / total:.2%}")
-        print(f"\n  Per-Category Breakdown:")
+        print("\n  Per-Category Breakdown:")
         for cat, data in sorted(
             category_metrics.items(), key=lambda x: -x[1]["avg_score"]
         ):
             print(
-                f"    {cat}: {data['avg_score']:.2f} (T1: {data['avg_turn_1']:.2f}, T2: {data['avg_turn_2']:.2f}) [{data['count']} items]"
+                f"    {cat}: {data['avg_score']:.2f} (T1: {data['avg_turn_1']:.2f}, T2: {data['avg_turn_2']:.2f}) [{data['count']} items]"  # noqa: E501
             )
         print(f"{'='*60}\n")
 

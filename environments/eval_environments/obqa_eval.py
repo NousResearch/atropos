@@ -23,18 +23,13 @@ import os
 import re
 import time
 from string import ascii_uppercase
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
-import wandb
 from datasets import load_dataset
 from eval_helpers import (
-    build_mcqa_fallback_patterns,
     create_system_content,
     extract_letter_from_answer_tag,
-    extract_thinking_content,
     get_default_thinking_prompt,
-    save_eval_results,
-    validate_thinking_format,
 )
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
@@ -278,8 +273,8 @@ class OBQAEvalEnv(BaseEnv):
         num_choices = len(choice_texts)
         valid_letters = ", ".join(ascii_uppercase[:num_choices])
 
-        query = "Answer the following multiple choice question about common sense. Think step by step before answering.\n\n"
-        query += f"Provide your final answer within <answer></answer> tags, containing only the letter ({valid_letters}).\n\n"
+        query = "Answer the following multiple choice question about common sense. Think step by step before answering.\n\n"  # noqa: E501
+        query += f"Provide your final answer within <answer></answer> tags, containing only the letter ({valid_letters}).\n\n"  # noqa: E501
         query += "Example format:\n<answer>A</answer>\n\n"
         query += f"Question: {question}\n"
 
@@ -542,7 +537,7 @@ class OBQAEvalEnv(BaseEnv):
             if self.config.full_debug:
                 status = "✓" if is_correct else "✗"
                 print(
-                    f"  [{status}] Q: {eval_item.get('question_stem', '')[:50]}... | Pred: {extracted_answer}, Gold: {gold_answer}"
+                    f"  [{status}] Q: {eval_item.get('question_stem', '')[:50]}... | Pred: {extracted_answer}, Gold: {gold_answer}"  # noqa: E501
                 )
 
             return {"result": {"correct": is_correct}, "sample": sample}

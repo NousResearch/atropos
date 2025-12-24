@@ -17,10 +17,8 @@ the gold standard (yes/no/maybe).
 """
 
 import asyncio
-import os
 import random
 import re
-import time
 from typing import Dict, List, Optional, Tuple
 
 import wandb
@@ -40,7 +38,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    EvalHandlingEnum,
 )
 
 # Valid answers for PubMedQA
@@ -48,7 +45,7 @@ VALID_ANSWERS = {"yes", "no", "maybe"}
 
 
 # Prompt template for PubMedQA with answer tag instruction
-PUBMEDQA_PROMPT_TEMPLATE = """Answer the following biomedical research question based on the provided context. Think step by step before answering.
+PUBMEDQA_PROMPT_TEMPLATE = """Answer the following biomedical research question based on the provided context. Think step by step before answering.  # noqa: E501
 
 Provide your final answer within <answer></answer> tags, containing only one of: yes, no, or maybe.
 

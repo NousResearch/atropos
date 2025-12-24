@@ -125,7 +125,7 @@ def extract_letter_from_answer_tag(
     content_to_check = answer_content
     prefix_match = ANSWER_PREFIX_PATTERN.match(content_to_check)
     if prefix_match:
-        content_to_check = content_to_check[prefix_match.end() :].strip()
+        content_to_check = content_to_check[prefix_match.end() :].strip()  # noqa: E203
         if debug:
             print(f"    Stripped prefix, remaining content: '{content_to_check}'")
 
@@ -304,7 +304,7 @@ def extract_number_from_answer_tag(
     content_to_check = answer_content
     prefix_match = ANSWER_PREFIX_PATTERN.match(content_to_check)
     if prefix_match:
-        content_to_check = content_to_check[prefix_match.end() :].strip()
+        content_to_check = content_to_check[prefix_match.end() :].strip()  # noqa: E203
         if debug:
             print(f"    Stripped prefix, remaining content: '{content_to_check}'")
 

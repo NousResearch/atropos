@@ -24,6 +24,8 @@ Supports thinking mode with <think></think> tags for extended reasoning.
 
 import asyncio
 import random
+import re
+from concurrent.futures import ProcessPoolExecutor
 from typing import Dict, List, Optional
 
 import wandb

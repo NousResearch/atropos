@@ -18,18 +18,14 @@ Supports thinking mode with <think></think> tags for extended reasoning.
 """
 
 import asyncio
-import os
 import random
-import re
-import time
 from concurrent.futures import ProcessPoolExecutor
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import wandb
 from datasets import load_dataset
 from eval_helpers import (
     THINK_CONTENT_AFTER_PATTERN,
-    compare_math_strings,
     create_system_content,
     extract_boxed_answers,
     extract_thinking_content,
@@ -47,8 +43,7 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    EvalHandlingEnum,
-)
+    )
 
 # Prompt template following lighteval's structure
 # Added boxed instruction for consistency with our math verification
@@ -329,7 +324,7 @@ class GSM8KEvalEnv(BaseEnv):
             print(f"Extracted: {extracted_answer}")
             print(f"Correct: {is_correct} (method: {method})")
             if has_multiple_boxed:
-                print(f"WARNING: Multiple \\boxed{{}} found - marked incorrect")
+                print("WARNING: Multiple \\boxed{} found - marked incorrect")
 
         return {
             "item_id": item["id"],

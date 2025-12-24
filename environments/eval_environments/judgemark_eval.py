@@ -34,16 +34,14 @@ import re
 import statistics
 import traceback
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import openai
 import scipy.stats
 from eval_helpers import (
     create_system_content,
-    get_default_thinking_prompt,
     save_eval_results,
 )
 from pydantic import Field

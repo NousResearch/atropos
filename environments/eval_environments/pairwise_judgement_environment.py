@@ -9,7 +9,6 @@ from typing import Dict, List, Optional, Tuple, Union
 import wandb
 from datasets import load_dataset
 from eval_helpers import (
-    create_system_content,
     get_default_thinking_prompt,
 )
 from pydantic import Field

@@ -18,22 +18,16 @@ Supports optional thinking mode with <think></think> tags for extended reasoning
 
 import asyncio
 import os
-import random
 import re
 import time
 from string import ascii_uppercase
 from typing import Dict, List, Optional, Tuple
 
-import wandb
 from datasets import load_dataset
 from eval_helpers import (
-    build_mcqa_fallback_patterns,
     create_system_content,
     extract_letter_from_answer_tag,
-    extract_thinking_content,
     get_default_thinking_prompt,
-    save_eval_results,
-    validate_thinking_format,
 )
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
@@ -879,13 +873,13 @@ class MMLUEvalEnv(BaseEnv):
                 status = "✓" if is_correct else "✗"
                 format_status = "✓" if format_valid else "✗"
                 print(
-                    f"  [{status}] {subject}: gold={gold_letter}, extracted={extracted_answer} ({extraction_method}), format={format_status}"
+                    f"  [{status}] {subject}: gold={gold_letter}, extracted={extracted_answer} ({extraction_method}), format={format_status}"  # noqa: E501
                 )
 
             return {"is_correct": is_correct, "sample": sample}
 
         except Exception as e:
-            if self.config.full_debug:
+            if self.config.full_debug:  # noqa: E501
                 print(f"Error in rollout_and_score_eval: {e}")
                 import traceback
 

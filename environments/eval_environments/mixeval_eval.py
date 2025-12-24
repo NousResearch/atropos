@@ -31,14 +31,12 @@ import asyncio
 import os
 import random
 import re
-import time
 from string import ascii_uppercase
 from typing import Dict, List, Optional, Tuple
 
 import wandb
 from datasets import load_dataset
 from eval_helpers import (
-    THINK_CONTENT_AFTER_PATTERN,
     create_system_content,
     extract_thinking_content,
     get_default_thinking_prompt,
@@ -58,7 +56,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    EvalHandlingEnum,
 )
 
 # Prompt construction helpers
@@ -125,9 +122,9 @@ def judge_freeform_prompt(question: str, answer: str, gold: str) -> List[Dict]:
             "content": f"""You will be provided with a question, its golden answer(s), and the model's answer, while the context of the question is not given here. Your task is to judge how correct the model's answer is based on the golden answer(s), without seeing the context of the question, and then give a correctness score. The correctness score should be one of the below numbers: 0.0 (totally wrong), 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, or 1.0 (totally right). Your should first briefly give your reasoning process regarding how the model's answer conforms to or contradicts the golden answer(s), and then give the correctness score. The correctness score must strictly follow this format: "[[score]]", e.g., "The correctness score: [[0.5]]".
 
 Note that each one of the golden answers is considered correct. Thus if the model's answer matches any one of the golden answers, it should be considered correct. Judge the below case, give the brief reasoning process and the correctness score.
-
+  # noqa: E501
 Question: {question}
-Golden Answer(s): {gold}
+Golden Answer(s): {gold}  # noqa: E501
 Model's Answer: {answer}
 Your Judgment:
 """,
@@ -150,7 +147,7 @@ def judge_multichoice_prompt(
             "content": f"""You will be provided with a multiple-choice question, its options, the gold answer, and the model's answer, while the context of the question is not given here. Your task is to extract or judge which option is chosen by the model based on its response, and to determine whether or not the model answered correctly. The model scores can either be 0 (incorrect) or 1 (correct). The correctness score must strictly follow this format: "[[score]]", e.g., "The correctness score: [[1]]".
 
 Question: {question}
-Options:
+Options:  # noqa: E501
 {parsed_options}
 Golden Answer: {gold}
 Model's Answer: {answer}

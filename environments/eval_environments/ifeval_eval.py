@@ -31,15 +31,10 @@ import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-import wandb
 from datasets import load_dataset
 from eval_helpers import (
-    THINK_CONTENT_AFTER_PATTERN,
     create_system_content,
-    extract_thinking_content,
     get_default_thinking_prompt,
-    save_eval_results,
-    validate_thinking_format,
 )
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio

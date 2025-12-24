@@ -18,10 +18,8 @@ Theorem proving (TP) problems are not included as they require different evaluat
 """
 
 import asyncio
-import os
 import random
 import re
-import time
 from typing import Dict, List, Optional, Tuple
 
 import wandb
@@ -41,7 +39,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    EvalHandlingEnum,
 )
 
 # Available text-only subsets in OlympiadBench
@@ -219,7 +216,7 @@ class OlympiadBenchEvalEnv(BaseEnv):
 
         if self.config.subset not in AVAILABLE_SUBSETS:
             print(
-                f"Warning: Subset '{self.config.subset}' may not be text-only. Available text-only subsets: {AVAILABLE_SUBSETS}"
+                f"Warning: Subset '{self.config.subset}' may not be text-only. Available text-only subsets: {AVAILABLE_SUBSETS}"  # noqa: E501
             )
 
         try:
@@ -303,7 +300,7 @@ class OlympiadBenchEvalEnv(BaseEnv):
                 multiple_answer_text += "(单位)"
                 unit_text = "，注意答案的单位不要放在\\boxed{}中"
 
-            instruction = f"以下是{subject_content}竞赛中的解答题{answer_type_text}。请根据题目的要求和所提供的信息计算得出答案。解答过程和结果中使用的变量和公式请使用LaTeX格式表示。"
+            instruction = f"以下是{subject_content}竞赛中的解答题{answer_type_text}。请根据题目的要求和所提供的信息计算得出答案。解答过程和结果中使用的变量和公式请使用LaTeX格式表示。"  # noqa: E501
             instruction += f"\n\n请将你的最终答案放在<answer></answer>标签中，格式为{multiple_answer_text}{unit_text}。"
             instruction += "\n\n示例格式:\n<answer>\\boxed{42}</answer>"
         else:
@@ -322,8 +319,8 @@ class OlympiadBenchEvalEnv(BaseEnv):
                 multiple_answer_text += "(unit)"
                 unit_text = ", note that the unit of the answer should not be included in \\boxed{}"
 
-            instruction = f"The following is an open-ended problem from an International {subject} competition. {answer_type_text}Please calculate the answer according to the given requirements and the information provided. Please use LaTeX format to represent the variables and formulas used in the solution process and results."
-            instruction += f"\n\nProvide your final answer within <answer></answer> tags in the format {multiple_answer_text}{unit_text}."
+            instruction = f"The following is an open-ended problem from an International {subject} competition. {answer_type_text}Please calculate the answer according to the given requirements and the information provided. Please use LaTeX format to represent the variables and formulas used in the solution process and results."  # noqa: E501
+            instruction += f"\n\nProvide your final answer within <answer></answer> tags in the format {multiple_answer_text}{unit_text}."  # noqa: E501
             instruction += "\n\nExample format:\n<answer>\\boxed{42}</answer>"
 
         return f"{instruction}\n\n{item['question']}"

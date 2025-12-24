@@ -18,12 +18,9 @@ Supports thinking mode with <think></think> tags for extended reasoning.
 """
 
 import asyncio
-import os
 import random
-import re
-import time
 from concurrent.futures import ProcessPoolExecutor
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import wandb
 from datasets import load_dataset
@@ -46,7 +43,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    EvalHandlingEnum,
 )
 
 # Prompt template following lighteval's MATH-500 structure
@@ -54,7 +50,7 @@ MATH500_PROMPT_TEMPLATE = """Solve the following problem. The final line of your
 "ANSWER: $ANSWER" (without quotes) where $ANSWER is the final answer. Think step by step before answering.
 
 However, for reliable parsing, also put your final answer in \\boxed{{}} format.
-
+  # noqa: E501
 {problem}"""
 
 

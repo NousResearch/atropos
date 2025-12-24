@@ -918,7 +918,7 @@ class JsonFormat(Instruction):
     """Check the Json format."""
 
     def build_description(self):
-        self._description_pattern = "Entire output should be wrapped in JSON format. You can use markdown ticks such as ```."
+        self._description_pattern = "Entire output should be wrapped in JSON format. You can use markdown ticks such as ```."  # noqa: E501
         return self._description_pattern
 
     def get_instruction_args(self):
@@ -1302,7 +1302,7 @@ class EndChecker(Instruction):
         )
         if self._end_phrase is None:
             self._end_phrase = random.choice(_ENDING_OPTIONS)
-        self._description_pattern = "Finish your response with this exact phrase {ender}. No other words should follow this phrase."
+        self._description_pattern = "Finish your response with this exact phrase {ender}. No other words should follow this phrase."  # noqa: E501
         return self._description_pattern.format(ender=self._end_phrase)
 
     def get_instruction_args(self):
@@ -1324,7 +1324,7 @@ class TitleChecker(Instruction):
 
     def build_description(self):
         """Build the instruction description."""
-        self._description_pattern = "Your answer must contain a title, wrapped in double angular brackets, such as <<poem of joy>>."
+        self._description_pattern = "Your answer must contain a title, wrapped in double angular brackets, such as <<poem of joy>>."  # noqa: E501
         return self._description_pattern
 
     def get_instruction_args(self):
@@ -1390,7 +1390,7 @@ class LetterFrequencyChecker(Instruction):
         else:
             self._comparison_relation = let_relation
 
-        self._description_pattern = "In your response, the letter {letter} should appear {let_relation} {let_frequency} times."
+        self._description_pattern = "In your response, the letter {letter} should appear {let_relation} {let_frequency} times."  # noqa: E501
 
         return self._description_pattern.format(
             letter=self._letter,
@@ -1459,7 +1459,7 @@ class LowercaseLettersEnglishChecker(Instruction):
 
     def build_description(self):
         """Build the instruction description."""
-        self._description_pattern = "Your entire response should be in English, and in all lowercase letters. No capital letters are allowed."
+        self._description_pattern = "Your entire response should be in English, and in all lowercase letters. No capital letters are allowed."  # noqa: E501
         return self._description_pattern
 
     def get_instruction_args(self):
@@ -1539,7 +1539,7 @@ class CapitalWordFrequencyChecker(Instruction):
                 f"{_COMPARISON_RELATION}, but {capital_relation} is given."
             )
 
-        self._description_pattern = "In your response, words with all capital letters should appear {relation} {frequency} times."
+        self._description_pattern = "In your response, words with all capital letters should appear {relation} {frequency} times."  # noqa: E501
 
         return self._description_pattern.format(
             frequency=self._frequency, relation=self._comparison_relation

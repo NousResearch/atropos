@@ -20,6 +20,7 @@ Supports optional thinking mode with <think></think> tags.
 """
 
 import asyncio
+import re
 from typing import Dict, List, Optional, Tuple
 
 import wandb

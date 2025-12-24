@@ -17,10 +17,8 @@ Note: This implementation uses the text-only questions (filters out image questi
 """
 
 import asyncio
-import os
 import random
 import re
-import time
 from typing import Dict, List, Optional, Tuple
 
 import wandb
@@ -40,12 +38,11 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    EvalHandlingEnum,
 )
 
 # Prompt template for HLE with answer tag instruction
 HLE_PROMPT_TEMPLATE = """Answer the following challenging question. Think step by step and reason carefully before providing your answer.
-
+  # noqa: E501
 Provide your final answer within <answer></answer> tags.
 
 Example format:
@@ -339,13 +336,13 @@ class HLEEvalEnv(BaseEnv):
                     return answer, "fallback_pattern"
 
         # Last resort: take the last line/sentence
-        lines = [l.strip() for l in response.strip().split("\n") if l.strip()]
+        lines = [line.strip() for line in response.strip().split("\n") if line.strip()]
         if lines:
             last_line = lines[-1]
             # Clean up common prefixes
             for prefix in ["Therefore,", "Thus,", "So,", "Hence,"]:
                 if last_line.startswith(prefix):
-                    last_line = last_line[len(prefix) :].strip()
+                    last_line = last_line[len(prefix) :].strip()  # noqa: E203
 
             if debug:
                 preview = last_line[:50] + "..." if len(last_line) > 50 else last_line
