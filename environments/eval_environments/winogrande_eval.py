@@ -172,7 +172,7 @@ class WinoGrandeEvalEnv(BaseEnv):
 
     async def setup(self):
         """Load the WinoGrande dataset."""
-        print(f"\nWinoGrande Evaluation Setup (Generative Mode):")
+        print("\nWinoGrande Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Subset: {self.config.subset}")
         print(f"  Evaluation split: {self.config.eval_split}")

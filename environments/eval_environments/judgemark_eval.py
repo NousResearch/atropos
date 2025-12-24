@@ -351,7 +351,7 @@ class JudgeMarkEvalEnv(BaseEnv):
 
     async def setup(self):
         """Load JudgeMark data files."""
-        print(f"\nLoading JudgeMark v2 data...")
+        print("\nLoading JudgeMark v2 data...")
 
         # Determine data directory
         data_dir = JUDGEMARK_DATA_DIR
@@ -701,7 +701,7 @@ class JudgeMarkEvalEnv(BaseEnv):
             f"  Models with reference: {calibrated_cross_stats['num_models_with_reference']}"
         )
 
-        print(f"\n  Per-model averages (calibrated):")
+        print("\n  Per-model averages (calibrated):")
         sorted_models = sorted(
             model_stats.items(), key=lambda x: x[1]["mean_calibrated"], reverse=True
         )

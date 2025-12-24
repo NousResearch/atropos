@@ -19,7 +19,7 @@ import os
 import re
 from concurrent.futures import ProcessPoolExecutor
 from string import ascii_uppercase
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 # Try to import math_verify libraries (optional dependency for math evals)
 try:

@@ -152,7 +152,7 @@ class HLEEvalEnv(BaseEnv):
         if not self._dataset_loaded:
             await self._load_dataset()
 
-        print(f"\nHLE Evaluation Setup (Generative Mode):")
+        print("\nHLE Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Evaluation split: {self.config.eval_split}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
@@ -525,7 +525,7 @@ class HLEEvalEnv(BaseEnv):
         if self.config.thinking_mode:
             print(f"  Thinking Utilization: {has_thinking / total:.2%}")
         if category_metrics:
-            print(f"\n  Per-Category Breakdown:")
+            print("\n  Per-Category Breakdown:")
             for cat, data in sorted(
                 category_metrics.items(), key=lambda x: -x[1]["accuracy"]
             ):

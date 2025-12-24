@@ -29,16 +29,11 @@ import time
 from string import ascii_uppercase
 from typing import Dict, List, Optional, Tuple
 
-import wandb
 from datasets import load_dataset
 from eval_helpers import (
-    build_mcqa_fallback_patterns,
     create_system_content,
     extract_letter_from_answer_tag,
-    extract_thinking_content,
     get_default_thinking_prompt,
-    save_eval_results,
-    validate_thinking_format,
 )
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
@@ -289,7 +284,7 @@ class GPQAEvalEnv(BaseEnv):
 
     async def setup(self) -> None:
         """Load the GPQA dataset and prepare for evaluation."""
-        print(f"\nGPQA Evaluation Setup (Generative Mode):")
+        print("\nGPQA Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Subset: {self.config.subset}")
         print(f"  Max tokens for reasoning: {self.config.eval_max_tokens}")
@@ -507,7 +502,7 @@ class GPQAEvalEnv(BaseEnv):
                             break
                         elif attempt < self.config.max_retries - 1:
                             if self.config.full_debug:
-                                print(f"  Response too short, retrying...")
+                                print("  Response too short, retrying...")
                             await asyncio.sleep(self.config.retry_delay)
 
                 except Exception as e:
@@ -520,7 +515,7 @@ class GPQAEvalEnv(BaseEnv):
                             print(
                                 f"    Response: {e.response.text[:500] if hasattr(e.response, 'text') else e.response}"
                             )
-                        except:
+                        except Exception:
                             pass
                     if attempt < self.config.max_retries - 1:
                         await asyncio.sleep(self.config.retry_delay)
@@ -592,7 +587,7 @@ class GPQAEvalEnv(BaseEnv):
         start_time = time.time()
 
         print(f"\n{'='*60}")
-        print(f"Starting GPQA Evaluation (Generative/Reasoning Mode)")
+        print("Starting GPQA Evaluation (Generative/Reasoning Mode)")
         print(f"{'='*60}")
         print(f"  Subset: {self.config.subset}")
         print(f"  Total questions: {len(self.all_eval_items)}")
@@ -708,7 +703,7 @@ class GPQAEvalEnv(BaseEnv):
             print(f"Format Compliance: {format_compliance_rate:.4f}")
             print(f"Thinking Utilization: {thinking_utilization}/{total_count}")
 
-        print(f"\nSubdomain Breakdown:")
+        print("\nSubdomain Breakdown:")
         for subdomain, stats in sorted(subdomain_results.items()):
             if stats["total"] > 0:
                 subdom_acc = stats["correct"] / stats["total"]
@@ -716,7 +711,7 @@ class GPQAEvalEnv(BaseEnv):
                     f"  {subdomain}: {subdom_acc:.4f} ({stats['correct']}/{stats['total']})"
                 )
 
-        print(f"\nExtraction Method Statistics:")
+        print("\nExtraction Method Statistics:")
         for method, stats in sorted(
             extraction_methods.items(), key=lambda x: -x[1]["count"]
         ):

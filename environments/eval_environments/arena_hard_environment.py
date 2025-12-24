@@ -9,7 +9,6 @@ from datasets import load_dataset
 from eval_helpers import (
     create_system_content,
     get_default_thinking_prompt,
-    save_eval_results,
 )
 from pydantic import Field
 from tenacity import retry, stop_after_attempt, wait_random_exponential

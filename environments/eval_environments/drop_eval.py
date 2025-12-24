@@ -23,17 +23,13 @@ import asyncio
 import os
 import re
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
-import wandb
 from datasets import load_dataset
 from eval_helpers import (
     create_system_content,
     extract_freeform_from_answer_tag,
-    extract_thinking_content,
     get_default_thinking_prompt,
-    save_eval_results,
-    validate_thinking_format,
 )
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
@@ -317,7 +313,7 @@ Question: {question}"""
 
     async def setup(self) -> None:
         """Load the DROP dataset and prepare for evaluation."""
-        print(f"\nDROP Evaluation Setup:")
+        print("\nDROP Evaluation Setup:")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Max tokens: {self.config.eval_max_tokens}")
         print(f"  Evaluation split: {self.config.eval_split}")
@@ -539,7 +535,7 @@ Question: {question}"""
                             print(
                                 f"    Response: {e.response.text[:500] if hasattr(e.response, 'text') else e.response}"
                             )
-                        except:
+                        except Exception:
                             pass
                     if attempt < self.config.max_retries - 1:
                         await asyncio.sleep(self.config.retry_delay)
@@ -615,7 +611,7 @@ Question: {question}"""
         start_time = time.time()
 
         print(f"\n{'='*60}")
-        print(f"Starting DROP Evaluation")
+        print("Starting DROP Evaluation")
         print(f"{'='*60}")
         print(f"  Total questions: {len(self.all_eval_items)}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
@@ -694,7 +690,7 @@ Question: {question}"""
 
         # Print summary
         print(f"\n{'='*60}")
-        print(f"DROP Evaluation Results")
+        print("DROP Evaluation Results")
         print(f"{'='*60}")
         print(f"Exact Match Accuracy: {accuracy:.4f} ({correct_count}/{total_count})")
         print(f"Average F1 Score: {avg_f1:.4f}")

@@ -167,7 +167,7 @@ class SIQAEvalEnv(BaseEnv):
 
     async def setup(self):
         """Load the SIQA dataset."""
-        print(f"\nSIQA Evaluation Setup (Generative Mode):")
+        print("\nSIQA Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Evaluation split: {self.config.eval_split}")
         print(f"  Thinking mode: {self.config.thinking_mode}")

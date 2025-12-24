@@ -464,7 +464,7 @@ class MMLUEvalEnv(BaseEnv):
         if not self.subjects:
             raise ValueError("No valid MMLU subjects specified for evaluation.")
 
-        print(f"\nMMLU Evaluation Setup (Generative Mode):")
+        print("\nMMLU Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Subjects: {len(self.subjects)} subjects")
         print(f"  Few-shot examples: {self.config.num_few_shot}")
@@ -821,7 +821,7 @@ class MMLUEvalEnv(BaseEnv):
                             print(
                                 f"    Response: {e.response.text[:500] if hasattr(e.response, 'text') else e.response}"
                             )
-                        except:
+                        except Exception:
                             pass
                     if attempt < self.config.max_retries - 1:
                         await asyncio.sleep(self.config.retry_delay)
@@ -907,7 +907,7 @@ class MMLUEvalEnv(BaseEnv):
         start_time = time.time()
 
         print(f"\n{'='*60}")
-        print(f"Starting MMLU Evaluation (Generative/Reasoning Mode)")
+        print("Starting MMLU Evaluation (Generative/Reasoning Mode)")
         print(f"{'='*60}")
         print(f"  Subjects: {len(self.subjects)}")
         print(f"  Total questions: {len(self.all_eval_items)}")
@@ -1046,7 +1046,7 @@ class MMLUEvalEnv(BaseEnv):
 
         # Print summary
         print(f"\n{'='*60}")
-        print(f"MMLU Evaluation Results")
+        print("MMLU Evaluation Results")
         print(f"{'='*60}")
         print(
             f"Overall Accuracy: {overall_accuracy:.4f} ({total_correct}/{total_count})"
@@ -1057,7 +1057,7 @@ class MMLUEvalEnv(BaseEnv):
             print(f"Format Compliance: {format_compliance_rate:.4f}")
             print(f"Thinking Utilization: {thinking_utilization}/{total_count}")
 
-        print(f"\nCategory Breakdown:")
+        print("\nCategory Breakdown:")
         for category, stats in category_results.items():
             if stats["total"] > 0:
                 cat_acc = stats["correct"] / stats["total"]
@@ -1065,7 +1065,7 @@ class MMLUEvalEnv(BaseEnv):
                     f"  {category}: {cat_acc:.4f} ({stats['correct']}/{stats['total']})"
                 )
 
-        print(f"\nExtraction Method Statistics:")
+        print("\nExtraction Method Statistics:")
         for method, stats in sorted(
             extraction_methods.items(), key=lambda x: -x[1]["count"]
         ):

@@ -307,7 +307,7 @@ class MMLUProEvalEnv(BaseEnv):
 
     async def setup(self) -> None:
         """Load the MMLU-Pro dataset and prepare for evaluation."""
-        print(f"\nMMLU-Pro Evaluation Setup (Generative Mode):")
+        print("\nMMLU-Pro Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Few-shot examples: {self.config.num_few_shot}")
         print(f"  Max tokens for reasoning: {self.config.eval_max_tokens}")
@@ -358,7 +358,7 @@ class MMLUProEvalEnv(BaseEnv):
             cat = item.get("category", "unknown")
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
-        print(f"\n  Category distribution:")
+        print("\n  Category distribution:")
         for cat, count in sorted(category_counts.items()):
             print(f"    {cat}: {count} questions")
 
@@ -586,7 +586,7 @@ class MMLUProEvalEnv(BaseEnv):
                             break
                         elif attempt < self.config.max_retries - 1:
                             if self.config.full_debug:
-                                print(f"  Response too short, retrying...")
+                                print("  Response too short, retrying...")
                             await asyncio.sleep(self.config.retry_delay)
 
                 except Exception as e:
@@ -599,7 +599,7 @@ class MMLUProEvalEnv(BaseEnv):
                             print(
                                 f"    Response: {e.response.text[:500] if hasattr(e.response, 'text') else e.response}"
                             )
-                        except:
+                        except Exception:
                             pass
                     if attempt < self.config.max_retries - 1:
                         await asyncio.sleep(self.config.retry_delay)
@@ -673,7 +673,7 @@ class MMLUProEvalEnv(BaseEnv):
         start_time = time.time()
 
         print(f"\n{'='*60}")
-        print(f"Starting MMLU-Pro Evaluation (Generative/Reasoning Mode)")
+        print("Starting MMLU-Pro Evaluation (Generative/Reasoning Mode)")
         print(f"{'='*60}")
         print(f"  Total questions: {len(self.all_eval_items)}")
         print(f"  Few-shot examples: {self.config.num_few_shot}")
@@ -788,7 +788,7 @@ class MMLUProEvalEnv(BaseEnv):
 
         # Print summary
         print(f"\n{'='*60}")
-        print(f"MMLU-Pro Evaluation Results")
+        print("MMLU-Pro Evaluation Results")
         print(f"{'='*60}")
         print(
             f"Overall Accuracy: {overall_accuracy:.4f} ({total_correct}/{total_count})"
@@ -799,7 +799,7 @@ class MMLUProEvalEnv(BaseEnv):
             print(f"Format Compliance: {format_compliance_rate:.4f}")
             print(f"Thinking Utilization: {thinking_utilization}/{total_count}")
 
-        print(f"\nCategory Breakdown:")
+        print("\nCategory Breakdown:")
         for category, stats in sorted(category_results.items()):
             if stats["total"] > 0:
                 cat_acc = stats["correct"] / stats["total"]
@@ -807,7 +807,7 @@ class MMLUProEvalEnv(BaseEnv):
                     f"  {category}: {cat_acc:.4f} ({stats['correct']}/{stats['total']})"
                 )
 
-        print(f"\nExtraction Method Statistics:")
+        print("\nExtraction Method Statistics:")
         for method, stats in sorted(
             extraction_methods.items(), key=lambda x: -x[1]["count"]
         ):

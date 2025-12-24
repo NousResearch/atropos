@@ -455,7 +455,7 @@ class SimpleQAEvalEnv(BaseEnv):
             else "String Matching (Nous)"
         )
 
-        print(f"\nSimpleQA Evaluation Setup:")
+        print("\nSimpleQA Evaluation Setup:")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Scoring mode: {scoring_mode}")
         print(f"  Max tokens for answer: {self.config.eval_max_tokens}")
@@ -627,7 +627,7 @@ class SimpleQAEvalEnv(BaseEnv):
                             break
                         elif attempt < self.config.max_retries - 1:
                             if self.config.full_debug:
-                                print(f"  Response too short, retrying...")
+                                print("  Response too short, retrying...")
                             await asyncio.sleep(self.config.retry_delay)
 
                 except Exception as e:
@@ -639,7 +639,7 @@ class SimpleQAEvalEnv(BaseEnv):
                             print(
                                 f"    Response: {e.response.text[:500] if hasattr(e.response, 'text') else e.response}"
                             )
-                        except:
+                        except Exception:
                             pass
                     if attempt < self.config.max_retries - 1:
                         await asyncio.sleep(self.config.retry_delay)
@@ -808,7 +808,7 @@ class SimpleQAEvalEnv(BaseEnv):
         )
 
         print(f"\n{'='*60}")
-        print(f"Starting SimpleQA Evaluation")
+        print("Starting SimpleQA Evaluation")
         print(f"{'='*60}")
         print(f"  Total questions: {len(self.all_eval_items)}")
         print(f"  Scoring mode: {scoring_mode}")
@@ -983,7 +983,7 @@ class SimpleQAEvalEnv(BaseEnv):
                 f"Accuracy (if attempted): {eval_metrics['eval/accuracy_if_attempted']:.4f}"
             )
             print(f"Not Attempted Rate: {eval_metrics['eval/not_attempted_rate']:.4f}")
-            print(f"\nGrade Distribution:")
+            print("\nGrade Distribution:")
             print(f"  CORRECT: {correct_count} ({100*correct_count/total_count:.1f}%)")
             print(
                 f"  INCORRECT: {incorrect_count} ({100*incorrect_count/total_count:.1f}%)"
@@ -1012,7 +1012,7 @@ class SimpleQAEvalEnv(BaseEnv):
             print(f"Thinking Utilization: {thinking_utilization}/{total_count}")
 
         if len(sorted_topics) > 0:
-            print(f"\nTop Topics (by count):")
+            print("\nTop Topics (by count):")
             for topic, stats in sorted_topics[:10]:
                 if stats["total"] > 0:
                     topic_acc = stats["correct"] / stats["total"]

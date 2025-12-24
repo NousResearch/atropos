@@ -23,12 +23,8 @@ Supports thinking mode with <think></think> tags for extended reasoning.
 """
 
 import asyncio
-import os
 import random
-import re
-import time
-from concurrent.futures import ProcessPoolExecutor
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import wandb
 from datasets import load_dataset
@@ -50,7 +46,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    EvalHandlingEnum,
 )
 
 # Available AIME years
@@ -62,7 +57,13 @@ AIME_DATASETS = {
 
 # Prompt template following lighteval's AIME structure
 # Important: Uses the "I hope it is correct" format for math-verify
-AIME_PROMPT_TEMPLATE = """Solve the following math problem efficiently and clearly. The last line of your response should be of the following format: 'Therefore, the final answer is: $\\boxed{{ANSWER}}$. I hope it is correct' (without quotes) where ANSWER is just the final number or expression that solves the problem. Think step by step before answering.
+AIME_PROMPT_TEMPLATE = """Solve the following math problem efficiently and clearly.
+
+The last line of your response should be of the following format:
+'Therefore, the final answer is: $\\boxed{{ANSWER}}$. I hope it is correct' (without quotes)
+where ANSWER is just the final number or expression that solves the problem.
+
+Think step by step before answering.
 
 Note: AIME answers are always integers from 0 to 999.
 
@@ -172,7 +173,7 @@ class AIMEEvalEnv(BaseEnv):
         if not self._dataset_loaded:
             await self._load_dataset()
 
-        print(f"\nAIME Evaluation Setup (Generative Mode):")
+        print("\nAIME Evaluation Setup (Generative Mode):")
         print(f"  Years: {self.config.years}")
         print(f"  Evaluation split: {self.config.eval_split}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
@@ -501,12 +502,12 @@ class AIMEEvalEnv(BaseEnv):
         print(f"  Format Compliance: {format_valid / total:.2%}")
         if self.config.thinking_mode:
             print(f"  Thinking Utilization: {has_thinking / total:.2%}")
-        print(f"\n  Per-Year Breakdown:")
+        print("\n  Per-Year Breakdown:")
         for year, data in sorted(year_metrics.items()):
             print(
                 f"    AIME {year}: {data['accuracy']:.2%} ({data['correct']}/{data['total']})"
             )
-        print(f"\n  Verification Methods:")
+        print("\n  Verification Methods:")
         for method, count in sorted(method_counts.items(), key=lambda x: -x[1]):
             print(f"    {method}: {count} ({count/total:.1%})")
         print(f"{'='*60}\n")

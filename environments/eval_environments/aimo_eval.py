@@ -17,12 +17,8 @@ Supports thinking mode with <think></think> tags for extended reasoning.
 """
 
 import asyncio
-import os
 import random
-import re
-import time
-from concurrent.futures import ProcessPoolExecutor
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import wandb
 from datasets import load_dataset
@@ -45,7 +41,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    EvalHandlingEnum,
 )
 
 # Prompt template - AIMO doesn't have a specific template in lighteval
@@ -161,7 +156,7 @@ class AIMOEvalEnv(BaseEnv):
         if not self._dataset_loaded:
             await self._load_dataset()
 
-        print(f"\nAIMO Evaluation Setup (Generative Mode):")
+        print("\nAIMO Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Evaluation split: {self.config.eval_split}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
@@ -401,7 +396,7 @@ class AIMOEvalEnv(BaseEnv):
         print(f"  Format Compliance: {format_valid / total:.2%}")
         if self.config.thinking_mode:
             print(f"  Thinking Utilization: {has_thinking / total:.2%}")
-        print(f"\n  Verification Methods:")
+        print("\n  Verification Methods:")
         for method, count in sorted(method_counts.items(), key=lambda x: -x[1]):
             print(f"    {method}: {count} ({count/total:.1%})")
         print(f"{'='*60}\n")

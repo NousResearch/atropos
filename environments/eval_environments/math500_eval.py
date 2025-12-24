@@ -172,7 +172,7 @@ class MATH500EvalEnv(BaseEnv):
         if not self._dataset_loaded:
             await self._load_dataset()
 
-        print(f"\nMATH-500 Evaluation Setup (Generative Mode):")
+        print("\nMATH-500 Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Evaluation split: {self.config.eval_split}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
@@ -470,7 +470,7 @@ class MATH500EvalEnv(BaseEnv):
         if self.config.thinking_mode:
             print(f"  Thinking Utilization: {has_thinking / total:.2%}")
         if subject_metrics and len(subject_metrics) > 1:
-            print(f"\n  Per-Subject Breakdown:")
+            print("\n  Per-Subject Breakdown:")
             for subject, data in sorted(
                 subject_metrics.items(), key=lambda x: -x[1]["accuracy"]
             ):
@@ -478,7 +478,7 @@ class MATH500EvalEnv(BaseEnv):
                     f"    {subject}: {data['accuracy']:.2%} ({data['correct']}/{data['total']})"
                 )
         if level_metrics and len(level_metrics) > 1:
-            print(f"\n  Per-Level Breakdown:")
+            print("\n  Per-Level Breakdown:")
             for level, data in sorted(level_metrics.items()):
                 print(
                     f"    Level {level}: {data['accuracy']:.2%} ({data['correct']}/{data['total']})"

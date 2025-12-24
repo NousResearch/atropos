@@ -199,7 +199,7 @@ class OlympiadBenchEvalEnv(BaseEnv):
         if not self._dataset_loaded:
             await self._load_dataset()
 
-        print(f"\nOlympiadBench Evaluation Setup (Generative Mode):")
+        print("\nOlympiadBench Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Subset: {self.config.subset}")
         print(f"  Evaluation split: {self.config.eval_split}")
@@ -648,7 +648,7 @@ class OlympiadBenchEvalEnv(BaseEnv):
         if self.config.thinking_mode:
             print(f"  Thinking Utilization: {has_thinking / total:.2%}")
         if subject_metrics:
-            print(f"\n  Per-Subject Breakdown:")
+            print("\n  Per-Subject Breakdown:")
             for subject, data in subject_metrics.items():
                 print(
                     f"    {subject}: {data['accuracy']:.2%} ({data['correct']}/{data['total']})"

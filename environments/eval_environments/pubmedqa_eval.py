@@ -154,7 +154,7 @@ class PubMedQAEvalEnv(BaseEnv):
         if not self._dataset_loaded:
             await self._load_dataset()
 
-        print(f"\nPubMedQA Evaluation Setup (Generative Mode):")
+        print("\nPubMedQA Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Subset: {self.config.subset}")
         print(f"  Evaluation split: {self.config.eval_split}")
@@ -481,7 +481,7 @@ class PubMedQAEvalEnv(BaseEnv):
         print(f"  Format Compliance: {format_valid / total:.2%}")
         if self.config.thinking_mode:
             print(f"  Thinking Utilization: {has_thinking / total:.2%}")
-        print(f"\n  Per-Answer Breakdown:")
+        print("\n  Per-Answer Breakdown:")
         for answer, data in answer_metrics.items():
             print(
                 f"    {answer}: {data['accuracy']:.2%} ({data['correct']}/{data['total']})"

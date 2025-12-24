@@ -343,7 +343,7 @@ class MixEvalEnv(BaseEnv):
         if not self._dataset_loaded:
             await self._load_dataset()
 
-        print(f"\nMixEval Evaluation Setup (with LLM Judge):")
+        print("\nMixEval Evaluation Setup (with LLM Judge):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Difficulty: {self.config.difficulty}")
         print(f"  Question types: {self.config.question_types}")
@@ -737,7 +737,7 @@ class MixEvalEnv(BaseEnv):
             print(f"  Format Compliance: {format_valid / total:.2%}")
             print(f"  Thinking Utilization: {has_thinking / total:.2%}")
         print(f"  Judge Error Rate: {self.judge_error_count / total:.2%}")
-        print(f"\n  Per-Benchmark Breakdown:")
+        print("\n  Per-Benchmark Breakdown:")
         for bench, data in sorted(
             benchmark_metrics.items(), key=lambda x: -x[1]["avg_score"]
         ):

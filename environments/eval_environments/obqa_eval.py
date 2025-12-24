@@ -291,7 +291,7 @@ class OBQAEvalEnv(BaseEnv):
 
     async def setup(self) -> None:
         """Load the OpenBookQA dataset and prepare for evaluation."""
-        print(f"\nOpenBookQA Evaluation Setup:")
+        print("\nOpenBookQA Evaluation Setup:")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Subset: {self.config.subset}")
         print(f"  Eval split: {self.config.eval_split}")
@@ -481,7 +481,7 @@ class OBQAEvalEnv(BaseEnv):
                             print(
                                 f"    Response: {e.response.text[:500] if hasattr(e.response, 'text') else e.response}"
                             )
-                        except:
+                        except Exception:
                             pass
                     if attempt < self.config.max_retries - 1:
                         await asyncio.sleep(self.config.retry_delay)
@@ -560,7 +560,7 @@ class OBQAEvalEnv(BaseEnv):
         start_time = time.time()
 
         print(f"\n{'='*60}")
-        print(f"Starting OpenBookQA Evaluation")
+        print("Starting OpenBookQA Evaluation")
         print(f"{'='*60}")
         print(f"  Total questions: {len(self.all_eval_items)}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
@@ -641,7 +641,7 @@ class OBQAEvalEnv(BaseEnv):
 
         # Print summary
         print(f"\n{'='*60}")
-        print(f"OpenBookQA Evaluation Results")
+        print("OpenBookQA Evaluation Results")
         print(f"{'='*60}")
         print(f"Accuracy: {accuracy:.4f} ({correct_count}/{total_count})")
         print(f"Answer Extraction Rate: {extraction_rate:.4f}")

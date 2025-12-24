@@ -282,7 +282,7 @@ class MuSREvalEnv(BaseEnv):
         if isinstance(choices_raw, str):
             try:
                 choices = ast.literal_eval(choices_raw)
-            except:
+            except Exception:
                 choices = []
         else:
             choices = choices_raw
@@ -301,7 +301,7 @@ class MuSREvalEnv(BaseEnv):
 
     async def setup(self) -> None:
         """Load the MuSR dataset and prepare for evaluation."""
-        print(f"\nMuSR Evaluation Setup:")
+        print("\nMuSR Evaluation Setup:")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Subset: {self.config.subset}")
         print(f"  Max tokens: {self.config.eval_max_tokens}")
@@ -495,7 +495,7 @@ class MuSREvalEnv(BaseEnv):
                             print(
                                 f"    Response: {e.response.text[:500] if hasattr(e.response, 'text') else e.response}"
                             )
-                        except:
+                        except Exception:
                             pass
                     if attempt < self.config.max_retries - 1:
                         await asyncio.sleep(self.config.retry_delay)

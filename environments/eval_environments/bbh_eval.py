@@ -20,12 +20,9 @@ snarks, sports_understanding, temporal_sequences, tracking_shuffled_objects (3/5
 """
 
 import asyncio
-import os
 import random
-import re
-import time
 from string import ascii_uppercase
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import wandb
 from datasets import load_dataset
@@ -33,7 +30,6 @@ from eval_helpers import (
     build_mcqa_fallback_patterns,
     create_system_content,
     extract_letter_from_answer_tag,
-    extract_thinking_content,
     get_default_thinking_prompt,
     save_eval_results,
     validate_thinking_format,
@@ -45,7 +41,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    EvalHandlingEnum,
 )
 
 # All available BBH subsets
@@ -86,8 +81,7 @@ def format_bbh_prompt(item: Dict) -> Tuple[str, List[str], int]:
     input_prefix = item.get("example_input_prefix", "\nQuestion: ")
     input_text = item.get("input", "")
     choice_prefix = item.get("choice_prefix", "\n  Choices: ")
-    output_prefix = item.get("example_output_prefix", "\nAnswer: ")
-
+    # Note: output_prefix from item.get("example_output_prefix") is not used in generative mode
     choices = item.get("choices", [])
     target_idx = item.get("target_idx", 0)
 
@@ -222,7 +216,7 @@ class BBHEvalEnv(BaseEnv):
         if not self._dataset_loaded:
             await self._load_dataset()
 
-        print(f"\nBBH Evaluation Setup (Generative Mode):")
+        print("\nBBH Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Subset: {self.config.subset}")
         print(f"  Evaluation split: {self.config.eval_split}")
@@ -553,7 +547,7 @@ class BBHEvalEnv(BaseEnv):
         print(f"  Format Compliance: {format_valid / total:.2%}")
         if self.config.thinking_mode:
             print(f"  Thinking Utilization: {has_thinking / total:.2%}")
-        print(f"\n  Per-Subset Breakdown:")
+        print("\n  Per-Subset Breakdown:")
         for subset, data in sorted(
             subset_metrics.items(), key=lambda x: -x[1]["accuracy"]
         ):

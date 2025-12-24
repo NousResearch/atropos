@@ -161,7 +161,7 @@ class GSM8KEvalEnv(BaseEnv):
         if not self._dataset_loaded:
             await self._load_dataset()
 
-        print(f"\nGSM8K Evaluation Setup (Generative Mode):")
+        print("\nGSM8K Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Subset: {self.config.subset}")
         print(f"  Evaluation split: {self.config.eval_split}")
@@ -416,7 +416,7 @@ class GSM8KEvalEnv(BaseEnv):
         print(f"  Format Compliance: {format_valid / total:.2%}")
         if self.config.thinking_mode:
             print(f"  Thinking Utilization: {has_thinking / total:.2%}")
-        print(f"\n  Verification Methods:")
+        print("\n  Verification Methods:")
         for method, count in sorted(method_counts.items(), key=lambda x: -x[1]):
             print(f"    {method}: {count} ({count/total:.1%})")
         print(f"{'='*60}\n")

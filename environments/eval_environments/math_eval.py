@@ -178,7 +178,7 @@ class MATHEvalEnv(BaseEnv):
         if not self._dataset_loaded:
             await self._load_dataset()
 
-        print(f"\nMATH Evaluation Setup (Generative Mode):")
+        print("\nMATH Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Subsets: {self.config.subsets}")
         print(f"  Evaluation split: {self.config.eval_split}")
@@ -484,7 +484,7 @@ class MATHEvalEnv(BaseEnv):
         print(f"  Format Compliance: {format_valid / total:.2%}")
         if self.config.thinking_mode:
             print(f"  Thinking Utilization: {has_thinking / total:.2%}")
-        print(f"\n  Per-Subset Breakdown:")
+        print("\n  Per-Subset Breakdown:")
         for subset, data in sorted(
             subset_metrics.items(), key=lambda x: -x[1]["accuracy"]
         ):
@@ -492,7 +492,7 @@ class MATHEvalEnv(BaseEnv):
                 f"    {subset}: {data['accuracy']:.2%} ({data['correct']}/{data['total']})"
             )
         if level_metrics and len(level_metrics) > 1:
-            print(f"\n  Per-Level Breakdown:")
+            print("\n  Per-Level Breakdown:")
             for level, data in sorted(level_metrics.items()):
                 print(
                     f"    {level}: {data['accuracy']:.2%} ({data['correct']}/{data['total']})"

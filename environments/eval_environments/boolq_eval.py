@@ -20,11 +20,7 @@ Supports optional thinking mode with <think></think> tags.
 """
 
 import asyncio
-import os
-import re
-import time
-from string import ascii_uppercase
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import wandb
 from datasets import load_dataset
@@ -33,7 +29,6 @@ from eval_helpers import (
     build_mcqa_fallback_patterns,
     create_system_content,
     extract_letter_from_answer_tag,
-    extract_thinking_content,
     get_default_thinking_prompt,
     save_eval_results,
     validate_thinking_format,
@@ -45,7 +40,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    EvalHandlingEnum,
 )
 
 
@@ -170,7 +164,7 @@ class BoolQEvalEnv(BaseEnv):
 
     async def setup(self):
         """Load the BoolQ dataset."""
-        print(f"\nBoolQ Evaluation Setup (Generative Mode):")
+        print("\nBoolQ Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Evaluation split: {self.config.eval_split}")
         print(f"  Thinking mode: {self.config.thinking_mode}")

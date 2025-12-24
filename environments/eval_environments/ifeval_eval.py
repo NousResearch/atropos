@@ -228,7 +228,7 @@ class IFEvalEnv(BaseEnv):
 
     async def setup(self) -> None:
         """Load the IFEval dataset and prepare for evaluation."""
-        print(f"\nIFEval Evaluation Setup:")
+        print("\nIFEval Evaluation Setup:")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Max tokens: {self.config.eval_max_tokens}")
         print(f"  Evaluation split: {self.config.eval_split}")
@@ -478,7 +478,7 @@ class IFEvalEnv(BaseEnv):
                             break
                         elif attempt < self.config.max_retries - 1:
                             if self.config.full_debug:
-                                print(f"  Response too short, retrying...")
+                                print("  Response too short, retrying...")
                             await asyncio.sleep(self.config.retry_delay)
 
                 except Exception as e:
@@ -490,7 +490,7 @@ class IFEvalEnv(BaseEnv):
                             print(
                                 f"    Response: {e.response.text[:500] if hasattr(e.response, 'text') else e.response}"
                             )
-                        except:
+                        except Exception:
                             pass
                     if attempt < self.config.max_retries - 1:
                         await asyncio.sleep(self.config.retry_delay)
@@ -569,7 +569,7 @@ class IFEvalEnv(BaseEnv):
         start_time = time.time()
 
         print(f"\n{'='*60}")
-        print(f"Starting IFEval Evaluation (Instruction Following)")
+        print("Starting IFEval Evaluation (Instruction Following)")
         print(f"{'='*60}")
         print(f"  Total prompts: {len(self.all_eval_items)}")
         print(f"  Max tokens: {self.config.eval_max_tokens}")
@@ -682,7 +682,7 @@ class IFEvalEnv(BaseEnv):
 
         # Print summary
         print(f"\n{'='*60}")
-        print(f"IFEval Evaluation Results")
+        print("IFEval Evaluation Results")
         print(f"{'='*60}")
         print(
             f"Prompt-Level Strict Accuracy: {prompt_strict_acc:.4f} ({prompt_strict_count}/{total_count})"

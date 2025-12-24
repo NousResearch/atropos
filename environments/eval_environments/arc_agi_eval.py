@@ -27,17 +27,14 @@ Answer must be provided in <answer></answer> tags as a JSON 2D array.
 import ast
 import asyncio
 import json
-import os
 import re
-import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import wandb
 from datasets import load_dataset
 from eval_helpers import (
     ANSWER_TAG_PATTERN,
     create_system_content,
-    extract_thinking_content,
     get_default_thinking_prompt,
     save_eval_results,
     validate_thinking_format,
@@ -49,7 +46,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    EvalHandlingEnum,
 )
 
 
@@ -168,7 +164,7 @@ class ARCAGIEvalEnv(BaseEnv):
 
     async def setup(self):
         """Load the ARC-AGI 2 dataset."""
-        print(f"\nARC-AGI 2 Evaluation Setup (Generative Mode):")
+        print("\nARC-AGI 2 Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Evaluation split: {self.config.eval_split}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
@@ -216,7 +212,8 @@ class ARCAGIEvalEnv(BaseEnv):
         gold_output = item["question"][0]["output"]
 
         # Build the prompt
-        query = """You are solving an ARC-AGI puzzle. You will be shown training examples where an input grid is transformed into an output grid following a specific pattern or rule.
+        query = """You are solving an ARC-AGI puzzle. You will be shown training examples
+where an input grid is transformed into an output grid following a specific pattern or rule.
 
 Your task is to:
 1. Analyze the training examples to understand the transformation pattern
@@ -315,7 +312,7 @@ Example format:
                 grid = ast.literal_eval(match)
                 if self._is_valid_grid(grid):
                     return grid
-            except:
+            except Exception:
                 continue
 
         # Strategy 4: Extract rows one per line
@@ -328,7 +325,7 @@ Example format:
                 grid = [json.loads(row) for row in rows]
                 if self._is_valid_grid(grid):
                     return grid
-            except:
+            except Exception:
                 pass
 
         return None

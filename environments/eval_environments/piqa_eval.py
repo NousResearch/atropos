@@ -167,7 +167,7 @@ class PIQAEvalEnv(BaseEnv):
 
     async def setup(self):
         """Load the PIQA dataset."""
-        print(f"\nPIQA Evaluation Setup (Generative Mode):")
+        print("\nPIQA Evaluation Setup (Generative Mode):")
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Evaluation split: {self.config.eval_split}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
