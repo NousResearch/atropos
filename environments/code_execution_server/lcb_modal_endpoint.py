@@ -1,36 +1,33 @@
 import ast
-import json
-import sys
 import faulthandler
+import json
 import platform
-import modal
-
-# used for debugging to time steps
-from datetime import datetime
 
 # to run the solution files we're using a timing based approach
 import signal
+import sys
+import time
 
-import numpy as np
-
+# used for debugging to time steps
+from datetime import datetime
+from decimal import Decimal
+from enum import Enum
 from io import StringIO
-
-# used for testing the code that reads from input
-from unittest.mock import patch, mock_open
 
 # from pyext import RuntimeModule
 from types import ModuleType
 
-from enum import Enum
-from decimal import Decimal
-import time
+# used for testing the code that reads from input
+from unittest.mock import mock_open, patch
 
-
+import modal
+import numpy as np
 
 import_string = "from string import *\nfrom re import *\nfrom datetime import *\nfrom collections import *\nfrom heapq import *\nfrom bisect import *\nfrom copy import *\nfrom math import *\nfrom random import *\nfrom statistics import *\nfrom itertools import *\nfrom functools import *\nfrom operator import *\nfrom io import *\nfrom sys import *\nfrom json import *\nfrom builtins import *\nfrom typing import *\nimport string\nimport re\nimport datetime\nimport collections\nimport heapq\nimport bisect\nimport copy\nimport math\nimport random\nimport statistics\nimport itertools\nimport functools\nimport operator\nimport io\nimport sys\nimport json\nsys.setrecursionlimit(50000)\n"
 
 image = modal.Image.debian_slim(python_version="3.10").pip_install("numpy")
 app = modal.App("joeli-lcb", image=image)
+
 
 def truncatefn(s, length=300):
     if isinstance(s, str):
@@ -117,7 +114,10 @@ def clean_if_name(code: str) -> str:
         last_block = astree.body[-1]
         if isinstance(last_block, ast.If):
             condition = last_block.test
-            if ast.unparse(condition).strip() == "__name__ == '__main__'" or ast.unparse(condition).strip() == "__name__ == \"__main__\"":
+            if (
+                ast.unparse(condition).strip() == "__name__ == '__main__'"
+                or ast.unparse(condition).strip() == '__name__ == "__main__"'
+            ):
                 code = (
                     ast.unparse(astree.body[:-1]) + "\n" + ast.unparse(last_block.body)  # type: ignore
                 )
@@ -181,10 +181,10 @@ def call_method(method, inputs):
     @patch("sys.stdin.read", lambda *args: inputs)
     # @patch('sys.stdout.write', print)
     def _inner_call_method(_method):
-        if 'stdin' in _method.__globals__:
-            _method.__globals__['stdin'] = mock_stdin
-        if 'stdout' in _method.__globals__:
-            _method.__globals__['stdout'] = sys.stdout
+        if "stdin" in _method.__globals__:
+            _method.__globals__["stdin"] = mock_stdin
+        if "stdout" in _method.__globals__:
+            _method.__globals__["stdout"] = sys.stdout
         try:
             return _method()
         except SystemExit as e:
@@ -259,11 +259,21 @@ def grade_call_based(
     if method is None:
         return
 
-    all_inputs = [[json.loads(line) for line in inputs.split("\n")] if isinstance(inputs, str) else inputs for inputs in all_inputs]
-    all_outputs = [json.loads(output) if isinstance(output, str) else output[0] for output in all_outputs]
+    all_inputs = [
+        (
+            [json.loads(line) for line in inputs.split("\n")]
+            if isinstance(inputs, str)
+            else inputs
+        )
+        for inputs in all_inputs
+    ]
+    all_outputs = [
+        json.loads(output) if isinstance(output, str) else output[0]
+        for output in all_outputs
+    ]
 
-    #all_inputs = [[json.loads(line) for line in inputs.split("\n")] for inputs in all_inputs]
-    #all_outputs = [json.loads(output) for output in all_outputs]
+    # all_inputs = [[json.loads(line) for line in inputs.split("\n")] for inputs in all_inputs]
+    # all_outputs = [json.loads(output) for output in all_outputs]
 
     total_execution = 0
     all_results = []
@@ -326,6 +336,7 @@ def grade_call_based(
             faulthandler.disable()
 
     return all_results, {"execution time": total_execution}
+
 
 def decimals_are_close(a: Decimal, b: Decimal, tol: Decimal = Decimal("1e-4")) -> bool:
     return abs(a - b) <= tol
@@ -450,7 +461,10 @@ def grade_stdio(
             if decimal_prediction_line == decimal_gtout_line:
                 continue
 
-            if len(decimal_prediction_line) == len(decimal_gtout_line) and all(decimals_are_close(a, b) for a, b in zip(decimal_prediction_line, decimal_gtout_line)):
+            if len(decimal_prediction_line) == len(decimal_gtout_line) and all(
+                decimals_are_close(a, b)
+                for a, b in zip(decimal_prediction_line, decimal_gtout_line)
+            ):
                 continue
 
             all_results.append(-2)
@@ -460,14 +474,22 @@ def grade_stdio(
     return all_results, {"execution time": total_execution_time}
 
 
-@app.function(max_containers=100,cpu=1.0, restrict_modal_access=False, max_inputs=1, timeout=600, block_network=False, retries=3)
+@app.function(
+    max_containers=100,
+    cpu=1.0,
+    restrict_modal_access=False,
+    max_inputs=1,
+    timeout=600,
+    block_network=False,
+    retries=3,
+)
 def run_test(sample, test=None, debug=False, timeout=15):
     """
     if test(generated_code) is not None it'll try to run the code.
     otherwise it'll just return an input and output pair.
     """
     print("VALID, went into function")
-    #test = json.loads(test)
+    # test = json.loads(test)
     signal.signal(signal.SIGALRM, timeout_handler)
 
     # Disable functionalities that can make destructive changes to the test.
@@ -478,7 +500,7 @@ def run_test(sample, test=None, debug=False, timeout=15):
         print(f"start = {datetime.now().time()}")
 
     try:
-        #in_outs = json.loads(sample["input_output"])
+        # in_outs = json.loads(sample["input_output"])
         in_outs = sample["tests"]
     except ValueError as e:
         raise e
@@ -630,4 +652,3 @@ def reliability_guard(maximum_memory_bytes=None):
     sys.modules["resource"] = None
     sys.modules["psutil"] = None
     sys.modules["tkinter"] = None
-
