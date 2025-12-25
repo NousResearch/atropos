@@ -43,7 +43,7 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    )
+)
 
 # Prompt template following lighteval's structure
 # Added boxed instruction for consistency with our math verification
