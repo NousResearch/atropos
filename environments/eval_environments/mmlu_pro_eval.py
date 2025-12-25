@@ -557,7 +557,7 @@ class MMLUProEvalEnv(BaseEnv):
             # Get model completion with retry logic
             model_response = None
             finish_reason = None
-            
+
             # Build completion kwargs - only include max_tokens if > 0
             # (0 means "use model default", so we don't pass the parameter)
             completion_kwargs = {
@@ -568,7 +568,7 @@ class MMLUProEvalEnv(BaseEnv):
             }
             if self.config.eval_max_tokens > 0:
                 completion_kwargs["max_tokens"] = self.config.eval_max_tokens
-            
+
             for attempt in range(self.config.max_retries):
                 try:
                     completion = await self.server.chat_completion(**completion_kwargs)
