@@ -479,15 +479,21 @@ class GPQAEvalEnv(BaseEnv):
             # Get model completion with retry logic
             model_response = None
             finish_reason = None
+            
+            # Build completion kwargs - only include max_tokens if > 0
+            # (0 means "use model default", so we don't pass the parameter)
+            completion_kwargs = {
+                "messages": messages,
+                "n": 1,
+                "temperature": self.config.eval_temperature,
+                "split": "eval",
+            }
+            if self.config.eval_max_tokens > 0:
+                completion_kwargs["max_tokens"] = self.config.eval_max_tokens
+            
             for attempt in range(self.config.max_retries):
                 try:
-                    completion = await self.server.chat_completion(
-                        messages=messages,
-                        n=1,
-                        temperature=self.config.eval_temperature,
-                        max_tokens=self.config.eval_max_tokens,
-                        split="eval",
-                    )
+                    completion = await self.server.chat_completion(**completion_kwargs)
 
                     if completion.choices and completion.choices[0].message.content:
                         model_response = completion.choices[0].message.content
