@@ -586,7 +586,7 @@ class AGIEvalEnv(BaseEnv):
                         print(f"    Model: {model_name}")
                         print(f"    Temperature: {self.config.eval_temperature}")
                         print(
-                            f"    Max tokens: {self.config.eval_max_tokens if self.config.eval_max_tokens > 0 else 'model default'}"
+                            f"    Max tokens: {self.config.eval_max_tokens if self.config.eval_max_tokens > 0 else 'model default'}" # noqa: E501
                         )
 
                     completion = await self.server.chat_completion(**completion_kwargs)
