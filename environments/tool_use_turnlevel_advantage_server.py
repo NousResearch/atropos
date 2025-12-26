@@ -37,11 +37,11 @@ from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+import wandb
 from datasets import load_dataset
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
-import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
