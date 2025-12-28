@@ -959,12 +959,43 @@ def extract_all_boxed(latex_str: str) -> List[str]:
     """
     Extract all \\boxed{} contents from a LaTeX string.
 
+    Handles arbitrarily nested braces by counting brace depth.
+
     Args:
         latex_str: LaTeX string
 
     Returns:
         List of contents from all \\boxed{} occurrences
     """
-    pattern = r"\\boxed\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}"
-    return re.findall(pattern, latex_str)
+    results = []
+    i = 0
+    boxed_pattern = "\\boxed{"
+
+    while i < len(latex_str):
+        # Find next \boxed{
+        pos = latex_str.find(boxed_pattern, i)
+        if pos == -1:
+            break
+
+        # Start after \boxed{
+        start = pos + len(boxed_pattern)
+        depth = 1
+        j = start
+
+        # Count braces to find matching closing brace
+        while j < len(latex_str) and depth > 0:
+            if latex_str[j] == '{':
+                depth += 1
+            elif latex_str[j] == '}':
+                depth -= 1
+            j += 1
+
+        if depth == 0:
+            # Extract content between braces
+            content = latex_str[start:j-1].strip()
+            results.append(content)
+
+        i = j
+
+    return results
 
