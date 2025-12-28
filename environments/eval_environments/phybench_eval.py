@@ -176,7 +176,6 @@ class PHYBenchEvalConfig(BaseEnvConfig):
     )
 
 
-
 class PHYBenchEvalEnv(BaseEnv):
     """
     PHYBench Evaluation Environment.
@@ -496,7 +495,10 @@ class PHYBenchEvalEnv(BaseEnv):
     async def rollout_and_score_eval(self, item: Dict) -> Optional[Dict]:
         """Run evaluation on a single item and return the result."""
         if self.config.full_debug:
-            print(f"[DEBUG] Starting eval for item: {item.get('id', 'unknown')}", flush=True)
+            print(
+                f"[DEBUG] Starting eval for item: {item.get('id', 'unknown')}",
+                flush=True,
+            )
         prompt = self._format_prompt(item)
         system_content = self._create_system_content()
 
@@ -519,9 +521,17 @@ class PHYBenchEvalEnv(BaseEnv):
         for attempt in range(self.config.max_retries):
             try:
                 if self.config.full_debug:
-                    print(f"  Making API request (attempt {attempt + 1}/{self.config.max_retries})...", flush=True)
-                    print(f"    Temperature: {self.config.eval_temperature}", flush=True)
-                    print(f"    Max tokens: {self.config.eval_max_tokens if self.config.eval_max_tokens > 0 else 'model default'}", flush=True)
+                    print(
+                        f"  Making API request (attempt {attempt + 1}/{self.config.max_retries})...",
+                        flush=True,
+                    )
+                    print(
+                        f"    Temperature: {self.config.eval_temperature}", flush=True
+                    )
+                    print(
+                        f"    Max tokens: {self.config.eval_max_tokens if self.config.eval_max_tokens > 0 else 'model default'}",
+                        flush=True,
+                    )
 
                 response = await self.server.chat_completion(**kwargs)
                 response_text = response.choices[0].message.content or ""
@@ -610,9 +620,7 @@ class PHYBenchEvalEnv(BaseEnv):
         print(f"{'='*60}\n")
 
         # Create evaluation tasks
-        eval_tasks = [
-            self.rollout_and_score_eval(item) for item in self.eval_items
-        ]
+        eval_tasks = [self.rollout_and_score_eval(item) for item in self.eval_items]
 
         # Run with progress bar
         results = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating PHYBench")

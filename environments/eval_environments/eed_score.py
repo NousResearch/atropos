@@ -988,18 +988,17 @@ def extract_all_boxed(latex_str: str) -> List[str]:
 
         # Count braces to find matching closing brace
         while j < len(latex_str) and depth > 0:
-            if latex_str[j] == '{':
+            if latex_str[j] == "{":
                 depth += 1
-            elif latex_str[j] == '}':
+            elif latex_str[j] == "}":
                 depth -= 1
             j += 1
 
         if depth == 0:
             # Extract content between braces
-            content = latex_str[start:j-1].strip()
+            content = latex_str[start : j - 1].strip()
             results.append(content)
 
         i = j
 
     return results
-
