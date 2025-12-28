@@ -530,7 +530,7 @@ class PHYBenchEvalEnv(BaseEnv):
                         f"    Temperature: {self.config.eval_temperature}", flush=True
                     )
                     print(
-                        f"    Max tokens: {self.config.eval_max_tokens if self.config.eval_max_tokens > 0 else 'model default'}", # noqa: E501
+                        f"    Max tokens: {self.config.eval_max_tokens if self.config.eval_max_tokens > 0 else 'model default'}",  # noqa: E501
                         flush=True,
                     )
 
