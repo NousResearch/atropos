@@ -691,7 +691,9 @@ def master_convert(s: str):
         Various exceptions if conversion fails
     """
     if not EED_AVAILABLE:
-        raise ImportError("latex2sympy2_extended and sympy are required for EED scoring")
+        raise ImportError(
+            "latex2sympy2_extended and sympy are required for EED scoring"
+        )
 
     preprocessed_stage1 = first_preprocess(s)
     preprocessed_stage2 = second_preprocess(preprocessed_stage1)
@@ -723,7 +725,9 @@ def sympy_to_tree(expr) -> TreeNode:
         ValueError: If expression contains unsupported types
     """
     # Numbers and constants
-    if isinstance(expr, (Integer, Pi, Exp1, Float, Rational, Infinity, NegativeInfinity)):
+    if isinstance(
+        expr, (Integer, Pi, Exp1, Float, Rational, Infinity, NegativeInfinity)
+    ):
         return TreeNode(label=f"number_{expr}", children=[])
 
     # Symbols
@@ -967,4 +971,3 @@ def extract_all_boxed(latex_str: str) -> List[str]:
     """
     pattern = r"\\boxed\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}"
     return re.findall(pattern, latex_str)
-

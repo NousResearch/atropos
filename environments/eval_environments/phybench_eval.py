@@ -56,7 +56,6 @@ from atroposlib.envs.base import (
     BaseEnvConfig,
 )
 
-
 # Physics domain tags in PHYBench
 PHYBENCH_TAGS = [
     "MECHANICS",
@@ -235,7 +234,9 @@ class PHYBenchEvalEnv(BaseEnv):
         print(f"  Thinking mode: {self.config.thinking_mode}")
         print(f"  EED Score enabled: {self.config.compute_eed_score and EED_AVAILABLE}")
         if self.config.thinking_mode:
-            thinking_prompt = get_default_thinking_prompt(self.config.custom_thinking_prompt)
+            thinking_prompt = get_default_thinking_prompt(
+                self.config.custom_thinking_prompt
+            )
             print(f"  Thinking prompt: {thinking_prompt[:80]}...")
         if self.config.tags_filter:
             print(f"  Tags filter: {self.config.tags_filter}")
@@ -284,13 +285,15 @@ class PHYBenchEvalEnv(BaseEnv):
             # Track tag distribution
             tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
-            self.eval_items.append({
-                "id": problem_id,
-                "tag": tag,
-                "content": content,
-                "solution": solution,
-                "answer": answer,
-            })
+            self.eval_items.append(
+                {
+                    "id": problem_id,
+                    "tag": tag,
+                    "content": content,
+                    "solution": solution,
+                    "answer": answer,
+                }
+            )
 
         # Shuffle with seed for reproducibility
         random.seed(self.config.shuffle_seed)
@@ -325,7 +328,9 @@ class PHYBenchEvalEnv(BaseEnv):
             or ""
         )
 
-    def _extract_answer(self, response: str, debug: bool = False) -> Tuple[Optional[str], str]:
+    def _extract_answer(
+        self, response: str, debug: bool = False
+    ) -> Tuple[Optional[str], str]:
         """
         Extract the answer from the model's response.
 
@@ -351,7 +356,9 @@ class PHYBenchEvalEnv(BaseEnv):
 
         if len(boxed_answers) > 1:
             if debug:
-                print(f"    Multiple \\boxed{{}} found ({len(boxed_answers)}), using last one")
+                print(
+                    f"    Multiple \\boxed{{}} found ({len(boxed_answers)}), using last one"
+                )
             return boxed_answers[-1], "boxed_last"
 
         return boxed_answers[0], "boxed"
@@ -389,7 +396,9 @@ class PHYBenchEvalEnv(BaseEnv):
         # Try EED Score - if score is 100, they're equivalent
         if self.config.compute_eed_score and EED_AVAILABLE:
             try:
-                score, _, _, _ = compute_eed_score(gold_clean, pred_clean, debug_mode=False)
+                score, _, _, _ = compute_eed_score(
+                    gold_clean, pred_clean, debug_mode=False
+                )
                 if score == 100:
                     return True, "sympy_equivalent"
             except Exception:
@@ -502,7 +511,9 @@ class PHYBenchEvalEnv(BaseEnv):
 
         # Extract thinking content if present
         thinking_content = (
-            extract_thinking_content(response_text) if self.config.thinking_mode else None
+            extract_thinking_content(response_text)
+            if self.config.thinking_mode
+            else None
         )
 
         # Get content for answer extraction
@@ -522,12 +533,16 @@ class PHYBenchEvalEnv(BaseEnv):
 
         # Compute scores
         gold_answer = item["answer"]
-        scores = self._compute_scores(extracted_answer, gold_answer, debug=self.config.full_debug)
+        scores = self._compute_scores(
+            extracted_answer, gold_answer, debug=self.config.full_debug
+        )
 
         if self.config.full_debug:
             status = "✓" if scores["is_correct"] else "✗"
             eed = scores["eed_score"]
-            print(f"  [{status}] {item['tag']}: EED={eed:.1f}, gold={gold_answer[:50]}...")
+            print(
+                f"  [{status}] {item['tag']}: EED={eed:.1f}, gold={gold_answer[:50]}..."
+            )
 
         return {
             "item_id": item["id"],
@@ -614,11 +629,15 @@ class PHYBenchEvalEnv(BaseEnv):
         # Format compliance and thinking utilization
         format_valid = sum(1 for r in valid_results if r.get("format_valid", True))
         has_thinking = sum(1 for r in valid_results if r.get("has_thinking", False))
-        has_boxed = sum(1 for r in valid_results if r.get("extracted_answer") is not None)
+        has_boxed = sum(
+            1 for r in valid_results if r.get("extracted_answer") is not None
+        )
 
         # Average response length
         response_lengths = [r.get("response_length", 0) for r in valid_results]
-        avg_response_length = sum(response_lengths) / len(response_lengths) if response_lengths else 0
+        avg_response_length = (
+            sum(response_lengths) / len(response_lengths) if response_lengths else 0
+        )
 
         metrics = {
             "accuracy": accuracy,
@@ -680,7 +699,9 @@ class PHYBenchEvalEnv(BaseEnv):
             "phybench/total_evaluated": metrics.get("total_evaluated", 0),
             "phybench/has_boxed_rate": metrics.get("has_boxed_rate", 0),
             "phybench/format_compliance_rate": metrics.get("format_compliance_rate", 0),
-            "phybench/thinking_utilization_rate": metrics.get("thinking_utilization_rate", 0),
+            "phybench/thinking_utilization_rate": metrics.get(
+                "thinking_utilization_rate", 0
+            ),
             "phybench/avg_response_length": metrics.get("avg_response_length", 0),
         }
 
@@ -708,4 +729,3 @@ class PHYBenchEvalEnv(BaseEnv):
 
 if __name__ == "__main__":
     PHYBenchEvalEnv.cli()
-
