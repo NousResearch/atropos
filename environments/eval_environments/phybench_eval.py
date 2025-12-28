@@ -69,7 +69,8 @@ PHYBENCH_TAGS = [
 ]
 
 # Prompt template for PHYBench evaluation
-PHYBENCH_PROMPT_TEMPLATE = """You are a physics expert. Please read the following question and provide a step-by-step solution.
+PHYBENCH_PROMPT_TEMPLATE = """You are a physics expert. 
+Please read the following question and provide a step-by-step solution.
 
 Put your final answer, which must be a readable LaTeX formula, in a \\boxed{{}} environment.
 
