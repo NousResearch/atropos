@@ -146,13 +146,13 @@ class TrainingConfig(BaseModel):
         ),
     )
     
-    # CUDA IPC mode (for shared_vllm mode - true shared GPU memory)
-    use_cuda_ipc: bool = Field(
+    # Shared memory mode (for shared_vllm mode - NCCL weight broadcast)
+    use_shared_memory: bool = Field(
         False,
         description=(
-            "Enable CUDA IPC for true shared GPU memory with vLLM. "
-            "This allows trainer to use vLLM's model weights directly without loading a copy. "
-            "Requires both processes on the SAME GPU. Saves ~8GB for 3B model."
+            "Enable shared memory weight updates via NCCL. "
+            "vLLM must be started with VLLM_ENABLE_SHARED_WEIGHTS=1. "
+            "Weight updates are broadcast to vLLM's daemon process."
         ),
     )
 
@@ -385,19 +385,16 @@ def load_model_and_tokenizer(
     tokenizer = AutoTokenizer.from_pretrained(config.model_name)
 
     if config.weight_bridge_mode == "shared_vllm" and bridge is not None:
-        if config.use_cuda_ipc:
-            # CUDA IPC mode: use vLLM's weights directly (NO NEW MEMORY!)
-            print("[Setup] Using CUDA IPC shared memory mode...")
-            print("[Setup] Trainer will use vLLM's model weights directly!")
-            model = bridge.get_trainable_model()
+        # Shared vLLM mode: load model, weights will be broadcast via NCCL
+        print("[Setup] Loading model for shared vLLM mode...")
+        if config.use_shared_memory:
+            print("[Setup] NCCL shared memory mode - updates broadcast to vLLM daemon")
         else:
-            # Standard shared mode: load own copy, notify via HTTP
-            print("[Setup] Loading model for shared vLLM mode...")
-            model = AutoModelForCausalLM.from_pretrained(
-                config.model_name, torch_dtype=torch.bfloat16
-            )
-            model.to(config.device)
-            bridge.attach_to_vllm_weights(dict(model.named_parameters()))
+            print("[Setup] HTTP notification mode - vLLM notified of updates")
+        model = AutoModelForCausalLM.from_pretrained(
+            config.model_name, torch_dtype=torch.bfloat16
+        )
+        model.to(config.device)
 
     elif config.weight_bridge_mode == "lora_only":
         model = _load_model_with_lora(config)
@@ -411,17 +408,15 @@ def load_model_and_tokenizer(
 
     # Enable gradient checkpointing (saves memory)
     # For LoRA, use PEFT's method; for others, use standard method
-    # NOTE: Skip for CUDA IPC as the model structure is different
     if config.weight_bridge_mode == "lora_only":
         # PEFT models need gradient_checkpointing enabled on base model
         # and require use_reentrant=False for proper gradient flow
         if hasattr(model, "enable_input_require_grads"):
             model.enable_input_require_grads()
         model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
-    elif not config.use_cuda_ipc:
-        # Standard gradient checkpointing for non-IPC modes
+    else:
+        # Standard gradient checkpointing
         model.gradient_checkpointing_enable()
-    # CUDA IPC mode: gradient checkpointing may not work with shared tensors
     
     model.train()
 
@@ -1040,14 +1035,14 @@ def train_shared_vllm(config: TrainingConfig):
     use_wandb = setup_wandb(config)
 
     print(f"\n{'='*60}")
-    if config.use_cuda_ipc:
-        print("SHARED VLLM MODE (CUDA IPC - TRUE SHARED MEMORY)")
-        print(">>> NO MODEL COPY - using vLLM's weights directly!")
+    if config.use_shared_memory:
+        print("SHARED VLLM MODE (NCCL BROADCAST)")
+        print(">>> Weights broadcast to vLLM via NCCL!")
     else:
         print("SHARED VLLM MODE (HTTP notifications)")
     print(f"{'='*60}")
     print(f"Model: {config.model_name}")
-    print(f"CUDA IPC: {config.use_cuda_ipc}")
+    print(f"Shared Memory: {config.use_shared_memory}")
     print(f"Distributed: rank={config.trainer_rank}/{config.world_size}")
     print(f"Init method: {config.init_method}")
     print(f"Inference nodes: {config.num_inference_nodes}")
@@ -1113,12 +1108,18 @@ def train_shared_vllm(config: TrainingConfig):
             gpu_mem_gb = 0
             gpu_mem_reserved_gb = 0
 
-        # Track notify update time (this is the "sync" for shared mode - should be ~0ms)
+        # Sync weights with vLLM
         sync_start = time.time()
-        bridge.notify_update()
+        if config.use_shared_memory:
+            # NCCL broadcast mode - weights sent directly to vLLM daemon
+            bridge.broadcast_weights(model)
+            print(f"  [SHARED] Weights broadcast via NCCL - step {step+1} (sync: {(time.time()-sync_start)*1000:.1f}ms)")
+        else:
+            # HTTP notification mode - just notify
+            bridge.notify_update()
+            print(f"  [SHARED] Update notification sent - step {step+1}")
         sync_time = time.time() - sync_start
         benchmark_stats["sync_times"].append(sync_time)
-        print(f"  [SHARED] Weights updated in-place - vLLM now using step {step+1} weights (sync: {sync_time*1000:.1f}ms)")
 
         # Add timing metrics
         metrics["step_time"] = step_time
@@ -1488,14 +1489,14 @@ def parse_args() -> argparse.Namespace:
         help="Module names to apply LoRA to (default: q_proj v_proj)",
     )
     
-    # --- CUDA IPC arguments ---
+    # --- Shared memory arguments ---
     parser.add_argument(
-        "--use-cuda-ipc",
+        "--use-shared-memory",
         action="store_true",
         help=(
-            "Enable CUDA IPC for true shared GPU memory with vLLM (shared_vllm mode only). "
-            "Trainer uses vLLM's model weights directly - no copy needed! "
-            "Requires both processes on SAME GPU. Saves ~8GB for 3B model."
+            "Enable NCCL shared memory weight updates (shared_vllm mode only). "
+            "Weights are broadcast to vLLM's daemon via NCCL. "
+            "vLLM must be started with VLLM_ENABLE_SHARED_WEIGHTS=1."
         ),
     )
 
@@ -1528,7 +1529,7 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
         lora_target_modules=args.lora_target_modules,
-        use_cuda_ipc=args.use_cuda_ipc,
+        use_shared_memory=getattr(args, 'use_shared_memory', False),
     )
 
 
