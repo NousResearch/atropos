@@ -34,8 +34,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from datasets import load_dataset
 from eval_helpers import (
     create_system_content,
-    get_default_thinking_prompt,
     format_reasoning_debug_info,
+    get_default_thinking_prompt,
 )
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
@@ -234,7 +234,7 @@ class IFEvalEnv(BaseEnv):
             if thinking_prompt:
                 print(f"  Thinking prompt: {thinking_prompt[:100]}...")
             else:
-                print(f"  Thinking prompt: None (using API reasoning mode only)")
+                print("  Thinking prompt: None (using API reasoning mode only)")
 
         # Load IFEval dataset
         try:
@@ -464,14 +464,22 @@ class IFEvalEnv(BaseEnv):
                         completion_kwargs["max_tokens"] = self.config.eval_max_tokens
 
                     if self.config.full_debug:
-                        print(f"\n  [API Call] Sending request (attempt {attempt + 1})...")
-                        print(f"    Temperature: {completion_kwargs.get('temperature')}")
-                        print(f"    Max tokens: {completion_kwargs.get('max_tokens', 'not set (unlimited)')}")
+                        print(
+                            f"\n  [API Call] Sending request (attempt {attempt + 1})..."
+                        )
+                        print(
+                            f"    Temperature: {completion_kwargs.get('temperature')}"
+                        )
+                        print(
+                            f"    Max tokens: {completion_kwargs.get('max_tokens', 'not set (unlimited)')}"
+                        )
                         print(f"    Thinking mode: {self.config.thinking_mode}")
                         print(f"    Reasoning effort: {self.config.reasoning_effort}")
                         # Show extra_body that will be injected by ServerManager
                         if self.config.thinking_mode or self.config.reasoning_effort:
-                            print(f"    (ServerManager will inject reasoning extra_body)")
+                            print(
+                                "    (ServerManager will inject reasoning extra_body)"
+                            )
 
                     _api_start = time.time()
                     completion = await self.server.chat_completion(**completion_kwargs)
