@@ -358,26 +358,45 @@ class VLLMWeightBridge:
         log_dir = self.config.log_dir or os.environ.get("LOGDIR", ".")
         json_path = Path(log_dir) / "vllm_bridge_config.json"
         
-        # Wait for file
+        # Wait for file (vLLM needs time to load model and export params)
         wait_time = 0
-        while not json_path.exists() and wait_time < self.config.timeout_seconds:
+        max_wait = min(self.config.timeout_seconds, 120)  # Max 2 minutes
+        while not json_path.exists() and wait_time < max_wait:
             if wait_time % 10 == 0:
-                print(f"[Bridge] Waiting for {json_path}...")
+                print(f"[Bridge] Waiting for {json_path}... ({wait_time}s)")
             time.sleep(1)
             wait_time += 1
         
         if not json_path.exists():
-            raise RuntimeError(f"Config file not found: {json_path}")
+            print(f"[Bridge] Warning: Config file not found after {wait_time}s")
+            print("[Bridge] Will use trainer's model params directly")
+            self.param_mappings = {}
+            self.param_name_list = []
+            return
         
-        time.sleep(0.5)  # Wait for file to finish writing
+        time.sleep(1.0)  # Wait for file to finish writing
         
-        with open(json_path, "r") as f:
-            data = json.load(f)
+        try:
+            with open(json_path, "r") as f:
+                data = json.load(f)
+            
+            self.param_mappings = data.get("param_mappings", {})
+            self.param_name_list = data.get("param_names", sorted(self.param_mappings.keys()))
+            
+            print(f"[Bridge] Loaded {len(self.param_name_list)} vLLM parameter names")
+        except Exception as e:
+            print(f"[Bridge] Warning: Failed to load config: {e}")
+            self.param_mappings = {}
+            self.param_name_list = []
+    
+    def set_param_list_from_model(self, model: nn.Module) -> None:
+        """
+        Set param list from the trainer's model.
         
-        self.param_mappings = data.get("param_mappings", {})
-        self.param_name_list = sorted(self.param_mappings.keys())
-        
-        print(f"[Bridge] Loaded mappings for {len(self.param_name_list)} parameters")
+        Call this if vLLM's param names don't match the trainer's.
+        """
+        self.param_name_list = sorted(name for name, _ in model.named_parameters())
+        print(f"[Bridge] Using trainer's {len(self.param_name_list)} parameter names")
     
     def broadcast_weights(self, model: nn.Module) -> None:
         """
@@ -400,31 +419,27 @@ class VLLMWeightBridge:
         start_time = time.time()
         
         state_dict = dict(model.named_parameters())
+        num_params = 0
         
         with torch.no_grad():
             for idx, param_name in enumerate(self.param_name_list):
-                # Signal which parameter we're broadcasting
-                idx_tensor = torch.tensor([idx], dtype=torch.long, device=self.device)
-                dist.broadcast(idx_tensor, src=0, group=self.nccl_group)
-                
                 # Get tensor for this parameter
                 if param_name not in state_dict:
                     continue
                 
                 tensor = state_dict[param_name].data
-                local_shape = self.param_mappings[param_name].get(
-                    "local_shape", list(tensor.shape)
-                )
                 
-                # All-gather to distribute to all ranks (including inference)
-                tensor_list = [
-                    torch.zeros(local_shape, dtype=tensor.dtype, device=self.device)
-                    for _ in range(self._total_group_size)
-                ]
-                dist.all_gather(tensor_list, tensor, group=self.nccl_group)
+                # Step 1: Broadcast parameter index
+                idx_tensor = torch.tensor([idx], dtype=torch.long, device=self.device)
+                dist.broadcast(idx_tensor, src=0, group=self.nccl_group)
+                
+                # Step 2: Broadcast the actual tensor
+                dist.broadcast(tensor.contiguous(), src=0, group=self.nccl_group)
+                
+                num_params += 1
         
         elapsed = time.time() - start_time
-        print(f"[Bridge] Broadcast update #{self._update_count} ({elapsed:.2f}s)")
+        print(f"[Bridge] Broadcast {num_params} params, update #{self._update_count} ({elapsed:.2f}s)")
     
     def broadcast_single_param(
         self, 
