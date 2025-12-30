@@ -27,6 +27,8 @@ import os
 import sys
 from datetime import datetime
 
+import pytest
+
 # Add the project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
@@ -324,8 +326,7 @@ async def test_server_manager_injects_extra_body():
     the full flow works.
     """
     if not OPENROUTER_API_KEY:
-        print("⚠ Skipping ServerManager integration test - OPENROUTER_API_KEY not set")
-        return True
+        pytest.skip("OPENROUTER_API_KEY not set - skipping integration test")
 
     from atroposlib.envs.server_handling.server_baseline import APIServerConfig
     from atroposlib.envs.server_handling.server_manager import ServerManager
@@ -345,60 +346,45 @@ async def test_server_manager_injects_extra_body():
     print("Testing ServerManager.chat_completion() with reasoning injection")
     print("=" * 60)
 
-    try:
-        # Create ServerManager with reasoning config (NOT in testing mode - we want real API call)
-        server_manager = ServerManager(
-            configs=[server_config],
-            reasoning_config=reasoning_config,
-            testing=False,  # Actually make the API call
-        )
+    # Create ServerManager with reasoning config (NOT in testing mode - we want real API call)
+    server_manager = ServerManager(
+        configs=[server_config],
+        reasoning_config=reasoning_config,
+        testing=False,  # Actually make the API call
+    )
 
-        # Make a chat completion call
-        messages = [
-            {"role": "system", "content": HERMES_REASONING_PROMPT},
-            {"role": "user", "content": "What is 2 + 2? Think carefully."},
-        ]
+    # Make a chat completion call
+    messages = [
+        {"role": "system", "content": HERMES_REASONING_PROMPT},
+        {"role": "user", "content": "What is 2 + 2? Think carefully."},
+    ]
 
-        print(
-            f"Making API call: enabled={reasoning_config.enabled}, "
-            f"effort={reasoning_config.effort}"
-        )
+    print(
+        f"Making API call: enabled={reasoning_config.enabled}, "
+        f"effort={reasoning_config.effort}"
+    )
 
-        completion = await server_manager.chat_completion(
-            messages=messages,
-            max_tokens=512,
-            temperature=0.7,
-        )
+    completion = await server_manager.chat_completion(
+        messages=messages,
+        max_tokens=512,
+        temperature=0.7,
+    )
 
-        # Verify response has reasoning
-        reasoning, source, content = extract_reasoning_from_completion(completion)
+    # Verify response has reasoning
+    reasoning, source, content = extract_reasoning_from_completion(completion)
 
-        print("Response received!")
-        print(
-            f"Content: {content[:100]}..."
-            if content and len(content) > 100
-            else f"Content: {content}"
-        )
-        print(f"Reasoning source: {source}")
-        print(f"Reasoning length: {len(reasoning) if reasoning else 0} chars")
+    print("Response received!")
+    print(
+        f"Content: {content[:100]}..."
+        if content and len(content) > 100
+        else f"Content: {content}"
+    )
+    print(f"Reasoning source: {source}")
+    print(f"Reasoning length: {len(reasoning) if reasoning else 0} chars")
 
-        if reasoning:
-            print(
-                "✓ ServerManager.chat_completion() correctly injected reasoning extra_body"
-            )
-            return True
-        else:
-            print(
-                "⚠ Response received but no reasoning found (model may not support it)"
-            )
-            return True  # Still a pass - the injection worked, model just didn't return reasoning
-
-    except Exception as e:
-        import traceback
-
-        print(f"✗ ServerManager test failed: {e}")
-        traceback.print_exc()
-        return False
+    # Assert we got a response (reasoning is optional - model may not support it)
+    assert content is not None, "Expected response content"
+    print("✓ ServerManager.chat_completion() correctly injected reasoning extra_body")
 
 
 def test_full_env_config_to_server_flow():
@@ -453,7 +439,6 @@ def test_full_env_config_to_server_flow():
     assert openai_extra["reasoning_effort"] == "high"
 
     print("\n✓ Full BaseEnvConfig → ServerManager flow works correctly!")
-    return True
 
 
 # =============================================================================
@@ -461,9 +446,12 @@ def test_full_env_config_to_server_flow():
 # =============================================================================
 
 
-async def test_openrouter_reasoning(model: str, effort: str = "high"):
+async def _run_openrouter_reasoning_test(model: str, effort: str = "high"):
     """
-    Test reasoning with an OpenRouter model.
+    Run reasoning test with an OpenRouter model (helper function).
+
+    Note: This is a helper function, not a pytest test. It's called by
+    run_all_integration_tests() when running the script directly.
 
     Args:
         model: Model name to test
@@ -632,9 +620,12 @@ async def test_openrouter_reasoning(model: str, effort: str = "high"):
         }
 
 
-async def test_openai_reasoning(effort: str = "medium"):
+async def _run_openai_reasoning_test(effort: str = "medium"):
     """
-    Test reasoning with OpenAI official API.
+    Run reasoning test with OpenAI official API (helper function).
+
+    Note: This is a helper function, not a pytest test. It's called by
+    run_all_integration_tests() when running the script directly.
 
     Args:
         effort: Reasoning effort level
@@ -809,11 +800,11 @@ async def run_all_integration_tests():
 
     # Test OpenRouter models
     for model in OPENROUTER_MODELS:
-        result = await test_openrouter_reasoning(model)
+        result = await _run_openrouter_reasoning_test(model)
         results.append(result)
 
     # Test OpenAI
-    result = await test_openai_reasoning()
+    result = await _run_openai_reasoning_test()
     results.append(result)
 
     # Summary
