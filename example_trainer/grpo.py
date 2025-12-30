@@ -157,12 +157,42 @@ class TrainingConfig(BaseModel):
     )
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=15))
+def check_atropos_api(timeout: float = 30.0) -> bool:
+    """
+    Check if the Atropos API server is reachable.
+    
+    Args:
+        timeout: Maximum time to wait for the server
+        
+    Returns:
+        True if server is reachable
+    """
+    import time as _time
+    start = _time.time()
+    while _time.time() - start < timeout:
+        try:
+            response = requests.get("http://localhost:8000/info", timeout=2)
+            if response.status_code == 200:
+                print("[Trainer] ✓ Atropos API server is reachable")
+                return True
+        except requests.exceptions.ConnectionError:
+            pass
+        except Exception as e:
+            print(f"[Trainer] Waiting for Atropos API... ({e})")
+        _time.sleep(1)
+    
+    print("[Trainer] ⚠ Warning: Atropos API server not reachable")
+    return False
+
+
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=30))
 def register_trainer(config: TrainingConfig):
     """
-    Register the trainer with the Atropos API
+    Register the trainer with the Atropos API.
+    
+    Verifies registration succeeded before returning.
     """
-    requests.post(
+    response = requests.post(
         "http://localhost:8000/register",
         json={
             "wandb_group": config.wandb_group,
@@ -176,6 +206,16 @@ def register_trainer(config: TrainingConfig):
         },
         timeout=10,
     )
+
+    # Check for HTTP errors
+    response.raise_for_status()
+    
+    # Verify we got a valid response with UUID
+    data = response.json()
+    if "uuid" not in data:
+        raise RuntimeError(f"Registration failed: {data}")
+    
+    print(f"[Trainer] ✓ Registered with Atropos API (uuid: {data['uuid']})")
 
 
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=30))
@@ -630,15 +670,15 @@ def run_training_step(
         total_neg += metrics["neg_count"]
 
     # Gradient clipping and optimizer step
-    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-    optimizer.step()
-    optimizer.zero_grad()
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+        optimizer.zero_grad()
 
     # Normalize metrics
-    if total_pos > 0:
-        total_pos_logp /= total_pos
-    if total_neg > 0:
-        total_neg_logp /= total_neg
+        if total_pos > 0:
+            total_pos_logp /= total_pos
+        if total_neg > 0:
+            total_neg_logp /= total_neg
 
     return {
         "loss": total_loss,
@@ -1072,6 +1112,14 @@ def train_shared_vllm(config: TrainingConfig):
     print("-" * 60)
 
     os.makedirs(config.save_path, exist_ok=True)
+    
+    # Check Atropos API and register BEFORE training loop
+    print("\n[Setup] Connecting to Atropos API...")
+    if not check_atropos_api(timeout=30):
+        raise RuntimeError(
+            "Atropos API server not reachable. "
+            "Please start it with: run-api"
+        )
     register_trainer(config)
 
     # === Benchmark tracking ===
