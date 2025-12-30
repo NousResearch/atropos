@@ -143,6 +143,11 @@ def weight_updater_process(
         )
         print("[Updater] ✓ NCCL group created", flush=True)
         
+        # Barrier synchronization to confirm both sides are ready
+        print("[Updater] Waiting for trainer to be ready...", flush=True)
+        dist.barrier(group=gloo_group)
+        print("[Updater] ✓ Trainer is ready, starting update loop", flush=True)
+        
     except Exception as e:
         print(f"[Updater] Failed to create process groups: {e}", flush=True)
         import traceback
@@ -212,6 +217,17 @@ def weight_updater_process(
                 if debug or (update_count % 50 == 0):
                     print(f"[Updater] Updated {param_name} (#{update_count})", flush=True)
                 
+            except torch.distributed.DistBackendError as e:
+                # NCCL communication failure - likely trainer crashed
+                error_str = str(e)
+                if "Broken pipe" in error_str or "Connection reset" in error_str:
+                    print("[Updater] Trainer disconnected (broken pipe). Exiting.", flush=True)
+                    break
+                else:
+                    print(f"[Updater] NCCL error: {e}", flush=True)
+                    import traceback
+                    traceback.print_exc()
+                    time.sleep(1)
             except Exception as e:
                 print(f"[Updater] Error in update loop: {e}", flush=True)
                 import traceback
