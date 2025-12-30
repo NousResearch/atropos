@@ -35,6 +35,7 @@ from datasets import load_dataset
 from eval_helpers import (
     create_system_content,
     get_default_thinking_prompt,
+    format_reasoning_debug_info,
 )
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
@@ -229,7 +230,11 @@ class IFEvalEnv(BaseEnv):
         print(f"  Evaluation split: {self.config.eval_split}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
         if self.config.thinking_mode:
-            print(f"  Thinking prompt: {self._get_thinking_prompt()[:100]}...")
+            thinking_prompt = self._get_thinking_prompt()
+            if thinking_prompt:
+                print(f"  Thinking prompt: {thinking_prompt[:100]}...")
+            else:
+                print(f"  Thinking prompt: None (using API reasoning mode only)")
 
         # Load IFEval dataset
         try:
@@ -458,7 +463,24 @@ class IFEvalEnv(BaseEnv):
                     if self.config.eval_max_tokens > 0:
                         completion_kwargs["max_tokens"] = self.config.eval_max_tokens
 
+                    if self.config.full_debug:
+                        print(f"\n  [API Call] Sending request (attempt {attempt + 1})...")
+                        print(f"    Temperature: {completion_kwargs.get('temperature')}")
+                        print(f"    Max tokens: {completion_kwargs.get('max_tokens', 'not set (unlimited)')}")
+                        print(f"    Thinking mode: {self.config.thinking_mode}")
+                        print(f"    Reasoning effort: {self.config.reasoning_effort}")
+                        # Show extra_body that will be injected by ServerManager
+                        if self.config.thinking_mode or self.config.reasoning_effort:
+                            print(f"    (ServerManager will inject reasoning extra_body)")
+
+                    _api_start = time.time()
                     completion = await self.server.chat_completion(**completion_kwargs)
+                    _api_elapsed = time.time() - _api_start
+
+                    # Log reasoning token usage if full_debug is enabled
+                    if self.config.full_debug and completion:
+                        print(f"  [API Response] Received in {_api_elapsed:.2f}s")
+                        print(format_reasoning_debug_info(completion))
 
                     if completion.choices and completion.choices[0].message.content:
                         model_response = completion.choices[0].message.content
