@@ -336,6 +336,14 @@ class VLLMWeightBridge:
             group_name="weight_update_group",
         )
         print("[Bridge] ✓ NCCL group created")
+        
+        # Barrier synchronization to ensure both sides are ready
+        print("[Bridge] Waiting for all ranks to be ready...")
+        try:
+            dist.barrier(group=self.gloo_group)
+            print("[Bridge] ✓ All ranks synchronized and ready")
+        except Exception as e:
+            print(f"[Bridge] Warning: Barrier sync failed: {e}")
     
     def _initialize_http_mode(self) -> None:
         """Initialize HTTP-based weight synchronization (fallback)."""

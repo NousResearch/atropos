@@ -178,9 +178,14 @@ def register_trainer(config: TrainingConfig):
     )
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=15))
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=30))
 def get_batch():
     data = requests.get("http://localhost:8000/batch", timeout=10).json()
+    
+    # Check if there was an error (trainer not registered)
+    if data.get("status") == "error":
+        raise RuntimeError(f"Atropos API error: {data.get('message', 'Unknown error')}")
+    
     return data
 
 
