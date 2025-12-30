@@ -1057,6 +1057,10 @@ def train_shared_vllm(config: TrainingConfig):
     print("[2/3] Loading model with shared weights...")
     model, tokenizer = load_model_and_tokenizer(config, bridge=bridge)
     optimizer = AdamW(model.parameters(), lr=config.lr)
+    
+    # For NCCL mode, set param list from trainer's model
+    if config.use_shared_memory:
+        bridge.set_param_list_from_model(model)
 
     print(f"[3/3] Starting training for {config.training_steps} steps")
     print("NOTE: vLLM sees weight updates immediately after each step!")
