@@ -87,7 +87,19 @@ def _maybe_apply_patches() -> bool:
         return False
     
     try:
-        from .vllm_patching import apply_patches
+        # Try relative import first (when run as module)
+        try:
+            from .vllm_patching import apply_patches
+        except ImportError:
+            # Fall back to absolute import (when run as script)
+            import sys
+            from pathlib import Path
+            # Add the example_trainer directory to path
+            script_dir = Path(__file__).parent
+            if str(script_dir) not in sys.path:
+                sys.path.insert(0, str(script_dir))
+            from vllm_patching import apply_patches
+        
         apply_patches()
         logger.info("✓ vLLM patches applied for shared memory weights")
         return True
@@ -97,6 +109,8 @@ def _maybe_apply_patches() -> bool:
         return False
     except Exception as e:
         logger.warning(f"Failed to apply patches: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
