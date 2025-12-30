@@ -22,7 +22,6 @@ from concurrent.futures import ProcessPoolExecutor
 from string import ascii_uppercase
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-
 # =============================================================================
 # REASONING/THINKING PROMPTS
 # =============================================================================
@@ -45,7 +44,7 @@ in the response content.
 
 Example usage:
     from eval_helpers import HERMES_REASONING_PROMPT
-    
+
     messages = [
         {"role": "system", "content": HERMES_REASONING_PROMPT},
         {"role": "user", "content": question},
@@ -520,11 +519,11 @@ def get_default_thinking_prompt(custom_prompt: Optional[str] = None) -> Optional
 
     Returns:
         The thinking prompt string, or None if no prompt specified.
-        
+
     Example:
         # No prompt injection (default):
         prompt = get_default_thinking_prompt()  # Returns None
-        
+
         # Use Hermes reasoning prompt:
         from eval_helpers import HERMES_REASONING_PROMPT
         prompt = get_default_thinking_prompt(HERMES_REASONING_PROMPT)
@@ -535,12 +534,12 @@ def get_default_thinking_prompt(custom_prompt: Optional[str] = None) -> Optional
 def get_thinking_prompt_or_hermes(custom_prompt: Optional[str] = None) -> str:
     """
     Get thinking prompt, defaulting to HERMES_REASONING_PROMPT if none provided.
-    
+
     Use this when you want to ensure a thinking prompt is always used.
-    
+
     Args:
         custom_prompt: Optional custom thinking prompt. If None, uses HERMES_REASONING_PROMPT.
-        
+
     Returns:
         The thinking prompt string (never None).
     """
@@ -563,24 +562,24 @@ def extract_reasoning_from_response(
 ) -> Tuple[Optional[str], str]:
     """
     Extract reasoning content from various API response formats.
-    
+
     This function handles multiple reasoning formats:
     1. reasoning_content field on the message (some providers)
     2. reasoning_details[].text field (OpenRouter style for reasoning models)
     3. reasoning field on the message (some providers)
     4. <think></think> blocks in message content (Hermes style)
-    
+
     Args:
         response: The ChatCompletion response object from the API
         content: Optional message content string. If provided, will check for
                 <think> blocks in addition to API fields.
-    
+
     Returns:
         Tuple of (reasoning_content, source) where:
         - reasoning_content: The extracted reasoning text, or None if not found
         - source: String indicating where reasoning was found:
           "reasoning_content", "reasoning_details", "reasoning", "think_block", "none"
-    
+
     Example:
         completion = await server.chat_completion(messages=messages)
         message = completion.choices[0].message
@@ -594,7 +593,7 @@ def extract_reasoning_from_response(
     # Try reasoning_content field (some providers like certain OpenAI-compatible APIs)
     if hasattr(response, "reasoning_content") and response.reasoning_content:
         return response.reasoning_content, "reasoning_content"
-    
+
     # Try message.reasoning_content if response is a Choice
     if hasattr(response, "message"):
         message = response.message
@@ -602,7 +601,7 @@ def extract_reasoning_from_response(
             return message.reasoning_content, "reasoning_content"
         if hasattr(message, "reasoning") and message.reasoning:
             return message.reasoning, "reasoning"
-    
+
     # Try reasoning_details field (OpenRouter style)
     if hasattr(response, "reasoning_details") and response.reasoning_details:
         for detail in response.reasoning_details:
@@ -611,7 +610,7 @@ def extract_reasoning_from_response(
             # Some formats use 'content' instead of 'text'
             if isinstance(detail, dict) and detail.get("text"):
                 return detail["text"], "reasoning_details"
-    
+
     # Try message.reasoning_details if response is a Choice
     if hasattr(response, "message"):
         message = response.message
@@ -621,17 +620,17 @@ def extract_reasoning_from_response(
                     return detail.text, "reasoning_details"
                 if isinstance(detail, dict) and detail.get("text"):
                     return detail["text"], "reasoning_details"
-    
+
     # Try reasoning field directly
     if hasattr(response, "reasoning") and response.reasoning:
         return response.reasoning, "reasoning"
-    
+
     # Try <think> blocks in content (Hermes style)
     if content:
         match = THINK_CONTENT_INSIDE_PATTERN.search(content)
         if match:
             return match.group(1).strip(), "think_block"
-    
+
     return None, "none"
 
 
@@ -641,36 +640,36 @@ def extract_reasoning_from_completion(
 ) -> Tuple[Optional[str], str, Optional[str]]:
     """
     Extract reasoning from a ChatCompletion object.
-    
+
     Convenience wrapper around extract_reasoning_from_response that handles
     the common case of extracting from a ChatCompletion.
-    
+
     Args:
         completion: The ChatCompletion response object
         choice_idx: Index of the choice to extract from (default 0)
-    
+
     Returns:
         Tuple of (reasoning_content, source, message_content) where:
         - reasoning_content: The extracted reasoning text, or None
         - source: Where reasoning was found (see extract_reasoning_from_response)
         - message_content: The message content (for convenience)
-    
+
     Example:
         completion = await server.chat_completion(messages=messages)
         reasoning, source, content = extract_reasoning_from_completion(completion)
     """
     if not completion or not completion.choices:
         return None, "none", None
-    
+
     if choice_idx >= len(completion.choices):
         return None, "none", None
-    
+
     choice = completion.choices[choice_idx]
     content = None
-    
+
     if hasattr(choice, "message") and hasattr(choice.message, "content"):
         content = choice.message.content
-    
+
     reasoning, source = extract_reasoning_from_response(choice, content)
     return reasoning, source, content
 
@@ -678,17 +677,17 @@ def extract_reasoning_from_completion(
 def get_reasoning_token_usage(completion: Any) -> Dict[str, Any]:
     """
     Extract reasoning token usage information from a ChatCompletion.
-    
+
     This extracts token counts from the usage field, including reasoning-specific
     metrics when available (e.g., reasoning_tokens from OpenRouter/OpenAI).
-    
+
     Works with all known providers:
     - OpenAI: usage.completion_tokens_details.reasoning_tokens
     - OpenRouter (Claude, Hermes, DeepSeek, etc.): Same location + provider/cost fields
-    
+
     Args:
         completion: The ChatCompletion response object
-    
+
     Returns:
         Dict with token usage info:
         - model: Model name used
@@ -700,7 +699,7 @@ def get_reasoning_token_usage(completion: Any) -> Dict[str, Any]:
         - cost: API cost (if available, OpenRouter)
         - provider: Provider name (if available, OpenRouter)
         - has_reasoning_content: Whether message contains reasoning field
-    
+
     Example:
         completion = await server.chat_completion(messages=messages)
         usage = get_reasoning_token_usage(completion)
@@ -718,21 +717,25 @@ def get_reasoning_token_usage(completion: Any) -> Dict[str, Any]:
         "provider": None,
         "has_reasoning_content": False,
     }
-    
+
     if not completion:
         return result
-    
+
     # Extract model name
     if hasattr(completion, "model"):
         result["model"] = completion.model
-    
+
     # Extract provider (OpenRouter includes this)
     if hasattr(completion, "provider"):
         result["provider"] = completion.provider
-    
+
     # Check if message has reasoning content
     if hasattr(completion, "choices") and completion.choices:
-        msg = completion.choices[0].message if hasattr(completion.choices[0], "message") else None
+        msg = (
+            completion.choices[0].message
+            if hasattr(completion.choices[0], "message")
+            else None
+        )
         if msg:
             # Check for reasoning field (OpenRouter normalized field)
             if hasattr(msg, "reasoning") and msg.reasoning:
@@ -740,96 +743,98 @@ def get_reasoning_token_usage(completion: Any) -> Dict[str, Any]:
             # Check for reasoning_details (OpenRouter)
             elif hasattr(msg, "reasoning_details") and msg.reasoning_details:
                 result["has_reasoning_content"] = True
-    
+
     # Extract usage info
     if not hasattr(completion, "usage") or not completion.usage:
         return result
-    
+
     usage = completion.usage
-    
+
     result["completion_tokens"] = getattr(usage, "completion_tokens", None)
     result["prompt_tokens"] = getattr(usage, "prompt_tokens", None)
     result["total_tokens"] = getattr(usage, "total_tokens", None)
-    
+
     # Extract cost (OpenRouter includes this)
     if hasattr(usage, "cost"):
         result["cost"] = usage.cost
-    
+
     # Extract reasoning tokens from completion_tokens_details
     # This works for: OpenAI, OpenRouter (Claude, Hermes, DeepSeek, etc.)
     if hasattr(usage, "completion_tokens_details") and usage.completion_tokens_details:
         details = usage.completion_tokens_details
         if hasattr(details, "reasoning_tokens"):
             result["reasoning_tokens"] = details.reasoning_tokens
-    
+
     # Extract cached tokens from prompt_tokens_details (OpenRouter/OpenAI)
     if hasattr(usage, "prompt_tokens_details") and usage.prompt_tokens_details:
         details = usage.prompt_tokens_details
         if hasattr(details, "cached_tokens"):
             result["cached_tokens"] = details.cached_tokens
-    
+
     return result
 
 
-def format_reasoning_debug_info(completion: Any, reasoning_content: Optional[str] = None) -> str:
+def format_reasoning_debug_info(
+    completion: Any, reasoning_content: Optional[str] = None
+) -> str:
     """
     Format reasoning debug information for logging.
-    
+
     Use this in evals when full_debug is enabled to show reasoning token usage.
-    
+
     Args:
         completion: The ChatCompletion response object
         reasoning_content: Optional pre-extracted reasoning content
-    
+
     Returns:
         Formatted string with reasoning debug info
-    
+
     Example:
         if self.config.full_debug:
             print(format_reasoning_debug_info(completion))
     """
     usage = get_reasoning_token_usage(completion)
-    
+
     lines = ["  [Reasoning/Token Debug Info]"]
-    
+
     # Model and provider info
     if usage["model"]:
         lines.append(f"    Model: {usage['model']}")
     if usage["provider"]:
         lines.append(f"    Provider: {usage['provider']}")
-    
+
     # Token counts
     if usage["prompt_tokens"] is not None:
         prompt_info = f"    Prompt tokens: {usage['prompt_tokens']}"
         if usage["cached_tokens"]:
             prompt_info += f" (cached: {usage['cached_tokens']})"
         lines.append(prompt_info)
-    
+
     if usage["completion_tokens"] is not None:
         lines.append(f"    Completion tokens: {usage['completion_tokens']}")
-    
+
     # Reasoning-specific info
     if usage["reasoning_tokens"] is not None:
         lines.append(f"    Reasoning tokens: {usage['reasoning_tokens']}")
         if usage["completion_tokens"] and usage["completion_tokens"] > 0:
             pct = (usage["reasoning_tokens"] / usage["completion_tokens"]) * 100
             lines.append(f"    Reasoning %: {pct:.1f}%")
-    
+
     if usage["has_reasoning_content"]:
         lines.append(f"    Has reasoning content: Yes")
-    
+
     # Cost info
     if usage["cost"] is not None:
         lines.append(f"    Cost: ${usage['cost']:.6f}")
-    
+
     # Total
     if usage["total_tokens"] is not None:
         lines.append(f"    Total tokens: {usage['total_tokens']}")
-    
+
     # Reasoning content length if provided
     if reasoning_content:
         lines.append(f"    Reasoning content length: {len(reasoning_content)} chars")
-    
+
     return "\n".join(lines)
 
 
