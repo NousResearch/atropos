@@ -666,9 +666,7 @@ class CodingEnv(BaseEnv):
     async def setup(self):
         """Setup the environment"""
         if self.config.dataset_name == "deepmind":
-            self.train = load_dataset(
-                "deepmind/code_contests", split="train"
-            )  # CHANGE
+            self.train = load_dataset("deepmind/code_contests", split="train")  # CHANGE
         else:
             self.train = load_dataset(
                 "NousResearch/RLVR_Coding_Problems", split="train"
