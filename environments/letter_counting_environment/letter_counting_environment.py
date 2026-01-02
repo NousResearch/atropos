@@ -37,9 +37,9 @@ DEFAULT_CONFIG_PATH = "config.yaml"
 def get_config_path() -> str:
     """
     Get the config path from CLI --config argument or use default.
-    
+
     Usage: python letter_counting_environment.py --config /path/to/config.yaml
-    
+
     Returns:
         Config file path (from --config arg or DEFAULT_CONFIG_PATH)
     """
@@ -49,6 +49,7 @@ def get_config_path() -> str:
         if arg.startswith("--config="):
             return arg.split("=", 1)[1]
     return DEFAULT_CONFIG_PATH
+
 
 # Import NLTK words corpus for training word list
 try:
@@ -326,7 +327,9 @@ class LetterCountingEnv(BaseEnv):
             base_logger.setLevel(logging.WARNING)
 
         # Log initialization
-        self.logger.info(f"LetterCountingEnv initialized with run UUID: {self.run_uuid}")
+        self.logger.info(
+            f"LetterCountingEnv initialized with run UUID: {self.run_uuid}"
+        )
         self.logger.info(
             f"Adaptive difficulty: starting at L{self.current_difficulty_level}/10 "
             f"(range: {self.config.min_difficulty_level}-{self.config.max_difficulty_level}, "
@@ -348,15 +351,15 @@ class LetterCountingEnv(BaseEnv):
     def config_init(cls) -> Tuple[LetterCountingConfig, List[APIServerConfig]]:
         """
         Load configuration from YAML file, with fallback to defaults if not found.
-        
+
         Config path priority:
         1. CLI argument: --config /path/to/config.yaml
         2. Default: config.yaml (DEFAULT_CONFIG_PATH)
-        
+
         If config file doesn't exist or can't be read, uses sensible defaults.
         """
         config_path = get_config_path()
-        
+
         # Try to load config from file, fall back to empty dicts if not found
         try:
             with open(config_path, "r") as f:
@@ -375,7 +378,9 @@ class LetterCountingEnv(BaseEnv):
         # Build LetterCountingConfig from YAML
         env_config = LetterCountingConfig(
             # Base environment config
-            tokenizer_name=env.get("tokenizer_name", "meta-llama/Llama-3.1-8B-Instruct"),
+            tokenizer_name=env.get(
+                "tokenizer_name", "meta-llama/Llama-3.1-8B-Instruct"
+            ),
             group_size=env.get("group_size", 16),
             batch_size=env.get("batch_size", 256),
             max_batches_offpolicy=env.get("max_batches_offpolicy", 3),
@@ -414,7 +419,9 @@ class LetterCountingEnv(BaseEnv):
         for openai_cfg in openai_configs:
             server_configs.append(
                 APIServerConfig(
-                    model_name=openai_cfg.get("model_name", "meta-llama/Llama-3.1-8B-Instruct"),
+                    model_name=openai_cfg.get(
+                        "model_name", "meta-llama/Llama-3.1-8B-Instruct"
+                    ),
                     base_url=openai_cfg.get("base_url", "http://localhost:8001/v1"),
                     api_key=openai_cfg.get("api_key", "x"),
                     num_requests_for_eval=openai_cfg.get("num_requests_for_eval", 256),
@@ -491,7 +498,9 @@ class LetterCountingEnv(BaseEnv):
             )
             return []
 
-        self.logger.info(f"Loading eval dataset from HuggingFace: {self.EVAL_DATASET_HF}")
+        self.logger.info(
+            f"Loading eval dataset from HuggingFace: {self.EVAL_DATASET_HF}"
+        )
 
         try:
             dataset = load_dataset(self.EVAL_DATASET_HF, split="train")
@@ -545,7 +554,7 @@ class LetterCountingEnv(BaseEnv):
         # Clamp to valid range
         level = max(
             self.config.min_difficulty_level,
-            min(self.config.max_difficulty_level, level)
+            min(self.config.max_difficulty_level, level),
         )
         return DIFFICULTY_TIERS.get(level, DIFFICULTY_TIERS[3])
 
@@ -561,7 +570,9 @@ class LetterCountingEnv(BaseEnv):
             Random string of lowercase letters
         """
         length = random.randint(min_length, max_length)
-        return ''.join(random.choice('abcdefghijklmnopqrstuvwxyz') for _ in range(length))
+        return "".join(
+            random.choice("abcdefghijklmnopqrstuvwxyz") for _ in range(length)
+        )
 
     def _select_target_letters(self, text: str, num_letters: int) -> List[str]:
         """
@@ -653,7 +664,9 @@ class LetterCountingEnv(BaseEnv):
 
             # Keep only the most recent scores
             if len(self.recent_scores) > self.config.difficulty_window_size:
-                self.recent_scores = self.recent_scores[-self.config.difficulty_window_size:]
+                self.recent_scores = self.recent_scores[
+                    -self.config.difficulty_window_size :
+                ]
 
             # Need at least half the window size before adjusting
             min_samples = max(10, self.config.difficulty_window_size // 2)
@@ -708,16 +721,16 @@ class LetterCountingEnv(BaseEnv):
         This method wraps that in <think> tags for consistent processing.
         """
         # Handle text completion API
-        if hasattr(completion_choice, 'text'):
-            raw_content = completion_choice.text or ''
+        if hasattr(completion_choice, "text"):
+            raw_content = completion_choice.text or ""
             reasoning_content = None
 
-            if hasattr(completion_choice, 'reasoning_content'):
+            if hasattr(completion_choice, "reasoning_content"):
                 reasoning_content = completion_choice.reasoning_content
 
-            if reasoning_content is None and hasattr(completion_choice, 'message'):
+            if reasoning_content is None and hasattr(completion_choice, "message"):
                 message = completion_choice.message
-                if message and hasattr(message, 'reasoning_content'):
+                if message and hasattr(message, "reasoning_content"):
                     reasoning_content = message.reasoning_content
 
             if reasoning_content:
@@ -725,16 +738,16 @@ class LetterCountingEnv(BaseEnv):
             return raw_content
 
         # Handle chat completion API
-        elif hasattr(completion_choice, 'message'):
+        elif hasattr(completion_choice, "message"):
             message = completion_choice.message
-            content = getattr(message, 'content', '') or ''
-            reasoning_content = getattr(message, 'reasoning_content', None)
+            content = getattr(message, "content", "") or ""
+            reasoning_content = getattr(message, "reasoning_content", None)
 
             if reasoning_content:
                 return f"<think>\n{reasoning_content}\n</think>{content}"
             return content
 
-        return ''
+        return ""
 
     async def _save_rollouts_to_jsonl(self):
         """Save buffered rollouts to a JSONL file in the data_dumps directory."""
@@ -794,11 +807,15 @@ class LetterCountingEnv(BaseEnv):
         super().load_checkpoint()
 
         if hasattr(self, "current_difficulty_level"):
-            self.logger.info(f"Restored difficulty level: L{self.current_difficulty_level}")
+            self.logger.info(
+                f"Restored difficulty level: L{self.current_difficulty_level}"
+            )
         if hasattr(self, "recent_scores") and self.recent_scores:
             self.logger.info(f"Restored {len(self.recent_scores)} recent scores")
         if hasattr(self, "save_file_batch_num"):
-            self.logger.info(f"Restored save_file_batch_num: {self.save_file_batch_num}")
+            self.logger.info(
+                f"Restored save_file_batch_num: {self.save_file_batch_num}"
+            )
 
     async def close(self):
         """Clean up and save any remaining rollouts before exiting."""
@@ -840,7 +857,9 @@ class LetterCountingEnv(BaseEnv):
             attempts = 0
             max_attempts = 100
             while attempts < max_attempts:
-                candidate = self.train_words[(self.iter + attempts) % len(self.train_words)]
+                candidate = self.train_words[
+                    (self.iter + attempts) % len(self.train_words)
+                ]
                 if min_len <= len(candidate) <= max_len:
                     text = candidate
                     break
@@ -858,13 +877,19 @@ class LetterCountingEnv(BaseEnv):
         target_letters = self._select_target_letters(text, num_letters)
 
         # Count occurrences for each target letter
-        correct_counts = {letter: text.lower().count(letter) for letter in target_letters}
+        correct_counts = {
+            letter: text.lower().count(letter) for letter in target_letters
+        }
 
         # Log item selection
         text_preview = text[:50] + "..." if len(text) > 50 else text
         letters_str = ", ".join(target_letters)
-        counts_str = ", ".join(f"{letter}:{correct_counts[letter]}" for letter in target_letters)
-        present_count = sum(1 for letter in target_letters if correct_counts[letter] > 0)
+        counts_str = ", ".join(
+            f"{letter}:{correct_counts[letter]}" for letter in target_letters
+        )
+        present_count = sum(
+            1 for letter in target_letters if correct_counts[letter] > 0
+        )
 
         self.logger.info(
             f"[L{self.current_difficulty_level}/10] '{text_preview}' | "
@@ -888,17 +913,27 @@ class LetterCountingEnv(BaseEnv):
                 + f", and '{target_letters[-1]}'"
             )
             question_text = f"Count the occurrences of the letters {letters_str} in the string {text}"
-            example_json = "{" + ", ".join(f'"{letter}": 0' for letter in target_letters) + "}"
+            example_json = (
+                "{" + ", ".join(f'"{letter}": 0' for letter in target_letters) + "}"
+            )
             question_with_instruction = (
                 f"{question_text}\n\n"
                 f"Provide your answer as JSON in the format: <answer>{example_json}</answer>"
             )
 
         # Create prompt (user message only, no system prompt)
-        prompt = [frozenset({"role": "user", "content": question_with_instruction}.items())]
+        prompt = [
+            frozenset({"role": "user", "content": question_with_instruction}.items())
+        ]
 
         # Return prompt, correct counts, text, target letters, and difficulty level
-        return (tuple(prompt), correct_counts, text, target_letters, self.current_difficulty_level)
+        return (
+            tuple(prompt),
+            correct_counts,
+            text,
+            target_letters,
+            self.current_difficulty_level,
+        )
 
     async def collect_trajectories(self, item) -> Tuple[ScoredDataGroup, List]:
         """Generate and collect model responses for scoring."""
@@ -912,15 +947,18 @@ class LetterCountingEnv(BaseEnv):
                     n=self.config.group_size,
                     max_tokens=self.config.max_generation_tokens,
                     temperature=self.config.generation_temperature,
-                    stop=[self.tokenizer.eos_token_id]
+                    stop=[self.tokenizer.eos_token_id],
                 )
 
                 state = managed.get_state()
                 nodes = state["nodes"]
         except Exception as e:
             import traceback
+
             text_preview = item[2][:50] if len(item[2]) > 50 else item[2]
-            self.logger.error(f"API call failed for '{text_preview}' (iter {self.iter}): {e}")
+            self.logger.error(
+                f"API call failed for '{text_preview}' (iter {self.iter}): {e}"
+            )
             traceback.print_exc()
             raise
 
@@ -928,20 +966,26 @@ class LetterCountingEnv(BaseEnv):
 
         for i, completion_choice in enumerate(completions.choices):
             trajectory_messages = [dict(role_dict) for role_dict in item[0]]
-            reconstructed_response = self._reconstruct_message_with_thinking(completion_choice)
-            trajectory_messages.append({"role": "assistant", "content": reconstructed_response})
+            reconstructed_response = self._reconstruct_message_with_thinking(
+                completion_choice
+            )
+            trajectory_messages.append(
+                {"role": "assistant", "content": reconstructed_response}
+            )
 
-            to_score.append({
-                "messages": tuple(trajectory_messages),
-                "correct_counts": item[1],
-                "text": item[2],
-                "target_letters": item[3],
-                "difficulty_level": item[4],
-                "finish_reason": completion_choice.finish_reason,
-                "tokens": nodes[i].tokens,
-                "masks": nodes[i].masked_tokens,
-                "logprobs": nodes[i].logprobs,
-            })
+            to_score.append(
+                {
+                    "messages": tuple(trajectory_messages),
+                    "correct_counts": item[1],
+                    "text": item[2],
+                    "target_letters": item[3],
+                    "difficulty_level": item[4],
+                    "finish_reason": completion_choice.finish_reason,
+                    "tokens": nodes[i].tokens,
+                    "masks": nodes[i].masked_tokens,
+                    "logprobs": nodes[i].logprobs,
+                }
+            )
 
         scored_data = await self.score(to_score)
 
@@ -951,7 +995,9 @@ class LetterCountingEnv(BaseEnv):
 
         return scored_data, []
 
-    async def _handle_data_dumping(self, to_score: List, scored_data: ScoredDataGroup, item):
+    async def _handle_data_dumping(
+        self, to_score: List, scored_data: ScoredDataGroup, item
+    ):
         """Handle data dumping for creating offline training datasets."""
         if not scored_data.get("scores"):
             return
@@ -967,27 +1013,35 @@ class LetterCountingEnv(BaseEnv):
         rollouts_to_dump = []
         for i, score_val in enumerate(scores):
             if score_val > 0:  # Only save successful rollouts
-                rollouts_to_dump.append({
-                    "conversation": to_score[i]["messages"],
-                    "score": score_val,
-                    "expected_counts": to_score[i]["correct_counts"],
-                    "text": to_score[i]["text"],
-                    "target_letters": to_score[i]["target_letters"],
-                    "difficulty_level": to_score[i]["difficulty_level"],
-                    "group_average_score": group_average,
-                })
+                rollouts_to_dump.append(
+                    {
+                        "conversation": to_score[i]["messages"],
+                        "score": score_val,
+                        "expected_counts": to_score[i]["correct_counts"],
+                        "text": to_score[i]["text"],
+                        "target_letters": to_score[i]["target_letters"],
+                        "difficulty_level": to_score[i]["difficulty_level"],
+                        "group_average_score": group_average,
+                    }
+                )
 
         if rollouts_to_dump:
             text = item[2]
             target_letters = item[3]
-            text_preview = text[:30].replace(" ", "_") if len(text) > 30 else text.replace(" ", "_")
+            text_preview = (
+                text[:30].replace(" ", "_")
+                if len(text) > 30
+                else text.replace(" ", "_")
+            )
             letters_str = "_".join(target_letters)
             item_id = f"{text_preview}_{letters_str}"
 
-            self.rollouts_to_save_buffer.append({
-                "item_id": item_id,
-                "rollouts": rollouts_to_dump,
-            })
+            self.rollouts_to_save_buffer.append(
+                {
+                    "item_id": item_id,
+                    "rollouts": rollouts_to_dump,
+                }
+            )
             self.processed_item_count += 1
 
             self.logger.debug(
@@ -1108,7 +1162,10 @@ class LetterCountingEnv(BaseEnv):
                 if model_answer is None:
                     reward = 0
                     format_errors_in_group += 1
-                    if "<think>" not in model_response.lower() or "</think>" not in model_response.lower():
+                    if (
+                        "<think>" not in model_response.lower()
+                        or "</think>" not in model_response.lower()
+                    ):
                         think_errors_in_group += 1
                 else:
                     if expected_format == "single":
@@ -1165,7 +1222,8 @@ class LetterCountingEnv(BaseEnv):
         text_preview = text[:50] + "..." if len(text) > 50 else text
         letters_str = ", ".join(target_letters)
         expected_str = (
-            str(expected_counts) if len(target_letters) > 1
+            str(expected_counts)
+            if len(target_letters) > 1
             else str(expected_counts[target_letters[0]])
         )
 
@@ -1279,7 +1337,9 @@ class LetterCountingEnv(BaseEnv):
             f"Evaluating on {len(self.eval_dataset)} items from {self.EVAL_DATASET_HF}..."
         )
 
-        eval_tasks = [self.rollout_and_score_eval(eval_item) for eval_item in self.eval_dataset]
+        eval_tasks = [
+            self.rollout_and_score_eval(eval_item) for eval_item in self.eval_dataset
+        ]
         results = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating")
 
         if not results:
@@ -1338,7 +1398,9 @@ class LetterCountingEnv(BaseEnv):
             return
 
         group_scores = scored_data.get("scores", [])
-        group_average_score = sum(group_scores) / len(group_scores) if group_scores else 0.0
+        group_average_score = (
+            sum(group_scores) / len(group_scores) if group_scores else 0.0
+        )
 
         current_rollouts = []
         for i in range(num_keep):
@@ -1348,12 +1410,20 @@ class LetterCountingEnv(BaseEnv):
                 )
                 score_val = scored_data["scores"][i]
                 expected_str = (
-                    str(expected_counts) if len(target_letters) > 1
+                    str(expected_counts)
+                    if len(target_letters) > 1
                     else str(expected_counts[target_letters[0]])
                 )
                 letters_str = ", ".join(target_letters)
                 current_rollouts.append(
-                    (full_text, score_val, expected_str, text[:100], letters_str, group_average_score)
+                    (
+                        full_text,
+                        score_val,
+                        expected_str,
+                        text[:100],
+                        letters_str,
+                        group_average_score,
+                    )
                 )
 
         self.rollouts_for_wandb.append(current_rollouts)
@@ -1364,14 +1434,22 @@ class LetterCountingEnv(BaseEnv):
     async def create_rollout_table(self, wandb_metrics):
         """Create a WandB table with rollout examples."""
         if len(self.rollouts_for_wandb) > 0:
-            table = wandb.Table(columns=[
-                "full_text", "score", "expected_counts", "text",
-                "target_letters", "group_average_score"
-            ])
+            table = wandb.Table(
+                columns=[
+                    "full_text",
+                    "score",
+                    "expected_counts",
+                    "text",
+                    "target_letters",
+                    "group_average_score",
+                ]
+            )
             for group in self.rollouts_for_wandb:
                 for item in group:
                     if len(item) >= 6:
-                        table.add_data(item[0], item[1], item[2], item[3], item[4], item[5])
+                        table.add_data(
+                            item[0], item[1], item[2], item[3], item[4], item[5]
+                        )
                     else:
                         table.add_data(item[0], item[1], item[2], item[3], item[4], 0.0)
             wandb_metrics["train/rollouts"] = table
@@ -1385,9 +1463,9 @@ class LetterCountingEnv(BaseEnv):
 
         # Training accuracy
         try:
-            wandb_metrics["train/percent_correct"] = (
-                sum(self.percent_correct_buffer) / len(self.percent_correct_buffer)
-            )
+            wandb_metrics["train/percent_correct"] = sum(
+                self.percent_correct_buffer
+            ) / len(self.percent_correct_buffer)
         except ZeroDivisionError:
             pass
 
@@ -1403,12 +1481,21 @@ class LetterCountingEnv(BaseEnv):
             total_letters_asked = sum(self.letter_distribution_stats.values())
             wandb_metrics["stats/total_letters_asked"] = total_letters_asked
 
-            most_common = max(self.letter_distribution_stats, key=self.letter_distribution_stats.get)
-            least_common = min(self.letter_distribution_stats, key=self.letter_distribution_stats.get)
-            wandb_metrics["stats/most_common_letter_count"] = self.letter_distribution_stats[most_common]
-            wandb_metrics["stats/least_common_letter_count"] = self.letter_distribution_stats[least_common]
+            most_common = max(
+                self.letter_distribution_stats, key=self.letter_distribution_stats.get
+            )
+            least_common = min(
+                self.letter_distribution_stats, key=self.letter_distribution_stats.get
+            )
+            wandb_metrics["stats/most_common_letter_count"] = (
+                self.letter_distribution_stats[most_common]
+            )
+            wandb_metrics["stats/least_common_letter_count"] = (
+                self.letter_distribution_stats[least_common]
+            )
 
             import math
+
             entropy = -sum(
                 (count / total_letters_asked) * math.log2(count / total_letters_asked)
                 for count in self.letter_distribution_stats.values()
@@ -1432,10 +1519,12 @@ class LetterCountingEnv(BaseEnv):
         # Error rates
         if self.processed_item_count > 0:
             wandb_metrics["errors/answer_format_error_rate"] = (
-                self.answer_format_errors / (self.processed_item_count * self.config.group_size)
+                self.answer_format_errors
+                / (self.processed_item_count * self.config.group_size)
             )
             wandb_metrics["errors/think_format_error_rate"] = (
-                self.think_format_errors / (self.processed_item_count * self.config.group_size)
+                self.think_format_errors
+                / (self.processed_item_count * self.config.group_size)
             )
             wandb_metrics["errors/total_format_errors"] = (
                 self.answer_format_errors + self.think_format_errors
@@ -1444,9 +1533,9 @@ class LetterCountingEnv(BaseEnv):
         # Adaptive difficulty metrics
         wandb_metrics["curriculum/difficulty_level"] = self.current_difficulty_level
         if self.recent_scores:
-            wandb_metrics["curriculum/recent_success_rate"] = (
-                sum(self.recent_scores) / len(self.recent_scores)
-            )
+            wandb_metrics["curriculum/recent_success_rate"] = sum(
+                self.recent_scores
+            ) / len(self.recent_scores)
         wandb_metrics["curriculum/samples_in_window"] = len(self.recent_scores)
 
         # Data dumping metrics
