@@ -594,8 +594,8 @@ class LetterCountingEnv(BaseEnv):
 
         # Find letters present/absent in text
         text_lower = text.lower()
-        present_letters = [l for l in all_letters if l in text_lower]
-        absent_letters = [l for l in all_letters if l not in text_lower]
+        present_letters = [ch for ch in all_letters if ch in text_lower]
+        absent_letters = [ch for ch in all_letters if ch not in text_lower]
 
         # Randomize the present letter bias between 30% and 90%
         # This prevents the model from learning a fixed pattern
@@ -1369,8 +1369,8 @@ class LetterCountingEnv(BaseEnv):
                 self.eval_metrics.append((f"eval/percent_correct_L{level}", level_acc))
 
         level_summary = " | ".join(
-            f"L{l}: {level_accuracies.get(l, 0):.0%}"
-            for l in sorted(level_accuracies.keys())
+            f"L{lvl}: {level_accuracies.get(lvl, 0):.0%}"
+            for lvl in sorted(level_accuracies.keys())
         )
         self.logger.info(
             f"Evaluation finished. Overall: {percent_correct:.1%} | {level_summary}"
