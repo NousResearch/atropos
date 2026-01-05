@@ -343,6 +343,7 @@ class SQLQueryEnv(BaseEnv):
         scores["tokens"] = list()
         scores["masks"] = list()
         scores["scores"] = list()
+        scores["inference_logprobs"] = list()
 
         # Get table info from first item
         gold_sql = rollout_group_data[0]["gold_sql"]
