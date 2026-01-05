@@ -66,12 +66,12 @@ class ReasoningConfig:
     # Calculated as percentage of 32k base: none=min, minimal=10%, low=20%,
     # medium=50%, high=80%, xhigh=95%
     EFFORT_TO_MAX_TOKENS = {
-        "none": 1024,    # Minimum/disabled
+        "none": 1024,  # Minimum/disabled
         "minimal": 3200,  # ~10% of 32k
-        "low": 6400,      # ~20% of 32k
+        "low": 6400,  # ~20% of 32k
         "medium": 16000,  # ~50% of 32k
-        "high": 25600,    # ~80% of 32k
-        "xhigh": 30400,   # ~95% of 32k
+        "high": 25600,  # ~80% of 32k
+        "xhigh": 30400,  # ~95% of 32k
     }
 
     def build_extra_body(

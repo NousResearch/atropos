@@ -202,7 +202,7 @@ def test_reasoning_config_invalid_effort():
 
 def test_reasoning_config_max_tokens_no_validation():
     """Test that max_tokens accepts any value (no range validation).
-    
+
     Provider limits vary and may change over time:
     - OpenRouter currently caps Anthropic at 1024-32000
     - Native Anthropic API supports up to 128k extended thinking
@@ -212,12 +212,12 @@ def test_reasoning_config_max_tokens_no_validation():
     config_low = ReasoningConfig(max_tokens=500)
     assert config_low.max_tokens == 500
     assert config_low.enabled  # Auto-enabled
-    
+
     # High values should work (e.g., for native Anthropic 128k thinking)
     config_high = ReasoningConfig(max_tokens=128000)
     assert config_high.max_tokens == 128000
     assert config_high.enabled
-    
+
     print("✓ max_tokens accepts any value (no range validation)")
 
 
