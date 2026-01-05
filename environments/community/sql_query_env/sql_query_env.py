@@ -12,6 +12,7 @@ from sql_executor import (
     create_table_from_wikisql,
     execute_sql,
     extract_boxed_sql,
+    quote_identifiers_in_sql,
     results_match,
 )
 from tqdm.asyncio import tqdm_asyncio
@@ -191,8 +192,11 @@ class SQLQueryEnv(BaseEnv):
         except Exception:
             return -1.0, False
 
+        # Quote identifiers in gold SQL that need quoting (e.g., "State/territory")
+        quoted_gold_sql = quote_identifiers_in_sql(gold_sql, header)
+
         # Execute gold SQL
-        gold_result = execute_sql(conn, gold_sql)
+        gold_result = execute_sql(conn, quoted_gold_sql)
         if gold_result is None:
             conn.close()
             return -1.0, False
