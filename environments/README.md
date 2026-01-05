@@ -86,7 +86,7 @@ You are a deep thinking AI, you may use extremely long chains of thought to deep
 python letter_counting_environment.py serve \
     --env.use_text_passages=False \
     --env.max_letters_to_count=1 \
-    --env.max_group-average-for-training=0.75
+    --env.max_group_average_for_training=0.75
 
 # Mixed mode with multi-letter counting
 python letter_counting_environment.py serve \

@@ -1,4 +1,5 @@
 import asyncio
+import gzip
 import json
 import logging
 import math
@@ -59,6 +60,8 @@ class ScoredDataGroup(TypedDict):
     advantages: Optional[List[List[float]]]
     ref_logprobs: Optional[List[List[float]]]
     messages: Optional[List[List[Message]]]
+    generation_params: Optional[Dict[str, Any]]
+    inference_logprobs: Optional[List[List[float]]]
     group_overrides: Optional[Dict]
     overrides: Optional[List[Dict]]
     images: Optional[Any]
@@ -718,7 +721,7 @@ class BaseEnv(ABC):
         eval_result = {
             "config_general": {
                 "model_name": model_name,
-                "total_evaluation_time_secondes": str(end_time - start_time),
+                "total_evaluation_time_seconds": str(end_time - start_time),
                 "generation_parameters": merged_gen_params,
             },
             "results": {
@@ -764,20 +767,41 @@ class BaseEnv(ABC):
             else f"{self.config.rollout_server_url}/scored_data"
         )
         async with aiohttp.ClientSession() as session:
-            async with session.post(
+            async with self._post_json_with_compression(
+                session,
                 url,
-                json=scored_data,
+                scored_data,
             ) as resp:
                 if resp.status >= 500:
-                    # Server errors (5xx) should trigger a retry
                     logging.debug(f"Server error: {resp.status}, retrying...")
                     raise Exception(f"Server error: {resp.status}")
                 elif resp.status >= 400:
-                    # Client errors (4xx) are logged but not retried
                     logging.error(f"Client error: {resp.status}, not retrying")
                     return
-                # Success case: print response text
                 print(await resp.text())
+
+    def _post_json_with_compression(
+        self,
+        session: aiohttp.ClientSession,
+        url: str,
+        payload: Any,
+        *,
+        minimum_size: int = 1024,
+    ):
+        """
+        Send JSON payloads with optional gzip compression when payloads are large.
+        """
+        serialized = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        body = serialized
+
+        if len(serialized) >= minimum_size:
+            compressed = gzip.compress(serialized)
+            if len(compressed) < len(serialized):
+                headers["Content-Encoding"] = "gzip"
+                body = compressed
+
+        return session.post(url, data=body, headers=headers)
 
     async def handle_send_to_api(
         self,
@@ -889,7 +913,8 @@ class BaseEnv(ABC):
         # do a rollout with item
         try:
             to_postprocess, to_backlog = await self.collect_trajectories(item)
-        except Exception:
+        except Exception as e:
+            logging.error(f"Error in collect_trajectories: {e}")
             to_postprocess = None
             to_backlog = []
         # add the items to the queue
@@ -911,7 +936,10 @@ class BaseEnv(ABC):
             self.task_successful.append(1)
             self.succeeded_task_duration.append(duration)
             logger.debug(f"handle_env: Collected {len(to_postprocess)} trajectories")
-            await self.handle_send_to_api(to_postprocess, item)
+            try:
+                await self.handle_send_to_api(to_postprocess, item)
+            except Exception as e:
+                logger.error(f"Error in handle_send_to_api: {e}")
         else:
             self.task_successful.append(0)
             self.failed_task_duration.append(duration)
@@ -1945,6 +1973,48 @@ class BaseEnv(ABC):
 
                 rprint(env_config)
                 rprint(final_openai_configs)
+
+                # --- Dump config to YAML in env save dir ---
+                if env_config.data_dir_to_save_evals is not None:
+                    os.makedirs(env_config.data_dir_to_save_evals, exist_ok=True)
+
+                    # Build config dictionary in the same format as YAML config files
+                    # Use mode='json' to properly serialize enums and other complex types
+                    config_dict = {
+                        ENV_NAMESPACE: env_config.model_dump(mode="json"),
+                    }
+
+                    # Handle OpenAI configs - can be a list or single dict
+                    if isinstance(final_openai_configs, list):
+                        config_dict[OPENAI_NAMESPACE] = [
+                            (
+                                cfg.model_dump(mode="json")
+                                if hasattr(cfg, "model_dump")
+                                else cfg
+                            )
+                            for cfg in final_openai_configs
+                        ]
+                    elif isinstance(final_openai_configs, APIServerConfig):
+                        config_dict[OPENAI_NAMESPACE] = final_openai_configs.model_dump(
+                            mode="json"
+                        )
+                    else:
+                        # ServerBaseline or other - convert to dict representation
+                        config_dict[OPENAI_NAMESPACE] = {}
+
+                    # Add server manager config
+                    config_dict["slurm"] = server_manager_config.slurm
+                    config_dict["testing"] = server_manager_config.testing
+
+                    # Write to YAML file
+                    config_filepath = os.path.join(
+                        env_config.data_dir_to_save_evals, "evaluate_config.yaml"
+                    )
+                    with open(config_filepath, "w") as f:
+                        yaml.dump(
+                            config_dict, f, default_flow_style=False, sort_keys=False
+                        )
+                    print(f"Dumped evaluate config to {config_filepath}")
 
                 # --- Create and Run Environment ---
                 # Create the environment instance

@@ -134,12 +134,20 @@ The API documentation (Swagger UI) will be available at `http://<your-server-ip>
             scores: List[float]
             advantages: Optional[List[List[float]]] = None
             ref_logprobs: Optional[List[List[float]]] = None
+            inference_logprobs: Optional[List[List[float]]] = None
+            generation_params: Optional[Dict[str, Any]] = None
             messages: Optional[List[List[Message]]] = None
             overrides: Optional[List[dict]] = None # Per-item logging overrides
             group_overrides: Optional[dict] = None # Group logging overrides
             images: Optional[Any] = None # Image data (if applicable)
             env_id: Optional[int] = None # ID of the environment that generated this data
         ```
+    * **Expected Data Format:**
+        * `tokens`: Full unmasked token sequences (prompt + completion)
+        * `masks`: Token sequences for training with **`-100` for prompt positions**, actual token IDs for completion positions
+        * `inference_logprobs`: Optional logprob sequences for training with **`1.0` for masked positions** (masked), actual logprob values for completion positions
+        * Why **1.0** for masked logprobs? It represents an "obviously bad" probability (e^1.0 ≈ 2.718 > 1.0, invalid), making masked positions easy to identify during training
+        * **Recommended:** Use [ManagedServer](../envs/server_handling/MANAGED_SERVER.md) in your environment to automatically produce this format
     * **Response:**
         * Normal submission: `{"status": "received"}`
         * Mixed-size group buffered: `{"status": "buffered", "buffer_size": <sequences_in_buffer>}`
@@ -154,7 +162,7 @@ The API documentation (Swagger UI) will be available at `http://<your-server-ip>
         * Not enough data: `{"batch": null}`
 * `GET /latest_example`
     * **Description:** Debug endpoint to retrieve the most recently added `ScoredData` item.
-    * **Response:** The last `ScoredData` dictionary pushed, or empty lists for tokens, masks, scores, advantages, ref_logprobs, messages, and images if none yet.
+    * **Response:** The last `ScoredData` dictionary pushed, or empty lists for tokens, masks, scores, advantages, ref_logprobs, inference_logprobs, generation_params, messages, and images if none yet.
 
 ### Debugging
 

@@ -583,7 +583,7 @@ If Atropos is helpful in your work, please cite:
 @misc{atropos,
   title = {{Atropos - An Async First Environment Rollout Controller}},
   author = {Dakota Mahan, Roger Jin, Teknium, Shannon Sands, Artem Yatsenko, Jai Suphavadeeprasit, Karan Malhotra, Chen Guang, Joe Li},
-  url = {https://www.github.com/NousResearch/Atropos},
+  url = {https://www.github.com/NousResearch/atropos},
   month = {4},
   year = {2025},
   version = {0.1},

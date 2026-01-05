@@ -8,6 +8,7 @@ from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.completion import Completion
 from pydantic import BaseModel, Field
 
+from atroposlib.envs.server_handling.managed_server import ManagedServer
 from atroposlib.envs.server_handling.openai_server import OpenAIServer
 from atroposlib.envs.server_handling.server_baseline import (
     APIServer,
@@ -15,7 +16,9 @@ from atroposlib.envs.server_handling.server_baseline import (
     ServerBaseline,
 )
 from atroposlib.envs.server_handling.server_harness import ServerHarness
+from atroposlib.envs.server_handling.sglang_server import SGLangServer
 from atroposlib.envs.server_handling.trl_vllm_server import TrlVllmServer
+from atroposlib.envs.server_handling.vllm_server import VLLMServer
 
 
 class ServerManagerConfig(BaseModel):
@@ -54,6 +57,10 @@ class ServerManager:
                     server_class = OpenAIServer
                 elif configs.server_type == "trl":
                     server_class = TrlVllmServer
+                elif configs.server_type == "sglang":
+                    server_class = SGLangServer
+                elif configs.server_type == "vllm":
+                    server_class = VLLMServer
                 else:
                     raise ValueError(f"Invalid server type: {configs.server_type}")
             else:
@@ -61,6 +68,10 @@ class ServerManager:
                     server_class = OpenAIServer
                 elif configs[0].server_type == "trl":
                     server_class = TrlVllmServer
+                elif configs[0].server_type == "sglang":
+                    server_class = SGLangServer
+                elif configs[0].server_type == "vllm":
+                    server_class = VLLMServer
                 else:
                     raise ValueError(f"Invalid server type: {configs[0].server_type}")
         if testing:
@@ -192,7 +203,7 @@ class ServerManager:
             for completion in completions[1:]:
                 out.choices.extend(completion.choices)
             return out
-        is_train = kwargs.get("split", "train") == "train"
+        is_train = kwargs.pop("split", "train") == "train"
         most_available_server = 0
         most_available_server_num_slots = -1
         await self.wait_for_sem(is_train)
@@ -225,7 +236,7 @@ class ServerManager:
             for completion in completions[1:]:
                 out.choices.extend(completion.choices)
             return out
-        is_train = kwargs.get("split", "train") == "train"
+        is_train = kwargs.pop("split", "train") == "train"
         most_available_server = 0
         most_available_server_num_slots = -1
         await self.wait_for_sem(is_train)
@@ -240,6 +251,53 @@ class ServerManager:
                     server.sem._value if is_train else server.eval_sem._value
                 )
         return await self.servers[most_available_server].completion(**kwargs)
+
+    async def tokens_and_logprobs_completion(
+        self, **kwargs
+    ) -> tuple[list, list, list, list]:
+        """
+        Get tokens and logprobs from completion.
+        Returns (prompt_tokens, output_tokens, output_logprobs, finish_reasons).
+        """
+        n = kwargs.get("n", 1)
+        if n > self.max_n_completions:
+            # Split into multiple completions
+            results = []
+            total_n = n
+            while total_n > 0:
+                n_to_use = min(total_n, self.max_n_completions)
+                kwargs["n"] = n_to_use
+                results.append(self.tokens_and_logprobs_completion(**kwargs))
+                total_n -= n_to_use
+            results = await asyncio.gather(*results)
+            # Merge results - prompt_tokens should be same, extend output lists
+            prompt_tokens = results[0][0]
+            output_tokens = []
+            output_logprobs = []
+            finish_reasons = []
+            for _, out_tokens, out_logprobs, out_finish_reasons in results:
+                output_tokens.extend(out_tokens)
+                output_logprobs.extend(out_logprobs)
+                finish_reasons.extend(out_finish_reasons)
+            return (prompt_tokens, output_tokens, output_logprobs, finish_reasons)
+
+        is_train = kwargs.pop("split", "train") == "train"
+        most_available_server = 0
+        most_available_server_num_slots = -1
+        await self.wait_for_sem(is_train)
+        for i, server in enumerate(self.servers):
+            if not server.server_healthy:
+                continue
+            if (
+                server.sem._value if is_train else server.eval_sem._value
+            ) > most_available_server_num_slots:
+                most_available_server = i
+                most_available_server_num_slots = (
+                    server.sem._value if is_train else server.eval_sem._value
+                )
+        return await self.servers[most_available_server].tokens_and_logprobs_completion(
+            **kwargs
+        )
 
     @asynccontextmanager
     async def dedicated_server(self) -> AsyncGenerator[OpenAIServer, None]:
@@ -256,3 +314,50 @@ class ServerManager:
                 yield self.servers[most_available_server]
             finally:
                 pass
+
+    @asynccontextmanager
+    async def managed_server(
+        self, tokenizer=None
+    ) -> AsyncGenerator[ManagedServer, None]:
+        """
+        Context manager that provides a ManagedServer instance.
+
+        The ManagedServer wraps the most available server and tracks text sequences
+        with aligned tokens and logprobs. State is automatically cleared on exit.
+
+        Args:
+            tokenizer: Optional tokenizer to use. If not provided, will attempt to
+                      extract from server or create from model name.
+
+        Yields:
+            ManagedServer instance wrapping the selected server
+
+        Example:
+            async with server_manager.managed_server() as managed:
+                response = await managed.chat_completion(
+                    messages=[{"role": "user", "content": "Hello"}],
+                    n=2
+                )
+                state = managed.get_state()
+                # Process state...
+                # State is automatically cleared when exiting context
+        """
+        most_available_server = 0
+        most_available_server_num_slots = -1
+        for i, server in enumerate(self.servers):
+            if not server.server_healthy:
+                continue
+            if server.sem._value > most_available_server_num_slots:
+                most_available_server = i
+                most_available_server_num_slots = server.sem._value
+
+        # Create ManagedServer wrapping the selected server
+        managed = ManagedServer(
+            server=self.servers[most_available_server], tokenizer=tokenizer
+        )
+
+        try:
+            yield managed
+        finally:
+            # Clean up: reset tracked sequences
+            managed.reset()

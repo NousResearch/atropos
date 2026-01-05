@@ -36,13 +36,7 @@ Atropos encompasses both environments, which are set up as services, and a traje
 
 </div>
 
-Atropos is a robust, scalable framework for **Reinforcement Learning Environments with LLMs**. Key features:
-
-- **Multi-Turn & Asynchronous RL:** Efficiently supports complex, multi-turn, and asynchronous interactions, decoupling environment steps from policy updates.
-- **Inference Agnostic:** Integrates with standard inference APIs (e.g., OpenAI, vLLM, SGLang), enabling easy switching between LLM providers and frameworks.
-- **Trainer Independent:** Offers a standardized training interface for experimenting with different RL algorithms and frameworks without major code changes.
-- **Scalable & Decentralized:** Easily scale by launching more environment instances (locally or across decentralized resources) that contribute rollouts to a central service.
-- **Diverse Environment Integration:** Manages many varied environment types concurrently for heterogeneous, multi-modal training.
+Atropos is a robust, scalable framework for **Reinforcement Learning Environments with LLMs**.
 
 The goal: provide a flexible, scalable, and standardized platform to accelerate LLM-based RL research across diverse, interactive settings.
 
@@ -83,7 +77,7 @@ https://huggingface.co/NousResearch/DeepHermes-ToolCalling-Specialist-Atropos
 
 
 Environment Used:
-[https://github.com/NousResearch/Atropos/blob/main/environments/tool_calling_server.py](https://github.com/NousResearch/atropos/blob/main/environments/tool_calling_server.py)
+[https://github.com/NousResearch/atropos/blob/main/environments/tool_calling_server.py](https://github.com/NousResearch/atropos/blob/main/environments/tool_calling_server.py)
 
 ---
 
@@ -101,7 +95,7 @@ Model Artifact:
 https://huggingface.co/NousResearch/DeepHermes-Financial-Fundamentals-Prediction-Specialist-Atropos
 
 Environment Used:
-[https://github.com/NousResearch/Atropos/blob/main/environments/fundamental_prediction_environment.py](https://github.com/NousResearch/atropos/blob/main/environments/fundamental_prediction_environment.py)
+[https://github.com/NousResearch/atropos/blob/main/environments/fundamental_prediction_environment.py](https://github.com/NousResearch/atropos/blob/main/environments/fundamental_prediction_environment.py)
 
 ---
 
@@ -131,6 +125,7 @@ Environment Used: [https://github.com/NousResearch/atropos/blob/main/environment
 
 Key Documents:
 - [Base Environment Class](atroposlib/envs/README.md) - Documentation for creating custom environments
+- [ManagedServer Guide](atroposlib/envs/server_handling/MANAGED_SERVER.md) - **Recommended approach** for automatic token and logprob tracking
 - [Environments Overview and Contribution Guide](environments/community/README.md) - Documentation for existing environments and how to contribute new ones.
 - [Full Environment Config Options](CONFIG.md) - Documentation for creating custom environments
 - [Example Trainer](example_trainer/README.md) - Getting started with training
@@ -175,6 +170,8 @@ pre-commit install
 2. **Run an Example Environment**
 
   You should edit the config_init section of the environment file you want ([For example, in GSM8K Environment](https://github.com/NousResearch/atropos/blob/main/environments/gsm8k_server.py#L53)) to point to a running VLLM or SGLang inference server as well as any other [configuration changes](CONFIG.md) you'd like to make, such as the group size, then:
+
+  > **Note:** By default, Atropos uses the OpenAI-compatible API endpoint which works with any provider. For enhanced features, use `VLLMServer` (atroposlib/envs/server_handling/vllm_server.py) or `SGLangServer` (atroposlib/envs/server_handling/sglang_server.py) for direct access to native APIs with full token and logprob tracking.
 
    ```bash
    # Start the API server
@@ -221,7 +218,21 @@ Axolotl is a powerful tool for fine-tuning a wide range of AI models, supporting
 The [Atropos plugin for Axolotl](https://github.com/axolotl-ai-cloud/plugin-atropos) seamlessly integrates Atropos' RL environments into Axolotl's training pipelines.
 This allows you to leverage Atropos for reinforcement learning while utilizing Axolotl's extensive features for model fine-tuning.
 
-To use, follow the readme on the [plugin repository](https://github.com/axolotl-ai-cloud/plugin-atropos).
+To use, follow the README on the [plugin repository](https://github.com/axolotl-ai-cloud/plugin-atropos).
+
+## Tinker
+<a href="https://github.com/NousResearch/tinker-atropos">
+  <img
+    src="https://github.com/user-attachments/assets/6c226187-4df8-4094-be5d-72f3f58de423"
+    alt="Atropos Tinker logo"
+    width="50%">
+</a>
+
+The Tinker API is a simple and flexible LoRA trainer framework for researchers and developers to quickly build out their ideas without worrying about the complexities of distributed training. Users write a simple loop that runs on their CPU, and Tinker manages the backend computation on their GPUs, while still providing full control over the training and algorithmic details.
+
+The [Tinker-Atropos](https://github.com/NousResearch/tinker-atropos) integration layer enables all Atropos environments to leverage the power of Tinker for their RL experiments. This allows users with little or no compute to develop and build Atropos environments with minimal worry about the underlying compute behavior, as well as providing an easy environment integration point for Tinker users.
+
+To get started, check out the README at the [project repository](https://github.com/NousResearch/tinker-atropos).
 
 ## Atropos' Example Trainer
 Atropos repo contains an example trainer that should primarily be used as a reference example to show how a trainer and inference provider can be integrated with Atropos to complete the RL Training Loop.
@@ -352,12 +363,12 @@ If you have found the library helpful in your work, you can cite this repository
 
 ```latex
 @misc{atropos,
-  title = {{Atropos - An Async First Environment Rollout Controller}},
-  author = {Dakota Mahan, Roger Jin, Teknium, Shannon Sands, Artem Yatsenko, Jai Suphavadeeprasit, Karan Malhotra, Chen Guang, Joe Li},
-  url = {https://www.github.com/NousResearch/Atropos},
-  month = {4},
-  year = {2025},
-  version = {0.1},
+  title        = {Atropos: An Async First Environment Rollout Controller},
+  author       = {Mahan, Dakota and Jin, Roger and Teknium and Sands, Shannon and Yatsenko, Artem and Suphavadeeprasit, Jai and Malhotra, Karan and Guang, Chen and Li, Joe},
+  howpublished = {\url{https://www.github.com/NousResearch/atropos}},
+  year         = {2025},
+  month        = {apr},
+  note         = {Version 0.3.0},
 }
 ```
 
@@ -371,4 +382,4 @@ Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 ---
 
 ## License
-Atropos is uses the MIT license, see the [LICENSE](LICENSE) file here for more information
+Atropos uses the MIT license, see the [LICENSE](LICENSE) file here for more information
