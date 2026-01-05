@@ -200,22 +200,25 @@ def test_reasoning_config_invalid_effort():
     print("✓ Invalid effort raises ValueError")
 
 
-def test_reasoning_config_invalid_max_tokens():
-    """Test that invalid max_tokens raises ValueError."""
-    # Too low
-    try:
-        ReasoningConfig(max_tokens=500)  # Should raise
-        assert False, "Should have raised ValueError for too low"
-    except ValueError as e:
-        assert "must be between 1024 and 32000" in str(e)
-
-    # Too high
-    try:
-        ReasoningConfig(max_tokens=50000)  # Should raise
-        assert False, "Should have raised ValueError for too high"
-    except ValueError as e:
-        assert "must be between 1024 and 32000" in str(e)
-    print("✓ Invalid max_tokens raises ValueError")
+def test_reasoning_config_max_tokens_no_validation():
+    """Test that max_tokens accepts any value (no range validation).
+    
+    Provider limits vary and may change over time:
+    - OpenRouter currently caps Anthropic at 1024-32000
+    - Native Anthropic API supports up to 128k extended thinking
+    We don't enforce limits here to allow flexibility.
+    """
+    # Low values should work
+    config_low = ReasoningConfig(max_tokens=500)
+    assert config_low.max_tokens == 500
+    assert config_low.enabled  # Auto-enabled
+    
+    # High values should work (e.g., for native Anthropic 128k thinking)
+    config_high = ReasoningConfig(max_tokens=128000)
+    assert config_high.max_tokens == 128000
+    assert config_high.enabled
+    
+    print("✓ max_tokens accepts any value (no range validation)")
 
 
 def test_hermes_prompts_defined():
@@ -855,7 +858,7 @@ def run_unit_tests():
     test_reasoning_config_full()
     test_reasoning_config_effort_mapping()
     test_reasoning_config_invalid_effort()
-    test_reasoning_config_invalid_max_tokens()
+    test_reasoning_config_max_tokens_no_validation()
     test_hermes_prompts_defined()
 
     # ServerManager integration tests (no API calls)
