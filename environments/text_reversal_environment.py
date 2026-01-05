@@ -1,5 +1,4 @@
 import asyncio
-import math
 import random
 import re
 import time
@@ -622,13 +621,15 @@ class TextReversalEnv(BaseEnv):
                 ):  # If less than half are valid
                     if attempt < max_retries - 1:
                         print(
-                            f"DEBUG: Only {len(valid_completions)}/{len(completions.choices)} valid completions (attempt {attempt + 1}/{max_retries})"
+                            f"DEBUG: Only {len(valid_completions)}/{len(completions.choices)} "
+                            f"valid completions (attempt {attempt + 1}/{max_retries})"
                         )
                         await asyncio.sleep(retry_delay)
                         continue
                     else:
                         print(
-                            f"DEBUG: Only {len(valid_completions)}/{len(completions.choices)} valid completions after {max_retries} attempts"
+                            f"DEBUG: Only {len(valid_completions)}/{len(completions.choices)} "
+                            f"valid completions after {max_retries} attempts"
                         )
                         # Continue with what we have
 
@@ -854,13 +855,16 @@ class TextReversalEnv(BaseEnv):
                     if not isinstance(model_response, str):
                         if attempt < max_retries - 1:
                             print(
-                                f"DEBUG: model_response is not a string. Type: {type(model_response)} (attempt {attempt + 1}/{max_retries})"
+                                f"DEBUG: model_response is not a string. "
+                                f"Type: {type(model_response)} "
+                                f"(attempt {attempt + 1}/{max_retries})"
                             )
                             await asyncio.sleep(retry_delay)
                             continue
                         else:
                             print(
-                                f"DEBUG: model_response is not a string after {max_retries} attempts. Type: {type(model_response)}"
+                                f"DEBUG: model_response is not a string after "
+                                f"{max_retries} attempts. Type: {type(model_response)}"
                             )
                             return {"score": 0.0, "sample": None}
 
@@ -868,13 +872,15 @@ class TextReversalEnv(BaseEnv):
                     if len(model_response.strip()) < self.config.min_response_length:
                         if attempt < max_retries - 1:
                             print(
-                                f"DEBUG: Very short response (likely EOS token only): '{model_response}' (attempt {attempt + 1}/{max_retries})"
+                                f"DEBUG: Very short response (likely EOS token only): "
+                                f"'{model_response}' (attempt {attempt + 1}/{max_retries})"
                             )
                             await asyncio.sleep(retry_delay)
                             continue
                         else:
                             print(
-                                f"DEBUG: Very short response after {max_retries} attempts: '{model_response}'"
+                                f"DEBUG: Very short response after {max_retries} "
+                                f"attempts: '{model_response}'"
                             )
                             return {"score": 0.0, "sample": None}
 
