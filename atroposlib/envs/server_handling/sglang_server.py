@@ -9,7 +9,11 @@ from pydantic_cli import FailedExecutionException
 from transformers import AutoTokenizer
 
 from atroposlib.envs.constants import NAMESPACE_SEP, OPENAI_NAMESPACE
-from atroposlib.envs.server_handling.server_baseline import APIServer, APIServerConfig
+from atroposlib.envs.server_handling.server_baseline import (
+    APIServer,
+    APIServerConfig,
+    ReasoningConfig,
+)
 
 
 class SGLangServer(APIServer):
@@ -17,14 +21,18 @@ class SGLangServer(APIServer):
     SGLang server handling.
     """
 
-    def __init__(self, config: APIServerConfig):
+    def __init__(
+        self,
+        config: APIServerConfig,
+        reasoning_config: ReasoningConfig = None,
+    ):
         self.openai = openai.AsyncClient(
             api_key=config.api_key,
             base_url=config.base_url,
             timeout=config.timeout,
         )
         self.tokenizer = AutoTokenizer.from_pretrained(config.model_name)
-        super().__init__(config)
+        super().__init__(config, reasoning_config=reasoning_config)
 
     async def check_server_status_task(self, chat_completion: bool = True):
         while True:

@@ -16,7 +16,11 @@ from openai.types.chat.chat_completion import (
 from openai.types.completion import Completion, CompletionChoice
 from transformers import AutoTokenizer
 
-from atroposlib.envs.server_handling.server_baseline import APIServer, APIServerConfig
+from atroposlib.envs.server_handling.server_baseline import (
+    APIServer,
+    APIServerConfig,
+    ReasoningConfig,
+)
 
 
 class TrlVllmServer(APIServer):
@@ -24,10 +28,14 @@ class TrlVllmServer(APIServer):
     A server that interfaces with trl's vLLM server.
     """
 
-    def __init__(self, config: APIServerConfig):
+    def __init__(
+        self,
+        config: APIServerConfig,
+        reasoning_config: ReasoningConfig = None,
+    ):
         self.config = config
         self.tokenizer = AutoTokenizer.from_pretrained(config.model_name)
-        super().__init__(config)
+        super().__init__(config, reasoning_config=reasoning_config)
 
     async def check_server_status_task(self, chat_completion: bool = True):
         """
