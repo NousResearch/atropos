@@ -198,3 +198,28 @@ These class-level variables in `BaseEnv` can be overridden in your subclass to c
 *   **CLI Integration**: Provides a `cli()` class method using `pydantic-cli` to easily create command-line interfaces for your environment (e.g., `python your_env_module.py serve --port 8001 ...`). See `get_cli_serve_config_cls` and `get_cli_process_config_cls`.
 
 By implementing the required methods and optionally overriding others, you can create diverse environments that leverage the distributed training infrastructure provided by the `Atropos` framework.
+
+---
+
+## Weave tracing in environments
+
+Environments emit Weave traces to help you inspect rollout flow and LLM calls:
+
+- Enabled by default; disable via config or env:
+  - Config: under your OpenAI server settings, set `tracing_enabled: false`
+    - YAML example:
+      ```yaml
+      openai:
+        model_name: your-model
+        base_url: http://localhost:9000
+        tracing_enabled: false
+      ```
+    - CLI example: `--openai--tracing_enabled false`
+  - Env (hard disable): `WEAVE_DISABLED=true`
+- Optional project override via `WEAVE_PROJECT=<your-project-name>`.
+- Traces include:
+  - Environment operations (group collection and send-to-API)
+  - LLM calls to OpenAI-compatible providers (including SGLang/TRL vLLM wrappers)
+  - Useful attributes (env name/id, model name, base URL, group/batch sizes)
+
+View your traces at `https://weave.wandb.ai` under your project.

@@ -1,8 +1,12 @@
 import asyncio
 import collections
+import functools
+import inspect
+import os
 import time
 from abc import ABC, abstractmethod
 from asyncio import exceptions
+from contextlib import contextmanager
 from typing import Literal, Optional
 
 import numpy as np
@@ -10,6 +14,108 @@ from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.completion import Completion
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_random_exponential
+
+try:
+    import weave as _weave
+except Exception:
+    _weave = None
+try:
+    import wandb as _wandb
+except Exception:
+    _wandb = None
+
+WEAVE_ENABLED = _weave is not None and os.getenv(
+    "WEAVE_DISABLED", "false"
+).lower() not in ("1", "true", "yes")
+_weave_initialized = False
+
+
+def _resolve_weave_project_name() -> str:
+
+    if _wandb is not None:
+        try:
+            run = getattr(_wandb, "run", None)
+            project_from_run = (
+                getattr(run, "project", None) if run is not None else None
+            )
+            if project_from_run:
+                return str(project_from_run)
+
+        except Exception:
+            pass
+
+    project_from_env = os.getenv("WANDB_PROJECT")
+    if project_from_env:
+        return project_from_env
+
+    project_from_weave_env = os.getenv("WEAVE_PROJECT")
+    if project_from_weave_env:
+        return project_from_weave_env
+
+    return "atropos"
+
+
+def ensure_weave_init() -> None:
+    global _weave_initialized
+    if WEAVE_ENABLED and not _weave_initialized:
+        project_name = _resolve_weave_project_name()
+        try:
+            _weave.init(project_name)
+        except Exception:
+
+            pass
+        _weave_initialized = True
+
+
+def weave_op(func):
+    if WEAVE_ENABLED:
+        wrapped = _weave.op(func)
+        if inspect.iscoroutinefunction(func):
+
+            @functools.wraps(wrapped)
+            async def init_then_call(*args, **kwargs):
+                # Gate tracing via per-instance config if available
+                tracing_enabled = True
+                try:
+                    if len(args) > 0 and getattr(args[0], "config", None) is not None:
+                        tracing_enabled = getattr(
+                            args[0].config, "tracing_enabled", True
+                        )
+                except Exception:
+                    tracing_enabled = True
+                if not tracing_enabled:
+                    return await func(*args, **kwargs)
+                ensure_weave_init()
+                return await wrapped(*args, **kwargs)
+
+        else:
+
+            @functools.wraps(wrapped)
+            def init_then_call(*args, **kwargs):
+                tracing_enabled = True
+                try:
+                    if len(args) > 0 and getattr(args[0], "config", None) is not None:
+                        tracing_enabled = getattr(
+                            args[0].config, "tracing_enabled", True
+                        )
+                except Exception:
+                    tracing_enabled = True
+                if not tracing_enabled:
+                    return func(*args, **kwargs)
+                ensure_weave_init()
+                return wrapped(*args, **kwargs)
+
+        return init_then_call
+    return func
+
+
+@contextmanager
+def weave_attributes(attrs: dict):
+    if WEAVE_ENABLED:
+        with _weave.attributes(attrs):
+            yield
+    else:
+        yield
 
 
 class AsyncSemWithAdaptiveWeight(asyncio.Semaphore):
@@ -110,6 +216,10 @@ class ServerBaseline(BaseModel):
     )
     server_type: Literal["openai", "trl", "sglang", "vllm"] = Field(
         default="openai", description="Type of server to use"
+    )
+    tracing_enabled: bool = Field(
+        default=True,
+        description="Enable Weave tracing for chat/completion ops (overridden by WEAVE_DISABLED).",
     )
 
 
@@ -264,6 +374,7 @@ class APIServer(ABC):
     @retry(
         stop=stop_after_attempt(3), wait=wait_random_exponential(multiplier=1, max=10)
     )
+    @weave_op
     async def chat_completion(self, **kwargs) -> ChatCompletion:
         """
         Chat completion handler, waits for the server to be healthy and then calls the chat completion wrapper.
@@ -285,15 +396,27 @@ class APIServer(ABC):
         split = kwargs.pop("split", "train")
         stat_dict = {}
         stat_dict["attempts"] = 0
-        if split == "train":
-            ret_data = await self._chat_comp(stat_dict, **kwargs)
-            self.request_timings.append(stat_dict["end"] - stat_dict["start"])
-            self.attempts_list.append(stat_dict["attempts"])
-        else:
-            # Give separate eval workers, if desired, gotta go fast for those evals
-            ret_data = await self._chat_eval(stat_dict, **kwargs)
-            self.eval_request_timings.append(stat_dict["end"] - stat_dict["start"])
-            self.eval_attempts_list.append(stat_dict["attempts"])
+        with weave_attributes(
+            {
+                "server_type": getattr(self.config, "server_type", None),
+                "endpoint": "chat_completion",
+                "model": self.config.model_name,
+                "base_url": getattr(self.config, "base_url", None),
+                "split": split,
+                "n": kwargs.get("n", 1),
+                "wandb_group": os.getenv("WANDB_GROUP", "unknown"),
+                "wandb_run_id": os.getenv("WANDB_RUN_ID", None),
+            }
+        ):
+            if split == "train":
+                ret_data = await self._chat_comp(stat_dict, **kwargs)
+                self.request_timings.append(stat_dict["end"] - stat_dict["start"])
+                self.attempts_list.append(stat_dict["attempts"])
+            else:
+
+                ret_data = await self._chat_eval(stat_dict, **kwargs)
+                self.eval_request_timings.append(stat_dict["end"] - stat_dict["start"])
+                self.eval_attempts_list.append(stat_dict["attempts"])
         return ret_data
 
     @retry(
@@ -330,6 +453,7 @@ class APIServer(ABC):
             stat_dict["end"] = time.time()
             return completions
 
+    @weave_op
     async def completion(self, **kwargs) -> Completion:
         """
         Completion handler, waits for the server to be healthy and then calls the completion wrapper.
@@ -352,20 +476,35 @@ class APIServer(ABC):
         split = kwargs.pop("split", "train")
         stat_dict = {}
         stat_dict["attempts"] = 0
-        if split == "train":
-            ret_data = await self._comp(stat_dict, **kwargs)
-            self.request_timings.append(stat_dict["end"] - stat_dict["start"])
-            self.attempts_list.append(stat_dict["attempts"])
-        else:
-            # Give separate eval workers, if desired, gotta go fast for those evals
-            ret_data = await self._comp_eval(stat_dict, **kwargs)
-            self.eval_request_timings.append(stat_dict["end"] - stat_dict["start"])
-            self.eval_attempts_list.append(stat_dict["attempts"])
+        with weave_attributes(
+            {
+                "server_type": getattr(self.config, "server_type", None),
+                "endpoint": "completion",
+                "model": self.config.model_name,
+                "base_url": getattr(self.config, "base_url", None),
+                "split": split,
+                "n": kwargs.get("n", 1),
+                "wandb_group": os.getenv(
+                    "WANDB_GROUP", "unknown"
+                ),  # This is set during the weave setup in our base env
+                "wandb_run_id": os.getenv("WANDB_RUN_ID", None),
+            }
+        ):
+            if split == "train":
+                ret_data = await self._comp(stat_dict, **kwargs)
+                self.request_timings.append(stat_dict["end"] - stat_dict["start"])
+                self.attempts_list.append(stat_dict["attempts"])
+            else:
+
+                ret_data = await self._comp_eval(stat_dict, **kwargs)
+                self.eval_request_timings.append(stat_dict["end"] - stat_dict["start"])
+                self.eval_attempts_list.append(stat_dict["attempts"])
         return ret_data
 
     @retry(
         stop=stop_after_attempt(3), wait=wait_random_exponential(multiplier=1, max=10)
     )
+    @weave_op
     async def _tokens_and_logprobs_comp(
         self, stat_dict, **kwargs
     ) -> tuple[list, list, list, list]:
@@ -426,13 +565,27 @@ class APIServer(ABC):
         split = kwargs.pop("split", "train")
         stat_dict = {}
         stat_dict["attempts"] = 0
-        if split == "train":
-            ret_data = await self._tokens_and_logprobs_comp(stat_dict, **kwargs)
-            self.request_timings.append(stat_dict["end"] - stat_dict["start"])
-            self.attempts_list.append(stat_dict["attempts"])
-        else:
-            # Give separate eval workers, if desired, gotta go fast for those evals
-            ret_data = await self._tokens_and_logprobs_comp_eval(stat_dict, **kwargs)
-            self.eval_request_timings.append(stat_dict["end"] - stat_dict["start"])
-            self.eval_attempts_list.append(stat_dict["attempts"])
+        with weave_attributes(
+            {
+                "server_type": getattr(self.config, "server_type", None),
+                "endpoint": "tokens_and_logprobs_completion",
+                "model": self.config.model_name,
+                "base_url": getattr(self.config, "base_url", None),
+                "split": split,
+                "n": kwargs.get("n", 1),
+                "wandb_group": os.getenv("WANDB_GROUP", "unknown"),
+                "wandb_run_id": os.getenv("WANDB_RUN_ID", None),
+            }
+        ):
+            if split == "train":
+                ret_data = await self._tokens_and_logprobs_comp(stat_dict, **kwargs)
+                self.request_timings.append(stat_dict["end"] - stat_dict["start"])
+                self.attempts_list.append(stat_dict["attempts"])
+            else:
+
+                ret_data = await self._tokens_and_logprobs_comp_eval(
+                    stat_dict, **kwargs
+                )
+                self.eval_request_timings.append(stat_dict["end"] - stat_dict["start"])
+                self.eval_attempts_list.append(stat_dict["attempts"])
         return ret_data
