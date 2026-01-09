@@ -5,12 +5,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
-from atroposlib.envs.base import (APIServerConfig, BaseEnv, BaseEnvConfig,
-                                  ScoredDataItem)
+from atroposlib.envs.base import APIServerConfig, BaseEnv, BaseEnvConfig, ScoredDataItem
 from atroposlib.type_definitions import Item
 
 try:
-    import verifiers as vf  # noqa: F401
+    import verifiers as vf
 except ImportError as e:
     raise ImportError(
         "The 'verifiers' package is required for VerifiersEnv. "
