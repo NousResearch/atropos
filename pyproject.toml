@@ -17,7 +17,7 @@ dependencies = [
     "numpy",
     "wandb",
     "gymnasium",
-    "math-verify==0.7.0",
+    "math-verify>=0.7.0",
     "jinja2",
     "nltk",
     "rich",
@@ -42,6 +42,9 @@ all = [
 ]
 rewardfns = [
     "torch"
+]
+verifiers = [
+    "verifiers>=0.1.5.post0"
 ]
 dev = [
     "pytest",
