@@ -26,7 +26,6 @@ dependencies = [
     "jsonlines",
     "pydantic-cli",
     "hf_transfer",
-    "verifiers>=0.1.5.post0",
 ]
 
 [project.scripts]
@@ -43,6 +42,9 @@ all = [
 ]
 rewardfns = [
     "torch"
+]
+verifiers = [
+    "verifiers>=0.1.5.post0"
 ]
 dev = [
     "pytest",

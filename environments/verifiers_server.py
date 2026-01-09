@@ -4,10 +4,10 @@
 # 2. prime login
 # 3. prime env install will/wordle (or any owner/environment)
 #
-import asyncio
 import os
+import random
 import time
-from typing import Dict, List, Optional, Tuple, TypedDict, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import verifiers as vf
 from tqdm.asyncio import tqdm_asyncio
@@ -18,14 +18,18 @@ from atroposlib.envs.base import (
     BaseEnvConfig,
     ScoredDataGroup,
 )
+from atroposlib.type_definitions import Item
+from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 
 class VfEnvConfig(BaseEnvConfig):
     vf_env_name: str = ""
-    env_args: dict = {}
+    env_args: Dict = {}
 
 
 class VerifiersEnv(BaseEnv):
+    name = "verifiers"
+
     def __init__(
         self,
         config: VfEnvConfig,
@@ -35,6 +39,7 @@ class VerifiersEnv(BaseEnv):
     ):
         super().__init__(config, server_configs, slurm, testing)
         self.eval_metrics = list()
+        self.percent_correct_buffer = list()
 
         self.vf_env = vf.load_environment(config.vf_env_name, **config.env_args)
         self.rubric = self.vf_env.rubric
@@ -67,6 +72,22 @@ class VerifiersEnv(BaseEnv):
             ),
         ]
         return env_config, server_configs
+
+    async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
+        if wandb_metrics is None:
+            wandb_metrics = {}
+
+        # Calculate percent_correct if buffer has data
+        if len(self.percent_correct_buffer) > 0:
+            wandb_metrics["train/percent_correct"] = sum(
+                self.percent_correct_buffer
+            ) / len(self.percent_correct_buffer)
+
+        self.percent_correct_buffer = list()
+        for item in self.eval_metrics:
+            wandb_metrics[item[0]] = item[1]
+        self.eval_metrics = list()
+        await super().wandb_log(wandb_metrics)
 
     async def setup(self):
         self.train = self.vf_env.get_dataset()
@@ -174,39 +195,115 @@ class VerifiersEnv(BaseEnv):
 
         return eval_metrics
 
-    async def get_next_item(self):
+    async def get_next_item(self) -> Item:
         next_item = self.train[self.iter % len(self.train)]
         self.iter += 1
         return next_item
 
+    async def collect_trajectories(
+        self, item: Item
+    ) -> Tuple[Optional[ScoredDataGroup], List[Item]]:
+        """Collect multiple trajectories for a single item and score them."""
+        question = item["question"]
+        answer = item["answer"]
 
-async def main():
-    env_config, server_configs = VerifiersEnv.config_init()
-    env_config.vf_env_name = "wordle"
-    env_config.env_args = {}
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": question},
+        ]
 
-    env = VerifiersEnv(
-        config=env_config,
-        server_configs=server_configs,
-    )
+        # Generate multiple completions at once
+        chat_completions = await self.server.chat_completion(
+            messages=messages,
+            n=self.config.group_size,
+            max_tokens=self.config.max_token_length,
+        )
 
-    await env.setup()
+        to_score = []
+        for choice in chat_completions.choices:
+            response_messages = (
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": choice.message.content},
+            )
+            to_score.append(
+                {
+                    "messages": response_messages,
+                    "answer": answer,
+                    "finish_reason": choice.finish_reason,
+                }
+            )
 
-    item = await env.get_next_item()
+        scored_data = await self.score(to_score)
+        return scored_data, []
 
-    roll = await env.rollout_and_score_eval(
-        question=item["question"],
-        answer=item["answer"],
-        system_prompt=env.system_prompt,
-    )
+    async def score(
+        self, rollout_group_data: List[Dict]
+    ) -> Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]:
+        """Score a group of rollouts using the Verifiers rubric."""
+        scores = ScoredDataGroup()
+        scores["tokens"] = []
+        scores["masks"] = []
+        scores["scores"] = []
 
-    print("Starting evaluate")
+        random.shuffle(rollout_group_data)
 
-    metrics = await env.evaluate()
+        for item in rollout_group_data:
+            response_content = item["messages"][-1]["content"]
+            answer = item["answer"]
 
-    print(metrics)
+            # Parse the model's answer using the Verifiers parser
+            _ = self.parser.parse_answer(completion=response_content)
+
+            # Calculate rewards using the rubric's reward functions
+            rewards = []
+            for func in self.reward_funcs:
+                try:
+                    reward = await self.rubric.call_reward_func(
+                        func=func,
+                        prompt=item["messages"][1]["content"],  # user message
+                        completion=response_content,
+                        answer=answer,
+                    )
+                    rewards.append(reward if reward is not None else 0.0)
+                except Exception:
+                    rewards.append(0.0)
+
+            # Calculate weighted score
+            weighted_score = sum(r * w for r, w in zip(rewards, self.reward_scales))
+
+            # Tokenize the messages for training
+            out_dict = tokenize_for_trainer(
+                self.tokenizer, item["messages"], item["finish_reason"]
+            )
+            tokens = out_dict["tokens"]
+            masks = out_dict["masks"]
+
+            # Skip examples with too few valid tokens
+            if len([1 for m in masks if m != -100]) < 10:
+                continue
+
+            scores["tokens"].append(tokens)
+            scores["masks"].append(masks)
+            # Convert weighted score to reward (-1 to 1 range based on threshold)
+            reward_value = 1.0 if weighted_score >= 0.5 else -1.0
+            scores["scores"].append(reward_value)
+
+            if len(scores["tokens"]) >= self.config.group_size:
+                break
+
+        # Track percent correct in buffer for wandb logging
+        for score in scores["scores"]:
+            self.percent_correct_buffer.append(max(score, 0))
+
+        # Return None if all scores are the same (no learning signal)
+        if len(scores["scores"]) == 0:
+            return None
+        if all(s == scores["scores"][0] for s in scores["scores"]):
+            return None
+
+        return scores
 
 
 if __name__ == "__main__":
-    # VerifiersEnv.cli()
-    asyncio.run(main())
+    VerifiersEnv.cli()
