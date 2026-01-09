@@ -7,7 +7,7 @@
 import asyncio
 import os
 import time
-from typing import Dict, List, Optional, Tuple, TypedDict, Union
+from typing import List, Tuple
 
 import verifiers as vf
 from tqdm.asyncio import tqdm_asyncio
@@ -16,7 +16,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    ScoredDataGroup,
 )
 
 
@@ -194,7 +193,7 @@ async def main():
 
     item = await env.get_next_item()
 
-    roll = await env.rollout_and_score_eval(
+    _ = await env.rollout_and_score_eval(
         question=item["question"],
         answer=item["answer"],
         system_prompt=env.system_prompt,
