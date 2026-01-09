@@ -6,6 +6,10 @@
 #
 # Or just run with --env.vf_env_name <env> and it will auto-install!
 #
+# This environment supports both single-turn and multi-turn verifiers environments.
+#
+import asyncio
+import contextlib
 import logging
 import os
 import random
@@ -13,6 +17,7 @@ import subprocess
 import time
 from typing import Dict, List, Optional, Tuple, Union
 
+from openai import AsyncOpenAI
 from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
@@ -56,6 +61,8 @@ class VerifiersEnv(BaseEnv):
             )
 
         super().__init__(config, server_configs, slurm, testing)
+        # Store server_configs for multi-turn rollouts
+        self._server_configs = server_configs if isinstance(server_configs, list) else []
         self.eval_metrics = list()
         self.percent_correct_buffer = list()
 
@@ -75,6 +82,36 @@ class VerifiersEnv(BaseEnv):
             else []
         )
         self.system_prompt = self.vf_env.system_prompt
+
+        # Create AsyncOpenAI client for verifiers rollouts
+        # This will be initialized when server is set up
+        self._vf_client: Optional[AsyncOpenAI] = None
+
+    def _get_vf_client(self) -> AsyncOpenAI:
+        """Get or create AsyncOpenAI client for verifiers rollouts."""
+        if self._vf_client is None:
+            # Get API config from server
+            server_config = self._server_configs[0] if self._server_configs else None
+            if server_config:
+                base_url = server_config.base_url
+                api_key = server_config.api_key or os.getenv("OPENAI_API_KEY", "dummy")
+                logger.info(
+                    "Creating verifiers client with base_url=%s, model=%s",
+                    base_url or "default (api.openai.com)",
+                    server_config.model_name,
+                )
+                self._vf_client = AsyncOpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                    timeout=server_config.timeout,
+                )
+            else:
+                # Fallback to environment variable
+                logger.info("Creating verifiers client with default OpenAI config")
+                self._vf_client = AsyncOpenAI(
+                    api_key=os.getenv("OPENAI_API_KEY", "dummy"),
+                )
+        return self._vf_client
 
     def _load_or_install_environment(self, env_name: str, **env_args):
         """Load environment, auto-installing via prime CLI if not found.
@@ -240,9 +277,27 @@ class VerifiersEnv(BaseEnv):
     async def rollout_and_score_eval(
         self, question: str, answer: str, **kwargs
     ) -> dict:
-        state = kwargs["state"] if "state" in kwargs else None
-        info = kwargs["info"] if "info" in kwargs else None
-        system_prompt = kwargs["system_prompt"] if "system_prompt" in kwargs else None
+        info = kwargs.get("info")
+        system_prompt = kwargs.get("system_prompt")
+
+        # Check if this is a multi-turn environment
+        is_multi_turn = hasattr(self.vf_env, "env_response")
+
+        if is_multi_turn:
+            return await self._rollout_and_score_eval_multi_turn(
+                question, answer, system_prompt=system_prompt, info=info
+            )
+        else:
+            return await self._rollout_and_score_eval_single_turn(
+                question, answer, system_prompt=system_prompt, info=info
+            )
+
+    async def _rollout_and_score_eval_single_turn(
+        self, question: str, answer: str, **kwargs
+    ) -> dict:
+        """Single-turn evaluation rollout and scoring."""
+        info = kwargs.get("info")
+        system_prompt = kwargs.get("system_prompt")
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": question},
@@ -281,7 +336,6 @@ class VerifiersEnv(BaseEnv):
                     answer=answer,
                     prompt=question,
                     info=info,
-                    state=state,
                 )
                 # Handle async functions
                 if hasattr(reward, "__await__"):
@@ -304,11 +358,72 @@ class VerifiersEnv(BaseEnv):
             "messages": messages,
             "question": question,
             "gold_answer": answer,
-            # "gold_parsed": str(gold_parsed) if gold_parsed else None,
             "model_parsed": str(answer_parsed) if answer_parsed else None,
             "score": int(score),
             "correct": bool(score),
             "finish_reason": choice.finish_reason,
+        }
+
+        return {"score": score, "sample": sample}
+
+    async def _rollout_and_score_eval_multi_turn(
+        self, question: str, answer: str, **kwargs
+    ) -> dict:
+        """Multi-turn evaluation rollout and scoring."""
+        # Get client and model info
+        client = self._get_vf_client()
+        model = self._server_configs[0].model_name if self._server_configs else "gpt-4"
+
+        # Prepare rollout input - use what the dataset provides
+        # For multi-turn, the "question" might be a list of messages
+        if isinstance(question, list):
+            prompt = question
+        else:
+            prompt = [{"role": "user", "content": question}]
+
+        rollout_input = {
+            "prompt": prompt,
+            "question": question if isinstance(question, str) else "",
+            "answer": answer,
+        }
+
+        try:
+            state = await self.vf_env.rollout(
+                input=rollout_input,
+                client=client,
+                model=model,
+                sampling_args={
+                    "max_tokens": self.config.max_token_length,
+                    "temperature": 0.0,  # Deterministic for eval
+                },
+            )
+        except Exception as e:
+            logger.warning("Multi-turn eval rollout failed: %s", e)
+            return {"score": 0.0, "sample": {"error": str(e)}}
+
+        # Score using rubric.score_rollout()
+        try:
+            score_sem = contextlib.nullcontext()
+            await self.rubric.score_rollout(state, score_sem=score_sem)
+            score = state.get("reward", 0.0)
+        except Exception as e:
+            logger.warning("Multi-turn eval scoring failed: %s", e)
+            score = 0.0
+
+        # Build sample for logging
+        prompt_messages = state.get("prompt", [])
+        completion_messages = state.get("completion", [])
+        full_messages = list(prompt_messages) + list(completion_messages)
+
+        sample = {
+            "messages": full_messages,
+            "question": question,
+            "gold_answer": answer,
+            "model_parsed": None,
+            "score": score,
+            "correct": bool(score > 0),
+            "finish_reason": "stop",
+            "num_turns": len(state.get("trajectory", [])),
         }
 
         return {"score": score, "sample": sample}
@@ -357,7 +472,24 @@ class VerifiersEnv(BaseEnv):
     async def collect_trajectories(
         self, item: Item
     ) -> Tuple[Optional[ScoredDataGroup], List[Item]]:
-        """Collect multiple trajectories for a single item and score them."""
+        """Collect multiple trajectories for a single item and score them.
+
+        This method supports both single-turn and multi-turn verifiers environments.
+        For multi-turn environments (like wordle), it uses the verifiers rollout
+        mechanism to handle the interaction loop.
+        """
+        # Check if this is a multi-turn environment
+        is_multi_turn = hasattr(self.vf_env, "env_response")
+
+        if is_multi_turn:
+            return await self._collect_multi_turn_trajectories(item)
+        else:
+            return await self._collect_single_turn_trajectories(item)
+
+    async def _collect_single_turn_trajectories(
+        self, item: Item
+    ) -> Tuple[Optional[ScoredDataGroup], List[Item]]:
+        """Collect trajectories for single-turn environments."""
         question = item["question"]
         answer = item["answer"]
 
@@ -379,7 +511,6 @@ class VerifiersEnv(BaseEnv):
             return None, []
 
         for choice in chat_completions.choices:
-            # Defensive check for choice content
             if not choice.message or choice.message.content is None:
                 logger.warning("Empty message content in completion choice")
                 continue
@@ -394,6 +525,116 @@ class VerifiersEnv(BaseEnv):
                     "messages": response_messages,
                     "answer": answer,
                     "finish_reason": choice.finish_reason,
+                    "state": None,  # No state for single-turn
+                }
+            )
+
+        scored_data = await self.score(to_score)
+        return scored_data, []
+
+    async def _collect_multi_turn_trajectories(
+        self, item: Item
+    ) -> Tuple[Optional[ScoredDataGroup], List[Item]]:
+        """Collect trajectories for multi-turn environments using verifiers rollout."""
+        # Get client and model info
+        client = self._get_vf_client()
+        model = self._server_configs[0].model_name if self._server_configs else "gpt-4"
+
+        logger.info("Starting multi-turn rollouts with model: %s", model)
+
+        # Prepare rollout input from item
+        rollout_input = {
+            "prompt": item.get("prompt", []),
+            "question": item.get("question", ""),
+            "answer": item.get("answer", ""),
+        }
+
+        # Timeout for individual rollouts (multi-turn can take longer)
+        rollout_timeout = 120  # 2 minutes per rollout
+
+        # Run multiple rollouts concurrently
+        async def run_single_rollout(idx: int):
+            """Run a single multi-turn rollout and return the state."""
+            try:
+                logger.debug("Starting rollout %d", idx)
+                state = await asyncio.wait_for(
+                    self.vf_env.rollout(
+                        input=rollout_input,
+                        client=client,
+                        model=model,
+                        sampling_args={
+                            "max_tokens": self.config.max_token_length,
+                            "temperature": 1.0,
+                        },
+                    ),
+                    timeout=rollout_timeout,
+                )
+                logger.debug("Rollout %d completed successfully", idx)
+                return state
+            except asyncio.TimeoutError:
+                logger.warning("Rollout %d timed out after %ds", idx, rollout_timeout)
+                return None
+            except Exception as e:
+                logger.warning("Rollout %d failed: %s", idx, e)
+                return None
+
+        # Run group_size rollouts concurrently
+        rollout_tasks = [
+            run_single_rollout(i) for i in range(self.config.group_size)
+        ]
+        states = await asyncio.gather(*rollout_tasks)
+
+        # Filter out failed rollouts
+        valid_states = [s for s in states if s is not None]
+        logger.info(
+            "Multi-turn rollouts completed: %d/%d successful",
+            len(valid_states),
+            len(states),
+        )
+        if not valid_states:
+            logger.error(
+                "All %d rollouts failed. Check API key and model configuration. "
+                "For non-OpenAI providers, set --openai.base_url to your API endpoint.",
+                len(states),
+            )
+            return None, []
+
+        # Score the rollouts using the verifiers rubric
+        to_score = []
+        for state in valid_states:
+            # Score the state using rubric
+            try:
+                # Use a no-op semaphore for scoring
+                score_sem = contextlib.nullcontext()
+                await self.rubric.score_rollout(state, score_sem=score_sem)
+            except Exception as e:
+                logger.warning("Scoring failed: %s", e)
+                state["reward"] = 0.0
+
+            # Build full conversation from state
+            prompt_messages = state.get("prompt", [])
+            completion_messages = state.get("completion", [])
+            full_messages = list(prompt_messages) + list(completion_messages)
+
+            # Determine finish reason
+            trajectory = state.get("trajectory", [])
+            if trajectory:
+                last_step = trajectory[-1]
+                response = last_step.get("response")
+                if response and hasattr(response, "choices") and response.choices:
+                    finish_reason = response.choices[0].finish_reason
+                else:
+                    finish_reason = "stop"
+            else:
+                finish_reason = "stop"
+
+            to_score.append(
+                {
+                    "messages": full_messages,
+                    "answer": state.get("answer", ""),
+                    "finish_reason": finish_reason,
+                    "state": state,  # Include full state for scoring
+                    "reward": state.get("reward", 0.0),
                 }
             )
 
@@ -418,30 +659,35 @@ class VerifiersEnv(BaseEnv):
             # Parse the model's answer using the Verifiers parser
             _ = self.parser.parse_answer(completion=response_content)
 
-            # Calculate rewards using the rubric's reward functions
-            rewards = []
-            for func in self.reward_funcs:
-                try:
-                    reward = self._call_reward_func(
-                        func=func,
-                        prompt=item["messages"][1]["content"],  # user message
-                        completion=item["messages"],
-                        answer=answer,
-                    )
-                    # Handle async functions
-                    if hasattr(reward, "__await__"):
-                        reward = await reward
-                    rewards.append(reward if reward is not None else 0.0)
-                except Exception as e:
-                    logger.warning(
-                        "Reward function %s failed: %s",
-                        getattr(func, "__name__", func),
-                        e,
-                    )
-                    rewards.append(0.0)
+            # Check if this is a multi-turn rollout with pre-computed reward
+            if item.get("state") is not None and "reward" in item:
+                # Multi-turn: use pre-computed reward from rubric.score_rollout()
+                weighted_score = item["reward"]
+            else:
+                # Single-turn: calculate rewards using the rubric's reward functions
+                rewards = []
+                for func in self.reward_funcs:
+                    try:
+                        reward = self._call_reward_func(
+                            func=func,
+                            prompt=item["messages"][1]["content"],  # user message
+                            completion=item["messages"],
+                            answer=answer,
+                        )
+                        # Handle async functions
+                        if hasattr(reward, "__await__"):
+                            reward = await reward
+                        rewards.append(reward if reward is not None else 0.0)
+                    except Exception as e:
+                        logger.warning(
+                            "Reward function %s failed: %s",
+                            getattr(func, "__name__", func),
+                            e,
+                        )
+                        rewards.append(0.0)
 
-            # Calculate weighted score
-            weighted_score = sum(r * w for r, w in zip(rewards, self.reward_scales))
+                # Calculate weighted score
+                weighted_score = sum(r * w for r, w in zip(rewards, self.reward_scales))
 
             # Normalize messages to list for tokenizer compatibility
             messages_list = list(item["messages"])
