@@ -44,6 +44,9 @@ all = [
 rewardfns = [
     "torch"
 ]
+verifiers = [
+    "verifiers>=0.1.5.post0"
+]
 dev = [
     "pytest",
     "pytest-asyncio",
