@@ -4,9 +4,12 @@
 # 2. prime login
 # 3. prime env install will/wordle (or any owner/environment)
 #
+# Or just run with --env.vf_env_name <env> and it will auto-install!
+#
 import logging
 import os
 import random
+import subprocess
 import time
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -56,7 +59,9 @@ class VerifiersEnv(BaseEnv):
         self.eval_metrics = list()
         self.percent_correct_buffer = list()
 
-        self.vf_env = vf.load_environment(config.vf_env_name, **config.env_args)
+        self.vf_env = self._load_or_install_environment(
+            config.vf_env_name, **config.env_args
+        )
         self.rubric = self.vf_env.rubric
 
         self.parser = self.rubric.parser
@@ -70,6 +75,52 @@ class VerifiersEnv(BaseEnv):
             else []
         )
         self.system_prompt = self.vf_env.system_prompt
+
+    def _load_or_install_environment(self, env_name: str, **env_args):
+        """Load environment, auto-installing via prime CLI if not found."""
+        try:
+            return vf.load_environment(env_name, **env_args)
+        except (ValueError, ImportError) as e:
+            if "Could not import" in str(e) or "No module named" in str(e):
+                logger.info(
+                    "Environment '%s' not found, attempting to install via prime CLI",
+                    env_name,
+                )
+                try:
+                    # Try to install via prime CLI
+                    result = subprocess.run(
+                        ["prime", "env", "install", env_name],
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                    )
+                    if result.returncode == 0:
+                        logger.info("Successfully installed environment '%s'", env_name)
+                        # Try loading again after install
+                        return vf.load_environment(env_name, **env_args)
+                    else:
+                        logger.error(
+                            "Failed to install environment '%s': %s",
+                            env_name,
+                            result.stderr,
+                        )
+                        raise RuntimeError(
+                            f"Failed to install environment '{env_name}'. "
+                            f"Make sure you're logged in with 'prime login'. "
+                            f"Error: {result.stderr}"
+                        ) from e
+                except FileNotFoundError:
+                    raise RuntimeError(
+                        f"Environment '{env_name}' not found and 'prime' CLI is not "
+                        "installed. Install with: uv tool install prime"
+                    ) from e
+                except subprocess.TimeoutExpired:
+                    raise RuntimeError(
+                        f"Timeout installing environment '{env_name}'. "
+                        "Try manually: prime env install " + env_name
+                    ) from e
+            else:
+                raise
 
     def _get_rubric_reward_funcs(self) -> List:
         """Get reward functions with compatibility for different verifiers versions."""
