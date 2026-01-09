@@ -374,8 +374,8 @@ class VerifiersEnv(BaseEnv):
         client = self._get_vf_client()
         model = self._server_configs[0].model_name if self._server_configs else "gpt-4"
 
-        # Prepare rollout input - use what the dataset provides
-        # For multi-turn, the "question" might be a list of messages
+        # Prepare rollout input - must match RolloutInput TypedDict
+        # For multi-turn, the "question" might be a list of messages (prompt)
         if isinstance(question, list):
             prompt = question
         else:
@@ -383,8 +383,10 @@ class VerifiersEnv(BaseEnv):
 
         rollout_input = {
             "prompt": prompt,
-            "question": question if isinstance(question, str) else "",
+            "example_id": 0,
+            "task": "default",
             "answer": answer,
+            "info": {},
         }
 
         try:
@@ -480,6 +482,11 @@ class VerifiersEnv(BaseEnv):
         """
         # Check if this is a multi-turn environment
         is_multi_turn = hasattr(self.vf_env, "env_response")
+        logger.warning(
+            "collect_trajectories called: is_multi_turn=%s, answer=%s",
+            is_multi_turn,
+            item.get("answer", "unknown"),
+        )
 
         if is_multi_turn:
             return await self._collect_multi_turn_trajectories(item)
@@ -540,13 +547,15 @@ class VerifiersEnv(BaseEnv):
         client = self._get_vf_client()
         model = self._server_configs[0].model_name if self._server_configs else "gpt-4"
 
-        logger.info("Starting multi-turn rollouts with model: %s", model)
+        logger.warning("Starting multi-turn rollouts with model: %s", model)
 
-        # Prepare rollout input from item
+        # Prepare rollout input from item - must match RolloutInput TypedDict
         rollout_input = {
             "prompt": item.get("prompt", []),
-            "question": item.get("question", ""),
+            "example_id": item.get("example_id", 0),
+            "task": item.get("task", "default"),
             "answer": item.get("answer", ""),
+            "info": item.get("info", {}),
         }
 
         # Timeout for individual rollouts (multi-turn can take longer)
