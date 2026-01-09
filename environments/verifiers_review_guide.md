@@ -66,9 +66,10 @@ prime env install owner/environment-name@latest --with pip
 
 Then set `env.vf_env_name: "owner/environment-name"` in `environments/configs/verifiers.yaml` and repeat the “Manual smoke test” above.
 
-To double-check the env is installed:
+To double-check you can load it locally:
 ```bash
-prime env list
+prime env info owner/environment-name
+python -c "import verifiers; verifiers.load_environment('environment-name')"
 ```
 
 ## Review checklist

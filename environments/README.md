@@ -41,7 +41,8 @@ python environments/verifiers_server.py evaluate --config environments/configs/v
 - Pass environment-specific kwargs via `env.env_args`.
 
 **Verify it’s using Prime Env Hub:**
-- Confirm the environment is installed: `prime env list` (should include your `owner/environment-name`).
+- Confirm the env exists on the hub: `prime env info owner/environment-name`.
+- Confirm it's installed + loadable locally: `python -c "import verifiers; verifiers.load_environment('environment-name')"` (use the normalized id printed on startup).
 - When the env starts, it prints a line like:
   - `[verifiers] loaded Prime Env Hub environment: hub_id='owner/environment-name' resolved_env_id='environment-name' env_type='...'`
 
