@@ -89,6 +89,7 @@ def create_completion(
 class ServerHarness:
     def __init__(self):
         self.response_map = dict()
+        self.tokens_and_logprobs_map = dict()  # Map for tokens/logprobs responses
         self.sem = AsyncSemWithAdaptiveWeight(1)
         self.eval_sem = AsyncSemWithAdaptiveWeight(1)
         self.server_healthy = True
@@ -113,6 +114,31 @@ class ServerHarness:
     def set_desired_completion(self, input_message: str, completion: Completion):
         self.response_map[input_message] = completion
 
+    def set_tokens_and_logprobs_response(
+        self,
+        prompt: str,
+        prompt_tokens: list,
+        output_tokens_list: list,
+        output_logprobs_list: list,
+        finish_reasons: list,
+    ):
+        """
+        Set expected response for _tokens_and_logprobs_completion_wrapper.
+
+        Args:
+            prompt: The prompt string (key)
+            prompt_tokens: List of prompt token IDs
+            output_tokens_list: List of lists of output token IDs (one per completion)
+            output_logprobs_list: List of lists of output logprobs (one per completion)
+            finish_reasons: List of finish reasons (one per completion)
+        """
+        self.tokens_and_logprobs_map[prompt] = (
+            prompt_tokens,
+            output_tokens_list,
+            output_logprobs_list,
+            finish_reasons,
+        )
+
     async def chat_completion(self, *args, **kwargs) -> ChatCompletion:
         messages = kwargs.get("messages")
         dictkey = self.conv_to_dictkey(messages)
@@ -127,6 +153,21 @@ class ServerHarness:
             return self.response_map.get(prompt)
         except KeyError as e:
             raise KeyError(f"KeyError: {e} for key:\n{prompt}")
+
+    async def tokens_and_logprobs_completion(
+        self, **kwargs
+    ) -> tuple[list, list, list, list]:
+        """
+        Mock implementation of tokens and logprobs completion wrapper.
+
+        Returns:
+            Tuple of (prompt_tokens, output_tokens_list, output_logprobs_list, finish_reasons)
+        """
+        prompt = kwargs.get("prompt")
+        try:
+            return self.tokens_and_logprobs_map.get(prompt)
+        except KeyError as e:
+            raise KeyError(f"KeyError: {e} for prompt:\n{prompt}")
 
 
 if __name__ == "__main__":
