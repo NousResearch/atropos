@@ -26,7 +26,6 @@ dependencies = [
     "jsonlines",
     "pydantic-cli",
     "hf_transfer",
-    "verifiers>=0.1.8.post2",
 ]
 
 [project.scripts]
@@ -58,6 +57,9 @@ examples = [
     "gradio",
     "atroposlib[rewardfns]",
     "langdetect"
+]
+verifiers = [
+    "verifiers>=0.1.5.post0"
 ]
 
 [build-system]
