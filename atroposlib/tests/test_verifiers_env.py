@@ -22,8 +22,10 @@ from environments.verifiers_server import VerifiersEnv, VfEnvConfig  # noqa: E40
 
 def create_mock_reward_func(return_value=1.0):
     """Create a mock reward function with proper signature."""
+
     def reward_func(completion, answer, **kwargs):
         return return_value
+
     reward_func.__name__ = "mock_reward_func"
     return reward_func
 
@@ -34,7 +36,9 @@ def mock_rubric():
     rubric = MagicMock()
     rubric.parser = MagicMock()
     rubric.parser.parse_answer = MagicMock(return_value="parsed_answer")
-    rubric.get_reward_funcs = MagicMock(return_value=[create_mock_reward_func(), create_mock_reward_func()])
+    rubric.get_reward_funcs = MagicMock(
+        return_value=[create_mock_reward_func(), create_mock_reward_func()]
+    )
     rubric.get_reward_weights = MagicMock(return_value=[1.0, 1.0])
     rubric.call_reward_func = AsyncMock(return_value=1.0)
     return rubric
