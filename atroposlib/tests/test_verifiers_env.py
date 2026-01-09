@@ -20,13 +20,21 @@ from atroposlib.envs.base import BaseEnvConfig  # noqa: E402
 from environments.verifiers_server import VerifiersEnv, VfEnvConfig  # noqa: E402
 
 
+def create_mock_reward_func(return_value=1.0):
+    """Create a mock reward function with proper signature."""
+    def reward_func(completion, answer, **kwargs):
+        return return_value
+    reward_func.__name__ = "mock_reward_func"
+    return reward_func
+
+
 @pytest.fixture
 def mock_rubric():
     """Create a mock rubric with parser and reward functions."""
     rubric = MagicMock()
     rubric.parser = MagicMock()
     rubric.parser.parse_answer = MagicMock(return_value="parsed_answer")
-    rubric.get_reward_funcs = MagicMock(return_value=[MagicMock(), MagicMock()])
+    rubric.get_reward_funcs = MagicMock(return_value=[create_mock_reward_func(), create_mock_reward_func()])
     rubric.get_reward_weights = MagicMock(return_value=[1.0, 1.0])
     rubric.call_reward_func = AsyncMock(return_value=1.0)
     return rubric
@@ -214,18 +222,19 @@ class TestVerifiersEnvScore:
             # Use side_effect to return different values for different calls
             call_count = [0]
 
-            def mock_reward_func(*args, **kwargs):
+            def mock_reward_func(completion, answer, **kwargs):
                 call_count[0] += 1
                 # Return high score for first call, low for second
                 return 1.0 if call_count[0] == 1 else 0.0
 
-            mock_func = MagicMock(side_effect=mock_reward_func)
-            env.reward_funcs = [mock_func]
+            mock_reward_func.__name__ = "mock_reward_func"
+            env.reward_funcs = [mock_reward_func]
             env.reward_scales = [1.0]
             env.tokenizer = mock_tokenizer
             env.config = MagicMock()
             env.config.group_size = 2
             env.config.reward_threshold = 0.5
+            env.config.ensure_scores_are_not_same = True
             env.percent_correct_buffer = []
 
             # Mock tokenize_for_trainer
@@ -278,14 +287,14 @@ class TestVerifiersEnvScore:
             env = VerifiersEnv.__new__(VerifiersEnv)
             env.parser = mock_rubric.parser
             env.rubric = mock_rubric
-            # All rewards return the same value
-            mock_func = MagicMock(return_value=1.0)
-            env.reward_funcs = [mock_func]
+            # All rewards return the same value - use proper signature
+            env.reward_funcs = [create_mock_reward_func(1.0)]
             env.reward_scales = [1.0]
             env.tokenizer = mock_tokenizer
             env.config = MagicMock()
             env.config.group_size = 2
             env.config.reward_threshold = 0.5
+            env.config.ensure_scores_are_not_same = True
             env.percent_correct_buffer = []
 
             with patch(
@@ -332,8 +341,13 @@ class TestVerifiersEnvCollectTrajectories:
         """Test that collect_trajectories generates multiple completions."""
         mock_vf.load_environment.return_value = mock_vf_env
 
+        # Mock the vf_env class name to indicate single-turn
+        mock_vf_env_single = MagicMock()
+        mock_vf_env_single.__class__.__name__ = "SingleTurnEnv"
+
         with patch.object(VerifiersEnv, "__init__", lambda self, *args, **kwargs: None):
             env = VerifiersEnv.__new__(VerifiersEnv)
+            env.vf_env = mock_vf_env_single
             env.server = mock_server
             env.system_prompt = "You are helpful"
             env.config = MagicMock()
@@ -341,7 +355,7 @@ class TestVerifiersEnvCollectTrajectories:
             env.config.max_token_length = 2048
             env.parser = mock_rubric.parser
             env.rubric = mock_rubric
-            env.reward_funcs = [MagicMock()]
+            env.reward_funcs = [create_mock_reward_func()]
             env.reward_scales = [1.0]
             env.tokenizer = mock_tokenizer
             env.percent_correct_buffer = []
@@ -464,9 +478,15 @@ class TestVerifiersEnvIntegration:
         """Test a simplified training loop flow."""
         mock_vf.load_environment.return_value = mock_vf_env
 
+        # Mock the vf_env class name to indicate single-turn
+        mock_vf_env_single = MagicMock()
+        mock_vf_env_single.__class__.__name__ = "SingleTurnEnv"
+        mock_vf_env_single.get_dataset = mock_vf_env.get_dataset
+        mock_vf_env_single.get_eval_dataset = mock_vf_env.get_eval_dataset
+
         with patch.object(VerifiersEnv, "__init__", lambda self, *args, **kwargs: None):
             env = VerifiersEnv.__new__(VerifiersEnv)
-            env.vf_env = mock_vf_env
+            env.vf_env = mock_vf_env_single
             env.server = mock_server
             env.system_prompt = "You are helpful"
             env.config = MagicMock()
@@ -474,7 +494,7 @@ class TestVerifiersEnvIntegration:
             env.config.max_token_length = 2048
             env.parser = mock_rubric.parser
             env.rubric = mock_rubric
-            env.reward_funcs = [MagicMock()]
+            env.reward_funcs = [create_mock_reward_func()]
             env.reward_scales = [1.0]
             env.tokenizer = mock_tokenizer
             env.percent_correct_buffer = []
