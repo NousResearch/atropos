@@ -23,10 +23,10 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 import verifiers as vf
+import wandb
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
-import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
