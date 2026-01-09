@@ -2,12 +2,21 @@ import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-import verifiers as vf
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
-from atroposlib.envs.base import APIServerConfig, BaseEnv, BaseEnvConfig, ScoredDataItem
+from atroposlib.envs.base import (APIServerConfig, BaseEnv, BaseEnvConfig,
+                                  ScoredDataItem)
 from atroposlib.type_definitions import Item
+
+try:
+    import verifiers as vf  # noqa: F401
+except ImportError as e:
+    raise ImportError(
+        "The 'verifiers' package is required for VerifiersEnv. "
+        "Install it with: pip install verifiers"
+    ) from e
+
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +30,11 @@ class VfEnvConfig(BaseEnvConfig):
     env_args: Dict[str, Any] = Field(
         default_factory=dict,
         description="Additional arguments for environment initialization",
+    )
+    reward_threshold: Optional[float] = Field(
+        default=None,
+        description="Optional threshold for binary reward conversion. "
+        "If set, scores >= threshold become 1.0, otherwise 0.0",
     )
 
 
@@ -50,6 +64,7 @@ class VerifiersEnv(BaseEnv):
         self.reward_funcs = self.rubric.get_reward_funcs()
         self.reward_weights = self.rubric.get_reward_weights()
         total_weight = sum(self.reward_weights)
+        # Division by zero: yields 0.0 for each weight when total is 0
         self.reward_scales = [
             weight / total_weight if total_weight != 0 else 0
             for weight in self.reward_weights
@@ -58,6 +73,10 @@ class VerifiersEnv(BaseEnv):
         self.train_data: List[Item] = []
         self.test_data: List[Item] = []
         self.iter = 0
+
+        # W&B tracking metrics
+        self._total_evaluated = 0
+        self._total_correct = 0
 
     async def setup(self) -> None:
         """Setup the environment by loading datasets"""
@@ -79,6 +98,44 @@ class VerifiersEnv(BaseEnv):
         next_item = self.train_data[self.iter % len(self.train_data)]
         self.iter += 1
         return next_item
+
+    async def _call_reward_func(
+        self,
+        func: Any,
+        prompt: str,
+        completion: List[Dict[str, str]],
+        answer: Optional[str],
+        info: Optional[Dict[str, Any]],
+        state: Optional[Any],
+    ) -> float:
+        """
+        Compatibility wrapper for calling rubric reward functions.
+        Handles potential API differences across verifiers versions.
+        """
+        if hasattr(self.rubric, "call_reward_func"):
+            return await self.rubric.call_reward_func(
+                func=func,
+                prompt=prompt,
+                completion=completion,
+                answer=answer,
+                info=info,
+                state=state,
+            )
+        # Fallback: Direct function call for older verifiers versions
+        try:
+            result = func(
+                prompt=prompt,
+                completion=completion,
+                answer=answer,
+                info=info,
+                state=state,
+            )
+            if hasattr(result, "__await__"):
+                return await result
+            return result
+        except Exception as e:
+            logger.warning(f"Reward function call failed: {e}")
+            return 0.0
 
     async def _perform_rollout(
         self,
@@ -107,12 +164,22 @@ class VerifiersEnv(BaseEnv):
             logger.error(f"Error during chat completion: {e}")
             return None, 0.0, [], [], []
 
+        # Defensive: Handle empty choices
+        if not completion.choices:
+            logger.error("Chat completion returned empty choices")
+            return None, 0.0, [], [], []
+
+        # Defensive: Handle None message content
         response_content = completion.choices[0].message.content
+        if response_content is None:
+            logger.warning("Chat completion returned None content, using empty string")
+            response_content = ""
+
         messages.append({"role": "assistant", "content": response_content})
 
         # Calculate rewards
         rewards = [
-            await self.rubric.call_reward_func(
+            await self._call_reward_func(
                 func=func,
                 prompt=question,
                 completion=messages,
@@ -127,6 +194,10 @@ class VerifiersEnv(BaseEnv):
             reward * scale for reward, scale in zip(rewards, self.reward_scales)
         ]
         total_score = sum(weighted_rewards)
+
+        # Apply reward threshold if configured
+        if self.config.reward_threshold is not None:
+            total_score = 1.0 if total_score >= self.config.reward_threshold else 0.0
 
         # Tokenize (Strict)
         if hasattr(self.tokenizer, "apply_chat_template"):
@@ -229,8 +300,18 @@ class VerifiersEnv(BaseEnv):
         samples = [result["sample"] for result in results]
         avg_total_score = sum(scores) / (len(scores) or 1)
 
+        # Track accuracy for W&B
+        num_correct = sum(1 for s in scores if s >= 0.5)
+        percent_correct = (num_correct / len(scores)) * 100 if scores else 0.0
+        self._total_evaluated += len(scores)
+        self._total_correct += num_correct
+
         end_time = time.time()
-        eval_metrics = {"eval/avg_total_score": avg_total_score}
+        eval_metrics = {
+            "eval/avg_total_score": avg_total_score,
+            "eval/percent_correct": percent_correct,
+            "eval/num_samples": len(scores),
+        }
 
         await self.evaluate_log(
             metrics=eval_metrics,
@@ -244,3 +325,14 @@ class VerifiersEnv(BaseEnv):
         )
 
         return eval_metrics
+
+    async def wandb_log(self, metrics: Dict[str, Any]) -> None:
+        """Override to add cumulative accuracy tracking."""
+        cumulative_accuracy = (
+            (self._total_correct / self._total_evaluated) * 100
+            if self._total_evaluated > 0
+            else 0.0
+        )
+        metrics["train/cumulative_accuracy"] = cumulative_accuracy
+        metrics["train/total_evaluated"] = self._total_evaluated
+        await super().wandb_log(metrics)
