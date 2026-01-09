@@ -1,15 +1,15 @@
-# Verifiers Training Environment for Atropos
-#
-# NOTE: This environment requires a LOCAL inference server (vLLM, SGLang, TRL)
-# for ALL modes (serve, process, evaluate) because it uses ManagedServer for
-# token/logprob tracking. For evaluation with OpenAI API, use:
-#   environments/eval_environments/verifiers_eval.py
-#
-# To install a Verifiers/Prime environment:
-# 1. uv tool install prime
-# 2. prime login
-# 3. prime env install will/wordle (or any owner/environment)
-# Docs: https://docs.primeintellect.ai/tutorials-environments/install
+"""
+Verifiers Training Environment for Atropos
+NOTE: This environment requires a LOCAL inference server (vLLM, SGLang, TRL)
+for ALL modes (serve, process, evaluate) because it uses ManagedServer for
+token/logprob tracking. For evaluation with OpenAI API, use: `environments/eval_environments/verifiers_eval.py`
+
+To install a Verifiers/Prime environment:
+1. uv tool install prime
+2. prime login
+3. prime env install will/wordle (or any owner/environment)
+Docs: https://docs.primeintellect.ai/tutorials-environments/install
+"""
 
 import time
 from typing import Any, Dict, List, Optional, Tuple

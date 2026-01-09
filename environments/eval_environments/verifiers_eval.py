@@ -11,7 +11,7 @@ To install a Verifiers/Prime environment:
 Docs: https://docs.primeintellect.ai/tutorials-environments/install
 
 Usage:
-    python verifiers_evaluation.py evaluate \
+    python verifiers_eval.py evaluate \
         --env.vf_env_name primeintellect/gsm8k \
         --openai.model_name gpt-4.1-nano \
         --openai.api_key $OPENAI_API_KEY
@@ -235,12 +235,12 @@ class VerifiersEvaluationEnv(BaseEnv):
 
     async def evaluate(self, *args, **kwargs) -> Dict:
         """Run the full evaluation."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Starting Verifiers Evaluation: {self.config.vf_env_name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"  Total questions: {len(self.eval_items)}")
         print(f"  Temperature: {self.config.temperature}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         start_time = time.time()
 
@@ -286,9 +286,9 @@ class VerifiersEvaluationEnv(BaseEnv):
         }
 
         # Print results
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Verifiers Evaluation Results")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"  Average Score: {avg_score:.4f}")
         print(f"  Accuracy: {accuracy:.2%} ({correct}/{total})")
         print(f"  Time: {end_time - start_time:.1f}s")
@@ -297,7 +297,7 @@ class VerifiersEvaluationEnv(BaseEnv):
             print(
                 f"    {name}: avg={data['avg']:.4f}, correct={data['correct']}/{total}"
             )
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         # Log to evaluate_log
         samples = [
