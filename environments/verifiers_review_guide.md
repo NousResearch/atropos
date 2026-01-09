@@ -72,6 +72,27 @@ prime env info owner/environment-name
 python -c "import verifiers; verifiers.load_environment('environment-name')"
 ```
 
+## SFT datagen (GPT‑4.1 + rubric-verified)
+This uses Atropos’s built-in `atropos-sft-gen` to collect the highest-scoring samples from the rollout API.
+
+Terminal A:
+```bash
+run-api
+```
+
+Terminal B (start this before the env; it resets + registers the API state):
+```bash
+atropos-sft-gen data/verifiers_sft.jsonl --api-url http://localhost:8000 --save-messages --save-top-n-per-group 1 --num-seqs-to-save 10000
+```
+
+Terminal C (run the env using GPT‑4.1):
+```bash
+export OPENAI_API_KEY=...
+python environments/verifiers_server.py serve --config environments/configs/verifiers.yaml \
+  --openai.model_name gpt-4.1 \
+  --openai.api_key $OPENAI_API_KEY
+```
+
 ## Review checklist
 - No secrets committed (API keys remain placeholders / env vars).
 - `env.vf_env_name` supports `owner/environment-name@version` and normalizes to `environment-name`.

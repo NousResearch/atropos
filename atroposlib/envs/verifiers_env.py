@@ -33,8 +33,8 @@ class VfEnvConfig(BaseEnvConfig):
     vf_env_name: str = Field(
         default="",
         description=(
-            "Prime Env Hub environment id. Accepts 'owner/environment-name' (Prime docs) "
-            "or 'owner-environment-name' (verifiers import id)."
+            "Prime Env Hub environment id. Accepts 'owner/environment-name@version' (Prime docs) "
+            "or an installed verifiers env id like 'environment-name'."
         ),
     )
     env_args: dict[str, Any] = Field(
@@ -307,21 +307,32 @@ class VerifiersEnv(BaseEnv):
     def _extract_prompt_answer_task_info(
         self, item: dict[str, Any]
     ) -> tuple[Any, str, str, dict[str, Any]]:
-        if "prompt" in item:
-            prompt = item["prompt"]
-        elif "question" in item:
-            prompt = self.vf_env.format_prompt(
-                item["question"],
-                system_prompt=getattr(self.vf_env, "system_prompt", None),
-                few_shot=getattr(self.vf_env, "few_shot", None),
-            )
-        else:
-            raise KeyError(
-                "verifiers dataset item missing 'prompt' and 'question' keys; "
-                "ensure the env provides a chat-formatted dataset or uses 'question'."
-            )
+        prompt: Any | None = None
 
-        answer = str(item.get("answer", ""))
+        if item.get("prompt") is not None:
+            prompt = item["prompt"]
+
+        if prompt is None:
+            question = item.get("question") or item.get("input") or item.get("problem")
+            if question is None:
+                raise KeyError(
+                    "verifiers dataset item missing prompt keys; expected one of: "
+                    "'prompt', 'question', 'input', 'problem'."
+                )
+
+            format_prompt = getattr(self.vf_env, "format_prompt", None)
+            if callable(format_prompt) and isinstance(question, str):
+                prompt = format_prompt(
+                    question,
+                    system_prompt=getattr(self.vf_env, "system_prompt", None),
+                    few_shot=getattr(self.vf_env, "few_shot", None),
+                )
+            else:
+                prompt = question
+
+        answer = str(
+            item.get("answer") or item.get("output") or item.get("response") or ""
+        )
         task = str(item.get("task", "default"))
         info = item.get("info") or {}
         if not isinstance(info, dict):
@@ -489,67 +500,65 @@ class VerifiersEnv(BaseEnv):
         else:
             eval_ds = self.eval_ds
 
-        semaphore = asyncio.Semaphore(max(1, self.config.max_eval_workers))
         scores: list[float] = []
         samples: list[EvaluationSample] = []
 
         async def eval_one(row: dict[str, Any]):
-            async with semaphore:
-                prompt, answer, task, info = self._extract_prompt_answer_task_info(row)
-                state = await self._rollout_state(
-                    item=row,
-                    prompt=prompt,
-                    answer=answer,
-                    task=task,
-                    info=info,
-                    sampling_args=self._sampling_args(
-                        temperature_override=self.config.eval_temperature
-                    ),
-                    split="eval",
+            prompt, answer, task, info = self._extract_prompt_answer_task_info(row)
+            state = await self._rollout_state(
+                item=row,
+                prompt=prompt,
+                answer=answer,
+                task=task,
+                info=info,
+                sampling_args=self._sampling_args(
+                    temperature_override=self.config.eval_temperature
+                ),
+                split="eval",
+            )
+            await self._score_states([state])
+            score = self._score_from_state(state)
+            completion = state.get("completion")
+            prompt_for_scoring = state.get("prompt", prompt)
+            finish_reason = self._finish_reason_from_state(state)
+
+            question = row.get("question") or row.get("input") or row.get("problem")
+            if question is None and isinstance(prompt_for_scoring, list):
+                for msg in reversed(prompt_for_scoring):
+                    if msg.get("role") == "user":
+                        question = msg.get("content")
+                        break
+
+            parsed = ""
+            if (
+                getattr(self.vf_env, "message_type", "chat") == "chat"
+                and isinstance(prompt_for_scoring, list)
+                and isinstance(completion, list)
+            ):
+                parsed = self.parser.parse_answer(
+                    completion=last_assistant_text(completion)
                 )
-                await self._score_states([state])
-                score = self._score_from_state(state)
-                completion = state.get("completion")
-                prompt_for_scoring = state.get("prompt", prompt)
-                finish_reason = self._finish_reason_from_state(state)
+                full_messages = sanitize_messages(prompt_for_scoring + completion)
+            elif isinstance(completion, str):
+                parsed = self.parser.parse_answer(completion=completion)
+                full_messages = [
+                    {"role": "user", "content": prompt_for_scoring},
+                    {"role": "assistant", "content": completion},
+                ]
+            else:
+                full_messages = []
 
-                question = row.get("question")
-                if question is None and isinstance(prompt_for_scoring, list):
-                    for msg in reversed(prompt_for_scoring):
-                        if msg.get("role") == "user":
-                            question = msg.get("content")
-                            break
+            sample: EvaluationSample = {
+                "messages": full_messages,
+                "question": str(question) if question is not None else None,
+                "gold_answer": answer,
+                "model_parsed": str(parsed) if parsed is not None else None,
+                "score": int(score) if float(score).is_integer() else None,
+                "correct": bool(score),
+                "finish_reason": finish_reason,
+            }
 
-                parsed = ""
-                if (
-                    getattr(self.vf_env, "message_type", "chat") == "chat"
-                    and isinstance(prompt_for_scoring, list)
-                    and isinstance(completion, list)
-                ):
-                    parsed = self.parser.parse_answer(
-                        completion=last_assistant_text(completion)
-                    )
-                    full_messages = sanitize_messages(prompt_for_scoring + completion)
-                elif isinstance(completion, str):
-                    parsed = self.parser.parse_answer(completion=completion)
-                    full_messages = [
-                        {"role": "user", "content": prompt_for_scoring},
-                        {"role": "assistant", "content": completion},
-                    ]
-                else:
-                    full_messages = []
-
-                sample: EvaluationSample = {
-                    "messages": full_messages,
-                    "question": str(question) if question is not None else None,
-                    "gold_answer": answer,
-                    "model_parsed": str(parsed) if parsed is not None else None,
-                    "score": int(score) if float(score).is_integer() else None,
-                    "correct": bool(score),
-                    "finish_reason": finish_reason,
-                }
-
-                return float(score), sample
+            return float(score), sample
 
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         for row in eval_ds:
@@ -566,9 +575,10 @@ class VerifiersEnv(BaseEnv):
                 samples.append(sample)
                 queue.task_done()
 
+        max_workers = max(1, int(self.config.max_eval_workers))
         workers = [
             asyncio.create_task(worker())
-            for _ in range(min(self.config.max_eval_workers, queue.qsize()))
+            for _ in range(min(max_workers, queue.qsize()))
         ]
         await asyncio.gather(*workers)
 
