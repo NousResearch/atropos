@@ -62,7 +62,9 @@ class VerifiersEnv(BaseEnv):
 
         super().__init__(config, server_configs, slurm, testing)
         # Store server_configs for multi-turn rollouts
-        self._server_configs = server_configs if isinstance(server_configs, list) else []
+        self._server_configs = (
+            server_configs if isinstance(server_configs, list) else []
+        )
         self.eval_metrics = list()
         self.percent_correct_buffer = list()
 
@@ -230,16 +232,25 @@ class VerifiersEnv(BaseEnv):
             if param.kind == inspect.Parameter.VAR_KEYWORD:
                 continue
             # If param has no default and we don't have it in call_kwargs, skip this function
-            if param.default is inspect.Parameter.empty and param_name not in call_kwargs:
+            if (
+                param.default is inspect.Parameter.empty
+                and param_name not in call_kwargs
+            ):
                 logger.warning(
                     "Skipping reward func %s: missing required param '%s' (have: %s)",
                     getattr(func, "__name__", str(func)),
                     param_name,
                     list(call_kwargs.keys()),
                 )
-                return None  # Return None to indicate this reward func should be skipped
+                return (
+                    None  # Return None to indicate this reward func should be skipped
+                )
 
-        logger.debug("Calling %s with params: %s", getattr(func, "__name__", str(func)), list(call_kwargs.keys()))
+        logger.debug(
+            "Calling %s with params: %s",
+            getattr(func, "__name__", str(func)),
+            list(call_kwargs.keys()),
+        )
         return func(**call_kwargs)
 
     @classmethod
@@ -540,10 +551,14 @@ class VerifiersEnv(BaseEnv):
                 n=self.config.group_size,
                 max_tokens=self.config.max_token_length,
             )
-            logger.warning("Single-turn: chat_completion returned %d choices", len(chat_completions.choices) if chat_completions.choices else 0)
+            logger.warning(
+                "Single-turn: chat_completion returned %d choices",
+                len(chat_completions.choices) if chat_completions.choices else 0,
+            )
         except Exception as e:
             logger.error("Single-turn: chat_completion failed: %s", e)
             import traceback
+
             logger.error("Single-turn traceback: %s", traceback.format_exc())
             return None, []
 
@@ -576,9 +591,11 @@ class VerifiersEnv(BaseEnv):
         if scored_data is None:
             logger.warning("Single-turn: score() returned None")
         else:
-            logger.warning("Single-turn: score() returned data with %d tokens, scores=%s",
-                          len(scored_data["tokens"]) if scored_data.get("tokens") else 0,
-                          scored_data.get("scores", [])[:5])
+            logger.warning(
+                "Single-turn: score() returned data with %d tokens, scores=%s",
+                len(scored_data["tokens"]) if scored_data.get("tokens") else 0,
+                scored_data.get("scores", [])[:5],
+            )
         return scored_data, []
 
     async def _collect_multi_turn_trajectories(
@@ -624,8 +641,7 @@ class VerifiersEnv(BaseEnv):
                 num_turns = len(state.get("trajectory", []))
                 reward = state.get("reward", "not_scored_yet")
                 logger.warning(
-                    "Rollout %d completed: turns=%d, reward=%s",
-                    idx, num_turns, reward
+                    "Rollout %d completed: turns=%d, reward=%s", idx, num_turns, reward
                 )
                 return state
             except asyncio.TimeoutError:
@@ -634,13 +650,12 @@ class VerifiersEnv(BaseEnv):
             except Exception as e:
                 logger.warning("Rollout %d failed: %s", idx, e)
                 import traceback
+
                 logger.warning("Rollout %d traceback: %s", idx, traceback.format_exc())
                 return None
 
         # Run group_size rollouts concurrently
-        rollout_tasks = [
-            run_single_rollout(i) for i in range(self.config.group_size)
-        ]
+        rollout_tasks = [run_single_rollout(i) for i in range(self.config.group_size)]
         states = await asyncio.gather(*rollout_tasks)
 
         # Filter out failed rollouts
@@ -700,15 +715,16 @@ class VerifiersEnv(BaseEnv):
         logger.warning(
             "Scoring %d multi-turn trajectories (rewards: %s)",
             len(to_score),
-            [item.get("reward", 0.0) for item in to_score]
+            [item.get("reward", 0.0) for item in to_score],
         )
         scored_data = await self.score(to_score)
         if scored_data is None:
             logger.warning("Scoring returned None (all scores same or no valid tokens)")
         else:
-            logger.warning("Scoring returned %d examples with scores: %s",
+            logger.warning(
+                "Scoring returned %d examples with scores: %s",
                 len(scored_data.get("scores", [])),
-                scored_data.get("scores", [])
+                scored_data.get("scores", []),
             )
         return scored_data, []
 
@@ -747,7 +763,11 @@ class VerifiersEnv(BaseEnv):
                     "Scoring: expected=%s, parsed=%s, response_tail=%s",
                     answer,
                     parsed,
-                    assistant_response[-100:] if len(assistant_response) > 100 else assistant_response
+                    (
+                        assistant_response[-100:]
+                        if len(assistant_response) > 100
+                        else assistant_response
+                    ),
                 )
 
                 for func in self.reward_funcs:
@@ -761,7 +781,11 @@ class VerifiersEnv(BaseEnv):
                         # Handle async functions
                         if hasattr(reward, "__await__"):
                             reward = await reward
-                        logger.warning("Reward func %s returned: %s", getattr(func, "__name__", func), reward)
+                        logger.warning(
+                            "Reward func %s returned: %s",
+                            getattr(func, "__name__", func),
+                            reward,
+                        )
                         rewards.append(reward if reward is not None else 0.0)
                     except Exception as e:
                         logger.warning(
@@ -773,7 +797,12 @@ class VerifiersEnv(BaseEnv):
 
                 # Calculate weighted score
                 weighted_score = sum(r * w for r, w in zip(rewards, self.reward_scales))
-                logger.warning("Final weighted_score: %s (rewards=%s, scales=%s)", weighted_score, rewards, self.reward_scales)
+                logger.warning(
+                    "Final weighted_score: %s (rewards=%s, scales=%s)",
+                    weighted_score,
+                    rewards,
+                    self.reward_scales,
+                )
 
             # Normalize messages to list for tokenizer compatibility
             messages_list = list(item["messages"])
@@ -813,7 +842,9 @@ class VerifiersEnv(BaseEnv):
         # Return None if all scores are the same (no learning signal) - but only if config requires it
         if self.config.ensure_scores_are_not_same:
             if all(s == scores["scores"][0] for s in scores["scores"]):
-                logger.warning("All scores are the same (%s), returning None", scores["scores"][0])
+                logger.warning(
+                    "All scores are the same (%s), returning None", scores["scores"][0]
+                )
                 return None
 
         return scores
