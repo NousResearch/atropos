@@ -642,3 +642,114 @@ python text_reversal_environment.py serve \
 
 **Evaluation Metric:**
 - `eval/percent_correct`: strict exact-match accuracy on the eval set.
+
+---
+
+### Prime Intellect Environment Hub (`verifiers_server.py`)
+
+An adapter that enables Atropos to use environments from Prime Intellect's Environment Hub via the `verifiers` library.
+
+**Prerequisites:**
+```bash
+# Install verifiers library
+pip install verifiers
+
+# Install Prime CLI
+uv tool install prime
+
+# Login to Prime Hub
+prime login
+
+# Install an environment (e.g., wordle)
+prime env install will/wordle
+```
+
+**Input Format:**
+- Varies by environment. Each Prime Hub environment provides:
+  - Training dataset via `env.get_dataset()`
+  - Evaluation dataset via `env.get_eval_dataset()`
+  - Items typically contain `question` and `answer` fields (or equivalent like `prompt`/`response`)
+
+**System Prompt:**
+- Provided by the loaded environment via `env.system_prompt`
+
+**Reward Function:**
+- Uses the Verifiers rubric system which can combine multiple reward functions
+- Each reward function contributes a weighted score
+- Scores are aggregated using normalized weights
+- Supports both simple correctness checking and complex multi-objective scoring
+
+**Configuration (`VfEnvConfig`):**
+- `vf_env_name` (str, required): Name of the Prime Hub environment (e.g., "wordle", "will/wordle")
+- `env_args` (dict, default: {}): Additional arguments passed to `vf.load_environment()`
+- `normalize_rewards` (bool, default: False): Whether to normalize rewards to [-1, 1] range
+- `min_mask_tokens` (int, default: 10): Minimum non-masked tokens required for valid rollouts
+
+**Key Features:**
+- **Optional Dependency**: `verifiers` library is not required for the rest of Atropos - clean ImportError if missing
+- **Automatic Dataset Normalization**: Handles various field names (`question`/`answer`, `prompt`/`response`, `input`/`output`)
+- **Rubric Integration**: Full support for Verifiers rubric reward functions and weights
+- **Defensive Error Handling**: Clear messages when environment not installed or config invalid
+- **Full Atropos Integration**: Supports `collect_trajectories`, `score`, `evaluate`, and `wandb_log`
+
+**Usage Examples:**
+```bash
+# Serve the environment
+python environments/verifiers_server.py serve \
+    --env.vf_env_name wordle \
+    --slurm false \
+    --openai.model_name gpt-4.1-nano \
+    --openai.api_key $OPENAI_API_KEY
+
+# Run evaluation only
+python environments/verifiers_server.py evaluate \
+    --env.vf_env_name wordle \
+    --openai.model_name gpt-4.1-nano \
+    --openai.api_key $OPENAI_API_KEY
+
+# With custom environment arguments
+python environments/verifiers_server.py serve \
+    --env.vf_env_name my_custom_env \
+    --env.env_args '{"difficulty": "hard"}'
+```
+
+**Evaluation Metrics:**
+- `eval/avg_score`: Average weighted score across all evaluation items
+- `eval/percent_correct`: Percentage of items with score > 0.5
+- `eval/num_samples`: Number of evaluation samples processed
+
+**Programmatic Usage:**
+```python
+from environments.verifiers_server import VerifiersEnv, VfEnvConfig
+from atroposlib.envs.base import APIServerConfig
+
+config = VfEnvConfig(
+    vf_env_name="wordle",
+    group_size=8,
+    max_token_length=2048,
+)
+
+server_configs = [
+    APIServerConfig(
+        model_name="gpt-4.1-nano",
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
+]
+
+env = VerifiersEnv(config=config, server_configs=server_configs)
+await env.setup()
+
+# Get training items
+item = await env.get_next_item()
+
+# Run evaluation
+metrics = await env.evaluate()
+print(f"Score: {metrics['eval/avg_score']}")
+```
+
+**Troubleshooting:**
+- `ImportError: verifiers not installed`: Run `pip install verifiers`
+- `ValueError: Failed to load environment`: Ensure you've run `prime env install <env_name>`
+- `ValueError: vf_env_name is required`: Specify the environment name in config
+
+---
