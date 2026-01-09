@@ -6,7 +6,10 @@ def pytest_addoption(parser):
         "--runproviders", action="store_true", default=False, help="run provider tests"
     )
     parser.addoption(
-        "--runprime", action="store_true", default=False, help="run Prime Hub integration tests"
+        "--runprime",
+        action="store_true",
+        default=False,
+        help="run Prime Hub integration tests",
     )
 
 
@@ -26,11 +29,10 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "providers" in item.keywords:
                 item.add_marker(skip_providers)
-    
+
     # Skip Prime tests unless --runprime is given
     if not config.getoption("--runprime"):
         skip_prime = pytest.mark.skip(reason="need --runprime option to run")
         for item in items:
             if "prime" in item.keywords:
                 item.add_marker(skip_prime)
-
