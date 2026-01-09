@@ -201,49 +201,95 @@ class VerifiersEnv(BaseEnv):
         """
         Extract and validate rubric components from the Verifiers environment.
         
+        Handles both single Rubric and RubricGroup (multiple rubrics) patterns.
+        
         Sets up:
-        - self.rubric: The Verifiers Rubric object
+        - self.rubric: The Verifiers Rubric or RubricGroup object
+        - self.rubrics: List of individual Rubric objects (for RubricGroup)
         - self.parser: Answer parser (if available)
-        - self.reward_funcs: List of reward functions
+        - self.reward_funcs: List of reward functions from all rubrics
         - self.reward_weights: Raw weights for each reward function
         - self.reward_scales: Normalized weights (sum to 1.0)
         """
         # Get rubric (may be on Environment or accessible via methods)
         self.rubric = getattr(self.vf_env, 'rubric', None)
         
-        # Get parser (optional - not all environments have one)
-        if self.rubric and hasattr(self.rubric, 'parser'):
-            self.parser = self.rubric.parser
+        # Handle RubricGroup (contains multiple rubrics)
+        # RubricGroup has a 'rubrics' attribute with list of individual Rubric objects
+        if self.rubric and hasattr(self.rubric, 'rubrics'):
+            self.rubrics = self.rubric.rubrics
+            logger.info(f"Found RubricGroup with {len(self.rubrics)} rubrics")
+        elif self.rubric:
+            self.rubrics = [self.rubric]
         else:
-            self.parser = None
+            self.rubrics = []
         
-        # Get reward functions - try multiple locations
+        # Get parser (optional - try from first rubric or environment)
+        self.parser = None
+        for rubric in self.rubrics:
+            if hasattr(rubric, 'parser') and rubric.parser is not None:
+                self.parser = rubric.parser
+                break
+        if self.parser is None and hasattr(self.vf_env, 'parser'):
+            self.parser = self.vf_env.parser
+        
+        # Get reward functions - collect from all rubrics
+        self.reward_funcs = []
+        self.reward_weights = []
+        
+        # First try environment-level methods
         if hasattr(self.vf_env, 'get_reward_funcs'):
-            self.reward_funcs = self.vf_env.get_reward_funcs()
-        elif self.rubric and hasattr(self.rubric, 'get_reward_funcs'):
-            self.reward_funcs = self.rubric.get_reward_funcs()
-        else:
-            self.reward_funcs = []
-            logger.warning("No reward functions found in environment or rubric")
+            funcs = self.vf_env.get_reward_funcs()
+            if funcs:
+                self.reward_funcs = list(funcs)
+                # Get corresponding weights
+                if hasattr(self.vf_env, 'get_reward_weights'):
+                    self.reward_weights = list(self.vf_env.get_reward_weights())
         
-        # Get reward weights
-        if hasattr(self.vf_env, 'get_reward_weights'):
-            self.reward_weights = self.vf_env.get_reward_weights()
-        elif self.rubric and hasattr(self.rubric, 'get_reward_weights'):
-            self.reward_weights = self.rubric.get_reward_weights()
+        # If not found, try each rubric in the group
+        if not self.reward_funcs:
+            for rubric in self.rubrics:
+                if hasattr(rubric, 'get_reward_funcs'):
+                    funcs = rubric.get_reward_funcs()
+                    if funcs:
+                        self.reward_funcs.extend(funcs)
+                        # Get weights for this rubric's functions
+                        if hasattr(rubric, 'get_reward_weights'):
+                            weights = rubric.get_reward_weights()
+                            self.reward_weights.extend(weights)
+                        else:
+                            # Default weight of 1.0 for each function
+                            self.reward_weights.extend([1.0] * len(funcs))
+        
+        # If still no reward functions, try score_rollout as the reward mechanism
+        if not self.reward_funcs and self.rubric:
+            if hasattr(self.rubric, 'score_rollout') or hasattr(self.rubric, 'score_rollouts'):
+                logger.info("Using rubric.score_rollout() for reward computation")
+                # Create a placeholder to indicate we should use score_rollout
+                self.reward_funcs = ['__score_rollout__']
+                self.reward_weights = [1.0]
+        
+        # Log result
+        if self.reward_funcs:
+            if self.reward_funcs == ['__score_rollout__']:
+                logger.info("Will use rubric.score_rollout() for rewards")
+            else:
+                logger.info(f"Found {len(self.reward_funcs)} reward functions")
         else:
-            # Default to equal weights
+            logger.warning("No reward functions found - will use fallback scoring")
+        
+        # Ensure weights match function count
+        if len(self.reward_weights) != len(self.reward_funcs):
             self.reward_weights = [1.0] * len(self.reward_funcs)
         
         # Calculate normalized scales with division-by-zero protection
-        weight_sum = sum(self.reward_weights)
+        weight_sum = sum(self.reward_weights) if self.reward_weights else 0
         if weight_sum > 0:
             self.reward_scales = [w / weight_sum for w in self.reward_weights]
         else:
             # Fallback to equal weights if sum is zero
             n = len(self.reward_weights) or 1
             self.reward_scales = [1.0 / n] * n
-            logger.warning("Reward weights sum to zero, using equal weights")
     
     @classmethod
     def config_init(cls) -> Tuple[VfEnvConfig, List[APIServerConfig]]:
@@ -521,8 +567,9 @@ class VerifiersEnv(BaseEnv):
         """
         Calculate the weighted reward for a single rollout.
         
-        Uses Verifiers rubric reward functions if available,
-        otherwise falls back to simple correctness checking.
+        Uses Verifiers rubric reward functions if available.
+        For RubricGroup, uses score_rollout() method.
+        Falls back to simple correctness checking if nothing else works.
         
         Args:
             item: Rollout data including messages and gold_answer
@@ -530,32 +577,75 @@ class VerifiersEnv(BaseEnv):
         Returns:
             Weighted reward score (typically 0.0 to 1.0)
         """
+        # Case 1: No rubric or reward funcs - use simple fallback
         if not self.reward_funcs or not self.rubric:
-            # Fallback: simple string matching
             response = item["messages"][-1].get("content", "") if item["messages"] else ""
             return 1.0 if item["gold_answer"] in response else 0.0
         
-        # Calculate rewards from each reward function
+        # Case 2: Using score_rollout (for RubricGroup)
+        if self.reward_funcs == ['__score_rollout__']:
+            try:
+                # Prepare rollout data in the format expected by verifiers
+                # Build completion string from assistant message
+                response = ""
+                for msg in item["messages"]:
+                    if msg.get("role") == "assistant":
+                        response = msg.get("content", "")
+                        break
+                
+                # Try async version first
+                if hasattr(self.rubric, 'score_rollout'):
+                    if asyncio.iscoroutinefunction(self.rubric.score_rollout):
+                        result = await self.rubric.score_rollout(
+                            prompt=item["messages"][0].get("content", "") if item["messages"] else "",
+                            completion=response,
+                            answer=item["gold_answer"],
+                        )
+                    else:
+                        result = self.rubric.score_rollout(
+                            prompt=item["messages"][0].get("content", "") if item["messages"] else "",
+                            completion=response,
+                            answer=item["gold_answer"],
+                        )
+                    
+                    # Result might be a dict with 'score' or a float
+                    if isinstance(result, dict):
+                        return float(result.get('score', result.get('reward', 0.0)))
+                    return float(result) if result is not None else 0.0
+            except Exception as e:
+                logger.debug(f"score_rollout failed: {e}, using fallback")
+                # Fallback to simple matching
+                response = item["messages"][-1].get("content", "") if item["messages"] else ""
+                return 1.0 if item["gold_answer"] in response else 0.0
+        
+        # Case 3: Using explicit reward functions
         rewards: List[float] = []
         for func in self.reward_funcs:
             try:
                 # Call the Verifiers reward function
                 # The API may vary, so we try common signatures
-                if asyncio.iscoroutinefunction(self.rubric.call_reward_func):
-                    reward = await self.rubric.call_reward_func(
-                        func=func,
-                        prompt=item["messages"][0].get("content", "") if item["messages"] else "",
-                        completion=list(item["messages"]),
-                        answer=item["gold_answer"],
-                    )
+                if hasattr(self.rubric, 'call_reward_func'):
+                    if asyncio.iscoroutinefunction(self.rubric.call_reward_func):
+                        reward = await self.rubric.call_reward_func(
+                            func=func,
+                            prompt=item["messages"][0].get("content", "") if item["messages"] else "",
+                            completion=list(item["messages"]),
+                            answer=item["gold_answer"],
+                        )
+                    else:
+                        reward = self.rubric.call_reward_func(
+                            func=func,
+                            prompt=item["messages"][0].get("content", "") if item["messages"] else "",
+                            completion=list(item["messages"]),
+                            answer=item["gold_answer"],
+                        )
+                    rewards.append(float(reward) if reward is not None else 0.0)
                 else:
-                    reward = self.rubric.call_reward_func(
-                        func=func,
-                        prompt=item["messages"][0].get("content", "") if item["messages"] else "",
-                        completion=list(item["messages"]),
-                        answer=item["gold_answer"],
-                    )
-                rewards.append(float(reward) if reward is not None else 0.0)
+                    # Try calling the function directly
+                    if callable(func):
+                        response = item["messages"][-1].get("content", "") if item["messages"] else ""
+                        reward = func(response, item["gold_answer"])
+                        rewards.append(float(reward) if reward is not None else 0.0)
             except Exception as e:
                 logger.warning(f"Reward function failed: {e}")
                 rewards.append(0.0)
