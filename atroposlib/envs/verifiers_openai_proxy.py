@@ -52,4 +52,3 @@ class AtroposOpenAIProxy:
     def __init__(self, server: Any, split: str):
         self.chat = AtroposChatProxy(server=server, split=split)
         self.completions = AtroposCompletionsProxy(server=server, split=split)
-

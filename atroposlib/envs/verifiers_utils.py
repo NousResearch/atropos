@@ -70,4 +70,3 @@ def infer_model_name(
     if isinstance(server_configs, APIServerConfig):
         return server_configs.model_name
     return getattr(server_configs, "model_name", "model")
-

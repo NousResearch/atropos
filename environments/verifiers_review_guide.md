@@ -76,4 +76,3 @@ prime env list
 - `env.vf_env_name` supports `owner/environment-name@version` and normalizes to `environment-name`.
 - Rollouts route through Atropos `ServerManager` (OpenAI-compatible proxy).
 - Rubric scoring path works with modern verifiers envs (`score_group`/`score_rollout`), with fallback for older envs.
-
