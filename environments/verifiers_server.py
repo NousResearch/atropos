@@ -1,8 +1,36 @@
 """
 Verifiers Training Environment for Atropos
-NOTE: This environment requires a LOCAL inference server (vLLM, SGLang, TRL)
-for ALL modes (serve, process, evaluate) because it uses ManagedServer for
-token/logprob tracking. For evaluation with OpenAI API, use: `environments/eval_environments/verifiers_eval.py`
+
+Supports TWO modes:
+- serve: RL training with local inference server (requires ManagedServer for logprobs)
+- process: SFT data generation with ANY API (OpenAI, Claude, local, etc.)
+
+Usage:
+  # RL Training (requires local vLLM/SGLang server)
+  python verifiers_server.py serve \
+      --env.vf_env_name "will/wordle" \
+      --openai.base_url http://localhost:9001/v1 \
+      --slurm false
+
+  # SFT Data Generation with OpenAI GPT-4o
+  python verifiers_server.py process \
+      --env.vf_env_name "will/wordle" \
+      --env.data_path_to_save_groups gpt4o_sft_data.jsonl \
+      --env.total_steps 100 \
+      --env.group_size 4 \
+      --openai.model_name gpt-4o \
+      --openai.base_url https://api.openai.com/v1
+
+  # SFT Data Generation with local server
+  python verifiers_server.py process \
+      --env.vf_env_name "will/wordle" \
+      --env.data_path_to_save_groups local_sft_data.jsonl \
+      --openai.base_url http://localhost:9001/v1
+
+  # Evaluation (uses ManagedServer by default, falls back to direct API in process mode)
+  python verifiers_server.py evaluate \
+      --env.vf_env_name "will/wordle" \
+      --openai.base_url http://localhost:9001/v1
 
 To install a Verifiers/Prime environment:
 1. uv tool install prime
@@ -24,6 +52,7 @@ from atroposlib.envs.base import (
     BaseEnvConfig,
     ScoredDataGroup,
 )
+from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 
 class VfEnvConfig(BaseEnvConfig):
@@ -73,12 +102,13 @@ class VerifiersEnv(BaseEnv):
             max_token_length=2048,
             wandb_name="verifiers",
         )
-        # Requires local inference server (vLLM, SGLang, TRL)
-        # For evaluation with OpenAI, use eval_environments/verifiers_evaluation.py
+        # Default config for local inference server (vLLM, SGLang, TRL)
+        # For SFT data generation with OpenAI, override via CLI:
+        #   --openai.base_url https://api.openai.com/v1 --openai.model_name gpt-4o
         server_configs = [
             APIServerConfig(
-                model_name="Qwen/Qwen2.5-1.5B-Instruct",
-                base_url="http://localhost:9001/v1",
+                model_name="gpt-4.1-nano",
+                base_url="https://api.openai.com/v1",
                 api_key="x",
                 num_requests_for_eval=4,
             ),
@@ -116,39 +146,58 @@ class VerifiersEnv(BaseEnv):
         data["iter"] = self.iter
         super().save_checkpoint(step, data)
 
+    def _compute_score(self, completion_messages: List[Dict], answer: str) -> float:
+        """Compute score using verifiers reward functions."""
+        rewards = []
+        for func in self.reward_funcs:
+            reward = func(
+                parser=self.parser,
+                completion=completion_messages,
+                answer=answer,
+            )
+            rewards.append(reward)
+        weighted_rewards = [r * self.reward_scales[j] for j, r in enumerate(rewards)]
+        return sum(weighted_rewards)
+
     async def rollout_and_score_eval(
         self, question: str, answer: str, **kwargs
     ) -> dict:
+        """
+        Rollout and score for evaluation.
+        Uses ManagedServer in serve mode, direct API calls in process mode.
+        """
         system_prompt = kwargs.get("system_prompt")
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": question},
         ]
 
-        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
-            completion = await managed.chat_completion(
+        is_process_mode = getattr(self, "process_mode", False)
+
+        if is_process_mode:
+            # Process mode: use direct API call (works with any API)
+            completion = await self.server.chat_completion(
                 messages=messages,
                 n=1,
                 max_tokens=self.config.max_token_length,
                 temperature=0.0,
             )
+        else:
+            # Serve mode: use ManagedServer for token tracking
+            async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+                completion = await managed.chat_completion(
+                    messages=messages,
+                    n=1,
+                    max_tokens=self.config.max_token_length,
+                    temperature=0.0,
+                )
 
         response_content = completion.choices[0].message.content or ""
         messages.append({"role": "assistant", "content": response_content})
 
         answer_parsed = self.parser.parse_answer(completion=response_content)
 
-        rewards = []
-        for func in self.reward_funcs:
-            reward = func(
-                parser=self.parser,
-                completion=messages,
-                answer=answer,
-            )
-            rewards.append(reward)
-        weighted_rewards = [r * self.reward_scales[j] for j, r in enumerate(rewards)]
-
-        score = sum(weighted_rewards)
+        score = self._compute_score(messages, answer)
 
         sample = {
             "messages": messages,
@@ -204,6 +253,11 @@ class VerifiersEnv(BaseEnv):
         return next_item
 
     async def collect_trajectories(self, item) -> Tuple[ScoredDataGroup, list]:
+        """
+        Collect trajectories - automatically switches between:
+        - ManagedServer (for RL training with local server - requires logprobs)
+        - tokenize_for_trainer (for SFT datagen with any API - no logprobs needed)
+        """
         question = item["question"]
         answer = item["answer"]
 
@@ -212,6 +266,81 @@ class VerifiersEnv(BaseEnv):
             {"role": "user", "content": question},
         ]
 
+        # Check if we're in process mode (SFT data generation)
+        is_process_mode = getattr(self, "process_mode", False)
+
+        if is_process_mode:
+            return await self._collect_trajectories_for_sft(messages, answer)
+        else:
+            return await self._collect_trajectories_for_training(messages, answer)
+
+    async def _collect_trajectories_for_sft(
+        self, messages: List[Dict], answer: str
+    ) -> Tuple[ScoredDataGroup, list]:
+        """
+        SFT data generation mode - works with ANY API (OpenAI, Claude, local).
+        Does NOT require logprobs or local server.
+
+        Uses tokenize_for_trainer to tokenize completions with your training
+        tokenizer, so the resulting data is ready for fine-tuning your target model.
+        """
+        completions = await self.server.chat_completion(
+            messages=messages,
+            n=self.config.group_size,
+            max_tokens=self.config.max_token_length,
+            temperature=1.0,
+        )
+
+        scored_data = ScoredDataGroup()
+        scored_data["tokens"] = []
+        scored_data["masks"] = []
+        scored_data["scores"] = []
+        scored_data["messages"] = []
+        # Note: No inference_logprobs - not needed/available for SFT
+
+        for choice in completions.choices:
+            response = choice.message.content or ""
+            finish_reason = choice.finish_reason or ""
+
+            # Build full conversation for scoring and tokenization
+            completion_messages = messages + [
+                {"role": "assistant", "content": response}
+            ]
+
+            # Score using verifiers reward funcs
+            score = self._compute_score(completion_messages, answer)
+
+            # Use tokenize_for_trainer for tokenization
+            # This uses YOUR training tokenizer (e.g., Qwen, Llama), not the API's tokenizer
+            # So GPT-4o responses get tokenized for your target model
+            tokenized = tokenize_for_trainer(
+                tokenizer=self.tokenizer,
+                chat=completion_messages,
+                include_messages=True,
+                finish_reason=finish_reason,
+            )
+
+            scored_data["tokens"].append(tokenized["tokens"])
+            scored_data["masks"].append(tokenized["masks"])
+            scored_data["messages"].append(completion_messages)
+            scored_data["scores"].append(score)
+
+        # Track scores for wandb logging
+        for score in scored_data["scores"]:
+            self.percent_correct_buffer.append(max(score, 0))
+
+        return scored_data, []
+
+    async def _collect_trajectories_for_training(
+        self, messages: List[Dict], answer: str
+    ) -> Tuple[ScoredDataGroup, list]:
+        """
+        RL training mode - requires local inference server.
+        Uses ManagedServer for proper token/logprob alignment.
+
+        The inference_logprobs are required for policy gradient methods like
+        GRPO, PPO, REINFORCE, etc.
+        """
         async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
             completions = await managed.chat_completion(
                 messages=messages,
@@ -223,30 +352,21 @@ class VerifiersEnv(BaseEnv):
             nodes = state["nodes"]
 
         scored_data = ScoredDataGroup()
-        scored_data["tokens"] = list()
-        scored_data["masks"] = list()
-        scored_data["scores"] = list()
-        scored_data["inference_logprobs"] = list()
+        scored_data["tokens"] = []
+        scored_data["masks"] = []
+        scored_data["scores"] = []
+        scored_data["inference_logprobs"] = []  # Required for RL training!
 
         for i, choice in enumerate(completions.choices):
             response = choice.message.content or ""
 
-            # Score using reward funcs
+            # Build full conversation for scoring
             completion_messages = messages + [
                 {"role": "assistant", "content": response}
             ]
-            rewards = []
-            for func in self.reward_funcs:
-                reward = func(
-                    parser=self.parser,
-                    completion=completion_messages,
-                    answer=answer,
-                )
-                rewards.append(reward)
-            weighted_rewards = [
-                r * self.reward_scales[j] for j, r in enumerate(rewards)
-            ]
-            score = sum(weighted_rewards)
+
+            # Score using verifiers reward funcs
+            score = self._compute_score(completion_messages, answer)
 
             # Use ManagedServer's properly aligned tokens/masks/logprobs
             node = nodes[i]

@@ -11,7 +11,160 @@ This directory contains various environments for training and evaluating languag
 
 ---
 
+### Prime Intellect Verifiers Integration
 
+A flexible environment that integrates with the [Verifiers](https://docs.primeintellect.ai/) ecosystem, allowing you to use any registered Prime environment for RL training, SFT data generation, or evaluation.
+
+**Files:**
+- `environments/verifiers_server.py` - Training and SFT data generation
+- `environments/eval_environments/verifiers_eval.py` - Standalone evaluation
+
+**Dependencies:**
+
+- `verifiers` Python package (install via `pip install verifiers` or include in your environment)
+- Prime CLI for environment management (`uv tool install prime`)
+- Prime CLI login required (`prime login`)
+- Environment installation (`prime env install owner/env_name`)
+
+**Supported Modes:**
+
+| Mode | File | Description |
+|------|------|-------------|
+| `serve` | `verifiers_server.py` | RL training with local inference server (requires ManagedServer for logprobs) |
+| `process` | `verifiers_server.py` | SFT data generation with ANY API (OpenAI, Claude, local, etc.) |
+| `evaluate` | `verifiers_server.py` | Quick evaluation using ManagedServer |
+| `evaluate` | `verifiers_eval.py` | Standalone evaluation with detailed metrics and retry logic |
+
+**Input Format:**
+
+- Loaded dynamically from the specified Prime environment via `vf.load_environment()`
+- Each item contains:
+  - `question`: The problem/prompt
+  - `answer`: The expected answer for verification
+
+**System Prompt:**
+
+- Dynamically loaded from the Prime environment's `system_prompt` configuration
+
+**Reward Function:**
+
+- Uses the environment's **rubric** system with:
+  - `parser`: Extracts answers from completions (e.g., `parser.parse_answer(completion)`)
+  - `funcs`: List of reward functions that receive `(parser, completion, answer)`
+  - `weights`: Weights for combining reward functions (normalized to sum to 1.0)
+- Final score is weighted sum of all reward function outputs
+
+**W&B Metrics Logged (Training - `verifiers_server.py`):**
+
+| Metric | Description |
+|--------|-------------|
+| `train/percent_correct` | Average score from verifiers reward functions (0-1) |
+| `train/rollouts` | Table of tokenized completions with scores |
+| `train/completion_lengths_*` | Response length statistics (std, min, max, p95) |
+| `server/server_0_request_time_*` | API latency metrics (avg, std, 99p) |
+| `eval/avg_total_score` | Average score on evaluation dataset |
+
+**W&B Metrics Logged (Evaluation - `verifiers_eval.py`):**
+
+| Metric | Description |
+|--------|-------------|
+| `verifiers/accuracy` | Proportion of items with score > 0 |
+| `verifiers/avg_score` | Average weighted score across all items |
+| `verifiers/total_evaluated` | Number of successfully evaluated items |
+| `verifiers/total_correct` | Number of items with score > 0 |
+| `verifiers/reward_func_N_avg` | Per-reward function average score |
+| `verifiers/reward_func_N_correct` | Per-reward function correct count |
+
+**Configuration Options (`VfEnvConfig` for `verifiers_server.py`):**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `vf_env_name` | str | `""` | Prime environment identifier (e.g., `"will/wordle"`, `"primeintellect/gsm8k"`) |
+| `env_args` | Dict | `{}` | Additional arguments passed to `vf.load_environment()`. Read environment specific documentation to get these args. |
+
+**Configuration Options (`VerifiersEvaluationConfig` for `verifiers_eval.py`):**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `vf_env_name` | str | `""` | Prime environment identifier |
+| `env_args` | dict | `{}` | Additional arguments for verifiers environment |
+| `temperature` | float | `0.0` | Temperature for generation (0.0 for deterministic) |
+| `max_retries` | int | `3` | Maximum retries for failed API calls |
+| `retry_delay` | float | `1.0` | Delay between retries in seconds |
+| `min_response_length` | int | `1` | Minimum response length to consider valid |
+| `full_debug` | bool | `False` | Enable verbose per-item debug output |
+| `max_eval_items` | int | `-1` | Maximum number of items to evaluate (-1 for all) |
+
+**Usage Examples:**
+
+```bash
+# RL Training (requires local vLLM/SGLang server)
+python verifiers_server.py serve \
+    --env.vf_env_name "will/wordle" \
+    --openai.base_url http://localhost:9001/v1 \
+    --slurm false
+
+# SFT Data Generation with OpenAI GPT-4o
+python verifiers_server.py process \
+    --env.vf_env_name "will/wordle" \
+    --env.data_path_to_save_groups gpt4o_sft_data.jsonl \
+    --env.total_steps 100 \
+    --env.group_size 4 \
+    --openai.model_name gpt-4o \
+    --openai.base_url https://api.openai.com/v1
+
+# SFT Data Generation with local server
+python verifiers_server.py process \
+    --env.vf_env_name "will/wordle" \
+    --env.data_path_to_save_groups local_sft_data.jsonl \
+    --openai.base_url http://localhost:9001/v1
+
+# Quick Evaluation via verifiers_server.py
+python verifiers_server.py evaluate \
+    --env.vf_env_name "will/wordle" \
+    --openai.base_url http://localhost:9001/v1
+
+# Standalone Evaluation with detailed metrics (verifiers_eval.py)
+python eval_environments/verifiers_eval.py evaluate \
+    --env.vf_env_name "primeintellect/gsm8k" \
+    --openai.model_name gpt-4o \
+    --openai.api_key $OPENAI_API_KEY
+
+# Quick test run with limited items
+python eval_environments/verifiers_eval.py evaluate \
+    --env.vf_env_name "primeintellect/gsm8k" \
+    --env.max_eval_items 10 \
+    --openai.model_name gpt-4o \
+    --openai.api_key $OPENAI_API_KEY
+
+# Evaluation with debug output
+python eval_environments/verifiers_eval.py evaluate \
+    --env.vf_env_name "primeintellect/gsm8k" \
+    --env.full_debug true \
+    --openai.base_url http://localhost:9001/v1
+```
+
+**Key Implementation Details:**
+
+- **RL Training Mode (`serve`)**: Uses `ManagedServer` for proper token/logprob alignment required by policy gradient methods (GRPO, PPO, REINFORCE). Returns `ScoredDataGroup` with `tokens`, `masks`, `scores`, and `inference_logprobs`.
+- **SFT Datagen Mode (`process`)**: Uses `tokenize_for_trainer` to tokenize API responses with your target model's tokenizer (e.g., GPT-4o responses tokenized for Qwen/Llama). Does NOT require logprobs.
+- **Evaluation (`evaluate`)**: Runs on the environment's eval dataset with greedy decoding (temperature=0). The standalone `verifiers_eval.py` provides more detailed metrics and retry logic for production evaluation.
+
+**Prime Environment Installation:**
+```bash
+# Install Prime CLI
+uv tool install prime
+
+# Login to Prime
+prime login
+
+# Install an environment (e.g., Wordle, GSM8K)
+prime env install will/wordle
+prime env install primeintellect/gsm8k
+
+# List available environments
+prime env list
+```
 
 ### Letter Counting Environment (`letter_counting_environment.py`)
 

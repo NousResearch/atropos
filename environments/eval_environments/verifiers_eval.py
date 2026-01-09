@@ -61,6 +61,9 @@ class VerifiersEvaluationConfig(BaseEnvConfig):
         default=1, description="Minimum response length to consider valid"
     )
     full_debug: bool = Field(default=False, description="Enable full debug output")
+    max_eval_items: int = Field(
+        default=-1, description="Maximum number of items to evaluate (-1 for all)"
+    )
 
 
 class VerifiersEvaluationEnv(BaseEnv):
@@ -110,6 +113,7 @@ class VerifiersEvaluationEnv(BaseEnv):
         server_configs = [
             APIServerConfig(
                 model_name="gpt-4.1-nano",
+                base_url="https://api.openai.com/v1",
                 api_key=os.getenv("OPENAI_API_KEY"),
             ),
         ]
@@ -121,6 +125,11 @@ class VerifiersEvaluationEnv(BaseEnv):
             # Load datasets from verifiers environment
             test_data = self.vf_env.get_eval_dataset()
             self.eval_items = test_data.select_columns(["question", "answer"]).to_list()
+
+            # Limit items if max_eval_items is set
+            if self.config.max_eval_items > 0:
+                self.eval_items = self.eval_items[: self.config.max_eval_items]
+
             self._dataset_loaded = True
 
         print("\nVerifiers Evaluation Setup:")
@@ -322,7 +331,7 @@ class VerifiersEvaluationEnv(BaseEnv):
         # Lazy init if wandb not already initialized
         if wandb.run is None:
             wandb.init(
-                project="verifiers-eval",
+                project="atropos-environments",
                 name=self.config.wandb_name,
                 config=self.config.model_dump(),
             )
