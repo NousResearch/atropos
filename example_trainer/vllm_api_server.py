@@ -136,7 +136,7 @@ async def _generate(request_dict: dict, raw_request: Request) -> Response:
 
 
 def build_app(args: Namespace) -> FastAPI:
-    global app
+    global app  # noqa: F824
 
     app.root_path = args.root_path
     return app
