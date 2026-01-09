@@ -207,8 +207,18 @@ class TestVerifiersEnvScore:
             env = VerifiersEnv.__new__(VerifiersEnv)
             env.parser = mock_rubric.parser
             env.rubric = mock_rubric
-            env.reward_funcs = [MagicMock(), MagicMock()]
-            env.reward_scales = [0.5, 0.5]
+            # Create mock reward functions that return different floats
+            # Use side_effect to return different values for different calls
+            call_count = [0]
+
+            def mock_reward_func(*args, **kwargs):
+                call_count[0] += 1
+                # Return high score for first call, low for second
+                return 1.0 if call_count[0] == 1 else 0.0
+
+            mock_func = MagicMock(side_effect=mock_reward_func)
+            env.reward_funcs = [mock_func]
+            env.reward_scales = [1.0]
             env.tokenizer = mock_tokenizer
             env.config = MagicMock()
             env.config.group_size = 2
@@ -244,9 +254,6 @@ class TestVerifiersEnvScore:
                     },
                 ]
 
-                # Make one reward return 1.0 and another return 0.0
-                mock_rubric.call_reward_func.side_effect = [1.0, 1.0, 0.0, 0.0]
-
                 result = await env.score(rollout_data)
 
                 assert result is not None
@@ -267,7 +274,9 @@ class TestVerifiersEnvScore:
             env = VerifiersEnv.__new__(VerifiersEnv)
             env.parser = mock_rubric.parser
             env.rubric = mock_rubric
-            env.reward_funcs = [MagicMock()]
+            # All rewards return the same value
+            mock_func = MagicMock(return_value=1.0)
+            env.reward_funcs = [mock_func]
             env.reward_scales = [1.0]
             env.tokenizer = mock_tokenizer
             env.config = MagicMock()
@@ -302,9 +311,6 @@ class TestVerifiersEnvScore:
                         "finish_reason": "stop",
                     },
                 ]
-
-                # All rewards are the same
-                mock_rubric.call_reward_func.return_value = 1.0
 
                 result = await env.score(rollout_data)
 

@@ -45,12 +45,41 @@ class VerifiersEnv(BaseEnv):
         self.rubric = self.vf_env.rubric
 
         self.parser = self.rubric.parser
-        self.reward_funcs = self.rubric.get_reward_funcs()
-        self.reward_weights = self.rubric.get_reward_weights()
-        self.reward_scales = [
-            weight / sum(self.reward_weights) for weight in self.reward_weights
-        ]
+        # Use private methods as public API changed in verifiers >= 0.1.9
+        self.reward_funcs = self.rubric._get_reward_funcs()
+        self.reward_weights = self.rubric._get_reward_weights()
+        total_weight = sum(self.reward_weights) if self.reward_weights else 1.0
+        self.reward_scales = (
+            [weight / total_weight for weight in self.reward_weights]
+            if self.reward_weights
+            else []
+        )
         self.system_prompt = self.vf_env.system_prompt
+
+    def _call_reward_func(self, func, completion, answer, prompt=None, **kwargs):
+        """Call a reward function with appropriate arguments based on its signature."""
+        import inspect
+
+        sig = inspect.signature(func)
+        params = sig.parameters
+
+        # Build kwargs based on what the function accepts
+        call_kwargs = {}
+        if "parser" in params:
+            call_kwargs["parser"] = self.parser
+        if "completion" in params:
+            call_kwargs["completion"] = completion
+        if "answer" in params:
+            call_kwargs["answer"] = answer
+        if "prompt" in params:
+            call_kwargs["prompt"] = prompt
+
+        # Add any extra kwargs the function might accept
+        for key, value in kwargs.items():
+            if key in params:
+                call_kwargs[key] = value
+
+        return func(**call_kwargs)
 
     @classmethod
     def config_init(cls) -> Tuple[VfEnvConfig, List[APIServerConfig]]:
@@ -127,22 +156,28 @@ class VerifiersEnv(BaseEnv):
         answer_parsed = self.parser.parse_answer(completion=response_content)
 
         # USE REWARD FUNC HERE TO GET SCORE
-        rewards = [
-            await self.rubric.call_reward_func(
-                func=func,
-                prompt=question,
-                completion=messages,
-                answer=answer,
-                info=info,
-                state=state,
-            )
-            for func in self.reward_funcs
+        rewards = []
+        for func in self.reward_funcs:
+            try:
+                reward = self._call_reward_func(
+                    func=func,
+                    completion=messages,
+                    answer=answer,
+                    prompt=question,
+                    info=info,
+                    state=state,
+                )
+                # Handle async functions
+                if hasattr(reward, "__await__"):
+                    reward = await reward
+                rewards.append(reward if reward is not None else 0.0)
+            except Exception:
+                rewards.append(0.0)
+
+        weighted_rewards = [
+            reward * self.reward_scales[i] if i < len(self.reward_scales) else reward
+            for i, reward in enumerate(rewards)
         ]
-
-        def mul_weight(reward, i):
-            return reward * self.reward_scales[int(i)]
-
-        weighted_rewards = [mul_weight(reward, i) for reward, i in enumerate(rewards)]
 
         score = sum(weighted_rewards)
 
@@ -259,12 +294,15 @@ class VerifiersEnv(BaseEnv):
             rewards = []
             for func in self.reward_funcs:
                 try:
-                    reward = await self.rubric.call_reward_func(
+                    reward = self._call_reward_func(
                         func=func,
                         prompt=item["messages"][1]["content"],  # user message
-                        completion=response_content,
+                        completion=item["messages"],
                         answer=answer,
                     )
+                    # Handle async functions
+                    if hasattr(reward, "__await__"):
+                        reward = await reward
                     rewards.append(reward if reward is not None else 0.0)
                 except Exception:
                     rewards.append(0.0)

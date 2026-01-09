@@ -17,7 +17,7 @@ dependencies = [
     "numpy",
     "wandb",
     "gymnasium",
-    "math-verify==0.7.0",
+    "math-verify>=0.7.0",
     "jinja2",
     "nltk",
     "rich",
