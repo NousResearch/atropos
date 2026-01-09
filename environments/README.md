@@ -642,3 +642,82 @@ python text_reversal_environment.py serve \
 
 **Evaluation Metric:**
 - `eval/percent_correct`: strict exact-match accuracy on the eval set.
+
+---
+
+### Verifiers Environment (`atroposlib/envs/verifiers.py`)
+
+A wrapper environment for the external [`verifiers`](https://pypi.org/project/verifiers/) library, enabling seamless integration of verifiers-defined tasks into the Atropos RL training pipeline.
+
+**Dependencies:**
+- `verifiers` (Install with: `pip install verifiers`)
+- `pydantic`
+- `tqdm`
+
+**Purpose:**
+- Allows running RL/inference on tasks defined in the `verifiers` ecosystem without needing to redefine rubrics, parsers, or reward functions.
+
+**Input Format:**
+- Items are loaded directly from the verifiers environment's dataset
+- Each item typically contains:
+  - `question`: The prompt or problem to solve
+  - `answer`: The expected gold answer
+  - `info`: (Optional) Additional context
+  - `state`: (Optional) Environment state for stateful tasks
+
+**System Prompt:**
+- Dynamically sourced from the loaded verifiers environment (`vf_env.system_prompt`)
+
+**Configuration (`VfEnvConfig`):**
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `vf_env_name` | `str` | `""` | Name of the verifiers environment to load (e.g., `"gsm8k"`, `"math"`) |
+| `env_args` | `Dict[str, Any]` | `{}` | Additional arguments passed to `vf.load_environment()` |
+| `reward_threshold` | `Optional[float]` | `None` | If set, converts continuous scores to binary (1.0 if ≥ threshold, else 0.0) |
+
+**Reward Function:**
+- Rewards are calculated using the rubric's reward functions, weighted and combined:
+  1. Each reward function in `rubric.get_reward_funcs()` is called with the prompt, completion, and answer
+  2. Results are weighted by `rubric.get_reward_weights()`
+  3. Weighted rewards are summed to produce the final score
+- If `reward_threshold` is configured, the final score is binarized
+- Division by zero protection: If total weight is 0, all weights become 0.0
+
+**Key Features:**
+- **Compatibility Layer**: Handles API differences across verifiers versions via `_call_reward_func()`
+- **Defensive Parsing**: Gracefully handles empty completion choices and `None` message content
+- **Cumulative Accuracy Tracking**: W&B metrics include running accuracy across all evaluations
+- **Flexible Tokenization**: Supports tokenizers with and without `apply_chat_template`
+
+**Evaluation Metrics:**
+- `eval/avg_total_score`: Average weighted reward score across test set
+- `eval/percent_correct`: Percentage of items scoring ≥ 0.5
+- `eval/num_samples`: Number of items evaluated
+- `train/cumulative_accuracy`: Running accuracy percentage across all evaluations
+- `train/total_evaluated`: Total number of items evaluated
+
+**Usage Example:**
+```bash
+# Load a GSM8K environment from verifiers
+python -m atroposlib.envs.verifiers serve \
+    --env.vf_env_name="gsm8k" \
+    --env.max_token_length=2048
+
+# With binary reward threshold
+python -m atroposlib.envs.verifiers serve \
+    --env.vf_env_name="math" \
+    --env.reward_threshold=0.5
+
+# With custom environment arguments
+python -m atroposlib.envs.verifiers serve \
+    --env.vf_env_name="custom/env" \
+    --env.env_args='{"split": "train", "subset": "easy"}'
+```
+
+**Test Coverage:**
+- Unit tests available in `tests/envs/test_verifiers.py`
+- Tests cover:
+  - Environment initialization and verifiers loading
+  - Dataset setup (train and eval)
+  - Trajectory collection with mocked completions
+  - Iterator cycling through training data
