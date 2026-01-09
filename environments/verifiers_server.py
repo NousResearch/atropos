@@ -4,12 +4,12 @@
 # 2. prime login
 # 3. prime env install will/wordle (or any owner/environment)
 #
+import logging
 import os
 import random
 import time
 from typing import Dict, List, Optional, Tuple, Union
 
-import verifiers as vf
 from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
@@ -21,10 +21,19 @@ from atroposlib.envs.base import (
 from atroposlib.type_definitions import Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
+# Import verifiers with guard for optional dependency
+try:
+    import verifiers as vf
+except ImportError:
+    vf = None
+
+logger = logging.getLogger(__name__)
+
 
 class VfEnvConfig(BaseEnvConfig):
     vf_env_name: str = ""
     env_args: Dict = {}
+    reward_threshold: float = 0.5  # Configurable threshold for binary rewards
 
 
 class VerifiersEnv(BaseEnv):
@@ -37,6 +46,12 @@ class VerifiersEnv(BaseEnv):
         slurm=False,
         testing=False,
     ):
+        if vf is None:
+            raise ImportError(
+                "verifiers package is required for VerifiersEnv. "
+                "Install with: pip install 'atroposlib[verifiers]'"
+            )
+
         super().__init__(config, server_configs, slurm, testing)
         self.eval_metrics = list()
         self.percent_correct_buffer = list()
@@ -45,9 +60,9 @@ class VerifiersEnv(BaseEnv):
         self.rubric = self.vf_env.rubric
 
         self.parser = self.rubric.parser
-        # Use private methods as public API changed in verifiers >= 0.1.9
-        self.reward_funcs = self.rubric._get_reward_funcs()
-        self.reward_weights = self.rubric._get_reward_weights()
+        # Compatibility layer for public/private API (changed in verifiers >= 0.1.9)
+        self.reward_funcs = self._get_rubric_reward_funcs()
+        self.reward_weights = self._get_rubric_reward_weights()
         total_weight = sum(self.reward_weights) if self.reward_weights else 1.0
         self.reward_scales = (
             [weight / total_weight for weight in self.reward_weights]
@@ -55,6 +70,26 @@ class VerifiersEnv(BaseEnv):
             else []
         )
         self.system_prompt = self.vf_env.system_prompt
+
+    def _get_rubric_reward_funcs(self) -> List:
+        """Get reward functions with compatibility for different verifiers versions."""
+        if hasattr(self.rubric, "get_reward_funcs"):
+            return self.rubric.get_reward_funcs()
+        elif hasattr(self.rubric, "_get_reward_funcs"):
+            return self.rubric._get_reward_funcs()
+        else:
+            logger.warning("Could not find reward_funcs method on rubric")
+            return []
+
+    def _get_rubric_reward_weights(self) -> List:
+        """Get reward weights with compatibility for different verifiers versions."""
+        if hasattr(self.rubric, "get_reward_weights"):
+            return self.rubric.get_reward_weights()
+        elif hasattr(self.rubric, "_get_reward_weights"):
+            return self.rubric._get_reward_weights()
+        else:
+            logger.warning("Could not find reward_weights method on rubric")
+            return []
 
     def _call_reward_func(self, func, completion, answer, prompt=None, **kwargs):
         """Call a reward function with appropriate arguments based on its signature."""
@@ -149,7 +184,17 @@ class VerifiersEnv(BaseEnv):
             temperature=0.0,
         )
 
-        response_content = completion.choices[0].message.content
+        # Defensive check for completion response
+        if not completion.choices:
+            logger.warning("No choices returned from eval chat completion")
+            return {"score": 0.0, "sample": {"error": "No completion choices"}}
+
+        choice = completion.choices[0]
+        if not choice.message or choice.message.content is None:
+            logger.warning("Empty message content in eval completion")
+            return {"score": 0.0, "sample": {"error": "Empty completion content"}}
+
+        response_content = choice.message.content
         messages.append({"role": "assistant", "content": response_content})
 
         # PARSE HERE WITH VF PARSER
@@ -171,7 +216,10 @@ class VerifiersEnv(BaseEnv):
                 if hasattr(reward, "__await__"):
                     reward = await reward
                 rewards.append(reward if reward is not None else 0.0)
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    "Reward function %s failed: %s", getattr(func, "__name__", func), e
+                )
                 rewards.append(0.0)
 
         weighted_rewards = [
@@ -189,7 +237,7 @@ class VerifiersEnv(BaseEnv):
             "model_parsed": str(answer_parsed) if answer_parsed else None,
             "score": int(score),
             "correct": bool(score),
-            "finish_reason": completion.choices[0].finish_reason,
+            "finish_reason": choice.finish_reason,
         }
 
         return {"score": score, "sample": sample}
@@ -255,12 +303,21 @@ class VerifiersEnv(BaseEnv):
         )
 
         to_score = []
+        if not chat_completions.choices:
+            logger.warning("No choices returned from chat completion")
+            return None, []
+
         for choice in chat_completions.choices:
-            response_messages = (
+            # Defensive check for choice content
+            if not choice.message or choice.message.content is None:
+                logger.warning("Empty message content in completion choice")
+                continue
+
+            response_messages = [
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": question},
                 {"role": "assistant", "content": choice.message.content},
-            )
+            ]
             to_score.append(
                 {
                     "messages": response_messages,
@@ -304,15 +361,23 @@ class VerifiersEnv(BaseEnv):
                     if hasattr(reward, "__await__"):
                         reward = await reward
                     rewards.append(reward if reward is not None else 0.0)
-                except Exception:
+                except Exception as e:
+                    logger.warning(
+                        "Reward function %s failed: %s",
+                        getattr(func, "__name__", func),
+                        e,
+                    )
                     rewards.append(0.0)
 
             # Calculate weighted score
             weighted_score = sum(r * w for r, w in zip(rewards, self.reward_scales))
 
+            # Normalize messages to list for tokenizer compatibility
+            messages_list = list(item["messages"])
+
             # Tokenize the messages for training
             out_dict = tokenize_for_trainer(
-                self.tokenizer, item["messages"], item["finish_reason"]
+                self.tokenizer, messages_list, item["finish_reason"]
             )
             tokens = out_dict["tokens"]
             masks = out_dict["masks"]
@@ -324,7 +389,9 @@ class VerifiersEnv(BaseEnv):
             scores["tokens"].append(tokens)
             scores["masks"].append(masks)
             # Convert weighted score to reward (-1 to 1 range based on threshold)
-            reward_value = 1.0 if weighted_score >= 0.5 else -1.0
+            reward_value = (
+                1.0 if weighted_score >= self.config.reward_threshold else -1.0
+            )
             scores["scores"].append(reward_value)
 
             if len(scores["tokens"]) >= self.config.group_size:

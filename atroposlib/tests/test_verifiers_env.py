@@ -88,6 +88,7 @@ class TestVfEnvConfig:
         assert config.env_args == {}
         assert config.group_size == 4  # inherited from BaseEnvConfig
         assert config.max_token_length == 2048
+        assert config.reward_threshold == 0.5  # default threshold
 
     def test_config_custom_values(self):
         """Test VfEnvConfig with custom values."""
@@ -96,11 +97,13 @@ class TestVfEnvConfig:
             env_args={"difficulty": "hard"},
             group_size=16,
             max_token_length=4096,
+            reward_threshold=0.7,
         )
         assert config.vf_env_name == "wordle"
         assert config.env_args == {"difficulty": "hard"}
         assert config.group_size == 16
         assert config.max_token_length == 4096
+        assert config.reward_threshold == 0.7
 
     def test_config_inherits_base_env_config(self):
         """Test that VfEnvConfig inherits from BaseEnvConfig."""
@@ -222,6 +225,7 @@ class TestVerifiersEnvScore:
             env.tokenizer = mock_tokenizer
             env.config = MagicMock()
             env.config.group_size = 2
+            env.config.reward_threshold = 0.5
             env.percent_correct_buffer = []
 
             # Mock tokenize_for_trainer
@@ -281,6 +285,7 @@ class TestVerifiersEnvScore:
             env.tokenizer = mock_tokenizer
             env.config = MagicMock()
             env.config.group_size = 2
+            env.config.reward_threshold = 0.5
             env.percent_correct_buffer = []
 
             with patch(
