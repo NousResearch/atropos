@@ -212,8 +212,22 @@ async def info():
 
 @app.get("/batch")
 async def get_batch():
-    if not app.state.started:
+    try:
+        started = bool(app.state.started)
+    except AttributeError:
+        return {
+            "batch": None,
+            "status": "server not registered; POST /register first",
+        }
+
+    if not started:
         app.state.started = True
+
+    if not hasattr(app.state, "queue") or not hasattr(app.state, "curr_batch"):
+        return {
+            "batch": None,
+            "status": "server not registered; POST /register first",
+        }
 
     if len(app.state.curr_batch) > 0:
         return {"batch": app.state.curr_batch.pop()}

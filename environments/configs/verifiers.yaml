@@ -1,0 +1,43 @@
+# Verifiers / Prime Env Hub adapter example.
+#
+# Prereq:
+#   uv tool install prime
+#   prime login
+#   prime env install adtygan/frozen-lake@latest --with pip   # or run in a venv (`uv venv`) without --with
+#
+# Run:
+#   run-api
+#   python environments/verifiers_server.py serve --config environments/configs/verifiers.yaml
+#
+env:
+  # Prime uses `owner/environment-name`. This adapter will normalize it to the
+  # verifiers env id expected by `verifiers.load_environment`, e.g. `frozen-lake`.
+  vf_env_name: "adtygan/frozen-lake"
+  env_args: {}
+
+  # Atropos config
+  group_size: 8
+  max_token_length: 2048
+  tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-3B-Preview"
+  rollout_server_url: "http://localhost:8000"
+  use_wandb: false
+  include_messages: true
+  train_on_all_assistant_turns: true
+  # Note: if group_size <= 1, the env will auto-disable ensure_scores_are_not_same.
+  ensure_scores_are_not_same: true
+
+  # Evaluation logging
+  eval_num_examples: 128
+  data_dir_to_save_evals: "data/evals/verifiers"
+
+# OpenAI server configurations
+openai:
+  - model_name: "gpt-4.1-nano"
+    # For OpenAI: set base_url: null and api_key to your OpenAI key.
+    # For local vLLM/SGLang: set base_url to your server URL and api_key to "x".
+    base_url: null
+    api_key: "REPLACE_ME"
+    weight: 1.0
+
+slurm: false
+testing: false

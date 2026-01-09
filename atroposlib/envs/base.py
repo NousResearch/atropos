@@ -463,7 +463,11 @@ class BaseEnv(ABC):
                     f"{self.config.rollout_server_url}/register-env",
                     json={
                         "max_token_length": self.config.max_token_length,
-                        "desired_name": self.config.wandb_name,
+                        "desired_name": str(
+                            self.config.wandb_name
+                            or self.name
+                            or self.__class__.__name__
+                        ),
                         "weight": self.config.inference_weight,
                         "min_batch_allocation": self.config.min_batch_allocation,
                         "group_size": self.config.group_size,

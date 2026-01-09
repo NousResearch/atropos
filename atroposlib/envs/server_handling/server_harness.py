@@ -8,6 +8,8 @@ from openai.types.chat.chat_completion import (
 )
 from openai.types.completion import Completion, CompletionChoice
 
+from atroposlib.envs.server_handling.server_baseline import AsyncSemWithAdaptiveWeight
+
 
 def create_chat_completion(
     resp: Union[str, List[str]],
@@ -87,8 +89,9 @@ def create_completion(
 class ServerHarness:
     def __init__(self):
         self.response_map = dict()
-        self.sem = asyncio.Semaphore(1)
-        self.eval_sem = asyncio.Semaphore(1)
+        self.sem = AsyncSemWithAdaptiveWeight(1)
+        self.eval_sem = AsyncSemWithAdaptiveWeight(1)
+        self.server_healthy = True
         pass
 
     def conv_to_dictkey(self, input_message: List[Dict[str, str]]) -> str:
