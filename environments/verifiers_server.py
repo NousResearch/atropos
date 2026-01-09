@@ -77,15 +77,35 @@ class VerifiersEnv(BaseEnv):
         self.system_prompt = self.vf_env.system_prompt
 
     def _load_or_install_environment(self, env_name: str, **env_args):
-        """Load environment, auto-installing via prime CLI if not found."""
+        """Load environment, auto-installing via prime CLI if not found.
+
+        Args:
+            env_name: Environment name. Can be either:
+                - Full format: "owner/env" (e.g., "will/wordle")
+                - Short format: "env" (e.g., "wordle")
+                For auto-install, use full format "owner/env".
+        """
+        # Parse env_name - extract module name for loading
+        # Format can be "owner/env_name" or just "env_name"
+        module_name = env_name.split("/")[-1] if "/" in env_name else env_name
+
         try:
-            return vf.load_environment(env_name, **env_args)
+            return vf.load_environment(module_name, **env_args)
         except (ValueError, ImportError) as e:
             if "Could not import" in str(e) or "No module named" in str(e):
                 logger.info(
                     "Environment '%s' not found, attempting to install via prime CLI",
                     env_name,
                 )
+
+                # For installation, we need the full "owner/env" format
+                if "/" not in env_name:
+                    raise RuntimeError(
+                        f"Environment '{env_name}' not found. "
+                        f"For auto-install, use full format: --env.vf_env_name owner/{env_name} "
+                        f"(e.g., will/wordle)"
+                    ) from e
+
                 try:
                     # Try to install via prime CLI
                     result = subprocess.run(
@@ -96,18 +116,18 @@ class VerifiersEnv(BaseEnv):
                     )
                     if result.returncode == 0:
                         logger.info("Successfully installed environment '%s'", env_name)
-                        # Try loading again after install
-                        return vf.load_environment(env_name, **env_args)
+                        # Try loading again after install (use module name)
+                        return vf.load_environment(module_name, **env_args)
                     else:
                         logger.error(
                             "Failed to install environment '%s': %s",
                             env_name,
-                            result.stderr,
+                            result.stderr or result.stdout,
                         )
                         raise RuntimeError(
                             f"Failed to install environment '{env_name}'. "
                             f"Make sure you're logged in with 'prime login'. "
-                            f"Error: {result.stderr}"
+                            f"Error: {result.stderr or result.stdout}"
                         ) from e
                 except FileNotFoundError:
                     raise RuntimeError(
