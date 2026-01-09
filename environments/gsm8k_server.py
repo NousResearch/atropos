@@ -14,7 +14,6 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
 )
 from atroposlib.type_definitions import Item
-from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 system_prompt = (
     "You are a deep thinking AI, you may use extremely long chains of thought "
@@ -123,18 +122,19 @@ class GSM8kEnv(BaseEnv):
 
     async def rollout_and_score_eval(self, question: str, answer: str) -> dict:
         """Rollout and score evaluation with detailed sample data collection."""
-        completion = await self.server.chat_completion(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": question},
-            ],
-            n=1,
-            max_tokens=self.config.max_token_length,
-            temperature=0.0,
-            split="eval",
-        )
 
-        response_content = completion.choices[0].message.content
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+            completion = await managed.chat_completion(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": question},
+                ],
+                n=1,
+                max_tokens=self.config.max_token_length,
+                temperature=0.6,
+            )
+
+            response_content = completion.choices[0].message.content
 
         # Parse gold answer
         gold_parsed = parse(
@@ -232,11 +232,18 @@ class GSM8kEnv(BaseEnv):
             "\\boxed{" + item["answer"].split("#")[-1].strip().replace(",", "") + "}"
         )
 
-        chat_completions = await self.server.chat_completion(
-            messages=[{"role": "system", "content": system_prompt}, user_message],
-            n=self.config.group_size,
-            max_tokens=self.config.max_token_length,
-        )
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+
+            chat_completions = await managed.chat_completion(
+                messages=[{"role": "system", "content": system_prompt}, user_message],
+                n=self.config.group_size,
+                max_tokens=self.config.max_token_length,
+                temperature=1.0,
+            )
+
+            state = managed.get_state()
+            nodes = state["nodes"]
+
         to_score = list()
         to_backlog = list()
         for i, chat_completion in enumerate(chat_completions.choices):
@@ -250,6 +257,9 @@ class GSM8kEnv(BaseEnv):
                     "messages": messages,
                     "gold_answer": gold_answer,
                     "finish_reason": chat_completion.finish_reason,
+                    "tokens": nodes[i].tokens,
+                    "masks": nodes[i].masked_tokens,
+                    "logprobs": nodes[i].logprobs,
                 }
             )
         to_postprocess = await self.score(to_score)
@@ -262,6 +272,7 @@ class GSM8kEnv(BaseEnv):
         scores["tokens"] = list()
         scores["masks"] = list()
         scores["scores"] = list()
+        scores["inference_logprobs"] = list()
         gold_parsed = parse(
             rollout_group_data[0]["gold_answer"],
             extraction_mode="first_match",
@@ -293,24 +304,25 @@ class GSM8kEnv(BaseEnv):
                 )
                 # Reward 1 if the content is the same as the ground truth, 0 otherwise
                 reward = verify(answer_parsed, gold_parsed)
-                # print(
-                #     f"message: {item[0][-1]['content']}, ground_truth: {item[1]}, reward: {reward}"
-                # )
-                out_dict = tokenize_for_trainer(
-                    self.tokenizer, item["messages"], item["finish_reason"]
-                )
-                tokens = out_dict["tokens"]
-                masks = out_dict["masks"]
+
+                tokens = item["tokens"]
+                masks = item["masks"]
+                logprobs = item["logprobs"]
+
                 # remove obviously bad examples
                 if len([1 for i in masks if i != -100]) < 10:
                     continue
                 scores["tokens"].append(tokens)
                 scores["masks"].append(masks)
+                scores["inference_logprobs"].append(logprobs)
                 scores["scores"].append(1.0 if reward else -1.0)
+
                 if len(scores["tokens"]) >= self.config.group_size:
                     break
+
             for score in scores["scores"]:
                 self.percent_correct_buffer.append(max(score, 0))
+
             # check if all the same
             # print(scores['scores'])
             if all([score == 1 for score in scores["scores"]]):

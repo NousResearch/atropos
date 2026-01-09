@@ -1,16 +1,25 @@
+import gzip
 import time
 import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, field_validator
+from starlette.datastructures import MutableHeaders
+from starlette.types import Receive, Scope, Send
 
 from atroposlib.api.utils import (
     find_groups_summing_to_target,
     grab_batch_with_minimum_allocations,
     grab_exact_from_heterogeneous_queue,
+)
+
+# Constants
+MIN_ENV_WEIGHT = (
+    0.01  # Minimum weight to prevent environments from being completely starved
 )
 
 # Message import removed - using Dict[str, Any] for more flexible validation
@@ -24,6 +33,71 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+class GZipRequestMiddleware:
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = MutableHeaders(scope=scope)
+        content_encoding = headers.get("content-encoding", "")
+        if "gzip" not in content_encoding.lower():
+            await self.app(scope, receive, send)
+            return
+
+        body_chunks = []
+        more_body = True
+        while more_body:
+            message = await receive()
+            body_chunks.append(message.get("body", b""))
+            more_body = message.get("more_body", False)
+
+        body = b"".join(body_chunks)
+        if body:
+            try:
+                decompressed = gzip.decompress(body)
+            except OSError:
+                response = PlainTextResponse(
+                    "Invalid gzip payload",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+                await response(scope, receive, send)
+                return
+        else:
+            decompressed = b""
+
+        mutable_headers = MutableHeaders(scope=scope)
+        mutable_headers["content-length"] = str(len(decompressed))
+        if "content-encoding" in mutable_headers:
+            del mutable_headers["content-encoding"]
+
+        sent = False
+
+        # needed some odd logic here to handle gzip stream so just returning an empty body
+        async def new_receive():
+            nonlocal sent
+            if sent:
+                return {"type": "http.request", "body": b"", "more_body": False}
+            sent = True
+            return {
+                "type": "http.request",
+                "body": decompressed,
+                "more_body": False,
+            }
+
+        await self.app(scope, new_receive, send)
+
+
+app.add_middleware(GZipRequestMiddleware)
 
 
 @app.get("/")
@@ -65,6 +139,8 @@ class ScoredData(BaseModel):
     messages: Optional[List[List[Dict[str, Any]]]] = (
         None  # Changed from Message TypedDict to Dict
     )
+    generation_params: Optional[Dict[str, Any]] = None
+    inference_logprobs: Optional[List[List[float]]] = None
     overrides: Optional[List[dict]] = None
     group_overrides: Optional[dict] = None
     images: Optional[Any] = None
@@ -90,6 +166,68 @@ class ScoredData(BaseModel):
         return v
 
 
+def _scored_data_to_dict(scored_data: ScoredData) -> Dict[str, Any]:
+    """Convert a `ScoredData` pydantic model into a plain dictionary."""
+
+    return {
+        "tokens": scored_data.tokens,
+        "masks": scored_data.masks,
+        "scores": scored_data.scores,
+        "advantages": scored_data.advantages,
+        "ref_logprobs": scored_data.ref_logprobs,
+        "messages": scored_data.messages,
+        "generation_params": scored_data.generation_params,
+        "inference_logprobs": scored_data.inference_logprobs,
+        "overrides": scored_data.overrides,
+        "group_overrides": scored_data.group_overrides,
+        "images": scored_data.images,
+        "env_id": scored_data.env_id,
+    }
+
+
+def _process_scored_data(scored_data: ScoredData) -> Dict[str, Any]:
+    """Normalize buffering/queueing logic for scored data submissions."""
+
+    if not hasattr(app.state, "queue"):
+        app.state.queue = []
+    if not hasattr(app.state, "buffer"):
+        app.state.buffer = {}
+
+    data_dict = _scored_data_to_dict(scored_data)
+    env_id = data_dict.get("env_id")
+    envs = getattr(app.state, "envs", [])
+
+    if env_id is not None and env_id < len(envs):
+        expected_group_size = envs[env_id].get("group_size", 1)
+        actual_group_size = len(scored_data.tokens)
+
+        if actual_group_size != expected_group_size:
+            buffer = app.state.buffer.setdefault(env_id, [])
+            buffer.append(data_dict)
+
+            indices = find_groups_summing_to_target(buffer, expected_group_size)
+
+            if indices:
+                groups_to_add = []
+                for idx in sorted(indices, reverse=True):
+                    groups_to_add.append(buffer.pop(idx))
+
+                for group in reversed(groups_to_add):
+                    app.state.queue.append(group)
+                    app.state.latest = group
+
+            return {
+                "status": "buffered",
+                "buffer_size": sum(
+                    len(group["tokens"]) for group in app.state.buffer.get(env_id, [])
+                ),
+            }
+
+    app.state.queue.append(data_dict)
+    app.state.latest = data_dict
+    return {"status": "received"}
+
+
 class Status(BaseModel):
     """
     basemodel for status information of the current server
@@ -109,9 +247,8 @@ class Info(BaseModel):
 
 @app.post("/register")
 async def register(registration: Registration):
-    try:
-        isinstance(app.state.queue, list)
-    except AttributeError:
+    # Initialize app state if not already done
+    if not hasattr(app.state, "queue"):
         app.state.queue = []
         app.state.group = registration.wandb_group
         app.state.project = registration.wandb_project
@@ -125,34 +262,29 @@ async def register(registration: Registration):
         app.state.started = False
         app.state.envs = []
         app.state.buffer = {}  # Buffer for mixed-size groups per environment
-    try:
-        app.state.requesters.append(uuid.uuid4().int)
-    except AttributeError:
-        # If requesters doesn't exist, create it
-        app.state.requesters = [uuid.uuid4().int]
+
+    # Initialize requesters list if not already done
+    if not hasattr(app.state, "requesters"):
+        app.state.requesters = []
+
+    app.state.requesters.append(uuid.uuid4().int)
     return {"uuid": app.state.requesters[-1]}
 
 
 @app.post("/register-env")
 async def register_env_url(register_env: RegisterEnv):
-    try:
-        if not app.state.started:
-            return {
-                "status": "wait for trainer to start",
-            }
-    except AttributeError:
+    # Check if trainer has started
+    if not hasattr(app.state, "started") or not app.state.started:
         return {
             "status": "wait for trainer to start",
         }
-    try:
-        isinstance(app.state.envs, list)
-    except AttributeError:
+
+    # Initialize envs list if not already done
+    if not hasattr(app.state, "envs"):
         app.state.envs = []
-    checkpoint_dir = ""
-    try:
-        checkpoint_dir = app.state.checkpoint_dir
-    except AttributeError:
-        pass
+
+    # Get checkpoint directory safely
+    checkpoint_dir = getattr(app.state, "checkpoint_dir", "")
     real_name = (
         f"{register_env.desired_name}_"
         f"{len([x for x in app.state.envs if x['desired_name'] == register_env.desired_name])}"
@@ -268,6 +400,8 @@ async def get_latest_example():
             "scores": [],
             "advantages": [],
             "ref_logprobs": [],
+            "generation_params": [],
+            "inference_logprobs": [],
             "messages": [],
             "images": [],
         }
@@ -275,59 +409,7 @@ async def get_latest_example():
 
 @app.post("/scored_data")
 async def scored_data(scored_data: ScoredData):
-    data_dict = {
-        "tokens": scored_data.tokens,
-        "masks": scored_data.masks,
-        "scores": scored_data.scores,
-        "advantages": scored_data.advantages,
-        "ref_logprobs": scored_data.ref_logprobs,
-        "messages": scored_data.messages,
-        "overrides": scored_data.overrides,
-        "group_overrides": scored_data.group_overrides,
-        "images": scored_data.images,
-        "env_id": scored_data.env_id,
-    }
-
-    # Check if this is a mixed-size group
-    env_id = scored_data.env_id
-    if env_id is not None and env_id < len(app.state.envs):
-        expected_group_size = app.state.envs[env_id].get("group_size", 1)
-        actual_group_size = len(scored_data.tokens)
-
-        if actual_group_size != expected_group_size:
-            # Mixed size group - add to buffer
-            if env_id not in app.state.buffer:
-                app.state.buffer[env_id] = []
-
-            app.state.buffer[env_id].append(data_dict)
-
-            # Try to find groups that sum to expected_group_size
-            indices = find_groups_summing_to_target(
-                app.state.buffer[env_id], expected_group_size
-            )
-
-            if indices:
-                # Add these groups to queue in order
-                groups_to_add = []
-                for idx in sorted(indices, reverse=True):
-                    groups_to_add.append(app.state.buffer[env_id].pop(idx))
-
-                # Add in FIFO order
-                for group in reversed(groups_to_add):
-                    app.state.queue.append(group)
-                    app.state.latest = group
-
-            return {
-                "status": "buffered",
-                "buffer_size": sum(
-                    len(g["tokens"]) for g in app.state.buffer.get(env_id, [])
-                ),
-            }
-
-    # Normal path - correct size or no env info
-    app.state.queue.append(data_dict)
-    app.state.latest = data_dict
-    return {"status": "received"}
+    return _process_scored_data(scored_data)
 
 
 @app.post("/scored_data_list")
@@ -335,58 +417,25 @@ async def scored_data_list(scored_data_list: List[ScoredData]):
     """Handle a list of ScoredData objects for step-based learning"""
 
     # Process each scored data item
+    buffered_count = 0
+    last_buffer_size: Optional[int] = None
     for scored_data in scored_data_list:
-        data_dict = {
-            "tokens": scored_data.tokens,
-            "masks": scored_data.masks,
-            "scores": scored_data.scores,
-            "advantages": scored_data.advantages,
-            "ref_logprobs": scored_data.ref_logprobs,
-            "images": scored_data.images,
-            "messages": scored_data.messages,
-            "overrides": scored_data.overrides,
-            "group_overrides": scored_data.group_overrides,
-            "env_id": scored_data.env_id,
-        }
+        result = _process_scored_data(scored_data)
+        if result.get("status") == "buffered":
+            buffered_count += 1
+            last_buffer_size = result.get("buffer_size", last_buffer_size)
 
-        # Check if this is a mixed-size group
-        env_id = scored_data.env_id
-        if env_id is not None and env_id < len(app.state.envs):
-            expected_group_size = app.state.envs[env_id].get("group_size", 1)
-            actual_group_size = len(scored_data.tokens)
+    response: Dict[str, Any] = {
+        "status": "received",
+        "groups_processed": len(scored_data_list),
+    }
 
-            if actual_group_size != expected_group_size:
-                # Mixed size group - add to buffer
-                if env_id not in app.state.buffer:
-                    app.state.buffer[env_id] = []
+    if buffered_count:
+        response["buffered"] = buffered_count
+        if last_buffer_size is not None:
+            response["last_buffer_size"] = last_buffer_size
 
-                app.state.buffer[env_id].append(data_dict)
-
-                # Try to find groups that sum to expected_group_size
-                indices = find_groups_summing_to_target(
-                    app.state.buffer[env_id], expected_group_size
-                )
-
-                if indices:
-                    # Add these groups to queue in order
-                    groups_to_add = []
-                    for idx in sorted(indices, reverse=True):
-                        groups_to_add.append(app.state.buffer[env_id].pop(idx))
-
-                    # Add in FIFO order
-                    for group in reversed(groups_to_add):
-                        app.state.queue.append(group)
-                        app.state.latest = group
-            else:
-                # Normal size - add directly to queue
-                app.state.queue.append(data_dict)
-                app.state.latest = data_dict
-        else:
-            # No env info or normal path - add directly to queue
-            app.state.queue.append(data_dict)
-            app.state.latest = data_dict
-
-    return {"status": "received", "groups_processed": len(scored_data_list)}
+    return response
 
 
 @app.get("/status")
@@ -416,8 +465,8 @@ async def get_status_env(env: EnvIdentifier):
         / total
     )
     env_weight = max(
-        0.01, env_weight
-    )  # Minimum weight of 0.01 :) TODO: try to figure out a better way to do this
+        MIN_ENV_WEIGHT, env_weight
+    )  # Ensure minimum weight to prevent environment starvation
 
     # Calculate total minimum allocations
     total_min_allocation = 0.0

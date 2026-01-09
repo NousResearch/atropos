@@ -86,7 +86,7 @@ You are a deep thinking AI, you may use extremely long chains of thought to deep
 python letter_counting_environment.py serve \
     --env.use_text_passages=False \
     --env.max_letters_to_count=1 \
-    --env.max_group-average-for-training=0.75
+    --env.max_group_average_for_training=0.75
 
 # Mixed mode with multi-letter counting
 python letter_counting_environment.py serve \
@@ -554,3 +554,91 @@ Wrap each *SEARCH/REPLACE* edit in a code block as shown in the example above. I
 - **Dataset Handling:** Loads training and test data from Hugging Face datasets, specifically tailored for SWE-bench like formats.
 - **Patch Parsing:** Implements robust parsing for a specific SEARCH/REPLACE patch format.
 - **Thinking Tag Processing:** Extracts content after `<think> </think>`
+
+---
+
+### Text Reversal Environment (`text_reversal_environment.py`)
+
+Environment for training and evaluating exact string reversal with optional thinking and split train/eval context lengths.
+
+**Dataset:**
+- `PrimeIntellect/Reverse-Text-SFT`
+
+**Input Format:**
+- Each item contains two `prompt` messages and one `completion` message:
+  - `prompt`: list of messages with roles {`system`, `user`}
+  - `completion`: list with a single assistant message containing the reversed text, wrapped in `<reversed_text>...</reversed_text>`
+
+**Prompt Construction:**
+- The dataset's system text is NOT used as a system message to the model.
+- Instead, it is prepended to the user content with two newline separators and sent as the user turn:
+  - Effective user content: `"{dataset_system}\n\n{dataset_user}"`
+- Optional thinking system prompt is included only when `use_thinking=True`.
+
+**Reward Function:**
+- Extract the model output after the first closing `</think>` tag (if present), trim whitespace.
+- Score is 1.0 if the remaining output EXACTLY matches the dataset assistant `completion` content; otherwise 0.0.
+
+**Optional CoT Length Penalty (for correct rollouts only):**
+- Enabled by default (`length_penalty_enabled=True`).
+- Within each training group, compute CoT token lengths from the content inside the first `<think>...</think>` block of correct rollouts.
+- Let L̄ be the average of those lengths. A deadband δ (default 5 tokens) defines a threshold `L̄ + δ`.
+- Any correct rollout with length above this threshold is penalized: `score = 1 - α * ((excess / L̄)^p)`, clipped to `[penalty_min_score, 1]`.
+  - Defaults: `α=0.5`, `p=2`, `penalty_min_score=0.2`.
+- Incorrect rollouts remain at 0.0. If no valid think block (or thinking disabled), penalty is skipped for that rollout.
+
+**Curriculum: One-Epoch + Hard Retries (optional):**
+- Controlled by `curriculum_one_epoch_enabled` (default: True).
+- First pass (one epoch): each item is attempted once. If any rollout in the group is correct (≥1/N), the item is considered solved and never revisited. If the group has zero correct (0/N), the item is marked “hard” and placed into a retry pool.
+- Retry phase: only begins after the first pass over all training items completes. Items in the retry pool are revisited up to `hard_retry_max_attempts` times (default: 3). If still unsolved, they are dropped and training completes naturally when the retry pool is exhausted.
+- Tip: Use a large `total_steps`. The environment will stop serving items once the one-epoch + retries queues are exhausted (it raises completion in `get_next_item`).
+
+**Configuration Options (`TextReversalEnvConfig`):**
+- `use_thinking` (bool, default: False): include thinking system prompt.
+- `dataset_name` (str, default: `PrimeIntellect/Reverse-Text-SFT`): training dataset.
+- `eval_dataset_name` (Optional[str], default: None): static eval dataset to use (full split). If `None`, the environment samples `test_set_size` examples from the training dataset for eval.
+- `test_set_size` (int, default: 100): number of samples for eval when `eval_dataset_name=None`.
+- `max_train_token_length` (int, default: 16384): max tokens for training generations.
+- `max_eval_token_length` (int, default: 32768): max tokens for eval generations.
+- `length_penalty_enabled` (bool, default: True): enable within-group CoT length penalty for correct rollouts.
+- `penalty_deadband_tokens` (int, default: 5): δ deadband added above average length before penalizing.
+- `penalty_alpha` (float, default: 0.5): penalty scale.
+- `penalty_power` (float, default: 2.0): penalty exponent (quadratic by default).
+- `penalty_min_score` (float, default: 0.2): lower bound for penalized correct rollouts.
+- `curriculum_one_epoch_enabled` (bool, default: True): enables one-pass training plus a late retry phase for hard items.
+- `hard_retry_max_attempts` (int, default: 3): maximum retry attempts per hard item in the retry phase.
+
+**Usage Examples:**
+```bash
+# Basic training with default 16k train context, 32k eval context, and sampled eval set (100 examples)
+python text_reversal_environment.py serve
+
+# Enable thinking system prompt
+python text_reversal_environment.py serve \
+  --env.use_thinking=True
+
+# Use a static eval dataset instead of sampling from train
+python text_reversal_environment.py serve \
+  --env.eval_dataset_name="someorg/Reverse-Text-EVAL"
+
+# Override max token lengths if needed
+python text_reversal_environment.py serve \
+  --env.max_train_token_length=12000 \
+  --env.max_eval_token_length=28000
+
+# Adjust/disable the CoT length penalty for correct rollouts
+python text_reversal_environment.py serve \
+  --env.length_penalty_enabled=False \
+  --env.penalty_deadband_tokens=8 \
+  --env.penalty_alpha=0.6 \
+  --env.penalty_power=2.0 \
+  --env.penalty_min_score=0.3
+
+# Enable one-epoch + retries curriculum and set max retries
+python text_reversal_environment.py serve \
+  --env.curriculum_one_epoch_enabled=True \
+  --env.hard_retry_max_attempts=3
+```
+
+**Evaluation Metric:**
+- `eval/percent_correct`: strict exact-match accuracy on the eval set.
