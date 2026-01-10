@@ -193,6 +193,7 @@ Remember: Only output the FIX (the lines that need to change), not the entire fu
 @dataclass
 class TraceStep:
     """Single step in reasoning trace."""
+
     step_type: str  # think, code, result, error, verify
     content: str
 
@@ -200,6 +201,7 @@ class TraceStep:
 @dataclass
 class GeneratedTrace:
     """Complete generated trace with interleaving + tool use."""
+
     problem: str
     messages: List[Dict[str, str]]
     code: Optional[str] = None
@@ -208,7 +210,7 @@ class GeneratedTrace:
     tests_total: int = 0
     think_count: int = 0
     code_block_count: int = 0  # Key metric for interleaving
-    execution_count: int = 0   # How many times code was executed
+    execution_count: int = 0  # How many times code was executed
     has_verify: bool = False
     had_errors: bool = False
     trace: List[TraceStep] = field(default_factory=list)
@@ -236,7 +238,9 @@ class GeneratedTrace:
             # Quality metrics
             "is_interleaved": self.code_block_count >= 3,
             "has_tool_feedback": self.execution_count > 0,
-            "is_ideal": self.code_block_count >= 3 and self.execution_count > 0 and self.score > 0,
+            "is_ideal": self.code_block_count >= 3
+            and self.execution_count > 0
+            and self.score > 0,
         }
 
     def to_training_format(self) -> Dict:
@@ -245,13 +249,18 @@ class GeneratedTrace:
         return {
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": INITIAL_PROMPT.format(problem=self.problem)},
+                {
+                    "role": "user",
+                    "content": INITIAL_PROMPT.format(problem=self.problem),
+                },
                 {"role": "assistant", "content": combined},
             ],
             "score": self.score,
             "think_count": self.think_count,
             "code_block_count": self.code_block_count,
-            "is_ideal": self.code_block_count >= 3 and self.execution_count > 0 and self.score > 0,
+            "is_ideal": self.code_block_count >= 3
+            and self.execution_count > 0
+            and self.score > 0,
         }
 
     def _combine_trace(self) -> str:
@@ -435,10 +444,10 @@ class InterleavedToolTraceGenerator:
                 # Also prevent hallucinated results
                 "stop": [
                     "[/CODE]\n\n[THINK]",  # Don't continue after code
-                    "[/CODE]\n\n[CODE]",   # Don't chain code blocks
-                    "[RESULT]",             # Don't hallucinate results
-                    "[ERROR]",              # Don't hallucinate errors
-                    "\n\n\n",               # Stop on excessive newlines
+                    "[/CODE]\n\n[CODE]",  # Don't chain code blocks
+                    "[RESULT]",  # Don't hallucinate results
+                    "[ERROR]",  # Don't hallucinate errors
+                    "\n\n\n",  # Stop on excessive newlines
                 ],
             },
         }
@@ -457,8 +466,12 @@ class InterleavedToolTraceGenerator:
 
     def _strip_hallucinations(self, text: str) -> str:
         """Remove hallucinated [RESULT] or [ERROR] blocks."""
-        text = re.sub(r'\[RESULT\].*?(?:\[/RESULT\]|$)', '', text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'\[ERROR\].*?(?:\[/ERROR\]|$)', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(
+            r"\[RESULT\].*?(?:\[/RESULT\]|$)", "", text, flags=re.DOTALL | re.IGNORECASE
+        )
+        text = re.sub(
+            r"\[ERROR\].*?(?:\[/ERROR\]|$)", "", text, flags=re.DOTALL | re.IGNORECASE
+        )
         return text.strip()
 
     def _parse_step(self, text: str) -> Tuple[Optional[str], str]:
@@ -466,24 +479,30 @@ class InterleavedToolTraceGenerator:
         text = text.strip()
 
         # Check for [VERIFY]
-        verify_match = re.search(r'\[VERIFY\](.*?)(?:\[/VERIFY\]|$)', text, re.DOTALL | re.IGNORECASE)
+        verify_match = re.search(
+            r"\[VERIFY\](.*?)(?:\[/VERIFY\]|$)", text, re.DOTALL | re.IGNORECASE
+        )
         if verify_match:
             return "verify", verify_match.group(1).strip()
 
         # Check for [CODE]...[/CODE]
-        code_match = re.search(r'\[CODE\](.*?)\[/CODE\]', text, re.DOTALL | re.IGNORECASE)
+        code_match = re.search(
+            r"\[CODE\](.*?)\[/CODE\]", text, re.DOTALL | re.IGNORECASE
+        )
         if code_match:
             content = code_match.group(1)
-            lines = [l for l in content.split('\n') if l.strip() or l == '']
+            lines = [l for l in content.split("\n") if l.strip() or l == ""]
             # Trim empty lines at start/end
             while lines and not lines[0].strip():
                 lines.pop(0)
             while lines and not lines[-1].strip():
                 lines.pop()
-            return "code", '\n'.join(lines)
+            return "code", "\n".join(lines)
 
         # Check for [THINK]
-        think_match = re.search(r'\[THINK\]\s*(.*?)(?=\[|$)', text, re.DOTALL | re.IGNORECASE)
+        think_match = re.search(
+            r"\[THINK\]\s*(.*?)(?=\[|$)", text, re.DOTALL | re.IGNORECASE
+        )
         if think_match:
             return "think", think_match.group(1).strip()
 
@@ -495,15 +514,15 @@ class InterleavedToolTraceGenerator:
             return False
 
         # Must have function definition
-        if not re.search(r'def\s+\w+\s*\(', code):
+        if not re.search(r"def\s+\w+\s*\(", code):
             return False
 
         # Must have return statement
-        if not re.search(r'\breturn\b', code):
+        if not re.search(r"\breturn\b", code):
             return False
 
         # Count indentation levels - if we're back to base level after return, likely complete
-        lines = code.strip().split('\n')
+        lines = code.strip().split("\n")
         if len(lines) < 2:
             return False
 
@@ -518,7 +537,7 @@ class InterleavedToolTraceGenerator:
             return False
 
         # If last line has return and is indented (part of function), likely complete
-        if 'return' in last_content_line:
+        if "return" in last_content_line:
             return True
 
         return False
@@ -532,7 +551,12 @@ class InterleavedToolTraceGenerator:
             results, metadata = execute_code_safe(code, tests, timeout=10.0)
 
             if "error" in metadata:
-                return f"Error: {metadata['error']}", False, 0, len(tests.get("outputs", []))
+                return (
+                    f"Error: {metadata['error']}",
+                    False,
+                    0,
+                    len(tests.get("outputs", [])),
+                )
 
             fn_name = tests.get("fn_name", "func")
             inputs = tests.get("inputs", [])
@@ -541,12 +565,18 @@ class InterleavedToolTraceGenerator:
             lines = []
             passed = 0
             for i, (inp, expected, result) in enumerate(zip(inputs, outputs, results)):
-                args_str = ", ".join(repr(x) for x in inp) if isinstance(inp, list) else repr(inp)
+                args_str = (
+                    ", ".join(repr(x) for x in inp)
+                    if isinstance(inp, list)
+                    else repr(inp)
+                )
                 if result:
                     lines.append(f"Test {i+1}: PASS - {fn_name}({args_str})")
                     passed += 1
                 else:
-                    lines.append(f"Test {i+1}: FAIL - {fn_name}({args_str}) expected {repr(expected)}")
+                    lines.append(
+                        f"Test {i+1}: FAIL - {fn_name}({args_str}) expected {repr(expected)}"
+                    )
 
             total = len(results)
             all_passed = passed == total
@@ -592,7 +622,12 @@ class InterleavedToolTraceGenerator:
                 if not response:
                     # Empty response, prompt again
                     messages.append({"role": "assistant", "content": ""})
-                    messages.append({"role": "user", "content": "Please continue with [THINK] or [CODE]."})
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": "Please continue with [THINK] or [CODE].",
+                        }
+                    )
                     continue
 
                 step_type, content = self._parse_step(response)
@@ -601,7 +636,12 @@ class InterleavedToolTraceGenerator:
                     think_count += 1
                     trace_steps.append(TraceStep(step_type="think", content=content))
                     messages.append({"role": "assistant", "content": response})
-                    messages.append({"role": "user", "content": "Now write the next [CODE] block (max 3 lines)."})
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": "Now write the next [CODE] block (max 3 lines).",
+                        }
+                    )
 
                 elif step_type == "code":
                     code_block_count += 1
@@ -610,49 +650,61 @@ class InterleavedToolTraceGenerator:
                     messages.append({"role": "assistant", "content": response})
 
                     # Check if function looks complete
-                    accumulated = '\n'.join(code_blocks)
+                    accumulated = "\n".join(code_blocks)
                     if self._looks_complete(accumulated):
                         # Execute the accumulated code
                         execution_count += 1
-                        result_text, all_passed, passed, total = self._execute_code(accumulated, tests)
+                        result_text, all_passed, passed, total = self._execute_code(
+                            accumulated, tests
+                        )
 
                         if "Error" in result_text or "error" in result_text.lower():
                             had_errors = True
-                            trace_steps.append(TraceStep(step_type="error", content=result_text))
+                            trace_steps.append(
+                                TraceStep(step_type="error", content=result_text)
+                            )
 
                             if fix_attempts < self.max_fix_attempts:
                                 fix_attempts += 1
-                                messages.append({
-                                    "role": "user",
-                                    "content": FUNCTION_COMPLETE_PROMPT.format(
-                                        result=f"[ERROR]\n{result_text}\n[/ERROR]",
-                                        next_instruction=AFTER_FAILURE_PROMPT
-                                    )
-                                })
+                                messages.append(
+                                    {
+                                        "role": "user",
+                                        "content": FUNCTION_COMPLETE_PROMPT.format(
+                                            result=f"[ERROR]\n{result_text}\n[/ERROR]",
+                                            next_instruction=AFTER_FAILURE_PROMPT,
+                                        ),
+                                    }
+                                )
                             else:
                                 break  # Give up
                         else:
-                            trace_steps.append(TraceStep(step_type="result", content=result_text))
+                            trace_steps.append(
+                                TraceStep(step_type="result", content=result_text)
+                            )
 
                             if all_passed:
-                                messages.append({
-                                    "role": "user",
-                                    "content": FUNCTION_COMPLETE_PROMPT.format(
-                                        result=f"[RESULT]\n{result_text}\n[/RESULT]",
-                                        next_instruction=AFTER_SUCCESS_PROMPT
-                                    )
-                                })
+                                messages.append(
+                                    {
+                                        "role": "user",
+                                        "content": FUNCTION_COMPLETE_PROMPT.format(
+                                            result=f"[RESULT]\n{result_text}\n[/RESULT]",
+                                            next_instruction=AFTER_SUCCESS_PROMPT,
+                                        ),
+                                    }
+                                )
                             else:
                                 had_errors = True
                                 if fix_attempts < self.max_fix_attempts:
                                     fix_attempts += 1
-                                    messages.append({
-                                        "role": "user",
-                                        "content": FUNCTION_COMPLETE_PROMPT.format(
-                                            result=f"[RESULT]\n{result_text}\n[/RESULT]",
-                                            next_instruction=AFTER_FAILURE_PROMPT
-                                        )
-                                    })
+                                    messages.append(
+                                        {
+                                            "role": "user",
+                                            "content": FUNCTION_COMPLETE_PROMPT.format(
+                                                result=f"[RESULT]\n{result_text}\n[/RESULT]",
+                                                next_instruction=AFTER_FAILURE_PROMPT,
+                                            ),
+                                        }
+                                    )
                                 else:
                                     break
                     else:
@@ -668,21 +720,29 @@ class InterleavedToolTraceGenerator:
                 else:
                     # Unknown format, try to salvage
                     messages.append({"role": "assistant", "content": response})
-                    messages.append({
-                        "role": "user",
-                        "content": "Invalid format. Please output exactly ONE [THINK] or [CODE] block."
-                    })
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": "Invalid format. Please output exactly ONE [THINK] or [CODE] block.",
+                        }
+                    )
 
             # Calculate final score
-            accumulated = '\n'.join(code_blocks)
+            accumulated = "\n".join(code_blocks)
             if execution_count == 0 and accumulated:
                 # Never executed, try now
-                result_text, all_passed, passed, total = self._execute_code(accumulated, tests)
+                result_text, all_passed, passed, total = self._execute_code(
+                    accumulated, tests
+                )
                 execution_count = 1
                 if all_passed:
-                    trace_steps.append(TraceStep(step_type="result", content=result_text))
+                    trace_steps.append(
+                        TraceStep(step_type="result", content=result_text)
+                    )
                 else:
-                    trace_steps.append(TraceStep(step_type="error", content=result_text))
+                    trace_steps.append(
+                        TraceStep(step_type="error", content=result_text)
+                    )
             else:
                 # Use last execution results
                 _, _, passed, total = self._execute_code(accumulated, tests)
@@ -740,7 +800,11 @@ class InterleavedToolTraceGenerator:
                         trace = await self.generate_trace(problem)
 
                         # Filter criteria
-                        is_ideal = trace.code_block_count >= 3 and trace.execution_count > 0 and trace.score > 0
+                        is_ideal = (
+                            trace.code_block_count >= 3
+                            and trace.execution_count > 0
+                            and trace.score > 0
+                        )
 
                         if only_ideal and not is_ideal:
                             progress.update(task, advance=1)
@@ -756,10 +820,16 @@ class InterleavedToolTraceGenerator:
             for i, problem in enumerate(problems):
                 for j in range(num_per_problem):
                     if verbose:
-                        print(f"Generating trace {i * num_per_problem + j + 1}/{total}...")
+                        print(
+                            f"Generating trace {i * num_per_problem + j + 1}/{total}..."
+                        )
                     trace = await self.generate_trace(problem)
 
-                    is_ideal = trace.code_block_count >= 3 and trace.execution_count > 0 and trace.score > 0
+                    is_ideal = (
+                        trace.code_block_count >= 3
+                        and trace.execution_count > 0
+                        and trace.score > 0
+                    )
 
                     if only_ideal and not is_ideal:
                         continue
@@ -780,13 +850,29 @@ async def main():
     parser = argparse.ArgumentParser(
         description="Generate traces with BOTH interleaving AND tool execution"
     )
-    parser.add_argument("--output", "-o", type=str, default="traces_interleaved_tools.jsonl")
+    parser.add_argument(
+        "--output", "-o", type=str, default="traces_interleaved_tools.jsonl"
+    )
     parser.add_argument("--num-traces", "-n", type=int, default=10)
-    parser.add_argument("--only-success", action="store_true", help="Only save successful traces")
-    parser.add_argument("--only-ideal", action="store_true", help="Only save ideal traces (interleaved + tool + success)")
-    parser.add_argument("--training-format", action="store_true", help="Save in training format")
-    parser.add_argument("--model", type=str, default=os.getenv("OLLAMA_MODEL", "deepseek-v3.2"))
-    parser.add_argument("--base-url", type=str, default=os.getenv("OLLAMA_BASE_URL", "https://ollama.com"))
+    parser.add_argument(
+        "--only-success", action="store_true", help="Only save successful traces"
+    )
+    parser.add_argument(
+        "--only-ideal",
+        action="store_true",
+        help="Only save ideal traces (interleaved + tool + success)",
+    )
+    parser.add_argument(
+        "--training-format", action="store_true", help="Save in training format"
+    )
+    parser.add_argument(
+        "--model", type=str, default=os.getenv("OLLAMA_MODEL", "deepseek-v3.2")
+    )
+    parser.add_argument(
+        "--base-url",
+        type=str,
+        default=os.getenv("OLLAMA_BASE_URL", "https://ollama.com"),
+    )
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--max-steps", type=int, default=25, help="Max steps per trace")
     args = parser.parse_args()
@@ -846,12 +932,15 @@ async def main():
         avg_executions = sum(t.execution_count for t in traces) / len(traces)
         verify_rate = sum(1 for t in traces if t.has_verify) / len(traces)
         ideal_count = sum(
-            1 for t in traces
+            1
+            for t in traces
             if t.code_block_count >= 3 and t.execution_count > 0 and t.score > 0
         )
 
         print(f"\nResults:")
-        print(f"  Success rate: {success_count}/{len(traces)} ({100*success_count/len(traces):.1f}%)")
+        print(
+            f"  Success rate: {success_count}/{len(traces)} ({100*success_count/len(traces):.1f}%)"
+        )
         print(f"  Avg score: {sum(scores)/len(scores):.2f}")
 
         print(f"\nInterleaving Metrics:")
@@ -865,7 +954,9 @@ async def main():
         print(f"\nTool Use Metrics:")
         print(f"  Avg executions: {avg_executions:.1f}")
         print(f"  [VERIFY] rate: {100*verify_rate:.1f}%")
-        print(f"  Error recovery traces: {sum(1 for t in traces if t.had_errors and t.score > 0)}")
+        print(
+            f"  Error recovery traces: {sum(1 for t in traces if t.had_errors and t.score > 0)}"
+        )
 
         print(f"\nIdeal Traces (interleaved + tool + success):")
         print(f"  {ideal_count}/{len(traces)} ({100*ideal_count/len(traces):.1f}%)")
