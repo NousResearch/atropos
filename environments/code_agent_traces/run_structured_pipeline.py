@@ -179,18 +179,40 @@ class StructuredAgent:
         matches = re.findall(pattern, text, re.DOTALL)
         return matches[-1].strip() if matches else None
 
-    async def _execute_code(self, code: str, test_cases: Optional[Dict] = None) -> Dict:
-        """Execute code locally."""
+    async def _execute_code(
+        self, code: str, test_cases: Optional[Dict] = None, verbose: bool = True
+    ) -> Dict:
+        """Execute code locally with detailed verification."""
         from local_executor import execute_code_safe
 
         if not code:
-            return {"success": False, "error": "No code"}
+            return {"success": False, "error": "No code provided"}
+
+        if not code.strip():
+            return {"success": False, "error": "Empty code"}
 
         if test_cases:
             results, metadata = execute_code_safe(code, test_cases, timeout=10.0)
+
+            # Detailed test result output
+            if verbose and "results" in metadata:
+                actual = metadata.get("results", [])
+                expected = metadata.get("expected", [])
+                console.print("\n[bold]Test Results:[/bold]")
+                for i, (res, exp, passed) in enumerate(
+                    zip(actual, expected, results)
+                ):
+                    status = "[green]PASS[/green]" if passed else "[red]FAIL[/red]"
+                    console.print(f"  Test {i+1}: {status}")
+                    if not passed:
+                        console.print(f"    Expected: {exp}")
+                        console.print(f"    Got:      {res}")
+
             return {
                 "success": all(results),
                 "results": results,
+                "passed": sum(results),
+                "total": len(results),
                 "metadata": metadata,
             }
         else:
@@ -200,7 +222,7 @@ class StructuredAgent:
                 exec(code, exec_globals)
                 return {"success": True, "executed": True}
             except Exception as e:
-                return {"success": False, "error": str(e)}
+                return {"success": False, "error": str(e), "exception": type(e).__name__}
 
     async def solve(
         self,
@@ -302,15 +324,24 @@ Please try again with the structured format. Analyze what went wrong in <plannin
             if code:
                 last_code = code
                 trace.final_code = code
-                exec_result = await self._execute_code(code, test_cases)
+                exec_result = await self._execute_code(code, test_cases, verbose=verbose)
                 last_result = exec_result
                 trace.execution_result = exec_result
                 success = exec_result.get("success", False)
 
                 if verbose:
-                    status = (
-                        "[green]SUCCESS[/green]" if success else "[red]FAILED[/red]"
-                    )
+                    passed = exec_result.get("passed", 0)
+                    total = exec_result.get("total", 0)
+                    if total > 0:
+                        status = (
+                            "[green]SUCCESS[/green]"
+                            if success
+                            else f"[red]FAILED ({passed}/{total} tests)[/red]"
+                        )
+                    else:
+                        status = (
+                            "[green]SUCCESS[/green]" if success else "[red]FAILED[/red]"
+                        )
                     console.print(f"\nExecution: {status}")
                     if not success and "error" in exec_result:
                         console.print(f"Error: {exec_result['error']}")
@@ -361,8 +392,14 @@ Example:
 - two_sum([3, 2, 4], 6) -> [1, 2]""",
         "tests": {
             "fn_name": "two_sum",
-            "inputs": [[[2, 7, 11, 15], 9], [[3, 2, 4], 6], [[3, 3], 6]],
-            "outputs": [[0, 1], [1, 2], [0, 1]],
+            "inputs": [
+                [[2, 7, 11, 15], 9],  # Basic case
+                [[3, 2, 4], 6],  # Non-adjacent
+                [[3, 3], 6],  # Duplicate values
+                [[1, 5, 3, 7, 2], 9],  # Multiple valid pairs (3+6 or 7+2)
+                [[-1, -2, -3, -4, -5], -8],  # Negative numbers
+            ],
+            "outputs": [[0, 1], [1, 2], [0, 1], [3, 4], [2, 4]],
         },
     },
     {
@@ -374,8 +411,16 @@ Example:
 - is_palindrome("race a car") -> False""",
         "tests": {
             "fn_name": "is_palindrome",
-            "inputs": [["A man, a plan, a canal: Panama"], ["race a car"], [""]],
-            "outputs": [True, False, True],
+            "inputs": [
+                ["A man, a plan, a canal: Panama"],  # Classic palindrome
+                ["race a car"],  # Not a palindrome
+                [""],  # Empty string
+                ["a"],  # Single char
+                [".,"],  # Only punctuation (should be True - empty after filtering)
+                ["0P"],  # Case + number edge case (not palindrome)
+                ["Aa"],  # Case insensitive check
+            ],
+            "outputs": [True, False, True, True, True, False, True],
         },
     },
     {
@@ -387,8 +432,14 @@ Example:
 - max_subarray([1]) -> 1""",
         "tests": {
             "fn_name": "max_subarray",
-            "inputs": [[[-2, 1, -3, 4, -1, 2, 1, -5, 4]], [[1]], [[-1]]],
-            "outputs": [6, 1, -1],
+            "inputs": [
+                [[-2, 1, -3, 4, -1, 2, 1, -5, 4]],  # Classic Kadane
+                [[1]],  # Single element
+                [[-1]],  # Single negative
+                [[-2, -1]],  # All negative (return max single)
+                [[5, 4, -1, 7, 8]],  # Entire array is max
+            ],
+            "outputs": [6, 1, -1, -1, 23],
         },
     },
 ]
@@ -465,6 +516,15 @@ async def main():
         console.print(f"  Iterations: {trace.iterations}")
         console.print(f"  Steps: {len(trace.steps)}")
         console.print(f"  Phases: {[s.phase for s in trace.steps]}")
+
+        # Show test details
+        if trace.execution_result:
+            passed = trace.execution_result.get("passed", 0)
+            total = trace.execution_result.get("total", 0)
+            if total > 0:
+                console.print(f"  Tests: {passed}/{total} passed")
+            if "error" in trace.execution_result:
+                console.print(f"  Error: {trace.execution_result['error'][:100]}")
 
     # Save traces
     if args.output:
