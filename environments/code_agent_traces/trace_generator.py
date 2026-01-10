@@ -498,7 +498,9 @@ class TraceGenerator:
         except Exception as e:
             return -1.0, 0, 0, str(e)
 
-    async def generate_trace(self, problem: Dict, force_interleave: bool = False) -> GeneratedTrace:
+    async def generate_trace(
+        self, problem: Dict, force_interleave: bool = False
+    ) -> GeneratedTrace:
         """Generate a single trace for a problem."""
         if force_interleave:
             return await self._generate_trace_forced(problem)
@@ -616,7 +618,12 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
                     else:
                         # Retry with stricter prompt
                         messages.append({"role": "assistant", "content": response})
-                        messages.append({"role": "user", "content": "Invalid format. Output EXACTLY ONE step: [THINK] your thought OR [CODE]\\ncode\\n[/CODE]"})
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": "Invalid format. Output EXACTLY ONE step: [THINK] your thought OR [CODE]\\ncode\\n[/CODE]",
+                            }
+                        )
                         continue
 
                 # Add step
@@ -626,18 +633,32 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
                 if step_type == "think":
                     think_count += 1
                     # Prompt for code or next think
-                    messages.append({"role": "user", "content": "Now output the next step: either another [THINK] or [CODE]\\nyour_code\\n[/CODE] (max 3 lines)"})
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": "Now output the next step: either another [THINK] or [CODE]\\nyour_code\\n[/CODE] (max 3 lines)",
+                        }
+                    )
 
                 elif step_type == "code":
                     code_parts.append(content)
                     # Check if function seems complete
-                    combined_code = '\n'.join(code_parts)
+                    combined_code = "\n".join(code_parts)
                     if self._looks_complete(combined_code):
                         # Ask for verification
                         test_example = self._get_test_example(tests)
-                        messages.append({"role": "user", "content": FORCED_VERIFY_PROMPT.format(test_case=test_example)})
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": FORCED_VERIFY_PROMPT.format(
+                                    test_case=test_example
+                                ),
+                            }
+                        )
                     else:
-                        messages.append({"role": "user", "content": FORCED_CONTINUE_PROMPT})
+                        messages.append(
+                            {"role": "user", "content": FORCED_CONTINUE_PROMPT}
+                        )
 
                 elif step_type == "verify":
                     has_verify = True
@@ -645,10 +666,15 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
 
                 elif step_type == "wait":
                     # Bug catch, continue
-                    messages.append({"role": "user", "content": "Good catch! Now continue with [CODE] to fix it or [THINK] to reason more."})
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": "Good catch! Now continue with [CODE] to fix it or [THINK] to reason more.",
+                        }
+                    )
 
             # Combine all code
-            full_code = '\n'.join(code_parts)
+            full_code = "\n".join(code_parts)
 
             # Execute and score
             score, passed, total, error = self._execute_and_score(full_code, tests)
@@ -656,8 +682,14 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
             # Build combined assistant response for training
             combined_response = self._combine_steps_to_response(all_steps)
             training_messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},  # Use original system prompt for training
-                {"role": "user", "content": f"Solve this coding problem step-by-step:\n\n{prompt}\n\nUse [THINK], [CODE], and [VERIFY] markers."},
+                {
+                    "role": "system",
+                    "content": SYSTEM_PROMPT,
+                },  # Use original system prompt for training
+                {
+                    "role": "user",
+                    "content": f"Solve this coding problem step-by-step:\n\n{prompt}\n\nUse [THINK], [CODE], and [VERIFY] markers.",
+                },
                 {"role": "assistant", "content": combined_response},
             ]
 
@@ -688,23 +720,29 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
         text = text.strip()
 
         # Check for [VERIFY]
-        verify_match = re.search(r'\[VERIFY\](.*?)(?:\[/VERIFY\]|$)', text, re.DOTALL | re.IGNORECASE)
+        verify_match = re.search(
+            r"\[VERIFY\](.*?)(?:\[/VERIFY\]|$)", text, re.DOTALL | re.IGNORECASE
+        )
         if verify_match:
             return "verify", verify_match.group(1).strip()
 
         # Check for [CODE]...[/CODE]
-        code_match = re.search(r'\[CODE\](.*?)\[/CODE\]', text, re.DOTALL | re.IGNORECASE)
+        code_match = re.search(
+            r"\[CODE\](.*?)\[/CODE\]", text, re.DOTALL | re.IGNORECASE
+        )
         if code_match:
             content = code_match.group(1)
-            lines = content.split('\n')
+            lines = content.split("\n")
             while lines and not lines[0].strip():
                 lines.pop(0)
             while lines and not lines[-1].strip():
                 lines.pop()
-            return "code", '\n'.join(lines)
+            return "code", "\n".join(lines)
 
         # Check for [THINK]
-        think_match = re.search(r'\[THINK\]\s*(.*?)(?:\[|$)', text, re.DOTALL | re.IGNORECASE)
+        think_match = re.search(
+            r"\[THINK\]\s*(.*?)(?:\[|$)", text, re.DOTALL | re.IGNORECASE
+        )
         if think_match:
             content = think_match.group(1).strip()
             if content.upper().startswith("WAIT"):
@@ -712,7 +750,9 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
             return "think", content
 
         # Check for [WAIT]
-        wait_match = re.search(r'\[WAIT\]\s*(.*?)(?:\[|$)', text, re.DOTALL | re.IGNORECASE)
+        wait_match = re.search(
+            r"\[WAIT\]\s*(.*?)(?:\[|$)", text, re.DOTALL | re.IGNORECASE
+        )
         if wait_match:
             return "wait", wait_match.group(1).strip()
 
@@ -724,23 +764,27 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
             return False
 
         # Must have a function definition
-        if not re.search(r'def\s+\w+\s*\(', code):
+        if not re.search(r"def\s+\w+\s*\(", code):
             return False
 
         # Must have a return statement
-        if not re.search(r'\breturn\b', code):
+        if not re.search(r"\breturn\b", code):
             return False
 
         # Check indentation suggests function body is complete
-        lines = code.strip().split('\n')
+        lines = code.strip().split("\n")
         if len(lines) < 2:
             return False
 
         # Last non-empty line should be at function body level (indented)
         last_line = lines[-1]
-        if last_line.strip() and not last_line.startswith(' ') and not last_line.startswith('\t'):
+        if (
+            last_line.strip()
+            and not last_line.startswith(" ")
+            and not last_line.startswith("\t")
+        ):
             # Last line is at module level, might be incomplete
-            return 'return' in last_line
+            return "return" in last_line
 
         return True
 
@@ -773,7 +817,7 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
                 parts.append(f"[CODE]\n{step.content}\n[/CODE]")
             elif step.step_type == "verify":
                 parts.append(f"[VERIFY]\n{step.content}\n[/VERIFY]")
-        return '\n'.join(parts)
+        return "\n".join(parts)
 
     async def generate_traces(
         self,
@@ -795,11 +839,15 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
                 TextColumn("[progress.description]{task.description}"),
                 console=console,
             ) as progress:
-                task = progress.add_task(f"Generating {total} traces ({mode_str})...", total=total)
+                task = progress.add_task(
+                    f"Generating {total} traces ({mode_str})...", total=total
+                )
 
                 for problem in problems:
                     for _ in range(num_per_problem):
-                        trace = await self.generate_trace(problem, force_interleave=force_interleave)
+                        trace = await self.generate_trace(
+                            problem, force_interleave=force_interleave
+                        )
 
                         if only_success and trace.score <= 0:
                             progress.update(task, advance=1)
@@ -811,8 +859,12 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
             for i, problem in enumerate(problems):
                 for j in range(num_per_problem):
                     if verbose:
-                        print(f"Generating trace {i * num_per_problem + j + 1}/{total} ({mode_str})...")
-                    trace = await self.generate_trace(problem, force_interleave=force_interleave)
+                        print(
+                            f"Generating trace {i * num_per_problem + j + 1}/{total} ({mode_str})..."
+                        )
+                    trace = await self.generate_trace(
+                        problem, force_interleave=force_interleave
+                    )
                     if only_success and trace.score <= 0:
                         continue
                     traces.append(trace)
@@ -891,7 +943,9 @@ async def main():
     print()
 
     if args.force_interleave:
-        print("⚡ Using FORCED interleaving mode (multi-turn, slower but true granular reasoning)")
+        print(
+            "⚡ Using FORCED interleaving mode (multi-turn, slower but true granular reasoning)"
+        )
         print()
 
     # Initialize generator
@@ -931,18 +985,23 @@ async def main():
 
         # Count code blocks to measure interleaving
         avg_code_blocks = sum(
-            sum(1 for s in t.trace if s.step_type == "code")
-            for t in traces
+            sum(1 for s in t.trace if s.step_type == "code") for t in traces
         ) / len(traces)
 
-        print(f"  Success rate: {success_count}/{len(traces)} ({100*success_count/len(traces):.1f}%)")
+        print(
+            f"  Success rate: {success_count}/{len(traces)} ({100*success_count/len(traces):.1f}%)"
+        )
         print(f"  Avg score: {sum(scores)/len(scores):.2f}")
         print(f"  Avg [THINK] count: {avg_thinks:.1f}")
-        print(f"  Avg [CODE] blocks: {avg_code_blocks:.1f}")  # Key metric for interleaving
+        print(
+            f"  Avg [CODE] blocks: {avg_code_blocks:.1f}"
+        )  # Key metric for interleaving
         print(f"  [VERIFY] usage: {100*verify_rate:.1f}%")
 
         if args.force_interleave:
-            print(f"\n  ⚡ Interleaving ratio: {avg_thinks:.1f} thinks / {avg_code_blocks:.1f} code blocks")
+            print(
+                f"\n  ⚡ Interleaving ratio: {avg_thinks:.1f} thinks / {avg_code_blocks:.1f} code blocks"
+            )
             if avg_code_blocks >= 3:
                 print(f"  ✓ Good interleaving achieved!")
             else:
