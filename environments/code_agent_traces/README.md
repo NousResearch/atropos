@@ -1,131 +1,207 @@
-# Code Agent Traces with Ollama
+# Code Agent Traces
 
-Pipeline for generating agent traces for code generation tasks using Ollama with logprobs support.
+Interleaved reasoning pipeline for code generation with **two modes**:
 
-## Overview
+| Mode | File | Purpose |
+|------|------|---------|
+| **Trace Generator** | `trace_generator.py` | Standalone JSONL generation for fine-tuning |
+| **RL Environment** | `interleaved_code_env.py` | Atropos integration for online RL training |
 
-This environment generates coding solutions using Ollama's native API with full logprobs tracking, suitable for training RL agents on code generation tasks.
+## Quick Start
 
-The pipeline:
-1. Load coding problems from dataset
-2. Generate code solutions using Ollama with logprobs
-3. Execute code in sandboxed environment
-4. Score solutions based on test case results
-5. Output agent traces with tokens, logprobs, and rewards
+```bash
+# Set API key
+export OLLAMA_API_KEY=your_key
+
+# Generate synthetic traces → JSONL
+python trace_generator.py --output traces.jsonl --num-traces 10
+
+# Or run RL training with Atropos
+python interleaved_code_env.py serve --config config.yaml
+```
+
+## Interleaved Reasoning Format
+
+Models use `[THINK]`, `[CODE]`, `[VERIFY]` markers:
+
+```
+[THINK] I need a hash map for O(n) lookup
+[CODE]
+def two_sum(nums, target):
+    seen = {}
+    for i, num in enumerate(nums):
+        if target - num in seen:
+            return [seen[target - num], i]
+        seen[num] = i
+[/CODE]
+[VERIFY]
+Test: [2,7,11,15], target=9 → [0,1] ✓
+[/VERIFY]
+```
+
+## Architecture
+
+```
+code_agent_traces/
+├── trace_generator.py       # Standalone JSONL generation
+├── interleaved_code_env.py  # Atropos RL environment
+├── interleaved_agent.py     # Interactive demo
+├── run_structured_pipeline.py # Structured pipeline demo
+├── local_executor.py        # Safe code execution
+└── README.md
+```
 
 ## Requirements
 
 ```bash
-pip install aiohttp transformers datasets rich pydantic
-```
+# Core
+pip install aiohttp rich
 
-For code execution, you need Modal setup:
-```bash
-pip install modal
-modal token new
+# For trace generator
+pip install datasets  # optional, for HumanEval
+
+# For RL environment (Atropos)
+pip install atroposlib wandb transformers
 ```
 
 ## Configuration
 
-Set environment variables:
-
 ```bash
-# For local Ollama
-export OLLAMA_BASE_URL=http://localhost:11434
-export OLLAMA_MODEL=deepseek-r1:7b
-
-# For Ollama Cloud
+# Ollama Cloud
 export OLLAMA_BASE_URL=https://ollama.com
-export OLLAMA_API_KEY=your_api_key_here
-export OLLAMA_MODEL=deepseek-v3.1
+export OLLAMA_API_KEY=your_api_key
+export OLLAMA_MODEL=deepseek-v3.2
+
+# Local Ollama
+export OLLAMA_BASE_URL=http://localhost:11434
+export OLLAMA_MODEL=qwen2.5-coder:7b
 ```
 
-## Usage
+---
 
-### Test the Pipeline
+## Mode 1: Trace Generator (JSONL)
+
+Standalone script for generating fine-tuning data.
+
+### Usage
 
 ```bash
-python test_ollama_pipeline.py
+# Basic usage
+python trace_generator.py --output traces.jsonl --num-traces 10
+
+# Only successful traces (score > 0)
+python trace_generator.py --output traces.jsonl --only-success
+
+# Simple chat format for fine-tuning
+python trace_generator.py --output traces.jsonl --chat-format
 ```
 
-### Run the Environment
-
-```bash
-python agent_trace_env.py
-```
-
-### With Custom Configuration
-
-```bash
-python agent_trace_env.py \
-    --temperature 0.7 \
-    --group_size 8 \
-    --max_code_tokens 4096
-```
-
-## Output Format
-
-Agent traces are saved as JSON files:
+### Output Format (Full)
 
 ```json
 {
-  "problem_idx": 0,
-  "problem": "Write a function...",
-  "problem_type": "func",
-  "timestamp": "2024-01-10T12:00:00",
-  "solutions": [
-    {
-      "index": 0,
-      "score": 1.0,
-      "code": "def solution(): ...",
-      "content": "Here's my solution...",
-      "finish_reason": "stop",
-      "token_count": 256
-    }
-  ],
-  "summary": {
-    "total_solutions": 4,
-    "correct_solutions": 3,
-    "avg_token_count": 280
-  }
+    "problem": "Write a function two_sum...",
+    "messages": [
+        {"role": "system", "content": "..."},
+        {"role": "user", "content": "..."},
+        {"role": "assistant", "content": "[THINK]...[CODE]...[VERIFY]..."}
+    ],
+    "code": "def two_sum(nums, target):\n    ...",
+    "score": 1.0,
+    "tests_passed": 4,
+    "tests_total": 4,
+    "think_count": 3,
+    "has_verify": true,
+    "trace": [
+        {"type": "think", "content": "I need a hash map..."},
+        {"type": "code", "content": "def two_sum..."},
+        {"type": "verify", "content": "Test: [2,7,11,15]..."}
+    ]
 }
 ```
 
-## Ollama Logprobs API
+### Output Format (Chat - for fine-tuning)
 
-This pipeline uses Ollama's native `/api/chat` endpoint for logprobs support.
-The OpenAI-compatible endpoint (`/v1/chat/completions`) does not return logprobs.
-
-Example native API call:
-```python
-from atroposlib.envs.server_handling.ollama_server import OllamaServer, OllamaServerConfig
-
-config = OllamaServerConfig(
-    base_url="http://localhost:11434",
-    model_name="deepseek-r1:7b",
-)
-
-server = OllamaServer(config)
-
-completion, logprobs = await server.chat_completion_with_logprobs(
-    messages=[{"role": "user", "content": "Hello!"}],
-    max_tokens=100,
-    top_logprobs=5,
-)
-
-for token_info in logprobs[0]:
-    print(f"Token: {token_info['token']}, logprob: {token_info['logprob']:.4f}")
+```json
+{"messages": [...], "score": 1.0}
 ```
+
+---
+
+## Mode 2: RL Environment (Atropos)
+
+Full Atropos integration for online RL training.
+
+### Usage
+
+```bash
+# Serve for training
+python interleaved_code_env.py serve --config config.yaml
+
+# Process mode (generate without training)
+python interleaved_code_env.py process \
+    --env--total_steps 100 \
+    --env--data_path_to_save_groups data/traces.jsonl
+
+# Evaluation only
+python interleaved_code_env.py evaluate
+```
+
+### Config Example
+
+```yaml
+# config.yaml
+env:
+  group_size: 8
+  max_token_length: 4096
+  dataset_name: openai/openai_humaneval
+  partial_credit: true
+  think_bonus: 0.1
+  verify_bonus: 0.1
+
+openai:
+  base_url: http://localhost:9004/v1
+  model_name: your-model
+```
+
+### Reward Structure
+
+| Component | Reward |
+|-----------|--------|
+| All tests pass | +1.0 |
+| Partial success | -1.0 + 2×(passed/total) |
+| Execution error | -1.0 |
+| ≥2 [THINK] markers | +0.1 bonus |
+| [VERIFY] marker | +0.1 bonus |
+
+### WandB Metrics
+
+- `train/percent_correct` - Success rate
+- `train/avg_think_count` - Average [THINK] usage
+- `train/verify_rate` - [VERIFY] usage rate
+- `eval/accuracy` - Test set accuracy
+
+---
+
+## Demo Scripts
+
+```bash
+# Interactive interleaved agent
+python interleaved_agent.py --example 0
+
+# Structured Planning-Action-Reflection pipeline
+python run_structured_pipeline.py --example 0
+```
+
+---
 
 ## Supported Models
 
-Cloud models (via ollama.com):
-- `deepseek-v3.1` - 671B parameters
-- `deepseek-v3.2` - High efficiency reasoning
-- `gpt-oss:120b-cloud`
+**Cloud (ollama.com):**
+- `deepseek-v3.2` - Recommended
+- `deepseek-v3.1`
 
-Local models:
-- `deepseek-r1:7b`
+**Local:**
 - `qwen2.5-coder:7b`
-- `codellama:13b`
+- `deepseek-r1:7b`
 - Any Ollama-compatible model
