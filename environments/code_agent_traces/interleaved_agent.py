@@ -24,9 +24,9 @@ sys.path.insert(
 )
 
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.syntax import Syntax
-from rich.markdown import Markdown
 
 console = Console()
 
@@ -96,6 +96,7 @@ IMPORTANT RULES:
 @dataclass
 class ThinkingStep:
     """A single step in the interleaved trace."""
+
     step_type: str  # "think", "code", "verify", "wait"
     content: str
     line_number: int = 0
@@ -104,6 +105,7 @@ class ThinkingStep:
 @dataclass
 class InterleavedTrace:
     """Complete interleaved reasoning trace."""
+
     problem: str
     steps: List[ThinkingStep] = field(default_factory=list)
     final_code: Optional[str] = None
@@ -186,11 +188,11 @@ class InterleavedAgent:
 
         # Also try to extract from markdown code blocks as fallback
         # Pattern for [CODE]...[/CODE] blocks
-        code_block_pattern = r'\[CODE\](.*?)\[/CODE\]'
+        code_block_pattern = r"\[CODE\](.*?)\[/CODE\]"
         code_blocks = re.findall(code_block_pattern, text, re.DOTALL | re.IGNORECASE)
 
         # Split by markers
-        pattern = r'\[(THINK|CODE|VERIFY|WAIT)\](.*?)(?=\[(?:THINK|CODE|VERIFY|WAIT|/CODE)\]|$)'
+        pattern = r"\[(THINK|CODE|VERIFY|WAIT)\](.*?)(?=\[(?:THINK|CODE|VERIFY|WAIT|/CODE)\]|$)"
         matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
 
         for marker, content in matches:
@@ -199,16 +201,16 @@ class InterleavedAgent:
             # Handle /CODE closing tag - keep original whitespace for code
             if marker == "CODE":
                 # Find the matching code block to preserve indentation
-                content = re.sub(r'\[/CODE\].*$', '', content, flags=re.DOTALL)
+                content = re.sub(r"\[/CODE\].*$", "", content, flags=re.DOTALL)
                 # Remove only leading/trailing blank lines, not indentation
-                lines = content.split('\n')
+                lines = content.split("\n")
                 # Strip leading empty lines
                 while lines and not lines[0].strip():
                     lines.pop(0)
                 # Strip trailing empty lines
                 while lines and not lines[-1].strip():
                     lines.pop()
-                content = '\n'.join(lines)
+                content = "\n".join(lines)
             else:
                 content = content.strip()
 
@@ -216,43 +218,53 @@ class InterleavedAgent:
                 continue
 
             if marker == "CODE":
-                code_lines = content.split('\n')
+                code_lines = content.split("\n")
                 line_num += len(code_lines)
                 code_parts.append(content)
-                steps.append(ThinkingStep(
-                    step_type="code",
-                    content=content,
-                    line_number=line_num,
-                ))
+                steps.append(
+                    ThinkingStep(
+                        step_type="code",
+                        content=content,
+                        line_number=line_num,
+                    )
+                )
             elif marker == "THINK":
                 # Check if it's actually a WAIT
                 if content.upper().startswith("WAIT"):
-                    steps.append(ThinkingStep(
+                    steps.append(
+                        ThinkingStep(
+                            step_type="wait",
+                            content=content,
+                        )
+                    )
+                else:
+                    steps.append(
+                        ThinkingStep(
+                            step_type="think",
+                            content=content,
+                        )
+                    )
+            elif marker == "WAIT":
+                steps.append(
+                    ThinkingStep(
                         step_type="wait",
                         content=content,
-                    ))
-                else:
-                    steps.append(ThinkingStep(
-                        step_type="think",
-                        content=content,
-                    ))
-            elif marker == "WAIT":
-                steps.append(ThinkingStep(
-                    step_type="wait",
-                    content=content,
-                ))
+                    )
+                )
             elif marker == "VERIFY":
-                steps.append(ThinkingStep(
-                    step_type="verify",
-                    content=content,
-                ))
+                steps.append(
+                    ThinkingStep(
+                        step_type="verify",
+                        content=content,
+                    )
+                )
 
         # Reconstruct full code - maintain structure
-        full_code = '\n'.join(code_parts)
+        full_code = "\n".join(code_parts)
 
         # Fallback: if no code found, try markdown blocks
         if not full_code.strip():
-            md_pattern = r'```python\s*(.*?)```'
+            md_pattern = r"```python\s*(.*?)```"
             md_matches = re.findall(md_pattern, text, re.DOTALL)
             if md_matches:
                 full_code = md_matches[-1].strip()
@@ -275,9 +287,7 @@ class InterleavedAgent:
                 actual = metadata.get("results", [])
                 expected = metadata.get("expected", [])
                 console.print("\n[bold]Test Execution:[/bold]")
-                for i, (res, exp, passed) in enumerate(
-                    zip(actual, expected, results)
-                ):
+                for i, (res, exp, passed) in enumerate(zip(actual, expected, results)):
                     status = "[green]✓[/green]" if passed else "[red]✗[/red]"
                     console.print(f"  {status} Test {i+1}: ", end="")
                     if passed:
@@ -307,11 +317,13 @@ class InterleavedAgent:
         elif step.step_type == "wait":
             console.print(f"[bold yellow]⚠️  WAIT: {step.content}[/bold yellow]")
         elif step.step_type == "verify":
-            console.print(Panel(
-                step.content,
-                title="[magenta]🔍 VERIFY[/magenta]",
-                border_style="magenta",
-            ))
+            console.print(
+                Panel(
+                    step.content,
+                    title="[magenta]🔍 VERIFY[/magenta]",
+                    border_style="magenta",
+                )
+            )
         elif step.step_type == "code":
             syntax = Syntax(step.content, "python", theme="monokai", line_numbers=True)
             console.print(syntax)
@@ -365,6 +377,7 @@ Try again with more careful step-by-step reasoning. Use [THINK] WAIT when you sp
 
             # Get response
             import time
+
             start = time.time()
             response = await self._call_llm(messages)
             duration = (time.time() - start) * 1000
@@ -396,9 +409,13 @@ Try again with more careful step-by-step reasoning. Use [THINK] WAIT when you sp
                     passed = exec_result.get("passed", 0)
                     total = exec_result.get("total", 0)
                     if success:
-                        console.print(f"\n[bold green]✓ All {total} tests passed![/bold green]")
+                        console.print(
+                            f"\n[bold green]✓ All {total} tests passed![/bold green]"
+                        )
                     else:
-                        console.print(f"\n[bold red]✗ Failed: {passed}/{total} tests[/bold red]")
+                        console.print(
+                            f"\n[bold red]✗ Failed: {passed}/{total} tests[/bold red]"
+                        )
             else:
                 last_result = {"error": "No code extracted"}
                 if verbose:
