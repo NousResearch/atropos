@@ -446,7 +446,11 @@ def train(config: TrainingConfig):
                     "train/grad_norm": grad_norm.item(),
                     "train/pos_logp": total_pos_logp,
                     "train/neg_logp": total_neg_logp,
-                    "train/logp": total_logp,
+                    "train/logp": (
+                        float(total_logp.float().mean().item())
+                        if hasattr(total_logp, "float")
+                        else float(total_logp)
+                    ),
                 },
                 step=step + 1,
             )
