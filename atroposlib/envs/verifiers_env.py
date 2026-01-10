@@ -105,10 +105,7 @@ class AtroposOpenAIProxy:
 class VfEnvConfig(BaseEnvConfig):
     vf_env_name: str = Field(
         default="",
-        description=(
-            "Prime Env Hub environment id. Accepts 'owner/environment-name@version' (Prime docs) "
-            "or an installed verifiers env id like 'environment-name'."
-        ),
+        description="Prime Env Hub id ('owner/env@ver') or installed verifiers env id ('env').",
     )
     env_args: dict[str, Any] = Field(
         default_factory=dict,
@@ -116,9 +113,7 @@ class VfEnvConfig(BaseEnvConfig):
     )
     train_on_all_assistant_turns: bool = Field(
         default=True,
-        description=(
-            "If True, unmask all assistant/agent turns (recommended for multi-turn verifiers envs)."
-        ),
+        description="If True, train on all assistant turns (recommended for multi-turn envs).",
     )
     temperature: float | None = Field(
         default=None,
