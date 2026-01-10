@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-import inspect
 import os
 import time
 from typing import Any, Tuple, Union
@@ -16,17 +14,99 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
 )
 from atroposlib.envs.server_handling.server_baseline import ServerBaseline
-from atroposlib.envs.verifiers_openai_proxy import AtroposOpenAIProxy
-from atroposlib.envs.verifiers_utils import (
-    infer_model_name,
-    last_assistant_text,
-    normalize_vf_env_id,
-    reward_scales,
-    sanitize_messages,
-    weighted_sum,
-)
-from atroposlib.type_definitions import EvaluationSample, Item
+from atroposlib.type_definitions import EvaluationSample, Item, Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+
+
+def normalize_vf_env_id(env_id: str) -> str:
+    env_id = (env_id or "").strip()
+    if not env_id:
+        raise ValueError(
+            "env.vf_env_name must be set (Prime Env Hub id: 'owner/environment-name@version')."
+        )
+    env_id = env_id.split("@", 1)[0].strip()
+    if "/" in env_id:
+        env_id = env_id.rsplit("/", 1)[-1].strip()
+    if not env_id:
+        raise ValueError(
+            "env.vf_env_name must contain an environment name like 'owner/environment-name'."
+        )
+    return env_id
+
+
+def sanitize_messages(messages: list[dict[str, Any]]) -> list[Message]:
+    sanitized: list[Message] = []
+    for msg in messages:
+        role = msg.get("role")
+        if role == "developer":
+            role = "system"
+        if role == "agent":
+            role = "assistant"
+        if role not in ("system", "user", "assistant", "tool"):
+            continue
+        sanitized.append({"role": role, "content": msg.get("content", "")})
+    return sanitized
+
+
+def infer_model_name(
+    server_configs: Union[ServerBaseline, list[APIServerConfig], APIServerConfig],
+) -> str:
+    if isinstance(server_configs, list) and server_configs:
+        return server_configs[0].model_name
+    if isinstance(server_configs, APIServerConfig):
+        return server_configs.model_name
+    return getattr(server_configs, "model_name", "model")
+
+
+class _ChatCompletionsProxy:
+    def __init__(self, server: Any, split: str):
+        self._server = server
+        self._split = split
+
+    async def create(self, *args, **kwargs):
+        if args:
+            raise TypeError("Only keyword arguments are supported.")
+        messages = kwargs.pop("messages", None)
+        if messages is None:
+            raise TypeError("Missing required kwarg: messages")
+        kwargs.pop("model", None)
+        if "max_completion_tokens" in kwargs and "max_tokens" not in kwargs:
+            kwargs["max_tokens"] = kwargs.pop("max_completion_tokens")
+        return await self._server.chat_completion(
+            messages=messages,
+            split=self._split,
+            **kwargs,
+        )
+
+
+class _CompletionsProxy:
+    def __init__(self, server: Any, split: str):
+        self._server = server
+        self._split = split
+
+    async def create(self, *args, **kwargs):
+        if args:
+            raise TypeError("Only keyword arguments are supported.")
+        prompt = kwargs.pop("prompt", None)
+        if prompt is None:
+            raise TypeError("Missing required kwarg: prompt")
+        kwargs.pop("model", None)
+        return await self._server.completion(
+            prompt=prompt,
+            split=self._split,
+            **kwargs,
+        )
+
+
+class _ChatProxy:
+    def __init__(self, server: Any, split: str):
+        self.completions = _ChatCompletionsProxy(server, split)
+
+
+class AtroposOpenAIProxy:
+    def __init__(self, server: Any, split: str):
+        self.chat = _ChatProxy(server, split)
+        self.completions = _CompletionsProxy(server, split)
 
 
 class VfEnvConfig(BaseEnvConfig):
@@ -84,10 +164,8 @@ class VerifiersEnv(BaseEnv):
             self.vf_env = vf.load_environment(vf_env_id, **config.env_args)
         except Exception as e:
             raise RuntimeError(
-                "Failed to load verifiers environment. Ensure you've installed it via Prime, e.g.:\n"
-                "  prime login\n"
+                "Failed to load verifiers environment (Prime Env Hub). Install it first, e.g.:\n"
                 f"  prime env install {config.vf_env_name}@latest --with pip\n"
-                f"Then rerun with env.vf_env_name='{config.vf_env_name}' (or just '{vf_env_id}').\n"
                 f"Underlying error: {e}"
             ) from e
 
@@ -96,34 +174,6 @@ class VerifiersEnv(BaseEnv):
             f"hub_id='{config.vf_env_name}' resolved_env_id='{vf_env_id}' "
             f"env_type='{type(self.vf_env).__module__}.{type(self.vf_env).__name__}'"
         )
-
-        self.rubric = self.vf_env.rubric
-        self.parser = self.rubric.parser
-
-        self._supports_rubric_score_group = callable(
-            getattr(self.rubric, "score_group", None)
-        )
-        self._supports_rubric_score_rollout = callable(
-            getattr(self.rubric, "score_rollout", None)
-        )
-
-        self.reward_funcs: list[Any] = []
-        self.reward_weights: list[float] = []
-        self.reward_scales: list[float] = []
-        if not (
-            self._supports_rubric_score_group or self._supports_rubric_score_rollout
-        ):
-            get_funcs = getattr(self.rubric, "get_reward_funcs", None) or getattr(
-                self.rubric, "_get_reward_funcs", None
-            )
-            get_weights = getattr(self.rubric, "get_reward_weights", None) or getattr(
-                self.rubric, "_get_reward_weights", None
-            )
-            if callable(get_funcs):
-                self.reward_funcs = list(get_funcs())
-            if callable(get_weights):
-                self.reward_weights = list(map(float, get_weights()))
-            self.reward_scales = reward_scales(self.reward_weights)
 
         self._train_client = AtroposOpenAIProxy(server=self.server, split="train")
         self._eval_client = AtroposOpenAIProxy(server=self.server, split="eval")
@@ -159,143 +209,6 @@ class VerifiersEnv(BaseEnv):
         self.eval_ds = self.vf_env.get_eval_dataset()
         self.iter = 0
 
-    async def _score_states(self, states: list[dict[str, Any]]) -> None:
-        if not states:
-            return
-
-        score_sem = asyncio.Semaphore(int(getattr(self.vf_env, "max_workers", 512)))
-        if self._supports_rubric_score_group:
-            await self.rubric.score_group(states, score_sem=score_sem)
-            return
-
-        if self._supports_rubric_score_rollout:
-            await asyncio.gather(
-                *[
-                    self.rubric.score_rollout(state, score_sem=score_sem)
-                    for state in states
-                ]
-            )
-            return
-
-        if not (
-            self.reward_funcs
-            and callable(getattr(self.rubric, "call_reward_func", None))
-        ):
-            for state in states:
-                state["reward"] = float(state.get("reward") or 0.0)
-            return
-
-        async def score_one(state: dict[str, Any]) -> None:
-            prompt = state.get("prompt")
-            completion = state.get("completion")
-            answer = str(state.get("answer", ""))
-            task = str(state.get("task", "default"))
-            info = state.get("info") or {}
-            if not isinstance(info, dict):
-                info = {"info": info}
-
-            rewards = await asyncio.gather(
-                *[
-                    self.rubric.call_reward_func(
-                        func=func,
-                        prompt=prompt,
-                        completion=completion,
-                        answer=answer,
-                        state=state,
-                        task=task,
-                        info=info,
-                    )
-                    for func in self.reward_funcs
-                ]
-            )
-            state["reward"] = weighted_sum(
-                list(map(float, rewards)), self.reward_scales
-            )
-
-        await asyncio.gather(*[score_one(state) for state in states])
-
-    def _score_from_state(self, state: dict[str, Any]) -> float:
-        reward = state.get("reward", 0.0)
-        if reward is None:
-            reward = 0.0
-        try:
-            return float(reward)
-        except Exception:
-            return 0.0
-
-    async def _rollout(
-        self,
-        *,
-        item: Item,
-        prompt: Any,
-        answer: str,
-        task: str,
-        info: dict[str, Any],
-        sampling_args: dict[str, Any],
-        split: str,
-    ) -> tuple[Any, dict[str, Any]]:
-        client = self._train_client if split == "train" else self._eval_client
-
-        base_kwargs: dict[str, Any] = {
-            "client": client,
-            "model": self._model_name,
-            "prompt": prompt,
-            "answer": answer,
-            "task": task,
-            "info": info,
-            "sampling_args": sampling_args,
-        }
-
-        rollout_sig = inspect.signature(self.vf_env.rollout)
-        params = list(rollout_sig.parameters.values())
-        if params and params[0].name == "self":
-            params = params[1:]
-
-        accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
-        accepted_names = {
-            p.name
-            for p in params
-            if p.kind
-            in (
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                inspect.Parameter.KEYWORD_ONLY,
-            )
-        }
-
-        kwargs = (
-            base_kwargs
-            if accepts_kwargs
-            else {k: v for k, v in base_kwargs.items() if k in accepted_names}
-        )
-
-        input_first = bool(params) and params[0].name in {
-            "input",
-            "item",
-            "row",
-            "example",
-        }
-
-        result = (
-            await self.vf_env.rollout(item, **kwargs)
-            if input_first
-            else await self.vf_env.rollout(**kwargs)
-        )
-
-        if isinstance(result, tuple) and len(result) == 2:
-            completion, state = result
-        elif isinstance(result, dict):
-            state = result
-            completion = state.get("completion")
-        else:
-            raise TypeError(
-                f"Unsupported verifiers env rollout return type: {type(result)}"
-            )
-
-        if not isinstance(state, dict):
-            raise TypeError(f"Rollout state must be dict, got: {type(state)}")
-
-        return completion, state
-
     def _sampling_args(self, *, temperature_override: float | None) -> dict[str, Any]:
         base: dict[str, Any] = dict(getattr(self.vf_env, "sampling_args", {}) or {})
         base["n"] = 1
@@ -304,286 +217,153 @@ class VerifiersEnv(BaseEnv):
             base["temperature"] = temperature_override
         return base
 
-    def _extract_prompt_answer_task_info(
-        self, item: dict[str, Any]
-    ) -> tuple[Any, str, str, dict[str, Any]]:
-        prompt: Any | None = None
+    async def collect_trajectories(self, item: Item) -> tuple[Any, list[Item]]:
+        assert isinstance(item, dict)
 
-        if item.get("prompt") is not None:
-            prompt = item["prompt"]
-
+        prompt = item.get("prompt")
         if prompt is None:
-            question = item.get("question") or item.get("input") or item.get("problem")
-            if question is None:
-                raise KeyError(
-                    "verifiers dataset item missing prompt keys; expected one of: "
-                    "'prompt', 'question', 'input', 'problem'."
-                )
+            raise KeyError(
+                "verifiers dataset items are expected to have a 'prompt' column; got keys: "
+                f"{sorted(item.keys())}"
+            )
 
-            format_prompt = getattr(self.vf_env, "format_prompt", None)
-            if callable(format_prompt) and isinstance(question, str):
-                prompt = format_prompt(
-                    question,
-                    system_prompt=getattr(self.vf_env, "system_prompt", None),
-                    few_shot=getattr(self.vf_env, "few_shot", None),
-                )
-            else:
-                prompt = question
-
-        answer = str(
-            item.get("answer") or item.get("output") or item.get("response") or ""
-        )
-        task = str(item.get("task", "default"))
         info = item.get("info") or {}
         if not isinstance(info, dict):
             info = {"info": info}
-        return prompt, answer, task, info
 
-    async def _rollout_state(
-        self,
-        *,
-        item: Item,
-        prompt: Any,
-        answer: str,
-        task: str,
-        info: dict[str, Any],
-        sampling_args: dict[str, Any],
-        split: str,
-    ) -> dict[str, Any]:
-        completion, state = await self._rollout(
-            item=item,
-            prompt=prompt,
-            answer=answer,
-            task=task,
-            info=info,
-            sampling_args=sampling_args,
-            split=split,
-        )
-
-        if completion is None:
-            completion = state.get("completion")
-
-        if "prompt" not in state or state.get("prompt") is None:
-            state["prompt"] = prompt
-        state.setdefault("answer", answer)
-        state.setdefault("task", task)
-        state.setdefault("info", info)
-        state["completion"] = completion
-        return state
-
-    def _finish_reason_from_state(self, state: dict[str, Any]) -> str:
-        try:
-            trajectory = state.get("trajectory") or []
-            if trajectory:
-                response = trajectory[-1].get("response")
-                if response is not None and getattr(response, "choices", None):
-                    return str(response.choices[0].finish_reason or "")
-        except Exception:
-            return ""
-        return ""
-
-    def _scored_item_from_state(self, state: dict[str, Any]) -> dict[str, Any]:
-        score = self._score_from_state(state)
-        finish_reason = self._finish_reason_from_state(state)
-
-        prompt = state.get("prompt")
-        completion = state.get("completion")
-        message_type = getattr(self.vf_env, "message_type", "chat")
-
-        if (
-            message_type == "chat"
-            and isinstance(prompt, list)
-            and isinstance(completion, list)
-        ):
-            full_messages = sanitize_messages(prompt + completion)
-            tok = tokenize_for_trainer(
-                self.tokenizer,
-                full_messages,
-                include_messages=self.config.include_messages,
-                train_on_all_assistant_turns=self.config.train_on_all_assistant_turns,
-                finish_reason=finish_reason,
-            )
-            return {
-                "tokens": tok["tokens"],
-                "masks": tok["masks"],
-                "scores": float(score),
-                "messages": tok.get("messages"),
-            }
-
-        if not isinstance(prompt, str) or not isinstance(completion, str):
-            raise TypeError(
-                "Unsupported verifiers env rollout output for completion-style tokenization: "
-                f"prompt={type(prompt)} completion={type(completion)}"
-            )
-
-        prompt_tokens = self.tokenizer.encode(prompt)
-        if prompt_tokens and prompt_tokens[-1] == self.tokenizer.eos_token_id:
-            prompt_tokens = prompt_tokens[:-1]
-        full_tokens = self.tokenizer.encode(prompt + completion)
-        masks = [-100 for _ in range(len(prompt_tokens))] + full_tokens[
-            len(prompt_tokens) :
-        ]
-        messages = [
-            {"role": "user", "content": prompt},
-            {"role": "assistant", "content": completion},
-        ]
-        return {
-            "tokens": full_tokens,
-            "masks": masks,
-            "scores": float(score),
-            "messages": messages if self.config.include_messages else None,
+        rollout_input: dict[str, Any] = {
+            "prompt": prompt,
+            "answer": str(item.get("answer", "")),
+            "task": str(item.get("task", "default")),
+            "info": info,
+            "example_id": int(item.get("example_id", 0) or 0),
         }
 
-    async def collect_trajectories(self, item: Item) -> tuple[Any, list[Item]]:
-        assert isinstance(item, dict)
-        prompt, answer, task, info = self._extract_prompt_answer_task_info(item)
+        inputs = [dict(rollout_input) for _ in range(self.config.group_size)]
         sampling_args = self._sampling_args(
             temperature_override=self.config.temperature
         )
 
-        rollout_tasks = [
-            self._rollout_state(
-                item=item,
-                prompt=prompt,
-                answer=answer,
-                task=task,
-                info=info,
-                sampling_args=sampling_args,
-                split="train",
-            )
-            for _ in range(self.config.group_size)
-        ]
-        rollout_results = await asyncio.gather(*rollout_tasks, return_exceptions=True)
+        outputs = await self.vf_env.generate(
+            inputs,
+            client=self._train_client,
+            model=self._model_name,
+            sampling_args=sampling_args,
+            use_tqdm=False,
+        )
 
-        backlog: list[Item] = []
-        states: list[dict[str, Any]] = []
-        for res in rollout_results:
-            if isinstance(res, Exception):
-                backlog.append(item)
+        tokens_list: list[list[int]] = []
+        masks_list: list[list[int]] = []
+        scores_list: list[float] = []
+        messages_list: list[list[Message] | None] = []
+
+        for state, p, c, reward in zip(
+            outputs["state"],
+            outputs["prompt"],
+            outputs["completion"],
+            outputs["reward"],
+        ):
+            score = float(reward or 0.0)
+            finish_reason = "length" if bool(state.get("is_truncated")) else ""
+
+            if isinstance(p, list) and isinstance(c, list):
+                full_messages = sanitize_messages(p + c)
+                tok = tokenize_for_trainer(
+                    self.tokenizer,
+                    full_messages,
+                    include_messages=self.config.include_messages,
+                    train_on_all_assistant_turns=self.config.train_on_all_assistant_turns,
+                    finish_reason=finish_reason,
+                )
+                tokens_list.append(tok["tokens"])
+                masks_list.append(tok["masks"])
+                messages_list.append(tok.get("messages"))
+            elif isinstance(p, str) and isinstance(c, str):
+                prompt_tokens = self.tokenizer.encode(p)
+                if prompt_tokens and prompt_tokens[-1] == self.tokenizer.eos_token_id:
+                    prompt_tokens = prompt_tokens[:-1]
+                full_tokens = self.tokenizer.encode(p + c)
+                masks = [-100] * len(prompt_tokens) + full_tokens[len(prompt_tokens) :]
+                tokens_list.append(full_tokens)
+                masks_list.append(masks)
+                if self.config.include_messages:
+                    messages_list.append(
+                        [
+                            {"role": "user", "content": p},
+                            {"role": "assistant", "content": c},
+                        ]
+                    )
+                else:
+                    messages_list.append(None)
             else:
-                states.append(res)
+                return None, [item]
 
-        if len(states) != self.config.group_size:
-            return None, backlog
-
-        await self._score_states(states)
-
-        items: list[dict[str, Any]] = []
-        for state in states:
-            try:
-                items.append(self._scored_item_from_state(state))
-            except Exception:
-                backlog.append(item)
-
-        if len(items) != self.config.group_size:
-            return None, backlog
+            scores_list.append(score)
 
         group: ScoredDataGroup = {
-            "tokens": [it["tokens"] for it in items],
-            "masks": [it["masks"] for it in items],
-            "scores": [it["scores"] for it in items],
+            "tokens": tokens_list,
+            "masks": masks_list,
+            "scores": scores_list,
         }
         if self.config.include_messages:
-            group["messages"] = [it.get("messages") for it in items]
+            group["messages"] = messages_list
 
-        return group, backlog
+        return group, []
 
     async def evaluate(self, *args, **kwargs):
         if self.eval_ds is None:
             return {}
 
         start_time = time.time()
+        sampling_args = self._sampling_args(
+            temperature_override=self.config.eval_temperature
+        )
 
-        eval_num = self.config.eval_num_examples
-        if eval_num > 0:
-            eval_ds = self.eval_ds.select(range(min(eval_num, len(self.eval_ds))))
-        else:
-            eval_ds = self.eval_ds
+        outputs = await self.vf_env.evaluate(
+            client=self._eval_client,
+            model=self._model_name,
+            sampling_args=sampling_args,
+            num_examples=self.config.eval_num_examples,
+            max_concurrent=max(1, int(self.config.max_eval_workers)),
+            max_concurrent_generation=max(1, int(self.config.max_eval_workers)),
+            max_concurrent_scoring=max(1, int(self.config.max_eval_workers)),
+            use_tqdm=False,
+        )
 
-        scores: list[float] = []
+        rewards = [float(r or 0.0) for r in outputs["reward"]]
+        avg_total_score = (sum(rewards) / len(rewards)) if rewards else 0.0
+        eval_metrics = {"eval/avg_total_score": avg_total_score}
+
         samples: list[EvaluationSample] = []
-
-        async def eval_one(row: dict[str, Any]):
-            prompt, answer, task, info = self._extract_prompt_answer_task_info(row)
-            state = await self._rollout_state(
-                item=row,
-                prompt=prompt,
-                answer=answer,
-                task=task,
-                info=info,
-                sampling_args=self._sampling_args(
-                    temperature_override=self.config.eval_temperature
-                ),
-                split="eval",
-            )
-            await self._score_states([state])
-            score = self._score_from_state(state)
-            completion = state.get("completion")
-            prompt_for_scoring = state.get("prompt", prompt)
-            finish_reason = self._finish_reason_from_state(state)
-
-            question = row.get("question") or row.get("input") or row.get("problem")
-            if question is None and isinstance(prompt_for_scoring, list):
-                for msg in reversed(prompt_for_scoring):
-                    if msg.get("role") == "user":
-                        question = msg.get("content")
-                        break
-
-            parsed = ""
-            if (
-                getattr(self.vf_env, "message_type", "chat") == "chat"
-                and isinstance(prompt_for_scoring, list)
-                and isinstance(completion, list)
-            ):
-                parsed = self.parser.parse_answer(
-                    completion=last_assistant_text(completion)
-                )
-                full_messages = sanitize_messages(prompt_for_scoring + completion)
-            elif isinstance(completion, str):
-                parsed = self.parser.parse_answer(completion=completion)
-                full_messages = [
-                    {"role": "user", "content": prompt_for_scoring},
-                    {"role": "assistant", "content": completion},
+        for p, c, a, r, state in zip(
+            outputs["prompt"],
+            outputs["completion"],
+            outputs["answer"],
+            outputs["reward"],
+            outputs["state"],
+        ):
+            finish_reason = "length" if bool(state.get("is_truncated")) else None
+            if isinstance(p, list) and isinstance(c, list):
+                msgs: list[dict[str, Any]] = sanitize_messages(p + c)
+            elif isinstance(p, str) and isinstance(c, str):
+                msgs = [
+                    {"role": "user", "content": p},
+                    {"role": "assistant", "content": c},
                 ]
             else:
-                full_messages = []
+                msgs = []
 
-            sample: EvaluationSample = {
-                "messages": full_messages,
-                "question": str(question) if question is not None else None,
-                "gold_answer": answer,
-                "model_parsed": str(parsed) if parsed is not None else None,
-                "score": int(score) if float(score).is_integer() else None,
-                "correct": bool(score),
-                "finish_reason": finish_reason,
-            }
-
-            return float(score), sample
-
-        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-        for row in eval_ds:
-            queue.put_nowait(row)
-
-        async def worker():
-            while True:
-                try:
-                    row = queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    return
-                s, sample = await eval_one(row)
-                scores.append(s)
-                samples.append(sample)
-                queue.task_done()
-
-        max_workers = max(1, int(self.config.max_eval_workers))
-        workers = [
-            asyncio.create_task(worker())
-            for _ in range(min(max_workers, queue.qsize()))
-        ]
-        await asyncio.gather(*workers)
-
-        avg_total_score = (sum(scores) / len(scores)) if scores else 0.0
-        eval_metrics = {"eval/avg_total_score": avg_total_score}
+            samples.append(
+                {
+                    "messages": msgs,
+                    "gold_answer": str(a),
+                    "score": int(r) if float(r or 0.0).is_integer() else None,
+                    "correct": bool(r),
+                    "finish_reason": finish_reason,
+                }
+            )
+            if len(samples) >= 20:
+                break
 
         end_time = time.time()
         await self.evaluate_log(

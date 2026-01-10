@@ -11,55 +11,20 @@ This directory contains various environments for training and evaluating languag
 
 ---
 
-### Verifiers / Prime Env Hub Environment (`verifiers_server.py`)
+### Verifiers / Prime Env Hub (`verifiers_server.py`)
 
-Adapter environment for running Prime Intellect Environment Hub environments inside Atropos (via the `verifiers` spec).
+Run Prime Intellect Environment Hub environments inside Atropos via `verifiers`.
 
 **Prereqs:**
-- Install Prime CLI and authenticate:
-  - `uv tool install prime`
-  - `prime login`
-- Install an environment:
-  - `prime env install owner/environment-name@latest` (uses `uv`; requires an active venv via `uv venv`)
-  - or `prime env install owner/environment-name@latest --with pip` (system install)
-  - example: `prime env install adtygan/frozen-lake@latest --with pip`
+- `uv tool install prime && prime login`
+- `prime env install owner/environment-name@latest --with pip`
 
-**Usage Example:**
-```bash
-# Start the Atropos API server
-run-api
-
-# Run the verifiers adapter environment
-python environments/verifiers_server.py serve --config environments/configs/verifiers.yaml
-
-# Eval-only
-python environments/verifiers_server.py evaluate --config environments/configs/verifiers.yaml
-```
-
-**Configuration Notes:**
-- Set `env.vf_env_name` to the Env Hub id (`owner/environment-name`). The adapter will normalize to the verifiers env id expected by `verifiers.load_environment` (`environment-name`).
-- Pass environment-specific kwargs via `env.env_args`.
-
-**Verify it’s using Prime Env Hub:**
-- Confirm the env exists on the hub: `prime env info owner/environment-name`.
-- Confirm it's installed + loadable locally: `python -c "import verifiers; verifiers.load_environment('environment-name')"` (use the normalized id printed on startup).
-- When the env starts, it prints a line like:
-  - `[verifiers] loaded Prime Env Hub environment: hub_id='owner/environment-name' resolved_env_id='environment-name' env_type='...'`
-
-**Minimal local smoke test (no trainer required):**
+**Run + verify:**
 ```bash
 run-api
-
-# initialize the rollout server state
-curl -sS http://localhost:8000/reset_data
-curl -sS -X POST http://localhost:8000/register \
-  -H 'Content-Type: application/json' \
-  -d '{"wandb_group":"local","wandb_project":"local","batch_size":1,"max_token_len":4096,"checkpoint_dir":"","save_checkpoint_interval":-1,"starting_step":0,"num_steps":5}'
-
-# start the env microservice (in another terminal)
 python environments/verifiers_server.py serve --config environments/configs/verifiers.yaml
 
-# once the env has sent data, this returns non-empty tokens/masks/scores
+# in logs: "[verifiers] loaded Prime Env Hub environment: hub_id='...' resolved_env_id='...'"
 curl -sS http://localhost:8000/latest_example
 ```
 
