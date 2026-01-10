@@ -26,6 +26,9 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from datasets import Dataset, load_dataset
+
+# Local executor
+from local_executor import execute_code_safe
 from pydantic import Field
 
 from atroposlib.envs.base import (
@@ -35,9 +38,6 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
-
-# Local executor
-from local_executor import execute_code_safe
 
 logger = logging.getLogger(__name__)
 
@@ -188,13 +188,15 @@ class InterleavedCodeEnv(BaseEnv):
                 # Convert to our format
                 problems = []
                 for item in ds:
-                    problems.append({
-                        "task_id": item.get("task_id", f"task_{len(problems)}"),
-                        "prompt": item.get("prompt", ""),
-                        "canonical_solution": item.get("canonical_solution", ""),
-                        "test": item.get("test", ""),
-                        "entry_point": item.get("entry_point", "solution"),
-                    })
+                    problems.append(
+                        {
+                            "task_id": item.get("task_id", f"task_{len(problems)}"),
+                            "prompt": item.get("prompt", ""),
+                            "canonical_solution": item.get("canonical_solution", ""),
+                            "test": item.get("test", ""),
+                            "entry_point": item.get("entry_point", "solution"),
+                        }
+                    )
             else:
                 # Generic dataset loading
                 ds = load_dataset(
@@ -226,7 +228,7 @@ class InterleavedCodeEnv(BaseEnv):
         problems = [
             {
                 "task_id": "two_sum",
-                "prompt": "def two_sum(nums: List[int], target: int) -> List[int]:\n    \"\"\"Return indices of two numbers that add up to target.\"\"\"\n",
+                "prompt": 'def two_sum(nums: List[int], target: int) -> List[int]:\n    """Return indices of two numbers that add up to target."""\n',
                 "test": {
                     "fn_name": "two_sum",
                     "inputs": [[[2, 7, 11, 15], 9], [[3, 2, 4], 6], [[3, 3], 6]],
@@ -236,17 +238,21 @@ class InterleavedCodeEnv(BaseEnv):
             },
             {
                 "task_id": "is_palindrome",
-                "prompt": "def is_palindrome(s: str) -> bool:\n    \"\"\"Check if string is palindrome (alphanumeric only, case insensitive).\"\"\"\n",
+                "prompt": 'def is_palindrome(s: str) -> bool:\n    """Check if string is palindrome (alphanumeric only, case insensitive)."""\n',
                 "test": {
                     "fn_name": "is_palindrome",
-                    "inputs": [["A man, a plan, a canal: Panama"], ["race a car"], [""]],
+                    "inputs": [
+                        ["A man, a plan, a canal: Panama"],
+                        ["race a car"],
+                        [""],
+                    ],
                     "outputs": [True, False, True],
                 },
                 "entry_point": "is_palindrome",
             },
             {
                 "task_id": "max_subarray",
-                "prompt": "def max_subarray(nums: List[int]) -> int:\n    \"\"\"Find contiguous subarray with largest sum.\"\"\"\n",
+                "prompt": 'def max_subarray(nums: List[int]) -> int:\n    """Find contiguous subarray with largest sum."""\n',
                 "test": {
                     "fn_name": "max_subarray",
                     "inputs": [[[-2, 1, -3, 4, -1, 2, 1, -5, 4]], [[1]], [[-1]]],
@@ -256,7 +262,7 @@ class InterleavedCodeEnv(BaseEnv):
             },
             {
                 "task_id": "reverse_linked_list",
-                "prompt": "def reverse_list(head: Optional[ListNode]) -> Optional[ListNode]:\n    \"\"\"Reverse a singly linked list.\"\"\"\n",
+                "prompt": 'def reverse_list(head: Optional[ListNode]) -> Optional[ListNode]:\n    """Reverse a singly linked list."""\n',
                 "test": {
                     "fn_name": "reverse_list",
                     "inputs": [],  # Would need special handling
@@ -266,7 +272,7 @@ class InterleavedCodeEnv(BaseEnv):
             },
             {
                 "task_id": "valid_parentheses",
-                "prompt": "def is_valid(s: str) -> bool:\n    \"\"\"Check if parentheses string is valid.\"\"\"\n",
+                "prompt": 'def is_valid(s: str) -> bool:\n    """Check if parentheses string is valid."""\n',
                 "test": {
                     "fn_name": "is_valid",
                     "inputs": [["()"], ["()[]{}"], ["(]"], ["([)]"], ["{[]}"]],
@@ -320,11 +326,16 @@ Remember:
         if isinstance(test_info, str):
             test_info = {"raw_test": test_info}
 
-        return (messages_tuple, json.dumps({
-            "task_id": task_id,
-            "entry_point": problem.get("entry_point", "solution"),
-            "test": test_info,
-        }))
+        return (
+            messages_tuple,
+            json.dumps(
+                {
+                    "task_id": task_id,
+                    "entry_point": problem.get("entry_point", "solution"),
+                    "test": test_info,
+                }
+            ),
+        )
 
     def _parse_response(self, text: str) -> Tuple[str, int, int, bool]:
         """
@@ -337,13 +348,13 @@ Remember:
         has_verify = False
 
         # Count [THINK] markers
-        think_count = len(re.findall(r'\[THINK\]', text, re.IGNORECASE))
+        think_count = len(re.findall(r"\[THINK\]", text, re.IGNORECASE))
 
         # Check for [VERIFY]
-        has_verify = bool(re.search(r'\[VERIFY\]', text, re.IGNORECASE))
+        has_verify = bool(re.search(r"\[VERIFY\]", text, re.IGNORECASE))
 
         # Extract code from [CODE]...[/CODE] blocks
-        code_pattern = r'\[CODE\](.*?)\[/CODE\]'
+        code_pattern = r"\[CODE\](.*?)\[/CODE\]"
         matches = re.findall(code_pattern, text, re.DOTALL | re.IGNORECASE)
 
         for match in matches:
@@ -353,14 +364,14 @@ Remember:
 
         # Fallback: try markdown code blocks
         if not code_parts:
-            md_pattern = r'```python\s*(.*?)```'
+            md_pattern = r"```python\s*(.*?)```"
             matches = re.findall(md_pattern, text, re.DOTALL)
             for match in matches:
                 code = match.strip()
                 if code:
                     code_parts.append(code)
 
-        full_code = '\n'.join(code_parts)
+        full_code = "\n".join(code_parts)
         return full_code, think_count, has_verify
 
     def _execute_and_score(
@@ -418,7 +429,9 @@ Remember:
     async def collect_trajectory(self, item) -> Tuple[Optional[Dict], List]:
         """Collect a single trajectory for one rollout."""
         messages_tuple, expected_raw = item
-        expected = json.loads(expected_raw) if isinstance(expected_raw, str) else expected_raw
+        expected = (
+            json.loads(expected_raw) if isinstance(expected_raw, str) else expected_raw
+        )
 
         # Convert back to messages
         prompt_msgs = [dict(r) for r in messages_tuple]
@@ -462,8 +475,10 @@ Remember:
         tok = tokenize_for_trainer(self.tokenizer, full_ctx)
 
         if DEBUG:
-            logger.info(f"Task: {expected.get('task_id')}, Score: {score:.2f}, "
-                       f"Thinks: {think_count}, Verify: {has_verify}")
+            logger.info(
+                f"Task: {expected.get('task_id')}, Score: {score:.2f}, "
+                f"Thinks: {think_count}, Verify: {has_verify}"
+            )
 
         return {
             "tokens": tok["tokens"],
@@ -515,20 +530,20 @@ Remember:
 
         # Add custom metrics
         if self.percent_correct_buffer:
-            wandb_metrics["train/percent_correct"] = (
-                sum(self.percent_correct_buffer) / len(self.percent_correct_buffer)
-            )
+            wandb_metrics["train/percent_correct"] = sum(
+                self.percent_correct_buffer
+            ) / len(self.percent_correct_buffer)
             self.percent_correct_buffer = []
 
         if self.think_counts:
-            wandb_metrics["train/avg_think_count"] = (
-                sum(self.think_counts) / len(self.think_counts)
+            wandb_metrics["train/avg_think_count"] = sum(self.think_counts) / len(
+                self.think_counts
             )
             self.think_counts = []
 
         if self.verify_counts:
-            wandb_metrics["train/verify_rate"] = (
-                sum(self.verify_counts) / len(self.verify_counts)
+            wandb_metrics["train/verify_rate"] = sum(self.verify_counts) / len(
+                self.verify_counts
             )
             self.verify_counts = []
 
