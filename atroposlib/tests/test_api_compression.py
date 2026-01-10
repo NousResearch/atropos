@@ -8,6 +8,7 @@ import requests
 
 from atroposlib.tests.api_test_utils import launch_api_for_testing
 
+
 @pytest.fixture(scope="module")
 def api_server():
     proc, base_url = launch_api_for_testing()
