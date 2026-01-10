@@ -73,89 +73,65 @@ except ImportError:
 
 SYSTEM_PROMPT = """You are an expert Python programmer with access to a code execution tool.
 
-You solve problems step-by-step, executing code to verify your solution works.
+## CRITICAL RULES
 
-## Available Tool
+1. You can ONLY output these markers:
+   - [THINK] your reasoning
+   - [CODE] ... [/CODE] your code
+   - [VERIFY] your verification (only after tests pass)
 
-You have ONE tool: code execution. Use it by writing:
+2. You must NEVER output [RESULT] or [ERROR] - those come from the SYSTEM only!
 
-[CODE]
-your_python_code_here()
-[/CODE]
-
-After each [CODE] block, you will receive execution results:
-- [RESULT] shows test results (PASS/FAIL for each test case)
-- [ERROR] shows runtime errors or exceptions
+3. After writing [CODE]...[/CODE], STOP and WAIT for test results.
 
 ## Workflow
 
-1. [THINK] - Reason about the problem or analyze execution results
-2. [CODE] - Write or fix code (will be executed automatically)
-3. See [RESULT] or [ERROR] - Analyze what happened
-4. Repeat until all tests pass
-5. [VERIFY] - Trace through your final solution to confirm understanding
+1. [THINK] - Reason about the problem
+2. [CODE] - Write code, then STOP
+3. << SYSTEM provides [RESULT] or [ERROR] >>
+4. [THINK] - Analyze results, fix if needed
+5. Repeat until success
+6. [VERIFY] - Explain your solution
 
-## Rules
+## Example (YOUR output only, not system messages)
 
-- Write ONLY the function, no test code or print statements
-- After seeing test failures, analyze WHY and fix the bug
-- Use [THINK] to reason about errors before attempting fixes
-- Maximum 5 code iterations allowed
-- After all tests pass, use [VERIFY] to explain your solution
-
-## Example Session
-
-[THINK] I need to find two indices that sum to target. I'll use a hash map for O(n) time.
+[THINK] I need to find two indices that sum to target. I'll use a hash map.
 [CODE]
 def two_sum(nums, target):
     seen = {}
     for i, num in enumerate(nums):
-        complement = target - num
-        if complement in seen:
-            return [seen[complement], i]
+        if target - num in seen:
+            return [seen[target-num], i]
         seen[num] = i
+    return []
 [/CODE]
 
-[RESULT]
-Test 1: PASS - two_sum([2,7,11,15], 9) = [0, 1]
-Test 2: FAIL - two_sum([3,3], 6) returned None, expected [0, 1]
-[/RESULT]
+<< STOP HERE - wait for system to execute and return results >>
 
-[THINK] The function doesn't return anything when no pair is found, but also test 2 shows [3,3] with target 6.
-Wait, the function should find 3+3=6 at indices 0,1. Let me trace:
-- i=0: num=3, complement=3, seen={} -> not found, add seen[3]=0
-- i=1: num=3, complement=3, seen={3:0} -> found! return [0,1]
-Actually the logic is correct. But I'm not returning for the "no solution" case. Let me check if that's causing issues.
+## After receiving results, you may continue:
+
+[THINK] The test failed because... Let me fix it.
 [CODE]
-def two_sum(nums, target):
-    seen = {}
-    for i, num in enumerate(nums):
-        complement = target - num
-        if complement in seen:
-            return [seen[complement], i]
-        seen[num] = i
-    return []  # No solution found
+# fixed code here
 [/CODE]
 
-[RESULT]
-All 4 tests passed!
-[/RESULT]
+## When all tests pass:
 
 [VERIFY]
-The solution uses a hash map to achieve O(n) time complexity:
-- For each number, we check if its complement (target - num) exists in seen
-- If found, return the stored index and current index
-- Otherwise, store the current number and its index
-This handles duplicates correctly because we check before storing."""
+The solution works by... (trace through the algorithm)
+[/VERIFY]"""
 
 
-INITIAL_PROMPT_TEMPLATE = """Solve this coding problem. You have access to code execution - your code will be tested automatically.
+INITIAL_PROMPT_TEMPLATE = """Solve this coding problem. Your code will be executed and tested automatically.
 
 Problem:
 {problem}
 
-Start with [THINK] to analyze the problem, then write your solution in [CODE]...[/CODE].
-You'll see test results after each code submission."""
+Instructions:
+1. Start with [THINK] to analyze the problem
+2. Write your solution in [CODE]...[/CODE]
+3. STOP after [/CODE] - do NOT write [RESULT] or test output
+4. Wait for the system to execute your code and show results"""
 
 
 CONTINUE_AFTER_RESULT = """The code was executed. Review the results above.
@@ -438,8 +414,8 @@ class ToolBasedTraceGenerator:
             return self.base_url[:-3] + "/api/chat"
         return self.base_url + "/api/chat"
 
-    async def _call_llm(self, messages: List[Dict]) -> str:
-        """Call LLM API."""
+    async def _call_llm(self, messages: List[Dict], stop_after_code: bool = True) -> str:
+        """Call LLM API with stop sequences to prevent hallucination."""
         import aiohttp
 
         url = self._get_api_url()
@@ -454,6 +430,8 @@ class ToolBasedTraceGenerator:
             "options": {
                 "temperature": self.temperature,
                 "num_predict": self.max_tokens,
+                # Stop sequences to prevent model from hallucinating results
+                "stop": ["[RESULT]", "[ERROR]", "\n[RESULT]", "\n[ERROR]"] if stop_after_code else [],
             },
         }
 
@@ -463,7 +441,24 @@ class ToolBasedTraceGenerator:
             ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-                return data.get("message", {}).get("content", "")
+                response = data.get("message", {}).get("content", "")
+
+                # Extra safety: strip any hallucinated results that got through
+                response = self._strip_hallucinated_results(response)
+                return response
+
+    def _strip_hallucinated_results(self, text: str) -> str:
+        """Remove any hallucinated [RESULT] or [ERROR] blocks from model output."""
+        # These markers should ONLY come from the system, not the model
+        # If model outputs them, it's hallucinating
+
+        # Find and remove [RESULT]...[/RESULT] or [RESULT]... to end
+        text = re.sub(r'\[RESULT\].*?(?:\[/RESULT\]|$)', '', text, flags=re.DOTALL | re.IGNORECASE)
+
+        # Find and remove [ERROR]...[/ERROR] or [ERROR]... to end
+        text = re.sub(r'\[ERROR\].*?(?:\[/ERROR\]|$)', '', text, flags=re.DOTALL | re.IGNORECASE)
+
+        return text.strip()
 
     def _extract_code(self, text: str) -> Optional[str]:
         """Extract code from [CODE]...[/CODE] block."""
