@@ -93,7 +93,6 @@ class ServerHarness:
         self.sem = AsyncSemWithAdaptiveWeight(1)
         self.eval_sem = AsyncSemWithAdaptiveWeight(1)
         self.server_healthy = True
-        pass
 
     def conv_to_dictkey(self, input_message: List[Dict[str, str]]) -> str:
         dictkey = list()

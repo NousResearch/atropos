@@ -145,8 +145,6 @@ class VerifiersEnv(BaseEnv):
         if self.config.group_size <= 1 and self.config.ensure_scores_are_not_same:
             self.config.ensure_scores_are_not_same = False
 
-        self.eval_metrics: list[tuple[str, float]] = []
-
         vf_env_id = normalize_vf_env_id(config.vf_env_name)
         try:
             self.vf_env = vf.load_environment(vf_env_id, **config.env_args)
@@ -157,7 +155,7 @@ class VerifiersEnv(BaseEnv):
                 f"Underlying error: {e}"
             ) from e
 
-        print(
+        logging.info(
             "[verifiers] loaded Prime Env Hub environment: "
             f"hub_id='{config.vf_env_name}' resolved_env_id='{vf_env_id}' "
             f"env_type='{type(self.vf_env).__module__}.{type(self.vf_env).__name__}'"
@@ -261,7 +259,7 @@ class VerifiersEnv(BaseEnv):
             outputs["reward"],
         ):
             score = float(reward or 0.0)
-            finish_reason = "length" if bool(state.get("is_truncated")) else ""
+            finish_reason = "length" if state.get("is_truncated") else None
 
             if isinstance(p, list) and isinstance(c, list):
                 full_messages = sanitize_messages(p + c)
@@ -343,7 +341,7 @@ class VerifiersEnv(BaseEnv):
             outputs["reward"],
             outputs["state"],
         ):
-            finish_reason = "length" if bool(state.get("is_truncated")) else None
+            finish_reason = "length" if state.get("is_truncated") else None
             if isinstance(p, list) and isinstance(c, list):
                 msgs: list[dict[str, Any]] = sanitize_messages(p + c)
             elif isinstance(p, str) and isinstance(c, str):
@@ -358,7 +356,7 @@ class VerifiersEnv(BaseEnv):
                 {
                     "messages": msgs,
                     "gold_answer": str(a),
-                    "score": int(r) if float(r or 0.0).is_integer() else None,
+                    "score": int(r) if r and float(r).is_integer() else None,
                     "correct": bool(r),
                     "finish_reason": finish_reason,
                 }
