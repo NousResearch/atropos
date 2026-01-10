@@ -11,12 +11,13 @@ import multiprocessing
 import signal
 import sys
 import traceback
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from typing import Any, Dict, List, Optional, Tuple
 
 
 class TimeoutError(Exception):
     """Raised when code execution times out."""
+
     pass
 
 
@@ -44,22 +45,58 @@ class ExecutionResult:
         }
 
 
-def _execute_code_worker(code: str, test_inputs: List, fn_name: str, queue: multiprocessing.Queue):
+def _execute_code_worker(
+    code: str, test_inputs: List, fn_name: str, queue: multiprocessing.Queue
+):
     """Worker function that runs in a separate process."""
     try:
         # Restrict builtins for safety
         safe_builtins = {
-            'abs': abs, 'all': all, 'any': any, 'bin': bin, 'bool': bool,
-            'chr': chr, 'dict': dict, 'divmod': divmod, 'enumerate': enumerate,
-            'filter': filter, 'float': float, 'format': format, 'frozenset': frozenset,
-            'hash': hash, 'hex': hex, 'int': int, 'isinstance': isinstance,
-            'issubclass': issubclass, 'iter': iter, 'len': len, 'list': list,
-            'map': map, 'max': max, 'min': min, 'next': next, 'oct': oct,
-            'ord': ord, 'pow': pow, 'print': print, 'range': range, 'repr': repr,
-            'reversed': reversed, 'round': round, 'set': set, 'slice': slice,
-            'sorted': sorted, 'str': str, 'sum': sum, 'tuple': tuple, 'type': type,
-            'zip': zip, 'True': True, 'False': False, 'None': None,
-            '__import__': __import__,  # Needed for some imports
+            "abs": abs,
+            "all": all,
+            "any": any,
+            "bin": bin,
+            "bool": bool,
+            "chr": chr,
+            "dict": dict,
+            "divmod": divmod,
+            "enumerate": enumerate,
+            "filter": filter,
+            "float": float,
+            "format": format,
+            "frozenset": frozenset,
+            "hash": hash,
+            "hex": hex,
+            "int": int,
+            "isinstance": isinstance,
+            "issubclass": issubclass,
+            "iter": iter,
+            "len": len,
+            "list": list,
+            "map": map,
+            "max": max,
+            "min": min,
+            "next": next,
+            "oct": oct,
+            "ord": ord,
+            "pow": pow,
+            "print": print,
+            "range": range,
+            "repr": repr,
+            "reversed": reversed,
+            "round": round,
+            "set": set,
+            "slice": slice,
+            "sorted": sorted,
+            "str": str,
+            "sum": sum,
+            "tuple": tuple,
+            "type": type,
+            "zip": zip,
+            "True": True,
+            "False": False,
+            "None": None,
+            "__import__": __import__,  # Needed for some imports
         }
 
         # Capture stdout/stderr
@@ -120,9 +157,11 @@ def execute_code_safe(
     # Handle string inputs (JSON)
     if isinstance(inputs, str):
         import json
+
         inputs = json.loads(inputs)
     if isinstance(expected_outputs, str):
         import json
+
         expected_outputs = json.loads(expected_outputs)
 
     # Create queue for results
@@ -221,9 +260,7 @@ class LocalCodeExecutor:
     def __init__(self, timeout: float = 15.0):
         self.timeout = timeout
 
-    async def run_test(
-        self, test_cases: Dict, code: str
-    ) -> Tuple[List[bool], Dict]:
+    async def run_test(self, test_cases: Dict, code: str) -> Tuple[List[bool], Dict]:
         """
         Run tests on code (async interface for compatibility).
 
@@ -268,7 +305,7 @@ if __name__ == "__main__":
     # Test the executor
     import asyncio
 
-    test_code = '''
+    test_code = """
 def two_sum(nums, target):
     seen = {}
     for i, num in enumerate(nums):
@@ -277,7 +314,7 @@ def two_sum(nums, target):
             return [seen[complement], i]
         seen[num] = i
     return []
-'''
+"""
 
     test_cases = {
         "fn_name": "two_sum",

@@ -28,7 +28,9 @@ import os
 import sys
 
 # Add parent directories to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 
 from rich import print as rprint
 from rich.console import Console
@@ -39,7 +41,10 @@ console = Console()
 
 async def test_ollama_connection():
     """Test basic Ollama Cloud connection."""
-    from atroposlib.envs.server_handling.ollama_server import OllamaServer, OllamaServerConfig
+    from atroposlib.envs.server_handling.ollama_server import (
+        OllamaServer,
+        OllamaServerConfig,
+    )
 
     rprint("\n[bold cyan]=" * 60)
     rprint("[bold cyan]Test 1: Ollama Cloud Connection (DeepSeek V3.2)")
@@ -77,7 +82,10 @@ async def test_ollama_connection():
 
 async def test_logprobs():
     """Test logprobs extraction from Ollama."""
-    from atroposlib.envs.server_handling.ollama_server import OllamaServer, OllamaServerConfig
+    from atroposlib.envs.server_handling.ollama_server import (
+        OllamaServer,
+        OllamaServerConfig,
+    )
 
     rprint("\n[bold cyan]=" * 60)
     rprint("[bold cyan]Test 2: Logprobs Extraction")
@@ -94,7 +102,12 @@ async def test_logprobs():
 
     try:
         completion, logprobs = await server.chat_completion_with_logprobs(
-            messages=[{"role": "user", "content": "What is 2 + 2? Reply with just the number."}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": "What is 2 + 2? Reply with just the number.",
+                }
+            ],
             max_tokens=20,
             temperature=0.7,
             top_logprobs=5,
@@ -122,19 +135,25 @@ async def test_logprobs():
             console.print(table)
             return True
         else:
-            rprint("[yellow]No logprobs returned. This is expected for some Ollama configurations.[/yellow]")
+            rprint(
+                "[yellow]No logprobs returned. This is expected for some Ollama configurations.[/yellow]"
+            )
             return True
 
     except Exception as e:
         rprint(f"[red]Logprobs test failed: {e}[/red]")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 async def test_code_generation():
     """Test code generation with the pipeline."""
-    from atroposlib.envs.server_handling.ollama_server import OllamaServer, OllamaServerConfig
+    from atroposlib.envs.server_handling.ollama_server import (
+        OllamaServer,
+        OllamaServerConfig,
+    )
 
     rprint("\n[bold cyan]=" * 60)
     rprint("[bold cyan]Test 3: Code Generation")
@@ -160,8 +179,15 @@ Example:
 """
 
     messages = [
-        {"role": "system", "content": "You are an expert Python programmer. Write clean, efficient code."},
-        {"role": "user", "content": problem + "\n\nEnclose your code in ```python and ``` delimiters."},
+        {
+            "role": "system",
+            "content": "You are an expert Python programmer. Write clean, efficient code.",
+        },
+        {
+            "role": "user",
+            "content": problem
+            + "\n\nEnclose your code in ```python and ``` delimiters.",
+        },
     ]
 
     try:
@@ -178,6 +204,7 @@ Example:
 
         # Extract and test the code
         import re
+
         code_match = re.search(r"```python\s*(.*?)```", response, re.DOTALL)
         if code_match:
             code = code_match.group(1).strip()
@@ -191,9 +218,13 @@ Example:
                 if "two_sum" in exec_globals:
                     result = exec_globals["two_sum"]([2, 7, 11, 15], 9)
                     if result == [0, 1]:
-                        rprint(f"[green]Code execution successful! Result: {result}[/green]")
+                        rprint(
+                            f"[green]Code execution successful! Result: {result}[/green]"
+                        )
                     else:
-                        rprint(f"[yellow]Code executed but wrong result: {result}[/yellow]")
+                        rprint(
+                            f"[yellow]Code executed but wrong result: {result}[/yellow]"
+                        )
             except Exception as e:
                 rprint(f"[red]Code execution failed: {e}[/red]")
 
@@ -202,13 +233,17 @@ Example:
     except Exception as e:
         rprint(f"[red]Code generation failed: {e}[/red]")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 async def test_tokens_and_logprobs():
     """Test the tokens_and_logprobs_completion method."""
-    from atroposlib.envs.server_handling.ollama_server import OllamaServer, OllamaServerConfig
+    from atroposlib.envs.server_handling.ollama_server import (
+        OllamaServer,
+        OllamaServerConfig,
+    )
 
     rprint("\n[bold cyan]=" * 60)
     rprint("[bold cyan]Test 4: Tokens and Logprobs Completion")
@@ -252,6 +287,7 @@ async def test_tokens_and_logprobs():
     except Exception as e:
         rprint(f"[red]Tokens and logprobs test failed: {e}[/red]")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -262,7 +298,10 @@ async def test_full_pipeline():
     rprint("[bold cyan]Test 5: Full Pipeline (Simulated)")
     rprint("[bold cyan]=" * 60)
 
-    from atroposlib.envs.server_handling.ollama_server import OllamaServer, OllamaServerConfig
+    from atroposlib.envs.server_handling.ollama_server import (
+        OllamaServer,
+        OllamaServerConfig,
+    )
 
     config = OllamaServerConfig(
         base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
@@ -309,6 +348,7 @@ Write your solution and enclose it in ```python and ``` delimiters.
 
         # Extract code
         import re
+
         code_match = re.search(r"```python\s*(.*?)```", response, re.DOTALL)
         code = code_match.group(1).strip() if code_match else None
 
@@ -321,7 +361,9 @@ Write your solution and enclose it in ```python and ``` delimiters.
                 if "is_prime" in exec_globals:
                     func = exec_globals["is_prime"]
                     correct = 0
-                    for inp, expected in zip(problem["tests"]["inputs"], problem["tests"]["outputs"]):
+                    for inp, expected in zip(
+                        problem["tests"]["inputs"], problem["tests"]["outputs"]
+                    ):
                         if func(*inp) == expected:
                             correct += 1
                     score = correct / len(problem["tests"]["inputs"])
@@ -338,7 +380,8 @@ Write your solution and enclose it in ```python and ``` delimiters.
             "num_tokens": len(logprobs[0]) if logprobs[0] else 0,
             "avg_logprob": (
                 sum(lp["logprob"] for lp in logprobs[0]) / len(logprobs[0])
-                if logprobs[0] else 0.0
+                if logprobs[0]
+                else 0.0
             ),
         }
 
@@ -358,6 +401,7 @@ Write your solution and enclose it in ```python and ``` delimiters.
     except Exception as e:
         rprint(f"[red]Full pipeline test failed: {e}[/red]")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -369,13 +413,13 @@ async def test_local_executor():
     rprint("[bold cyan]=" * 60)
 
     try:
-        from local_executor import run_test_local, execute_code_safe
+        from local_executor import execute_code_safe, run_test_local
 
         # Test 1: Simple function
-        code = '''
+        code = """
 def add(a, b):
     return a + b
-'''
+"""
         tests = {
             "fn_name": "add",
             "inputs": [[1, 2], [3, 4], [-1, 1]],
@@ -392,15 +436,17 @@ def add(a, b):
         # Test 3: Error handling
         bad_code = "def broken(: pass"
         results3, metadata3 = execute_code_safe(bad_code, tests)
-        rprint(f"Test 3 - syntax error: {results3}, error={metadata3.get('error', 'none')[:50]}")
+        rprint(
+            f"Test 3 - syntax error: {results3}, error={metadata3.get('error', 'none')[:50]}"
+        )
 
         # Test 4: Timeout
-        slow_code = '''
+        slow_code = """
 def slow(a, b):
     import time
     time.sleep(100)
     return a + b
-'''
+"""
         results4, metadata4 = execute_code_safe(slow_code, tests, timeout=1.0)
         rprint(f"Test 4 - timeout: {results4}, error={metadata4.get('error', 'none')}")
 
@@ -410,6 +456,7 @@ def slow(a, b):
     except Exception as e:
         rprint(f"[red]Local executor test failed: {e}[/red]")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -423,7 +470,9 @@ async def main():
     rprint("\n[bold]Configuration:[/bold]")
     rprint(f"  OLLAMA_BASE_URL: {os.getenv('OLLAMA_BASE_URL', 'https://ollama.com')}")
     rprint(f"  OLLAMA_MODEL: {os.getenv('OLLAMA_MODEL', 'deepseek-v3.2')}")
-    rprint(f"  OLLAMA_API_KEY: {'[set]' if os.getenv('OLLAMA_API_KEY') else '[NOT SET - required for Ollama Cloud]'}")
+    rprint(
+        f"  OLLAMA_API_KEY: {'[set]' if os.getenv('OLLAMA_API_KEY') else '[NOT SET - required for Ollama Cloud]'}"
+    )
 
     results = {}
 

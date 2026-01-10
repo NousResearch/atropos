@@ -40,10 +40,12 @@ from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 # Try to import Modal, fallback to local executor
 try:
     import modal
+
     run_test = modal.Function.from_name("joeli-lcb", "run_test")
     USE_MODAL = True
 except Exception:
     from .local_executor import run_test_local
+
     run_test = None
     USE_MODAL = False
 
@@ -74,7 +76,9 @@ FORMATTING_STDIN_STDOUT = (
 async_semaphore = asyncio.Semaphore(100)
 
 
-def build_prompt(question: str, problem_type: str, starter_code: Optional[str] = None) -> str:
+def build_prompt(
+    question: str, problem_type: str, starter_code: Optional[str] = None
+) -> str:
     """Build the user prompt for a coding problem."""
     prompt = f"### Problem:\n{question}\n\n"
 
@@ -256,7 +260,9 @@ class AgentTraceEnv(BaseEnv):
         )
 
         # Determine generation parameters
-        temp = self.config.eval_temperature if split == "test" else self.config.temperature
+        temp = (
+            self.config.eval_temperature if split == "test" else self.config.temperature
+        )
         max_tokens = self.config.max_code_tokens
         n_samples = 16 if split == "test" else self.config.group_size
 
@@ -287,9 +293,7 @@ class AgentTraceEnv(BaseEnv):
             fn_name = item.get("fn_name", "none")
             tests["fn_name"] = fn_name
 
-            score, error_info = await self.execute_and_score(
-                code, tests, item["idx"]
-            )
+            score, error_info = await self.execute_and_score(code, tests, item["idx"])
 
             # Tokenize full conversation
             messages = [system_msg, user_msg, assistant_msg]
@@ -318,16 +322,17 @@ class AgentTraceEnv(BaseEnv):
         scored_data["masks"] = [r["masks"] for r in results]
         scored_data["scores"] = [r["score"] for r in results]
         scored_data["overrides"] = [
-            {"set_advantage_to_zero": r["finish_reason"] == "length"}
-            for r in results
+            {"set_advantage_to_zero": r["finish_reason"] == "length"} for r in results
         ]
 
         # Calculate metrics
         num_correct = sum(1 for s in scored_data["scores"] if math.isclose(s, 1.0))
         avg_length = sum(len(r["tokens"]) for r in results) / len(results)
 
-        rprint(f"Problem {item['idx']}: {num_correct}/{n_samples} correct, "
-               f"avg_len={avg_length:.0f}, time={elapsed:.1f}s")
+        rprint(
+            f"Problem {item['idx']}: {num_correct}/{n_samples} correct, "
+            f"avg_len={avg_length:.0f}, time={elapsed:.1f}s"
+        )
 
         # Save trace to file
         await self.save_trace(item, results, scored_data)
@@ -364,7 +369,9 @@ class AgentTraceEnv(BaseEnv):
                     try:
                         res, metadata = await run_test.remote.aio(test_input, code)
                     except Exception as e:
-                        rprint(f"[yellow]Modal error, falling back to local: {e}[/yellow]")
+                        rprint(
+                            f"[yellow]Modal error, falling back to local: {e}[/yellow]"
+                        )
                         res, metadata = await run_test_local(test_input, code)
                 else:
                     # Use local executor
@@ -459,9 +466,8 @@ class AgentTraceEnv(BaseEnv):
                     self.metrics["avg_completion_length"][-100:]
                 )
             if self.metrics["total_problems"] > 0:
-                wandb_metrics["train/accuracy"] = (
-                    self.metrics["correct_solutions"] /
-                    (self.metrics["total_problems"] * self.config.group_size)
+                wandb_metrics["train/accuracy"] = self.metrics["correct_solutions"] / (
+                    self.metrics["total_problems"] * self.config.group_size
                 )
 
         await super().wandb_log(wandb_metrics)
@@ -530,7 +536,9 @@ class OllamaAgentTraceEnv(AgentTraceEnv):
         }
 
         messages = [system_msg, user_msg]
-        temp = self.config.eval_temperature if split == "test" else self.config.temperature
+        temp = (
+            self.config.eval_temperature if split == "test" else self.config.temperature
+        )
         n_samples = self.config.group_size
 
         all_results = []
@@ -573,18 +581,22 @@ class OllamaAgentTraceEnv(AgentTraceEnv):
 
             # Tokenize
             full_messages = [system_msg, user_msg, assistant_msg]
-            out_dict = tokenize_for_trainer(self.tokenizer, full_messages, finish_reason)
+            out_dict = tokenize_for_trainer(
+                self.tokenizer, full_messages, finish_reason
+            )
 
-            all_results.append({
-                "tokens": out_dict["tokens"],
-                "masks": out_dict["masks"],
-                "score": score,
-                "code": code,
-                "error": error_info,
-                "finish_reason": finish_reason,
-                "content": content,
-                "messages": full_messages,
-            })
+            all_results.append(
+                {
+                    "tokens": out_dict["tokens"],
+                    "masks": out_dict["masks"],
+                    "score": score,
+                    "code": code,
+                    "error": error_info,
+                    "finish_reason": finish_reason,
+                    "content": content,
+                    "messages": full_messages,
+                }
+            )
 
         # Build ScoredDataGroup
         scored_data = ScoredDataGroup()

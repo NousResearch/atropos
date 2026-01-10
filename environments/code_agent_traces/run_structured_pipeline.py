@@ -28,13 +28,14 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 # Add parent to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 
 from rich import print as rprint
 from rich.console import Console
-from rich.panel import Panel
 from rich.markdown import Markdown
-
+from rich.panel import Panel
 
 console = Console()
 
@@ -74,6 +75,7 @@ IMPORTANT: Always include ALL THREE sections with proper XML tags."""
 @dataclass
 class ReasoningStep:
     """A single step in the reasoning trace."""
+
     phase: str  # planning, action, reflection
     content: str
     tokens_count: int = 0
@@ -83,6 +85,7 @@ class ReasoningStep:
 @dataclass
 class AgentTrace:
     """Complete structured agent trace."""
+
     problem: str
     steps: List[ReasoningStep] = field(default_factory=list)
     final_code: Optional[str] = None
@@ -153,7 +156,9 @@ class StructuredAgent:
         }
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, headers=headers, timeout=300) as resp:
+            async with session.post(
+                url, json=payload, headers=headers, timeout=300
+            ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
                 return data.get("message", {}).get("content", "")
@@ -161,6 +166,7 @@ class StructuredAgent:
     def _extract_section(self, text: str, tag: str) -> str:
         """Extract content between XML tags."""
         import re
+
         pattern = rf"<{tag}>(.*?)</{tag}>"
         match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
         return match.group(1).strip() if match else ""
@@ -168,6 +174,7 @@ class StructuredAgent:
     def _extract_code(self, text: str) -> Optional[str]:
         """Extract Python code from markdown blocks."""
         import re
+
         pattern = r"```python\s*(.*?)```"
         matches = re.findall(pattern, text, re.DOTALL)
         return matches[-1].strip() if matches else None
@@ -244,6 +251,7 @@ Please try again with the structured format. Analyze what went wrong in <plannin
 
             # Get LLM response
             import time
+
             start_time = time.time()
             response = await self._call_llm(messages)
             duration = (time.time() - start_time) * 1000
@@ -255,32 +263,40 @@ Please try again with the structured format. Analyze what went wrong in <plannin
 
             # Store planning step
             if planning:
-                trace.steps.append(ReasoningStep(
-                    phase="planning",
-                    content=planning,
-                    duration_ms=duration / 3,
-                ))
+                trace.steps.append(
+                    ReasoningStep(
+                        phase="planning",
+                        content=planning,
+                        duration_ms=duration / 3,
+                    )
+                )
                 if verbose:
-                    console.print(Panel(
-                        Markdown(planning),
-                        title="[green]PLANNING[/green]",
-                        border_style="green",
-                    ))
+                    console.print(
+                        Panel(
+                            Markdown(planning),
+                            title="[green]PLANNING[/green]",
+                            border_style="green",
+                        )
+                    )
 
             # Store action step and extract code
             code = self._extract_code(action) or self._extract_code(response)
             if action or code:
-                trace.steps.append(ReasoningStep(
-                    phase="action",
-                    content=action or f"```python\n{code}\n```",
-                    duration_ms=duration / 3,
-                ))
+                trace.steps.append(
+                    ReasoningStep(
+                        phase="action",
+                        content=action or f"```python\n{code}\n```",
+                        duration_ms=duration / 3,
+                    )
+                )
                 if verbose and code:
-                    console.print(Panel(
-                        f"```python\n{code}\n```",
-                        title="[yellow]ACTION (Code)[/yellow]",
-                        border_style="yellow",
-                    ))
+                    console.print(
+                        Panel(
+                            f"```python\n{code}\n```",
+                            title="[yellow]ACTION (Code)[/yellow]",
+                            border_style="yellow",
+                        )
+                    )
 
             # Execute code
             if code:
@@ -292,7 +308,9 @@ Please try again with the structured format. Analyze what went wrong in <plannin
                 success = exec_result.get("success", False)
 
                 if verbose:
-                    status = "[green]SUCCESS[/green]" if success else "[red]FAILED[/red]"
+                    status = (
+                        "[green]SUCCESS[/green]" if success else "[red]FAILED[/red]"
+                    )
                     console.print(f"\nExecution: {status}")
                     if not success and "error" in exec_result:
                         console.print(f"Error: {exec_result['error']}")
@@ -302,23 +320,29 @@ Please try again with the structured format. Analyze what went wrong in <plannin
 
             # Store reflection step
             if reflection:
-                trace.steps.append(ReasoningStep(
-                    phase="reflection",
-                    content=reflection,
-                    duration_ms=duration / 3,
-                ))
+                trace.steps.append(
+                    ReasoningStep(
+                        phase="reflection",
+                        content=reflection,
+                        duration_ms=duration / 3,
+                    )
+                )
                 if verbose:
-                    console.print(Panel(
-                        Markdown(reflection),
-                        title="[cyan]REFLECTION[/cyan]",
-                        border_style="cyan",
-                    ))
+                    console.print(
+                        Panel(
+                            Markdown(reflection),
+                            title="[cyan]REFLECTION[/cyan]",
+                            border_style="cyan",
+                        )
+                    )
 
             if success:
                 break
 
         trace.success = success
-        trace.total_tokens = sum(len(s.content.split()) * 2 for s in trace.steps)  # Approximate
+        trace.total_tokens = sum(
+            len(s.content.split()) * 2 for s in trace.steps
+        )  # Approximate
 
         return trace
 
@@ -379,7 +403,9 @@ async def main():
     args = parser.parse_args()
 
     console.print("[bold magenta]" + "=" * 60)
-    console.print("[bold magenta]Structured Agent Pipeline (Planning-Action-Reflection)")
+    console.print(
+        "[bold magenta]Structured Agent Pipeline (Planning-Action-Reflection)"
+    )
     console.print("[bold magenta]" + "=" * 60)
 
     # Configuration
@@ -417,9 +443,13 @@ async def main():
         traces.append(trace)
     else:
         # All examples
-        console.print(f"\n[bold]Running all {len(EXAMPLE_PROBLEMS)} example problems...[/bold]")
+        console.print(
+            f"\n[bold]Running all {len(EXAMPLE_PROBLEMS)} example problems...[/bold]"
+        )
         for i, example in enumerate(EXAMPLE_PROBLEMS):
-            console.print(f"\n[bold yellow]━━━ Problem {i + 1}/{len(EXAMPLE_PROBLEMS)} ━━━[/bold yellow]")
+            console.print(
+                f"\n[bold yellow]━━━ Problem {i + 1}/{len(EXAMPLE_PROBLEMS)} ━━━[/bold yellow]"
+            )
             console.print(f"[dim]{example['problem'][:100]}...[/dim]")
             trace = await agent.solve(example["problem"], example.get("tests"))
             traces.append(trace)

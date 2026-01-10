@@ -38,16 +38,19 @@ from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 # Local executor for code execution
 try:
     import modal
+
     run_test = modal.Function.from_name("joeli-lcb", "run_test")
     USE_MODAL = True
 except Exception:
     from .local_executor import run_test_local
+
     run_test = None
     USE_MODAL = False
 
 
 class AgentPhase(Enum):
     """Phases of the agent reasoning loop."""
+
     PLANNING = "planning"
     ACTION = "action"
     REFLECTION = "reflection"
@@ -56,6 +59,7 @@ class AgentPhase(Enum):
 @dataclass
 class AgentStep:
     """A single step in the agent trace."""
+
     phase: AgentPhase
     content: str
     tokens: List[int] = field(default_factory=list)
@@ -66,6 +70,7 @@ class AgentStep:
 @dataclass
 class AgentTrace:
     """Complete agent trace with planning-action-reflection structure."""
+
     problem_idx: int
     problem: str
     steps: List[AgentStep] = field(default_factory=list)
@@ -188,7 +193,9 @@ class StructuredAgentConfig(BaseEnvConfig):
         description="Dataset for coding problems",
     )
     temperature: float = Field(0.7, description="Sampling temperature")
-    max_iterations: int = Field(3, description="Max planning-action-reflection iterations")
+    max_iterations: int = Field(
+        3, description="Max planning-action-reflection iterations"
+    )
     max_tokens_per_phase: int = Field(1024, description="Max tokens per phase")
     collect_logprobs: bool = Field(True, description="Collect logprobs for each phase")
     output_dir: str = Field("structured_traces", description="Output directory")
@@ -310,10 +317,7 @@ class StructuredAgentEnv(BaseEnv):
             return False, {"error": str(e)}
 
     async def generate_phase(
-        self,
-        messages: List[Dict],
-        phase: AgentPhase,
-        max_tokens: int = 1024
+        self, messages: List[Dict], phase: AgentPhase, max_tokens: int = 1024
     ) -> Tuple[str, List[int], List[float]]:
         """Generate content for a specific phase."""
         try:
@@ -329,9 +333,7 @@ class StructuredAgentEnv(BaseEnv):
             assistant_msg = {"role": "assistant", "content": content}
             full_messages = messages + [assistant_msg]
             out_dict = tokenize_for_trainer(
-                self.tokenizer,
-                full_messages,
-                completion.choices[0].finish_reason
+                self.tokenizer, full_messages, completion.choices[0].finish_reason
             )
 
             return content, out_dict.get("tokens", []), []
@@ -365,11 +367,17 @@ class StructuredAgentEnv(BaseEnv):
 
             # === PLANNING PHASE ===
             if iteration == 1:
-                planning_prompt = PLANNING_PROMPT.format(problem=item.get("problem", ""))
+                planning_prompt = PLANNING_PROMPT.format(
+                    problem=item.get("problem", "")
+                )
             else:
                 planning_prompt = ITERATION_PROMPT.format(
                     code=last_code or "",
-                    result=json.dumps(last_result, indent=2) if last_result else "No result"
+                    result=(
+                        json.dumps(last_result, indent=2)
+                        if last_result
+                        else "No result"
+                    ),
                 )
 
             messages = [
@@ -377,25 +385,31 @@ class StructuredAgentEnv(BaseEnv):
                 {"role": "user", "content": planning_prompt},
             ]
 
-            planning_content, planning_tokens, planning_logprobs = await self.generate_phase(
-                messages, AgentPhase.PLANNING, self.config.max_tokens_per_phase
+            planning_content, planning_tokens, planning_logprobs = (
+                await self.generate_phase(
+                    messages, AgentPhase.PLANNING, self.config.max_tokens_per_phase
+                )
             )
 
             plan = self.extract_phase_content(planning_content, "planning")
             if not plan:
                 plan = planning_content  # Use full content if no tags
 
-            trace.steps.append(AgentStep(
-                phase=AgentPhase.PLANNING,
-                content=plan,
-                tokens=planning_tokens,
-                logprobs=planning_logprobs,
-                metadata={"iteration": iteration}
-            ))
+            trace.steps.append(
+                AgentStep(
+                    phase=AgentPhase.PLANNING,
+                    content=plan,
+                    tokens=planning_tokens,
+                    logprobs=planning_logprobs,
+                    metadata={"iteration": iteration},
+                )
+            )
 
             # === ACTION PHASE ===
             action_prompt = ACTION_PROMPT.format(plan=plan)
-            messages.append({"role": "assistant", "content": f"<planning>\n{plan}\n</planning>"})
+            messages.append(
+                {"role": "assistant", "content": f"<planning>\n{plan}\n</planning>"}
+            )
             messages.append({"role": "user", "content": action_prompt})
 
             action_content, action_tokens, action_logprobs = await self.generate_phase(
@@ -408,13 +422,15 @@ class StructuredAgentEnv(BaseEnv):
                 action_text = self.extract_phase_content(action_content, "action")
                 code = self.extract_code(action_text) if action_text else None
 
-            trace.steps.append(AgentStep(
-                phase=AgentPhase.ACTION,
-                content=action_content,
-                tokens=action_tokens,
-                logprobs=action_logprobs,
-                metadata={"iteration": iteration, "has_code": code is not None}
-            ))
+            trace.steps.append(
+                AgentStep(
+                    phase=AgentPhase.ACTION,
+                    content=action_content,
+                    tokens=action_tokens,
+                    logprobs=action_logprobs,
+                    metadata={"iteration": iteration, "has_code": code is not None},
+                )
+            )
 
             # Execute code
             if code:
@@ -429,27 +445,42 @@ class StructuredAgentEnv(BaseEnv):
                 exec_result = last_result
 
             # === REFLECTION PHASE ===
-            result_str = "SUCCESS - All tests passed!" if success else f"FAILED - {json.dumps(exec_result)}"
+            result_str = (
+                "SUCCESS - All tests passed!"
+                if success
+                else f"FAILED - {json.dumps(exec_result)}"
+            )
             reflection_prompt = REFLECTION_PROMPT.format(result=result_str)
 
-            messages.append({"role": "assistant", "content": f"<action>\n{action_content}\n</action>"})
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": f"<action>\n{action_content}\n</action>",
+                }
+            )
             messages.append({"role": "user", "content": reflection_prompt})
 
-            reflection_content, reflection_tokens, reflection_logprobs = await self.generate_phase(
-                messages, AgentPhase.REFLECTION, self.config.max_tokens_per_phase // 2
+            reflection_content, reflection_tokens, reflection_logprobs = (
+                await self.generate_phase(
+                    messages,
+                    AgentPhase.REFLECTION,
+                    self.config.max_tokens_per_phase // 2,
+                )
             )
 
             reflection = self.extract_phase_content(reflection_content, "reflection")
             if not reflection:
                 reflection = reflection_content
 
-            trace.steps.append(AgentStep(
-                phase=AgentPhase.REFLECTION,
-                content=reflection,
-                tokens=reflection_tokens,
-                logprobs=reflection_logprobs,
-                metadata={"iteration": iteration, "success": success}
-            ))
+            trace.steps.append(
+                AgentStep(
+                    phase=AgentPhase.REFLECTION,
+                    content=reflection,
+                    tokens=reflection_tokens,
+                    logprobs=reflection_logprobs,
+                    metadata={"iteration": iteration, "success": success},
+                )
+            )
 
             if success:
                 break
@@ -496,8 +527,10 @@ class StructuredAgentEnv(BaseEnv):
         num_success = sum(1 for t in traces if t.score > 0)
         avg_iterations = np.mean([t.num_iterations for t in traces])
 
-        rprint(f"Problem {item['idx']}: {num_success}/{len(traces)} success, "
-               f"avg_iter={avg_iterations:.1f}, time={elapsed:.1f}s")
+        rprint(
+            f"Problem {item['idx']}: {num_success}/{len(traces)} success, "
+            f"avg_iter={avg_iterations:.1f}, time={elapsed:.1f}s"
+        )
 
         # Save traces
         await self.save_traces(item, traces)
@@ -522,12 +555,11 @@ class StructuredAgentEnv(BaseEnv):
                 "successful": sum(1 for t in traces if t.score > 0),
                 "avg_iterations": np.mean([t.num_iterations for t in traces]),
                 "avg_tokens": np.mean([t.total_tokens for t in traces]),
-            }
+            },
         }
 
         trace_file = os.path.join(
-            self.output_dir,
-            f"structured_trace_{item['idx']:06d}.json"
+            self.output_dir, f"structured_trace_{item['idx']:06d}.json"
         )
         with open(trace_file, "w") as f:
             json.dump(output, f, indent=2)
