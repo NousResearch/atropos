@@ -1,12 +1,13 @@
 # Code Agent Traces
 
-Interleaved reasoning pipeline for code generation with **three modes**:
+Interleaved reasoning pipeline for code generation with **four modes**:
 
-| Mode | File | Purpose |
-|------|------|---------|
-| **Marker-Based Generator** | `trace_generator.py` | Standalone JSONL generation (no execution feedback) |
-| **Tool-Based Generator** | `trace_generator_tools.py` | JSONL with code execution & error recovery |
-| **RL Environment** | `interleaved_code_env.py` | Atropos integration for online RL training |
+| Mode | File | Interleaving | Tool Use | Purpose |
+|------|------|:------------:|:--------:|---------|
+| Marker-Based | `trace_generator.py` | ✓ (forced) | ✗ | Fast JSONL generation |
+| Tool-Based | `trace_generator_tools.py` | ✗ | ✓ | Execution feedback |
+| **Interleaved+Tools** | `trace_generator_interleaved_tools.py` | ✓ | ✓ | **IDEAL training data** |
+| RL Environment | `interleaved_code_env.py` | ✓ | ✓ | Online RL training |
 
 ## Quick Start
 
@@ -14,11 +15,17 @@ Interleaved reasoning pipeline for code generation with **three modes**:
 # Set API key
 export OLLAMA_API_KEY=your_key
 
-# Generate synthetic traces (marker-based, with forced interleaving)
+# RECOMMENDED: Interleaved + Tool traces (best quality)
+python trace_generator_interleaved_tools.py --output traces.jsonl --num-traces 10
+
+# Only ideal traces (interleaved + tool + success)
+python trace_generator_interleaved_tools.py --output traces.jsonl --only-ideal
+
+# Marker-based (fast, no execution feedback)
 python trace_generator.py --output traces.jsonl --num-traces 10 --force-interleave
 
-# Generate traces with tool execution feedback (recommended for richer data)
-python trace_generator_tools.py --output traces_tools.jsonl --num-traces 10
+# Tool-based (execution feedback, but monolithic code)
+python trace_generator_tools.py --output traces.jsonl --num-traces 10
 
 # Or run RL training with Atropos
 python interleaved_code_env.py serve --config config.yaml
@@ -288,7 +295,94 @@ works because we check before storing.
 
 ---
 
-## Mode 3: RL Environment (Atropos)
+## Mode 3: Interleaved + Tools (IDEAL)
+
+**`trace_generator_interleaved_tools.py`** - Combines BOTH dimensions for optimal training data.
+
+### The Two Dimensions
+
+```
+                    Interleaved Reasoning
+                           ↑
+        ┌──────────────────┼──────────────────┐
+        │   trace_         │   interleaved_   │
+        │   generator.py   │   tools.py       │
+        │   (forced)       │   (THIS ONE)     │
+        │                  │   ★ IDEAL ★      │
+────────┼──────────────────┼──────────────────┼────→ Tool Use
+        │   trace_         │   trace_         │
+        │   generator.py   │   generator_     │
+        │   (default)      │   tools.py       │
+        └──────────────────┴──────────────────┘
+```
+
+### Usage
+
+```bash
+# Generate ideal traces
+python trace_generator_interleaved_tools.py --output traces.jsonl --num-traces 10
+
+# Only keep ideal traces (interleaved + tool + success)
+python trace_generator_interleaved_tools.py --output traces.jsonl --only-ideal
+
+# Training format (single assistant message)
+python trace_generator_interleaved_tools.py --output traces.jsonl --training-format
+```
+
+### Example Output
+
+```
+[THINK] I'll start by defining the function and initializing pointers.
+[CODE]
+def binary_search(nums, target):
+    left, right = 0, len(nums) - 1
+[/CODE]
+
+[THINK] Now I need a loop while the interval is valid.
+[CODE]
+    while left <= right:
+        mid = (left + right) // 2
+[/CODE]
+
+[THINK] Compare mid element with target, handle three cases.
+[CODE]
+        if nums[mid] == target:
+            return mid
+        elif nums[mid] < target:
+            left = mid + 1
+        else:
+            right = mid - 1
+[/CODE]
+
+[THINK] If we exit the loop, target wasn't found.
+[CODE]
+    return -1
+[/CODE]
+
+[RESULT]
+Test 1: PASS - binary_search([1,2,3,4,5], 3) = 2
+Test 2: PASS - binary_search([1,2,3,4,5], 6) = -1
+All 4 tests passed!
+[/RESULT]
+
+[VERIFY]
+Binary search divides search space in half each iteration.
+For [1,2,3,4,5] with target=3:
+- left=0, right=4, mid=2, nums[2]=3 == target -> return 2
+```
+
+### Quality Metrics
+
+| Metric | Description | Ideal Value |
+|--------|-------------|-------------|
+| `think_count` | Number of [THINK] blocks | ≥ 3 |
+| `code_block_count` | Number of [CODE] blocks | ≥ 3 |
+| `execution_count` | Real code executions | ≥ 1 |
+| `is_ideal` | All conditions met + success | `true` |
+
+---
+
+## Mode 4: RL Environment (Atropos)
 
 Full Atropos integration for online RL training.
 
