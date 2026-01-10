@@ -58,6 +58,9 @@ examples = [
     "atroposlib[rewardfns]",
     "langdetect"
 ]
+verifiers = [
+    "verifiers>=0.1.5.post0"
+]
 
 [build-system]
 requires = ["hatchling"]

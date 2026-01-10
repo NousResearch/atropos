@@ -1,0 +1,31 @@
+# Verifiers environment configuration
+# Usage: python environments/verifiers_server.py serve --config environments/configs/verifiers.yaml
+#
+# For SFT data generation with external API:
+#   python environments/verifiers_server.py process \
+#       --env.vf_env_name primeintellect/gsm8k \
+#       --env.data_path_to_save_groups output.jsonl \
+#       --openai.base_url https://api.openai.com/v1 \
+#       --openai.api_key $OPENAI_API_KEY \
+#       --openai.model_name gpt-4o
+
+env:
+  vf_env_name: "primeintellect/gsm8k"  # Prime Env Hub environment
+  env_args: {}
+  group_size: 8
+  max_token_length: 2048
+  tokenizer_name: "Qwen/Qwen2.5-1.5B-Instruct"
+  rollout_server_url: "http://localhost:8000"
+  use_wandb: true
+  wandb_name: "verifiers"
+  total_steps: 1000
+  batch_size: 4
+  steps_per_eval: 100
+
+openai:
+  - model_name: "Qwen/Qwen2.5-1.5B-Instruct"
+    base_url: "http://localhost:9001/v1"
+    api_key: "x"
+
+slurm: false
+testing: false
