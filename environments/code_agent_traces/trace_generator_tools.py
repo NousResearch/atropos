@@ -232,7 +232,10 @@ class GeneratedTrace:
         return {
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": INITIAL_PROMPT_TEMPLATE.format(problem=self.problem)},
+                {
+                    "role": "user",
+                    "content": INITIAL_PROMPT_TEMPLATE.format(problem=self.problem),
+                },
                 {"role": "assistant", "content": combined_response},
             ],
             "score": self.score,
@@ -503,7 +506,12 @@ class ToolBasedTraceGenerator:
             results, metadata = execute_code_safe(code, tests, timeout=10.0)
 
             if "error" in metadata:
-                return f"Error: {metadata['error']}", False, 0, len(tests.get("outputs", []))
+                return (
+                    f"Error: {metadata['error']}",
+                    False,
+                    0,
+                    len(tests.get("outputs", [])),
+                )
 
             # Format results
             fn_name = tests.get("fn_name", "func")
@@ -548,7 +556,10 @@ class ToolBasedTraceGenerator:
         # Initialize conversation
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": INITIAL_PROMPT_TEMPLATE.format(problem=prompt_text)},
+            {
+                "role": "user",
+                "content": INITIAL_PROMPT_TEMPLATE.format(problem=prompt_text),
+            },
         ]
 
         trace_steps: List[TraceStep] = []
@@ -589,42 +600,56 @@ class ToolBasedTraceGenerator:
                     trace_steps.append(TraceStep(step_type="code", content=code))
 
                     # Execute code
-                    result_text, all_passed, passed, total = self._execute_code(code, tests)
+                    result_text, all_passed, passed, total = self._execute_code(
+                        code, tests
+                    )
                     last_passed = passed
                     last_total = total
 
                     if "Error" in result_text or "error" in result_text.lower():
                         had_errors = True
-                        trace_steps.append(TraceStep(step_type="error", content=result_text))
+                        trace_steps.append(
+                            TraceStep(step_type="error", content=result_text)
+                        )
                         # Add to conversation
                         messages.append({"role": "assistant", "content": response})
-                        messages.append({
-                            "role": "user",
-                            "content": f"[ERROR]\n{result_text}\n[/ERROR]\n\n{CONTINUE_AFTER_ERROR.format(iteration=code_iterations)}"
-                        })
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": f"[ERROR]\n{result_text}\n[/ERROR]\n\n{CONTINUE_AFTER_ERROR.format(iteration=code_iterations)}",
+                            }
+                        )
                     else:
-                        trace_steps.append(TraceStep(step_type="result", content=result_text))
+                        trace_steps.append(
+                            TraceStep(step_type="result", content=result_text)
+                        )
                         messages.append({"role": "assistant", "content": response})
 
                         if all_passed:
                             # Ask for verification
-                            messages.append({
-                                "role": "user",
-                                "content": f"[RESULT]\n{result_text}\n[/RESULT]\n\nExcellent! All tests passed. Now use [VERIFY] to trace through your solution and explain why it works."
-                            })
+                            messages.append(
+                                {
+                                    "role": "user",
+                                    "content": f"[RESULT]\n{result_text}\n[/RESULT]\n\nExcellent! All tests passed. Now use [VERIFY] to trace through your solution and explain why it works.",
+                                }
+                            )
                         else:
                             had_errors = True  # Test failures count as errors
-                            messages.append({
-                                "role": "user",
-                                "content": f"[RESULT]\n{result_text}\n[/RESULT]\n\n{CONTINUE_AFTER_RESULT.format(iteration=code_iterations)}"
-                            })
+                            messages.append(
+                                {
+                                    "role": "user",
+                                    "content": f"[RESULT]\n{result_text}\n[/RESULT]\n\n{CONTINUE_AFTER_RESULT.format(iteration=code_iterations)}",
+                                }
+                            )
                 else:
                     # No code in response, might just be thinking
                     messages.append({"role": "assistant", "content": response})
-                    messages.append({
-                        "role": "user",
-                        "content": "Please write your solution in a [CODE]...[/CODE] block."
-                    })
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": "Please write your solution in a [CODE]...[/CODE] block.",
+                        }
+                    )
 
             # Calculate score
             if last_total > 0:
@@ -825,8 +850,12 @@ async def main():
         print(f"  [VERIFY] usage: {100*verify_rate:.1f}%")
 
         print(f"\nTool Usage Metrics:")
-        print(f"  Traces with error recovery: {error_recovery_count} ({100*error_recovery_count/len(traces):.1f}%)")
-        print(f"  Multi-iteration traces: {sum(1 for t in traces if t.code_iterations > 1)}")
+        print(
+            f"  Traces with error recovery: {error_recovery_count} ({100*error_recovery_count/len(traces):.1f}%)"
+        )
+        print(
+            f"  Multi-iteration traces: {sum(1 for t in traces if t.code_iterations > 1)}"
+        )
 
     print(f"\nSaved to: {args.output}")
 
