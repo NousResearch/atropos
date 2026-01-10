@@ -9,14 +9,15 @@ env:
   use_wandb: false
   include_messages: true
   train_on_all_assistant_turns: true
-  ensure_scores_are_not_same: true
+  ensure_scores_are_not_same: false
   eval_num_examples: 128
   data_dir_to_save_evals: "data/evals/verifiers"
 
 openai:
-  - model_name: "gpt-4.1-nano"
-    base_url: null
-    api_key: "REPLACE_ME"
+  - model_name: "openai/gpt-4.1"
+    base_url: "https://openrouter.ai/api/v1"
+    api_key: "$OPENROUTER_API_KEY"
+    health_check: false
     weight: 1.0
 
 slurm: false

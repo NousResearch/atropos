@@ -1,4 +1,5 @@
 import asyncio
+import os
 import warnings
 
 import aiohttp
@@ -200,6 +201,19 @@ def resolve_openai_configs(
         logger.info(
             "Using single OpenAI server configuration based on merged settings (default/YAML/CLI)."
         )
+
+        api_key = openai_config_dict.get("api_key")
+        if isinstance(api_key, str):
+            api_key_stripped = api_key.strip()
+            if api_key_stripped.startswith("${") and api_key_stripped.endswith("}"):
+                env_name = api_key_stripped[2:-1].strip()
+                if env_name:
+                    openai_config_dict["api_key"] = os.getenv(env_name, "")
+            elif api_key_stripped.startswith("$") and len(api_key_stripped) > 1:
+                env_name = api_key_stripped[1:].strip()
+                if env_name:
+                    openai_config_dict["api_key"] = os.getenv(env_name, "")
+
         try:
             final_openai_config = APIServerConfig(**openai_config_dict)
         except Exception as e:

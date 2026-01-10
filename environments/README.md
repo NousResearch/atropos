@@ -18,13 +18,15 @@ Run Prime Intellect Environment Hub environments inside Atropos via `verifiers`.
 **Prereqs:**
 - `uv tool install prime && prime login`
 - `prime env install owner/environment-name@latest --with pip`
+- Set `OPENROUTER_API_KEY` (required for OpenRouter inference)
 
 **Run + verify:**
 ```bash
 run-api
-curl -sS -X POST http://localhost:8000/register -H 'Content-Type: application/json' -d '{"wandb_group":"local","wandb_project":"local","batch_size":1,"max_token_len":4096,"checkpoint_dir":"","save_checkpoint_interval":-1,"starting_step":0,"num_steps":5}' >/dev/null
+export OPENROUTER_API_KEY="sk-or-...redacted..."
+curl -sS -X POST http://localhost:8000/register -H 'Content-Type: application/json' -d '{"wandb_group":"local","wandb_project":"local","batch_size":1,"max_token_len":-1,"checkpoint_dir":"","save_checkpoint_interval":-1,"starting_step":0,"num_steps":5}' >/dev/null
 curl -sS http://localhost:8000/batch >/dev/null  # flips app.state.started=true
-python environments/verifiers_server.py serve --config environments/configs/verifiers.yaml
+python3 environments/verifiers_server.py serve --config environments/configs/verifiers.yaml
 curl -sS http://localhost:8000/latest_example
 ```
 

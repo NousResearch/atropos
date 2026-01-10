@@ -2,70 +2,37 @@
 
 import gzip
 import json
-import os
-import signal
-import subprocess
-import sys
-import time
 
 import pytest
 import requests
 
-
-def wait_for_api_server(max_wait=10):
-    for _ in range(max_wait):
-        try:
-            response = requests.get("http://localhost:8000/info")
-            if response.status_code == 200:
-                return True
-        except requests.exceptions.ConnectionError:
-            pass
-        time.sleep(1)
-    return False
-
+from atroposlib.tests.api_test_utils import launch_api_for_testing
 
 @pytest.fixture(scope="module")
 def api_server():
-    proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "atroposlib.cli.run_api",
-            "--host",
-            "localhost",
-            "--port",
-            "8000",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        preexec_fn=os.setsid,
-    )
+    proc, base_url = launch_api_for_testing()
 
-    if not wait_for_api_server():
-        proc.terminate()
-        raise RuntimeError("API server failed to start")
+    yield base_url
 
-    yield
-
-    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    proc.terminate()
     proc.wait()
 
     try:
-        requests.get("http://localhost:8000/reset_data")
+        requests.get(f"{base_url}/reset_data")
     except Exception:
         pass
 
 
 @pytest.fixture(autouse=True)
-def reset_api_state():
+def reset_api_state(api_server):
     """Reset API state before each test."""
     try:
-        requests.get("http://localhost:8000/reset_data")
+        requests.get(f"{api_server}/reset_data")
     except Exception:
         pass
     yield
     try:
-        requests.get("http://localhost:8000/reset_data")
+        requests.get(f"{api_server}/reset_data")
     except Exception:
         pass
 
@@ -75,7 +42,7 @@ class TestAPICompression:
 
     def test_small_response_not_compressed(self, api_server):
         """Small payloads bypass gzip."""
-        response = requests.get("http://localhost:8000/info")
+        response = requests.get(f"{api_server}/info")
 
         assert response.status_code == 200, response.text
 
@@ -87,7 +54,7 @@ class TestAPICompression:
     def test_large_response_compressed_automatically(self, api_server):
         """Large batches are gzipped and transparently decoded by clients."""
         requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "test_group",
                 "wandb_project": "test_project",
@@ -110,12 +77,12 @@ class TestAPICompression:
         }
 
         post_response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json=large_scored_data,
         )
         assert post_response.status_code == 200
 
-        response = requests.get("http://localhost:8000/batch")
+        response = requests.get(f"{api_server}/batch")
 
         assert response.status_code == 200
 
@@ -131,7 +98,7 @@ class TestAPICompression:
     def test_compression_with_raw_headers(self, api_server):
         """Explicit Accept-Encoding still yields usable decoded responses."""
         requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "test_group",
                 "wandb_project": "test_project",
@@ -150,11 +117,11 @@ class TestAPICompression:
             "masks": [[1 for _ in range(512)] for _ in range(16)],
             "scores": [0.5 for _ in range(16)],
         }
-        requests.post("http://localhost:8000/scored_data", json=large_scored_data)
+        requests.post(f"{api_server}/scored_data", json=large_scored_data)
 
         session = requests.Session()
         response = session.get(
-            "http://localhost:8000/batch",
+            f"{api_server}/batch",
             headers={"Accept-Encoding": "gzip"},
             stream=True,
         )
@@ -172,7 +139,7 @@ class TestAPICompression:
     def test_compression_ratio_estimation(self, api_server):
         """Produce a rough before/after size estimate for visibility."""
         requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "test_group",
                 "wandb_project": "test_project",
@@ -192,9 +159,9 @@ class TestAPICompression:
             "advantages": [[0.1 for _ in range(1024)] for _ in range(32)],
         }
 
-        requests.post("http://localhost:8000/scored_data", json=large_scored_data)
+        requests.post(f"{api_server}/scored_data", json=large_scored_data)
 
-        response = requests.get("http://localhost:8000/batch")
+        response = requests.get(f"{api_server}/batch")
 
         assert response.status_code == 200
         data = response.json()
@@ -213,7 +180,7 @@ class TestAPICompression:
     def test_environment_client_compatibility(self, api_server):
         """Simulate the common trainer + env flow."""
         requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "test_group",
                 "wandb_project": "test_project",
@@ -226,10 +193,10 @@ class TestAPICompression:
             },
         )
 
-        requests.get("http://localhost:8000/batch")
+        requests.get(f"{api_server}/batch")
 
         env_response = requests.post(
-            "http://localhost:8000/register-env",
+            f"{api_server}/register-env",
             json={
                 "max_token_length": 2048,
                 "desired_name": "test_env",
@@ -250,13 +217,13 @@ class TestAPICompression:
         }
 
         post_response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json=scored_data,
         )
         assert post_response.status_code == 200
 
         status_response = requests.get(
-            "http://localhost:8000/status-env", json={"env_id": env_id}
+            f"{api_server}/status-env", json={"env_id": env_id}
         )
         assert status_response.status_code == 200
         status_data = status_response.json()
@@ -265,7 +232,7 @@ class TestAPICompression:
     def test_server_accepts_gzipped_scored_data(self, api_server):
         """Server inflates gzipped POST bodies."""
         requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "test_group",
                 "wandb_project": "test_project",
@@ -288,7 +255,7 @@ class TestAPICompression:
         compressed = gzip.compress(payload)
 
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             data=compressed,
             headers={
                 "Content-Type": "application/json",
@@ -300,7 +267,7 @@ class TestAPICompression:
         response_data = response.json()
         assert response_data["status"] == "received"
 
-        batch_response = requests.get("http://localhost:8000/batch")
+        batch_response = requests.get(f"{api_server}/batch")
         assert batch_response.status_code == 200
         batch_data = batch_response.json()
         assert batch_data["batch"] is not None
@@ -308,7 +275,7 @@ class TestAPICompression:
     def test_scored_data_list_compression(self, api_server):
         """Multi-item submissions still round-trip correctly."""
         requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "test_group",
                 "wandb_project": "test_project",
@@ -331,7 +298,7 @@ class TestAPICompression:
         ]
 
         response = requests.post(
-            "http://localhost:8000/scored_data_list",
+            f"{api_server}/scored_data_list",
             json=scored_data_list,
         )
 
@@ -340,7 +307,7 @@ class TestAPICompression:
         assert data["status"] == "received"
         assert data["groups_processed"] == 4
 
-        batch_response = requests.get("http://localhost:8000/batch")
+        batch_response = requests.get(f"{api_server}/batch")
         assert batch_response.status_code == 200
         batch_data = batch_response.json()
         assert batch_data["batch"] is not None
