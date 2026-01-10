@@ -47,6 +47,7 @@ from local_executor import execute_code_safe
 try:
     from rich.console import Console
     from rich.progress import Progress, SpinnerColumn, TextColumn
+
     console = Console()
     HAS_RICH = True
 except ImportError:
@@ -101,9 +102,11 @@ RULES:
 # Data Classes
 # ============================================================================
 
+
 @dataclass
 class TraceStep:
     """Single step in reasoning trace."""
+
     step_type: str  # think, code, verify, wait
     content: str
 
@@ -111,6 +114,7 @@ class TraceStep:
 @dataclass
 class GeneratedTrace:
     """Complete generated trace."""
+
     problem: str
     messages: List[Dict[str, str]]
     code: Optional[str] = None
@@ -301,6 +305,7 @@ Example:
 # Trace Generator
 # ============================================================================
 
+
 class TraceGenerator:
     """Generates interleaved reasoning traces."""
 
@@ -344,7 +349,9 @@ class TraceGenerator:
         }
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, headers=headers, timeout=300) as resp:
+            async with session.post(
+                url, json=payload, headers=headers, timeout=300
+            ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
                 return data.get("message", {}).get("content", "")
@@ -361,20 +368,20 @@ class TraceGenerator:
         has_verify = False
 
         # Pattern for markers
-        pattern = r'\[(THINK|CODE|VERIFY|WAIT)\](.*?)(?=\[(?:THINK|CODE|VERIFY|WAIT|/CODE)\]|$)'
+        pattern = r"\[(THINK|CODE|VERIFY|WAIT)\](.*?)(?=\[(?:THINK|CODE|VERIFY|WAIT|/CODE)\]|$)"
         matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
 
         for marker, content in matches:
             marker = marker.upper()
 
             if marker == "CODE":
-                content = re.sub(r'\[/CODE\].*$', '', content, flags=re.DOTALL)
-                lines = content.split('\n')
+                content = re.sub(r"\[/CODE\].*$", "", content, flags=re.DOTALL)
+                lines = content.split("\n")
                 while lines and not lines[0].strip():
                     lines.pop(0)
                 while lines and not lines[-1].strip():
                     lines.pop()
-                content = '\n'.join(lines)
+                content = "\n".join(lines)
 
                 if content.strip():
                     code_parts.append(content)
@@ -401,18 +408,20 @@ class TraceGenerator:
                     steps.append(TraceStep(step_type="wait", content=content))
 
         # Combine code
-        full_code = '\n'.join(code_parts)
+        full_code = "\n".join(code_parts)
 
         # Fallback to markdown
         if not full_code.strip():
-            md_pattern = r'```python\s*(.*?)```'
+            md_pattern = r"```python\s*(.*?)```"
             md_matches = re.findall(md_pattern, text, re.DOTALL)
             if md_matches:
                 full_code = md_matches[-1].strip()
 
         return steps, full_code, think_count, has_verify
 
-    def _execute_and_score(self, code: str, tests: Dict) -> Tuple[float, int, int, Optional[str]]:
+    def _execute_and_score(
+        self, code: str, tests: Dict
+    ) -> Tuple[float, int, int, Optional[str]]:
         """
         Execute code and return score.
 
@@ -534,7 +543,9 @@ Use [THINK], [CODE], and [VERIFY] markers. Return ONLY the function."""
             for i, problem in enumerate(problems):
                 for j in range(num_per_problem):
                     if verbose:
-                        print(f"Generating trace {i * num_per_problem + j + 1}/{total}...")
+                        print(
+                            f"Generating trace {i * num_per_problem + j + 1}/{total}..."
+                        )
                     trace = await self.generate_trace(problem)
                     if only_success and trace.score <= 0:
                         continue
@@ -547,18 +558,21 @@ Use [THINK], [CODE], and [VERIFY] markers. Return ONLY the function."""
 # Main
 # ============================================================================
 
+
 async def main():
     parser = argparse.ArgumentParser(
         description="Generate synthetic traces for code reasoning"
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=str,
         default="traces.jsonl",
         help="Output JSONL file",
     )
     parser.add_argument(
-        "--num-traces", "-n",
+        "--num-traces",
+        "-n",
         type=int,
         default=10,
         help="Number of traces per problem",
@@ -638,7 +652,9 @@ async def main():
         avg_thinks = sum(t.think_count for t in traces) / len(traces)
         verify_rate = sum(1 for t in traces if t.has_verify) / len(traces)
 
-        print(f"  Success rate: {success_count}/{len(traces)} ({100*success_count/len(traces):.1f}%)")
+        print(
+            f"  Success rate: {success_count}/{len(traces)} ({100*success_count/len(traces):.1f}%)"
+        )
         print(f"  Avg score: {sum(scores)/len(scores):.2f}")
         print(f"  Avg [THINK] count: {avg_thinks:.1f}")
         print(f"  [VERIFY] usage: {100*verify_rate:.1f}%")
