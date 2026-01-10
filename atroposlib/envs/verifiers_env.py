@@ -40,22 +40,14 @@ def sanitize_messages(messages: list[dict[str, Any]]) -> list[Message]:
         role = msg.get("role")
         if role == "developer":
             role = "system"
+        if role == "function":
+            role = "tool"
         if role == "agent":
             role = "assistant"
         if role not in ("system", "user", "assistant", "tool"):
             continue
         sanitized.append({"role": role, "content": msg.get("content", "")})
     return sanitized
-
-
-def infer_model_name(
-    server_configs: Union[ServerBaseline, list[APIServerConfig], APIServerConfig],
-) -> str:
-    if isinstance(server_configs, list) and server_configs:
-        return server_configs[0].model_name
-    if isinstance(server_configs, APIServerConfig):
-        return server_configs.model_name
-    return getattr(server_configs, "model_name", "model")
 
 
 class _ChatCompletionsProxy:
@@ -177,7 +169,12 @@ class VerifiersEnv(BaseEnv):
 
         self._train_client = AtroposOpenAIProxy(server=self.server, split="train")
         self._eval_client = AtroposOpenAIProxy(server=self.server, split="eval")
-        self._model_name = infer_model_name(server_configs)
+        if isinstance(server_configs, list) and server_configs:
+            self._model_name = server_configs[0].model_name
+        elif isinstance(server_configs, APIServerConfig):
+            self._model_name = server_configs.model_name
+        else:
+            self._model_name = getattr(server_configs, "model_name", "model")
 
         self.iter = 0
         self.train = None
@@ -244,13 +241,16 @@ class VerifiersEnv(BaseEnv):
             temperature_override=self.config.temperature
         )
 
-        outputs = await self.vf_env.generate(
-            inputs,
-            client=self._train_client,
-            model=self._model_name,
-            sampling_args=sampling_args,
-            use_tqdm=False,
-        )
+        try:
+            outputs = await self.vf_env.generate(
+                inputs,
+                client=self._train_client,
+                model=self._model_name,
+                sampling_args=sampling_args,
+                use_tqdm=False,
+            )
+        except Exception:
+            return None, [item]
 
         tokens_list: list[list[int]] = []
         masks_list: list[list[int]] = []
@@ -319,16 +319,19 @@ class VerifiersEnv(BaseEnv):
             temperature_override=self.config.eval_temperature
         )
 
-        outputs = await self.vf_env.evaluate(
-            client=self._eval_client,
-            model=self._model_name,
-            sampling_args=sampling_args,
-            num_examples=self.config.eval_num_examples,
-            max_concurrent=max(1, int(self.config.max_eval_workers)),
-            max_concurrent_generation=max(1, int(self.config.max_eval_workers)),
-            max_concurrent_scoring=max(1, int(self.config.max_eval_workers)),
-            use_tqdm=False,
-        )
+        try:
+            outputs = await self.vf_env.evaluate(
+                client=self._eval_client,
+                model=self._model_name,
+                sampling_args=sampling_args,
+                num_examples=self.config.eval_num_examples,
+                max_concurrent=max(1, int(self.config.max_eval_workers)),
+                max_concurrent_generation=max(1, int(self.config.max_eval_workers)),
+                max_concurrent_scoring=max(1, int(self.config.max_eval_workers)),
+                use_tqdm=False,
+            )
+        except Exception:
+            return {}
 
         rewards = [float(r or 0.0) for r in outputs["reward"]]
         avg_total_score = (sum(rewards) / len(rewards)) if rewards else 0.0
