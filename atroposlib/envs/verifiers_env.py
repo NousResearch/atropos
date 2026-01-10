@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import time
 from typing import Any, Tuple, Union
@@ -250,6 +251,7 @@ class VerifiersEnv(BaseEnv):
                 use_tqdm=False,
             )
         except Exception:
+            logging.exception("[verifiers] vf_env.generate failed")
             return None, [item]
 
         tokens_list: list[list[int]] = []
@@ -331,6 +333,7 @@ class VerifiersEnv(BaseEnv):
                 use_tqdm=False,
             )
         except Exception:
+            logging.exception("[verifiers] vf_env.evaluate failed")
             return {}
 
         rewards = [float(r or 0.0) for r in outputs["reward"]]
