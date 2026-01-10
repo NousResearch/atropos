@@ -2,71 +2,35 @@
 Tests for API server message handling, particularly for SFT (Supervised Fine-Tuning) scenarios.
 """
 
-import os
-import signal
-import subprocess
-import time
-
 import pytest
 import requests
 
-
-def wait_for_api_server(max_wait=10):
-    """Wait for API server to be ready."""
-    for _ in range(max_wait):
-        try:
-            response = requests.get("http://localhost:8000/info")
-            if response.status_code == 200:
-                return True
-        except requests.exceptions.ConnectionError:
-            pass
-        time.sleep(1)
-    return False
+from atroposlib.tests.api_test_utils import launch_api_for_testing
 
 
 @pytest.fixture(scope="module")
 def api_server():
     """Launch API server for testing."""
-    # Start the API server as a subprocess
-    proc = subprocess.Popen(
-        [
-            "python",
-            "-m",
-            "atroposlib.cli.run_api",
-            "--host",
-            "localhost",
-            "--port",
-            "8000",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        preexec_fn=os.setsid,  # Create new process group
-    )
+    proc, base_url = launch_api_for_testing()
 
-    # Wait for server to be ready
-    if not wait_for_api_server():
-        proc.terminate()
-        raise RuntimeError("API server failed to start")
+    yield base_url
 
-    yield
-
-    # Kill the process group to ensure all child processes are terminated
-    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    proc.terminate()
     proc.wait()
 
     # Clean up after tests
     try:
-        requests.get("http://localhost:8000/reset_data")
+        requests.get(f"{base_url}/reset_data")
     except Exception:
         pass
 
 
 @pytest.fixture(autouse=True)
-def reset_api_state():
+def reset_api_state(api_server):
     """Reset API state before each test."""
-    requests.get("http://localhost:8000/reset_data")
+    requests.get(f"{api_server}/reset_data")
     yield
-    requests.get("http://localhost:8000/reset_data")
+    requests.get(f"{api_server}/reset_data")
 
 
 class TestAPIMessagesHandling:
@@ -75,7 +39,7 @@ class TestAPIMessagesHandling:
     def test_register_trainer(self, api_server):
         """Test trainer registration."""
         response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "test_group",
                 "wandb_project": "test_project",
@@ -98,7 +62,7 @@ class TestAPIMessagesHandling:
         """Test posting scored data with messages field."""
         # First register
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "test",
                 "wandb_project": "test",
@@ -132,7 +96,7 @@ class TestAPIMessagesHandling:
         ]
 
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[1, 2, 3, 4, 5]],
                 "masks": [[1, 1, 1, 1, 1]],
@@ -148,14 +112,14 @@ class TestAPIMessagesHandling:
         assert response.status_code == 200
         assert response.json()["status"] == "received"
         # batches
-        latest = requests.get("http://localhost:8000/latest_example").json()
+        latest = requests.get(f"{api_server}/latest_example").json()
         assert latest.get("generation_params", {}).get("temperature") == 0.7
 
     def test_scored_data_list_with_messages(self, api_server):
         """Test posting a list of scored data with messages."""
         # First register
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "test",
                 "wandb_project": "test",
@@ -186,7 +150,7 @@ class TestAPIMessagesHandling:
             )
 
         response = requests.post(
-            "http://localhost:8000/scored_data_list", json=scored_data_list
+            f"{api_server}/scored_data_list", json=scored_data_list
         )
         if response.status_code != 200:
             print(f"Error response: {response.text}")
@@ -199,7 +163,7 @@ class TestAPIMessagesHandling:
         """Test SFT-style message handling with group overrides."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "sft_test",
                 "wandb_project": "sft_test",
@@ -224,7 +188,7 @@ class TestAPIMessagesHandling:
         ]
 
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[100, 101, 102, 103, 104, 105]],
                 "masks": [[-100, -100, 102, 103, 104, 105]],  # Masked prefix
@@ -244,7 +208,7 @@ class TestAPIMessagesHandling:
         """Test messages with image data."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "multimodal_test",
                 "wandb_project": "multimodal_test",
@@ -279,7 +243,7 @@ class TestAPIMessagesHandling:
         ]
 
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[200, 201, 202, 203]],
                 "masks": [[1, 1, 1, 1]],
@@ -297,7 +261,7 @@ class TestAPIMessagesHandling:
         """Test retrieving batches that contain messages."""
         # Register with batch size 2
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "batch_test",
                 "wandb_project": "batch_test",
@@ -328,13 +292,13 @@ class TestAPIMessagesHandling:
                 payload["generation_params"] = {"temperature": 0.8}
 
             response = requests.post(
-                "http://localhost:8000/scored_data",
+                f"{api_server}/scored_data",
                 json=payload,
             )
             assert response.status_code == 200
 
         # Retrieve the batch
-        batch_response = requests.get("http://localhost:8000/batch")
+        batch_response = requests.get(f"{api_server}/batch")
         assert batch_response.status_code == 200
         batch_data = batch_response.json()
         assert batch_data["batch"] is not None
@@ -360,7 +324,7 @@ class TestAPIMessagesHandling:
         """Test that latest example endpoint includes messages."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "latest_test",
                 "wandb_project": "latest_test",
@@ -386,7 +350,7 @@ class TestAPIMessagesHandling:
         ]
 
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[42, 43, 44]],
                 "masks": [[1, 1, 1]],
@@ -400,7 +364,7 @@ class TestAPIMessagesHandling:
         assert response.status_code == 200
 
         # Get latest example
-        latest_response = requests.get("http://localhost:8000/latest_example")
+        latest_response = requests.get(f"{api_server}/latest_example")
         assert latest_response.status_code == 200
         latest_data = latest_response.json()
 
@@ -413,7 +377,7 @@ class TestAPIMessagesHandling:
         """Test handling of empty or None messages."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "empty_test",
                 "wandb_project": "empty_test",
@@ -429,7 +393,7 @@ class TestAPIMessagesHandling:
 
         # Test with None messages (optional field)
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[1, 2, 3]],
                 "masks": [[1, 1, 1]],
@@ -444,7 +408,7 @@ class TestAPIMessagesHandling:
 
         # Test with empty messages list
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[4, 5, 6]],
                 "masks": [[1, 1, 1]],
@@ -461,7 +425,7 @@ class TestAPIMessagesHandling:
         """Test handling of complex message structures with tool calls."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "complex_test",
                 "wandb_project": "complex_test",
@@ -493,7 +457,7 @@ class TestAPIMessagesHandling:
         ]
 
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[300, 301, 302, 303, 304]],
                 "masks": [[1, 1, 1, 1, 1]],
@@ -511,7 +475,7 @@ class TestAPIMessagesHandling:
         """Test messages with reward field as defined in Message TypedDict."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "reward_test",
                 "wandb_project": "reward_test",
@@ -532,7 +496,7 @@ class TestAPIMessagesHandling:
         ]
 
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[400, 401, 402]],
                 "masks": [[1, 1, 1]],
@@ -553,7 +517,7 @@ class TestSFTIntegration:
         """Test SFT with completion format."""
         # Register
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "sft_completion",
                 "wandb_project": "sft_completion",
@@ -569,7 +533,7 @@ class TestSFTIntegration:
 
         # Simple completion text - messages field is omitted for completion format
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[500, 501, 502, 503]],
                 "masks": [[500, 501, 502, 503]],
@@ -588,7 +552,7 @@ class TestSFTIntegration:
         """Test SFT with prefixed completion format."""
         # Register
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "sft_prefixed",
                 "wandb_project": "sft_prefixed",
@@ -604,7 +568,7 @@ class TestSFTIntegration:
 
         # Prefixed completion with masked prefix
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[600, 601, 602, 603, 604, 605]],
                 "masks": [[-100, -100, -100, 603, 604, 605]],  # First 3 tokens masked
@@ -623,7 +587,7 @@ class TestSFTIntegration:
         """Test batch processing for SFT data."""
         # Register with larger batch size
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "sft_batch",
                 "wandb_project": "sft_batch",
@@ -644,7 +608,7 @@ class TestSFTIntegration:
                 {"role": "assistant", "content": f"Answer {i}", "reward": None},
             ]
             response = requests.post(
-                "http://localhost:8000/scored_data",
+                f"{api_server}/scored_data",
                 json={
                     "tokens": [[700 + i, 701 + i, 702 + i]],
                     "masks": [[-100, 701 + i, 702 + i]],
@@ -658,12 +622,12 @@ class TestSFTIntegration:
             assert response.status_code == 200
 
         # Verify queue size
-        status_response = requests.get("http://localhost:8000/status")
+        status_response = requests.get(f"{api_server}/status")
         assert status_response.status_code == 200
         assert status_response.json()["queue_size"] == 4
 
         # Get batch
-        batch_response = requests.get("http://localhost:8000/batch")
+        batch_response = requests.get(f"{api_server}/batch")
         assert batch_response.status_code == 200
         batch = batch_response.json()["batch"]
         assert len(batch) == 4
@@ -681,7 +645,7 @@ class TestMessageRewardHandling:
         """Test messages without the reward field - should be accepted."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "no_reward_test",
                 "wandb_project": "no_reward_test",
@@ -697,7 +661,7 @@ class TestMessageRewardHandling:
 
         # Messages without reward field should be accepted
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[800, 801, 802]],
                 "masks": [[1, 1, 1]],
@@ -732,7 +696,7 @@ class TestMessageRewardHandling:
         """Test messages with inconsistent reward field presence - should be accepted."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "mixed_reward_test",
                 "wandb_project": "mixed_reward_test",
@@ -748,7 +712,7 @@ class TestMessageRewardHandling:
 
         # Mixed messages - some with reward, some without - should be OK
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[810, 811, 812]],
                 "masks": [[1, 1, 1]],
@@ -776,7 +740,7 @@ class TestMessageRewardHandling:
         """Test explicit None reward vs missing field."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "reward_none_test",
                 "wandb_project": "reward_none_test",
@@ -792,7 +756,7 @@ class TestMessageRewardHandling:
 
         # Test 1: All messages have reward=None (should work)
         response1 = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[820, 821, 822]],
                 "masks": [[1, 1, 1]],
@@ -818,7 +782,7 @@ class TestMessageRewardHandling:
         messages_missing_reward.append(msg2)
 
         response2 = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[830, 831, 832]],
                 "masks": [[1, 1, 1]],
@@ -839,7 +803,7 @@ class TestMessageRewardHandling:
         """Test messages with extra fields not defined in Message TypedDict."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "extra_fields_test",
                 "wandb_project": "extra_fields_test",
@@ -855,7 +819,7 @@ class TestMessageRewardHandling:
 
         # Messages with extra fields that aren't in the TypedDict
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[840, 841, 842]],
                 "masks": [[1, 1, 1]],
@@ -899,7 +863,7 @@ class TestMessageRewardHandling:
         """Test messages with extra fields but missing the reward field - should be accepted."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "extra_no_reward_test",
                 "wandb_project": "extra_no_reward_test",
@@ -915,7 +879,7 @@ class TestMessageRewardHandling:
 
         # Messages with extra fields but NO reward field - should be OK
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[850, 851, 852]],
                 "masks": [[1, 1, 1]],
@@ -960,7 +924,7 @@ class TestWeirdMessageFormats:
         """Test sending messages as tuples instead of lists."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "tuple_test",
                 "wandb_project": "tuple_test",
@@ -976,7 +940,7 @@ class TestWeirdMessageFormats:
 
         # Try messages as tuple of tuples (JSON will convert to lists)
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[900, 901, 902]],
                 "masks": [[1, 1, 1]],
@@ -1002,7 +966,7 @@ class TestWeirdMessageFormats:
         """Test messages with nested unusual types."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "nested_weird_test",
                 "wandb_project": "nested_weird_test",
@@ -1018,7 +982,7 @@ class TestWeirdMessageFormats:
 
         # Messages with weird nested content
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[910, 911, 912]],
                 "masks": [[1, 1, 1]],
@@ -1055,7 +1019,7 @@ class TestWeirdMessageFormats:
         """Test messages with numeric strings and edge case content."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "numeric_content_test",
                 "wandb_project": "numeric_content_test",
@@ -1071,7 +1035,7 @@ class TestWeirdMessageFormats:
 
         # Messages with numeric and edge case content
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[920, 921, 922]],
                 "masks": [[1, 1, 1]],
@@ -1095,7 +1059,7 @@ class TestWeirdMessageFormats:
         """Test messages with boolean and null values in various fields."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "bool_null_test",
                 "wandb_project": "bool_null_test",
@@ -1111,7 +1075,7 @@ class TestWeirdMessageFormats:
 
         # Try various edge cases
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[930, 931, 932]],
                 "masks": [[1, 1, 1]],
@@ -1144,7 +1108,7 @@ class TestWeirdMessageFormats:
         """Test messages with very large content strings."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "large_content_test",
                 "wandb_project": "large_content_test",
@@ -1161,7 +1125,7 @@ class TestWeirdMessageFormats:
         # Large content message
         large_content = "A" * 10000  # 10k character string
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[940, 941, 942]],
                 "masks": [[1, 1, 1]],
@@ -1183,7 +1147,7 @@ class TestWeirdMessageFormats:
         """Test messages with unicode, emojis, and special characters."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "unicode_test",
                 "wandb_project": "unicode_test",
@@ -1199,7 +1163,7 @@ class TestWeirdMessageFormats:
 
         # Unicode and special character messages
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[950, 951, 952]],
                 "masks": [[1, 1, 1]],
@@ -1228,7 +1192,7 @@ class TestWeirdMessageFormats:
         """Test messages with custom role values like 'dog'."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "custom_role_test",
                 "wandb_project": "custom_role_test",
@@ -1244,7 +1208,7 @@ class TestWeirdMessageFormats:
 
         # Try custom/weird roles
         response = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[960, 961, 962, 963, 964]],
                 "masks": [[1, 1, 1, 1, 1]],
@@ -1272,7 +1236,7 @@ class TestWeirdMessageFormats:
         """Test messages missing role or content fields."""
         # Register first
         register_response = requests.post(
-            "http://localhost:8000/register",
+            f"{api_server}/register",
             json={
                 "wandb_group": "missing_fields_test",
                 "wandb_project": "missing_fields_test",
@@ -1288,7 +1252,7 @@ class TestWeirdMessageFormats:
 
         # Try missing role
         response1 = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[970, 971, 972]],
                 "masks": [[1, 1, 1]],
@@ -1310,7 +1274,7 @@ class TestWeirdMessageFormats:
 
         # Try missing content
         response2 = requests.post(
-            "http://localhost:8000/scored_data",
+            f"{api_server}/scored_data",
             json={
                 "tokens": [[980, 981, 982]],
                 "masks": [[1, 1, 1]],

@@ -4,9 +4,11 @@ import requests
 from atroposlib.tests.api_test_utils import launch_api_for_testing
 
 
-def register_data(group="test", proj="test", batch_size=32) -> requests.Response:
+def register_data(
+    base_url: str, group: str = "test", proj: str = "test", batch_size: int = 32
+) -> requests.Response:
     x = requests.post(
-        "http://localhost:8000/register",
+        f"{base_url}/register",
         json={
             "wandb_group": group,
             "wandb_project": proj,
@@ -22,7 +24,11 @@ def register_data(group="test", proj="test", batch_size=32) -> requests.Response
 
 
 def post_scored_data(
-    tokens=((0,),), masks=((0,),), scores=(0,), ref_logprobs=((0,),)
+    base_url: str,
+    tokens=((0,),),
+    masks=((0,),),
+    scores=(0,),
+    ref_logprobs=((0,),),
 ) -> requests.Response:
     data = {
         "tokens": tokens,
@@ -31,51 +37,51 @@ def post_scored_data(
     }
     if ref_logprobs is not None:
         data["ref_logprobs"] = ref_logprobs
-    x = requests.post("http://localhost:8000/scored_data", json=data)
+    x = requests.post(f"{base_url}/scored_data", json=data)
     return x
 
 
-def reset() -> requests.Response:
-    x = requests.get("http://localhost:8000/reset_data")
+def reset(base_url: str) -> requests.Response:
+    x = requests.get(f"{base_url}/reset_data")
     return x
 
 
 @pytest.fixture(scope="session")
 def api():
-    proc = launch_api_for_testing()
-    yield
+    proc, base_url = launch_api_for_testing()
+    yield base_url
     proc.terminate()
-    proc.wait()  # Wait for clean shutdown
+    proc.wait()
 
 
 def test_register(api):
-    x = register_data()
+    x = register_data(api)
     assert x.status_code == 200, x.text
     data = x.json()
     assert "uuid" in data
 
 
 def test_reset(api):
-    x = register_data()
+    x = register_data(api)
     assert x.status_code == 200, x.text
     data = x.json()
     assert "uuid" in data
-    x = post_scored_data()
+    x = post_scored_data(api)
     assert x.status_code == 200, x.text
-    x = reset()
+    x = reset(api)
     print("0-0-0-0-0-0-0-0", flush=True)
     print(x.text, flush=True)
     print("0-0-0-0-0-0-0-0", flush=True)
     assert x.status_code == 200, x.text
-    x = requests.get("http://localhost:8000/info")
+    x = requests.get(f"{api}/info")
     assert x.status_code == 200
     assert x.json()["batch_size"] == -1
-    x = requests.get("http://localhost:8000/status")
+    x = requests.get(f"{api}/status")
     assert x.status_code == 200, x.text
     data = x.json()
     assert data["current_step"] == 0
     assert data["queue_size"] == 0
-    x = requests.get("http://localhost:8000/wandb_info")
+    x = requests.get(f"{api}/wandb_info")
     assert x.status_code == 200, x.text
     data = x.json()
     assert data["group"] is None
@@ -83,7 +89,7 @@ def test_reset(api):
 
 
 def test_batch_size(api):
-    x = register_data()
+    x = register_data(api)
     assert x.status_code == 200, x.text
     # get the batch size
-    x = requests.get("http://localhost:8000/info")
+    x = requests.get(f"{api}/info")

@@ -344,8 +344,22 @@ async def info():
 
 @app.get("/batch")
 async def get_batch():
-    if not app.state.started:
+    try:
+        started = bool(app.state.started)
+    except AttributeError:
+        return {
+            "batch": None,
+            "status": "server not registered; POST /register first",
+        }
+
+    if not started:
         app.state.started = True
+
+    if not hasattr(app.state, "queue") or not hasattr(app.state, "curr_batch"):
+        return {
+            "batch": None,
+            "status": "server not registered; POST /register first",
+        }
 
     if len(app.state.curr_batch) > 0:
         return {"batch": app.state.curr_batch.pop()}
@@ -563,18 +577,20 @@ async def get_status_env(env: EnvIdentifier):
 
 @app.get("/reset_data")
 async def reset_data():
-    try:
+    if hasattr(app.state, "queue"):
         del app.state.queue
-        app.state.group = None
-        app.state.project = None
-        app.state.batchsize = -1
-        app.state.num_steps = -1
-        app.state.status_dict = {"step": 0}
-        app.state.curr_batch = []
-        app.state.started = False
-        app.state.requesters = []
-        app.state.envs = []
-        app.state.buffer = {}
-    except KeyError:
-        pass
+
+    app.state.group = None
+    app.state.project = None
+    app.state.batchsize = -1
+    app.state.num_steps = -1
+    app.state.status_dict = {"step": 0}
+    app.state.curr_batch = []
+    app.state.started = False
+    app.state.requesters = []
+    app.state.envs = []
+    app.state.buffer = {}
+
+    if hasattr(app.state, "latest"):
+        del app.state.latest
     return PlainTextResponse("Reset successful", status_code=status.HTTP_200_OK)

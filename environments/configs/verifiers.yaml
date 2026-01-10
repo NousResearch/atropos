@@ -1,0 +1,24 @@
+env:
+  vf_env_name: "adtygan/frozen-lake@latest"
+  env_args: {}
+
+  group_size: 8
+  max_token_length: 2048
+  tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-3B-Preview"
+  rollout_server_url: "http://localhost:8000"
+  use_wandb: false
+  include_messages: true
+  train_on_all_assistant_turns: true
+  ensure_scores_are_not_same: false
+  eval_num_examples: 128
+  data_dir_to_save_evals: "data/evals/verifiers"
+
+openai:
+  - model_name: "openai/gpt-4.1"
+    base_url: "https://openrouter.ai/api/v1"
+    api_key: "$OPENROUTER_API_KEY"
+    health_check: false
+    weight: 1.0
+
+slurm: false
+testing: false
