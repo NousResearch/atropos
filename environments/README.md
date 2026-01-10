@@ -22,9 +22,9 @@ Run Prime Intellect Environment Hub environments inside Atropos via `verifiers`.
 **Run + verify:**
 ```bash
 run-api
+curl -sS -X POST http://localhost:8000/register -H 'Content-Type: application/json' -d '{"wandb_group":"local","wandb_project":"local","batch_size":1,"max_token_len":4096,"checkpoint_dir":"","save_checkpoint_interval":-1,"starting_step":0,"num_steps":5}' >/dev/null
+curl -sS http://localhost:8000/batch >/dev/null  # flips app.state.started=true
 python environments/verifiers_server.py serve --config environments/configs/verifiers.yaml
-
-# in logs: "[verifiers] loaded Prime Env Hub environment: hub_id='...' resolved_env_id='...'"
 curl -sS http://localhost:8000/latest_example
 ```
 
