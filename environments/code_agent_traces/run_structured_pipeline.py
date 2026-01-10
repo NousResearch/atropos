@@ -199,9 +199,7 @@ class StructuredAgent:
                 actual = metadata.get("results", [])
                 expected = metadata.get("expected", [])
                 console.print("\n[bold]Test Results:[/bold]")
-                for i, (res, exp, passed) in enumerate(
-                    zip(actual, expected, results)
-                ):
+                for i, (res, exp, passed) in enumerate(zip(actual, expected, results)):
                     status = "[green]PASS[/green]" if passed else "[red]FAIL[/red]"
                     console.print(f"  Test {i+1}: {status}")
                     if not passed:
@@ -222,7 +220,11 @@ class StructuredAgent:
                 exec(code, exec_globals)
                 return {"success": True, "executed": True}
             except Exception as e:
-                return {"success": False, "error": str(e), "exception": type(e).__name__}
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "exception": type(e).__name__,
+                }
 
     async def solve(
         self,
@@ -324,7 +326,9 @@ Please try again with the structured format. Analyze what went wrong in <plannin
             if code:
                 last_code = code
                 trace.final_code = code
-                exec_result = await self._execute_code(code, test_cases, verbose=verbose)
+                exec_result = await self._execute_code(
+                    code, test_cases, verbose=verbose
+                )
                 last_result = exec_result
                 trace.execution_result = exec_result
                 success = exec_result.get("success", False)
