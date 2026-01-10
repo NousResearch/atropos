@@ -14,7 +14,7 @@ dependencies = [
     "uvicorn[standard]",
     "tenacity",
     "markdown",
-    "numpy",
+    "numpy<=2.2",
     "wandb",
     "gymnasium",
     "math-verify>=0.7.0",

@@ -13,11 +13,12 @@ import numpy as np
 import requests
 import torch
 import torch.nn.functional as F
-import wandb  # Added for logging
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential
 from torch.optim import AdamW
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+import wandb  # Added for logging
 
 # Global variable to keep track of the vLLM process
 vllm_process = None
@@ -446,7 +447,11 @@ def train(config: TrainingConfig):
                     "train/grad_norm": grad_norm.item(),
                     "train/pos_logp": total_pos_logp,
                     "train/neg_logp": total_neg_logp,
-                    "train/logp": total_logp,
+                    "train/logp": (
+                        float(total_logp.float().mean().item())
+                        if hasattr(total_logp, "float")
+                        else float(total_logp)
+                    ),
                 },
                 step=step + 1,
             )

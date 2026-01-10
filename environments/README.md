@@ -642,3 +642,54 @@ python text_reversal_environment.py serve \
 
 **Evaluation Metric:**
 - `eval/percent_correct`: strict exact-match accuracy on the eval set.
+
+### Verifiers Server (`verifiers_server.py`)
+
+The Verifiers Server acts as a bridge between Atropos and the [Verifiers Environment Hub](https://github.com/NousResearch/verifiers). This allows you to leverage any Verifiers-native environment for RL (via GRPO), SFT data generation, or large-scale evaluation while maintaining correct multi-turn logic and token-level accuracy.
+
+#### 1. Setup & Installation
+To use these environments, you first need to install the Verifiers CLI tool (`prime`) and the specific environment you wish to run:
+
+```bash
+# Install the Verifiers management tool
+uv tool install prime
+
+# Install a specific environment (e.g., Alphabet Sort)
+prime env install primeintellect/alphabet-sort
+```
+
+#### 2. Serving the Environment
+Once installed, you can serve the environment through Atropos.
+
+```bash
+uv run environments/verifiers_server.py serve \
+    --env.vf_env_name alphabet-sort \
+    --openai.base_url http://localhost:9001/v1 \
+    --openai.model_name "Qwen/Qwen2.5-1.5B-Instruct"
+```
+
+#### 3. Passing Environment Arguments
+Many Verifiers environments require specific configuration (like dataset splits or difficulty settings). You can pass these via the `--env.env_args` flag using a JSON string:
+
+```bash
+--env.env_args '{"split": "train", "min_length": 5}'
+```
+
+#### 4. Training with GRPO
+The Verifiers bridge is designed to work out-of-the-box with the `grpo_trainer`. Because it uses the Verifiers' native rollout loop, it correctly captures rewards and advantages even in complex, multi-turn tool-use scenarios.
+
+#### 5. SFT Data Generation
+If you want to generate high-quality reasoning traces for SFT using a Verifiers environment, use the `atropos-sft-gen` CLI.
+
+**Note:** Since Verifiers environments often involve multi-turn interactions or specific formatting (like `<thought>` tags), you **must** use the `--save-messages` flag to preserve the full chat structure instead of just a raw text completion.
+
+```bash
+atropos-sft-gen data.jsonl \
+    --save-messages \
+    --num-seqs-to-save 100
+```
+
+#### 6. Summary of Key Features
+*   **Native Multi-turn:** Supports environments that require the model to "try again" or use tools over multiple steps.
+*   **Token Alignment:** When used with a vLLM/SGLang backend, it captures exact logprobs and token IDs for the entire trajectory.
+*   **Unified Metrics:** Automatically logs Verifiers-specific metrics (like `format_score` or `strict_accuracy`) to Weights & Biases.
