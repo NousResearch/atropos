@@ -414,7 +414,9 @@ class ToolBasedTraceGenerator:
             return self.base_url[:-3] + "/api/chat"
         return self.base_url + "/api/chat"
 
-    async def _call_llm(self, messages: List[Dict], stop_after_code: bool = True) -> str:
+    async def _call_llm(
+        self, messages: List[Dict], stop_after_code: bool = True
+    ) -> str:
         """Call LLM API with stop sequences to prevent hallucination."""
         import aiohttp
 
@@ -431,7 +433,11 @@ class ToolBasedTraceGenerator:
                 "temperature": self.temperature,
                 "num_predict": self.max_tokens,
                 # Stop sequences to prevent model from hallucinating results
-                "stop": ["[RESULT]", "[ERROR]", "\n[RESULT]", "\n[ERROR]"] if stop_after_code else [],
+                "stop": (
+                    ["[RESULT]", "[ERROR]", "\n[RESULT]", "\n[ERROR]"]
+                    if stop_after_code
+                    else []
+                ),
             },
         }
 
@@ -453,10 +459,14 @@ class ToolBasedTraceGenerator:
         # If model outputs them, it's hallucinating
 
         # Find and remove [RESULT]...[/RESULT] or [RESULT]... to end
-        text = re.sub(r'\[RESULT\].*?(?:\[/RESULT\]|$)', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(
+            r"\[RESULT\].*?(?:\[/RESULT\]|$)", "", text, flags=re.DOTALL | re.IGNORECASE
+        )
 
         # Find and remove [ERROR]...[/ERROR] or [ERROR]... to end
-        text = re.sub(r'\[ERROR\].*?(?:\[/ERROR\]|$)', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(
+            r"\[ERROR\].*?(?:\[/ERROR\]|$)", "", text, flags=re.DOTALL | re.IGNORECASE
+        )
 
         return text.strip()
 
