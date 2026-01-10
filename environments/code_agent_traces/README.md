@@ -86,15 +86,27 @@ Standalone script for generating fine-tuning data.
 ### Usage
 
 ```bash
-# Basic usage
+# Basic usage (single-call, model may output monolithic response)
 python trace_generator.py --output traces.jsonl --num-traces 10
 
+# RECOMMENDED: Force true interleaving via multi-turn conversation
+python trace_generator.py --output traces.jsonl --num-traces 10 --force-interleave
+
 # Only successful traces (score > 0)
-python trace_generator.py --output traces.jsonl --only-success
+python trace_generator.py --output traces.jsonl --only-success --force-interleave
 
 # Simple chat format for fine-tuning
-python trace_generator.py --output traces.jsonl --chat-format
+python trace_generator.py --output traces.jsonl --chat-format --force-interleave
 ```
+
+### Interleaving Modes
+
+| Mode | Flag | Description |
+|------|------|-------------|
+| Single-call | (default) | Fast but model often outputs monolithic Plan→Code→Verify |
+| **Forced interleave** | `--force-interleave` | Multi-turn conversation forces Think→Code→Think→Code... |
+
+**Recommended**: Use `--force-interleave` for proper training data with granular reasoning steps.
 
 ### Output Format (Full)
 

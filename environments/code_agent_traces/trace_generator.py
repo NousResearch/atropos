@@ -98,6 +98,47 @@ RULES:
 4. Return ONLY the function, no test code or print statements"""
 
 
+# System prompt for forced interleaving - strict one-step-at-a-time
+FORCED_INTERLEAVE_SYSTEM = """You are an expert Python programmer who thinks step-by-step.
+
+CRITICAL: You must output EXACTLY ONE step at a time!
+
+Valid step patterns:
+1. [THINK] your reasoning here (1-2 sentences max)
+2. [CODE]\nyour_code_lines\n[/CODE] (max 3 lines of code)
+3. [VERIFY]\ntest trace\n[/VERIFY] (only when code is complete)
+
+RULES:
+- Output ONLY ONE [THINK] or [CODE] or [VERIFY] per response
+- After [CODE], STOP immediately and wait for next prompt
+- Do NOT write the entire solution at once
+- Each [CODE] block should have 1-3 lines maximum
+- Use [VERIFY] only when the function is complete
+
+Example of a SINGLE valid response:
+[THINK] I need to initialize a hash map to store seen values and their indices"""
+
+
+FORCED_CONTINUE_PROMPT = """Continue with the next step.
+
+Remember:
+- Output EXACTLY ONE step: either [THINK] or [CODE] (1-3 lines max)
+- If the function is complete, use [VERIFY] to trace through a test case
+- Do NOT repeat previous code
+- Do NOT write the entire solution"""
+
+
+FORCED_VERIFY_PROMPT = """The function appears complete. Now verify it works correctly.
+
+Output a [VERIFY] block that traces through this test case step by step:
+{test_case}
+
+Format:
+[VERIFY]
+Step-by-step trace showing each variable value
+[/VERIFY]"""
+
+
 # ============================================================================
 # Data Classes
 # ============================================================================
@@ -457,8 +498,14 @@ class TraceGenerator:
         except Exception as e:
             return -1.0, 0, 0, str(e)
 
-    async def generate_trace(self, problem: Dict) -> GeneratedTrace:
+    async def generate_trace(self, problem: Dict, force_interleave: bool = False) -> GeneratedTrace:
         """Generate a single trace for a problem."""
+        if force_interleave:
+            return await self._generate_trace_forced(problem)
+        return await self._generate_trace_single(problem)
+
+    async def _generate_trace_single(self, problem: Dict) -> GeneratedTrace:
+        """Generate trace with single LLM call (original method)."""
         prompt = problem.get("prompt", "")
         tests = problem.get("tests", {})
         problem_id = problem.get("id", "unknown")
@@ -510,16 +557,237 @@ Use [THINK], [CODE], and [VERIFY] markers. Return ONLY the function."""
                 model=self.model,
             )
 
+    async def _generate_trace_forced(self, problem: Dict) -> GeneratedTrace:
+        """
+        Generate trace with FORCED interleaving via multi-turn conversation.
+
+        Forces the model to output one step at a time by stopping after each
+        [/CODE] or [THINK] and re-prompting to continue.
+        """
+        prompt = problem.get("prompt", "")
+        tests = problem.get("tests", {})
+
+        # Build initial message
+        initial_user = f"""Solve this problem step by step. Output ONLY your first [THINK] step.
+
+Problem:
+{prompt}
+
+Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
+
+        messages = [
+            {"role": "system", "content": FORCED_INTERLEAVE_SYSTEM},
+            {"role": "user", "content": initial_user},
+        ]
+
+        all_steps: List[TraceStep] = []
+        code_parts: List[str] = []
+        think_count = 0
+        has_verify = False
+        max_turns = 20  # Safety limit
+        turn = 0
+
+        try:
+            while turn < max_turns:
+                turn += 1
+
+                # Call LLM for one step
+                response = await self._call_llm(messages)
+                response = response.strip()
+
+                # Parse this single response
+                step_type, content = self._parse_single_step(response)
+
+                if step_type is None:
+                    # Model didn't follow format, try to salvage
+                    # Check if it output a full solution
+                    steps, code, tc, hv = self._parse_response(response)
+                    if code:
+                        # Model ignored instruction, use what we got
+                        for s in steps:
+                            all_steps.append(s)
+                            if s.step_type == "think":
+                                think_count += 1
+                            elif s.step_type == "code":
+                                code_parts.append(s.content)
+                        has_verify = hv
+                        think_count = max(think_count, tc)
+                        break
+                    else:
+                        # Retry with stricter prompt
+                        messages.append({"role": "assistant", "content": response})
+                        messages.append({"role": "user", "content": "Invalid format. Output EXACTLY ONE step: [THINK] your thought OR [CODE]\\ncode\\n[/CODE]"})
+                        continue
+
+                # Add step
+                all_steps.append(TraceStep(step_type=step_type, content=content))
+                messages.append({"role": "assistant", "content": response})
+
+                if step_type == "think":
+                    think_count += 1
+                    # Prompt for code or next think
+                    messages.append({"role": "user", "content": "Now output the next step: either another [THINK] or [CODE]\\nyour_code\\n[/CODE] (max 3 lines)"})
+
+                elif step_type == "code":
+                    code_parts.append(content)
+                    # Check if function seems complete
+                    combined_code = '\n'.join(code_parts)
+                    if self._looks_complete(combined_code):
+                        # Ask for verification
+                        test_example = self._get_test_example(tests)
+                        messages.append({"role": "user", "content": FORCED_VERIFY_PROMPT.format(test_case=test_example)})
+                    else:
+                        messages.append({"role": "user", "content": FORCED_CONTINUE_PROMPT})
+
+                elif step_type == "verify":
+                    has_verify = True
+                    break  # Done!
+
+                elif step_type == "wait":
+                    # Bug catch, continue
+                    messages.append({"role": "user", "content": "Good catch! Now continue with [CODE] to fix it or [THINK] to reason more."})
+
+            # Combine all code
+            full_code = '\n'.join(code_parts)
+
+            # Execute and score
+            score, passed, total, error = self._execute_and_score(full_code, tests)
+
+            # Build combined assistant response for training
+            combined_response = self._combine_steps_to_response(all_steps)
+            training_messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},  # Use original system prompt for training
+                {"role": "user", "content": f"Solve this coding problem step-by-step:\n\n{prompt}\n\nUse [THINK], [CODE], and [VERIFY] markers."},
+                {"role": "assistant", "content": combined_response},
+            ]
+
+            return GeneratedTrace(
+                problem=prompt,
+                messages=training_messages,
+                code=full_code,
+                score=score,
+                tests_passed=passed,
+                tests_total=total,
+                think_count=think_count,
+                has_verify=has_verify,
+                trace=all_steps,
+                error=error,
+                model=self.model,
+            )
+
+        except Exception as e:
+            return GeneratedTrace(
+                problem=prompt,
+                messages=messages,
+                error=str(e),
+                model=self.model,
+            )
+
+    def _parse_single_step(self, text: str) -> Tuple[Optional[str], str]:
+        """Parse a single step from response. Returns (step_type, content) or (None, '') if invalid."""
+        text = text.strip()
+
+        # Check for [VERIFY]
+        verify_match = re.search(r'\[VERIFY\](.*?)(?:\[/VERIFY\]|$)', text, re.DOTALL | re.IGNORECASE)
+        if verify_match:
+            return "verify", verify_match.group(1).strip()
+
+        # Check for [CODE]...[/CODE]
+        code_match = re.search(r'\[CODE\](.*?)\[/CODE\]', text, re.DOTALL | re.IGNORECASE)
+        if code_match:
+            content = code_match.group(1)
+            lines = content.split('\n')
+            while lines and not lines[0].strip():
+                lines.pop(0)
+            while lines and not lines[-1].strip():
+                lines.pop()
+            return "code", '\n'.join(lines)
+
+        # Check for [THINK]
+        think_match = re.search(r'\[THINK\]\s*(.*?)(?:\[|$)', text, re.DOTALL | re.IGNORECASE)
+        if think_match:
+            content = think_match.group(1).strip()
+            if content.upper().startswith("WAIT"):
+                return "wait", content
+            return "think", content
+
+        # Check for [WAIT]
+        wait_match = re.search(r'\[WAIT\]\s*(.*?)(?:\[|$)', text, re.DOTALL | re.IGNORECASE)
+        if wait_match:
+            return "wait", wait_match.group(1).strip()
+
+        return None, ""
+
+    def _looks_complete(self, code: str) -> bool:
+        """Check if code looks like a complete function."""
+        if not code.strip():
+            return False
+
+        # Must have a function definition
+        if not re.search(r'def\s+\w+\s*\(', code):
+            return False
+
+        # Must have a return statement
+        if not re.search(r'\breturn\b', code):
+            return False
+
+        # Check indentation suggests function body is complete
+        lines = code.strip().split('\n')
+        if len(lines) < 2:
+            return False
+
+        # Last non-empty line should be at function body level (indented)
+        last_line = lines[-1]
+        if last_line.strip() and not last_line.startswith(' ') and not last_line.startswith('\t'):
+            # Last line is at module level, might be incomplete
+            return 'return' in last_line
+
+        return True
+
+    def _get_test_example(self, tests: Dict) -> str:
+        """Get a test example for verification prompt."""
+        if not tests or not tests.get("inputs"):
+            return "an example input"
+
+        fn_name = tests.get("fn_name", "func")
+        inputs = tests["inputs"][0] if tests["inputs"] else []
+        expected = tests["outputs"][0] if tests.get("outputs") else "expected_output"
+
+        # Format inputs
+        if isinstance(inputs, list):
+            args = ", ".join(repr(x) for x in inputs)
+        else:
+            args = repr(inputs)
+
+        return f"{fn_name}({args}) should return {expected}"
+
+    def _combine_steps_to_response(self, steps: List[TraceStep]) -> str:
+        """Combine steps into a single formatted response for training."""
+        parts = []
+        for step in steps:
+            if step.step_type == "think":
+                parts.append(f"[THINK] {step.content}")
+            elif step.step_type == "wait":
+                parts.append(f"[THINK] WAIT - {step.content}")
+            elif step.step_type == "code":
+                parts.append(f"[CODE]\n{step.content}\n[/CODE]")
+            elif step.step_type == "verify":
+                parts.append(f"[VERIFY]\n{step.content}\n[/VERIFY]")
+        return '\n'.join(parts)
+
     async def generate_traces(
         self,
         problems: List[Dict],
         num_per_problem: int = 1,
         only_success: bool = False,
+        force_interleave: bool = False,
         verbose: bool = True,
     ) -> List[GeneratedTrace]:
         """Generate multiple traces."""
         traces = []
         total = len(problems) * num_per_problem
+
+        mode_str = "FORCED interleaved" if force_interleave else "single-call"
 
         if verbose and HAS_RICH:
             with Progress(
@@ -527,11 +795,11 @@ Use [THINK], [CODE], and [VERIFY] markers. Return ONLY the function."""
                 TextColumn("[progress.description]{task.description}"),
                 console=console,
             ) as progress:
-                task = progress.add_task(f"Generating {total} traces...", total=total)
+                task = progress.add_task(f"Generating {total} traces ({mode_str})...", total=total)
 
                 for problem in problems:
                     for _ in range(num_per_problem):
-                        trace = await self.generate_trace(problem)
+                        trace = await self.generate_trace(problem, force_interleave=force_interleave)
 
                         if only_success and trace.score <= 0:
                             progress.update(task, advance=1)
@@ -543,10 +811,8 @@ Use [THINK], [CODE], and [VERIFY] markers. Return ONLY the function."""
             for i, problem in enumerate(problems):
                 for j in range(num_per_problem):
                     if verbose:
-                        print(
-                            f"Generating trace {i * num_per_problem + j + 1}/{total}..."
-                        )
-                    trace = await self.generate_trace(problem)
+                        print(f"Generating trace {i * num_per_problem + j + 1}/{total} ({mode_str})...")
+                    trace = await self.generate_trace(problem, force_interleave=force_interleave)
                     if only_success and trace.score <= 0:
                         continue
                     traces.append(trace)
@@ -605,6 +871,11 @@ async def main():
         default=0.7,
         help="Sampling temperature",
     )
+    parser.add_argument(
+        "--force-interleave",
+        action="store_true",
+        help="Force true interleaving via multi-turn conversation (slower but more granular)",
+    )
     args = parser.parse_args()
 
     api_key = os.getenv("OLLAMA_API_KEY", "")
@@ -615,8 +886,13 @@ async def main():
     print(f"  Output: {args.output}")
     print(f"  Traces per problem: {args.num_traces}")
     print(f"  Only success: {args.only_success}")
+    print(f"  Force interleave: {args.force_interleave}")
     print(f"  Problems: {len(BUILTIN_PROBLEMS)}")
     print()
+
+    if args.force_interleave:
+        print("⚡ Using FORCED interleaving mode (multi-turn, slower but true granular reasoning)")
+        print()
 
     # Initialize generator
     generator = TraceGenerator(
@@ -631,6 +907,7 @@ async def main():
         problems=BUILTIN_PROBLEMS,
         num_per_problem=args.num_traces,
         only_success=args.only_success,
+        force_interleave=args.force_interleave,
         verbose=True,
     )
 
@@ -652,12 +929,24 @@ async def main():
         avg_thinks = sum(t.think_count for t in traces) / len(traces)
         verify_rate = sum(1 for t in traces if t.has_verify) / len(traces)
 
-        print(
-            f"  Success rate: {success_count}/{len(traces)} ({100*success_count/len(traces):.1f}%)"
-        )
+        # Count code blocks to measure interleaving
+        avg_code_blocks = sum(
+            sum(1 for s in t.trace if s.step_type == "code")
+            for t in traces
+        ) / len(traces)
+
+        print(f"  Success rate: {success_count}/{len(traces)} ({100*success_count/len(traces):.1f}%)")
         print(f"  Avg score: {sum(scores)/len(scores):.2f}")
         print(f"  Avg [THINK] count: {avg_thinks:.1f}")
+        print(f"  Avg [CODE] blocks: {avg_code_blocks:.1f}")  # Key metric for interleaving
         print(f"  [VERIFY] usage: {100*verify_rate:.1f}%")
+
+        if args.force_interleave:
+            print(f"\n  ⚡ Interleaving ratio: {avg_thinks:.1f} thinks / {avg_code_blocks:.1f} code blocks")
+            if avg_code_blocks >= 3:
+                print(f"  ✓ Good interleaving achieved!")
+            else:
+                print(f"  ⚠ Low interleaving - model may be combining code blocks")
 
     print(f"\nSaved to: {args.output}")
 
