@@ -24,9 +24,9 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import verifiers as vf
+import wandb
 from pydantic import Field
 
-import wandb
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
