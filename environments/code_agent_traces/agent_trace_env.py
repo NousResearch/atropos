@@ -21,7 +21,6 @@ from collections import deque
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-import modal
 import numpy as np
 import regex as re
 from datasets import load_dataset
@@ -37,6 +36,16 @@ from atroposlib.envs.base import (
 )
 from atroposlib.type_definitions import AgentStep, GameHistory, Item, Message
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+
+# Try to import Modal, fallback to local executor
+try:
+    import modal
+    run_test = modal.Function.from_name("joeli-lcb", "run_test")
+    USE_MODAL = True
+except Exception:
+    from .local_executor import run_test_local
+    run_test = None
+    USE_MODAL = False
 
 
 # System prompt for code generation
@@ -61,7 +70,7 @@ FORMATTING_STDIN_STDOUT = (
     "Enclose your code within ```python and ``` delimiters."
 )
 
-# Semaphore for Modal calls
+# Semaphore for code execution calls
 async_semaphore = asyncio.Semaphore(100)
 
 
@@ -77,13 +86,6 @@ def build_prompt(question: str, problem_type: str, starter_code: Optional[str] =
 
     prompt += "### Your Solution:\n"
     return prompt
-
-
-# Modal function for code execution
-try:
-    run_test = modal.Function.from_name("joeli-lcb", "run_test")
-except Exception:
-    run_test = None
 
 
 class AgentTraceConfig(BaseEnvConfig):
@@ -146,23 +148,23 @@ class AgentTraceEnv(BaseEnv):
             batch_size=-1,
             steps_per_eval=50,
             max_token_length=8192,
-            wandb_name="agent_trace_ollama",
+            wandb_name="agent_trace_deepseek",
             temperature=0.7,
             eval_temperature=0.3,
             collect_logprobs=True,
             use_ollama=True,
         )
 
-        # Ollama server configuration
+        # Ollama Cloud configuration with DeepSeek V3.2
         server_configs = [
             APIServerConfig(
-                model_name="deepseek-r1:7b",  # Or any Ollama model
-                base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+                model_name=os.getenv("OLLAMA_MODEL", "deepseek-v3.2"),
+                base_url=os.getenv("OLLAMA_BASE_URL", "https://ollama.com"),
                 api_key=os.getenv("OLLAMA_API_KEY", ""),
                 server_type="ollama",
                 num_requests_for_eval=32,
                 timeout=300,
-                health_check=False,  # Ollama health check is different
+                health_check=False,
             ),
         ]
 
@@ -353,23 +355,26 @@ class AgentTraceEnv(BaseEnv):
         if code is None:
             return -1.0, {"error": "No code extracted"}
 
-        if run_test is None:
-            # Fallback if Modal not available
-            return 0.0, {"error": "Modal not available for execution"}
-
         try:
             async with async_semaphore:
                 test_input = {"tests": tests}
-                res, metadata = await run_test.remote.aio(test_input, code)
+
+                if USE_MODAL and run_test is not None:
+                    # Use Modal for sandboxed execution
+                    try:
+                        res, metadata = await run_test.remote.aio(test_input, code)
+                    except Exception as e:
+                        rprint(f"[yellow]Modal error, falling back to local: {e}[/yellow]")
+                        res, metadata = await run_test_local(test_input, code)
+                else:
+                    # Use local executor
+                    res, metadata = await run_test_local(test_input, code)
 
             if set(res) == {True}:
                 return 1.0, metadata
             else:
                 return -1.0, metadata
 
-        except modal.exception.RemoteError as e:
-            rprint(f"[red]Modal error for problem {problem_idx}: {e}[/red]")
-            return -1.0, {"error": "segmentation fault"}
         except Exception as e:
             rprint(f"[red]Execution error for problem {problem_idx}: {e}[/red]")
             return -1.0, {"error": str(e)}
@@ -464,15 +469,17 @@ class AgentTraceEnv(BaseEnv):
 
 class OllamaAgentTraceEnv(AgentTraceEnv):
     """
-    Agent Trace Environment specifically optimized for Ollama with logprobs.
+    Agent Trace Environment specifically optimized for Ollama Cloud with logprobs.
 
     This variant uses Ollama's native API to get detailed logprobs for
     each generated token, enabling more sophisticated RL training.
+
+    Default configuration uses Ollama Cloud with DeepSeek V3.2.
     """
 
     @classmethod
     def config_init(cls) -> Tuple[AgentTraceConfig, List[APIServerConfig]]:
-        """Initialize with Ollama-specific configuration."""
+        """Initialize with Ollama Cloud configuration for DeepSeek V3.2."""
         env_config = AgentTraceConfig(
             tokenizer_name="Qwen/Qwen3-14B",
             group_size=4,
@@ -483,13 +490,14 @@ class OllamaAgentTraceEnv(AgentTraceEnv):
             top_logprobs=5,
             collect_logprobs=True,
             use_ollama=True,
-            output_dir="ollama_agent_traces",
+            output_dir="deepseek_agent_traces",
         )
 
+        # Ollama Cloud with DeepSeek V3.2
         server_configs = [
             APIServerConfig(
-                model_name=os.getenv("OLLAMA_MODEL", "deepseek-r1:7b"),
-                base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+                model_name=os.getenv("OLLAMA_MODEL", "deepseek-v3.2"),
+                base_url=os.getenv("OLLAMA_BASE_URL", "https://ollama.com"),
                 api_key=os.getenv("OLLAMA_API_KEY", ""),
                 server_type="ollama",
                 timeout=300,

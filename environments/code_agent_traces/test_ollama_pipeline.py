@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
 """
-Test script for the Ollama Agent Trace Pipeline.
+Test script for the Ollama Agent Trace Pipeline with DeepSeek V3.2.
 
 This script tests the complete pipeline:
-1. Ollama server connection with logprobs
-2. Code generation
-3. (Optional) Code execution scoring
+1. Ollama Cloud connection with logprobs
+2. Code generation with DeepSeek V3.2
+3. Local code execution and scoring
 
 Usage:
-    # Test with local Ollama
+    # Set your Ollama Cloud API key
+    export OLLAMA_API_KEY=your_api_key_here
+
+    # Run tests with DeepSeek V3.2 (default)
     python test_ollama_pipeline.py
 
-    # Test with Ollama Cloud
-    OLLAMA_BASE_URL=https://ollama.com OLLAMA_API_KEY=your_key python test_ollama_pipeline.py
-
-    # Test with specific model
+    # Test with different model
     OLLAMA_MODEL=deepseek-v3.1 python test_ollama_pipeline.py
+
+    # Test with local Ollama
+    OLLAMA_BASE_URL=http://localhost:11434 OLLAMA_MODEL=deepseek-r1:7b python test_ollama_pipeline.py
 """
 
 import asyncio
@@ -35,17 +38,17 @@ console = Console()
 
 
 async def test_ollama_connection():
-    """Test basic Ollama server connection."""
+    """Test basic Ollama Cloud connection."""
     from atroposlib.envs.server_handling.ollama_server import OllamaServer, OllamaServerConfig
 
     rprint("\n[bold cyan]=" * 60)
-    rprint("[bold cyan]Test 1: Ollama Server Connection")
+    rprint("[bold cyan]Test 1: Ollama Cloud Connection (DeepSeek V3.2)")
     rprint("[bold cyan]=" * 60)
 
     config = OllamaServerConfig(
-        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        base_url=os.getenv("OLLAMA_BASE_URL", "https://ollama.com"),
         api_key=os.getenv("OLLAMA_API_KEY", ""),
-        model_name=os.getenv("OLLAMA_MODEL", "deepseek-r1:7b"),
+        model_name=os.getenv("OLLAMA_MODEL", "deepseek-v3.2"),
         timeout=120,
     )
 
@@ -81,9 +84,9 @@ async def test_logprobs():
     rprint("[bold cyan]=" * 60)
 
     config = OllamaServerConfig(
-        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        base_url=os.getenv("OLLAMA_BASE_URL", "https://ollama.com"),
         api_key=os.getenv("OLLAMA_API_KEY", ""),
-        model_name=os.getenv("OLLAMA_MODEL", "deepseek-r1:7b"),
+        model_name=os.getenv("OLLAMA_MODEL", "deepseek-v3.2"),
         timeout=120,
     )
 
@@ -212,9 +215,9 @@ async def test_tokens_and_logprobs():
     rprint("[bold cyan]=" * 60)
 
     config = OllamaServerConfig(
-        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        base_url=os.getenv("OLLAMA_BASE_URL", "https://ollama.com"),
         api_key=os.getenv("OLLAMA_API_KEY", ""),
-        model_name=os.getenv("OLLAMA_MODEL", "deepseek-r1:7b"),
+        model_name=os.getenv("OLLAMA_MODEL", "deepseek-v3.2"),
         timeout=120,
     )
 
@@ -359,20 +362,75 @@ Write your solution and enclose it in ```python and ``` delimiters.
         return False
 
 
+async def test_local_executor():
+    """Test local code execution."""
+    rprint("\n[bold cyan]=" * 60)
+    rprint("[bold cyan]Test 6: Local Code Executor")
+    rprint("[bold cyan]=" * 60)
+
+    try:
+        from local_executor import run_test_local, execute_code_safe
+
+        # Test 1: Simple function
+        code = '''
+def add(a, b):
+    return a + b
+'''
+        tests = {
+            "fn_name": "add",
+            "inputs": [[1, 2], [3, 4], [-1, 1]],
+            "outputs": [3, 7, 0],
+        }
+
+        results, metadata = execute_code_safe(code, tests)
+        rprint(f"Test 1 - add function: {results}")
+
+        # Test 2: Async interface
+        results2, metadata2 = await run_test_local({"tests": tests}, code)
+        rprint(f"Test 2 - async interface: {results2}")
+
+        # Test 3: Error handling
+        bad_code = "def broken(: pass"
+        results3, metadata3 = execute_code_safe(bad_code, tests)
+        rprint(f"Test 3 - syntax error: {results3}, error={metadata3.get('error', 'none')[:50]}")
+
+        # Test 4: Timeout
+        slow_code = '''
+def slow(a, b):
+    import time
+    time.sleep(100)
+    return a + b
+'''
+        results4, metadata4 = execute_code_safe(slow_code, tests, timeout=1.0)
+        rprint(f"Test 4 - timeout: {results4}, error={metadata4.get('error', 'none')}")
+
+        rprint(f"[green]Local executor tests passed![/green]")
+        return True
+
+    except Exception as e:
+        rprint(f"[red]Local executor test failed: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 async def main():
     """Run all tests."""
     rprint("[bold magenta]" + "=" * 60)
-    rprint("[bold magenta]Ollama Agent Trace Pipeline - Test Suite")
+    rprint("[bold magenta]Ollama Cloud + DeepSeek V3.2 - Agent Trace Pipeline")
     rprint("[bold magenta]" + "=" * 60)
 
     rprint("\n[bold]Configuration:[/bold]")
-    rprint(f"  OLLAMA_BASE_URL: {os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')}")
-    rprint(f"  OLLAMA_MODEL: {os.getenv('OLLAMA_MODEL', 'deepseek-r1:7b')}")
-    rprint(f"  OLLAMA_API_KEY: {'[set]' if os.getenv('OLLAMA_API_KEY') else '[not set]'}")
+    rprint(f"  OLLAMA_BASE_URL: {os.getenv('OLLAMA_BASE_URL', 'https://ollama.com')}")
+    rprint(f"  OLLAMA_MODEL: {os.getenv('OLLAMA_MODEL', 'deepseek-v3.2')}")
+    rprint(f"  OLLAMA_API_KEY: {'[set]' if os.getenv('OLLAMA_API_KEY') else '[NOT SET - required for Ollama Cloud]'}")
 
     results = {}
 
-    # Run tests
+    # Run local executor test first (no network needed)
+    results["local_executor"] = await test_local_executor()
+
+    # Run Ollama Cloud tests
     results["connection"] = await test_ollama_connection()
 
     if results["connection"]:
@@ -381,7 +439,8 @@ async def main():
         results["tokens_logprobs"] = await test_tokens_and_logprobs()
         results["full_pipeline"] = await test_full_pipeline()
     else:
-        rprint("[yellow]Skipping remaining tests due to connection failure.[/yellow]")
+        rprint("[yellow]Skipping Ollama tests due to connection failure.[/yellow]")
+        rprint("[yellow]Make sure OLLAMA_API_KEY is set for Ollama Cloud.[/yellow]")
 
     # Summary
     rprint("\n[bold magenta]" + "=" * 60)
