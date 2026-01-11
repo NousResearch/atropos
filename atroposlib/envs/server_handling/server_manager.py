@@ -10,6 +10,7 @@ from openai.types.completion import Completion
 from pydantic import BaseModel, Field
 
 from atroposlib.envs.server_handling.managed_server import ManagedServer
+from atroposlib.envs.server_handling.ollama_server import OllamaServer
 from atroposlib.envs.server_handling.openai_server import OpenAIServer
 from atroposlib.envs.server_handling.server_baseline import (
     APIServer,
@@ -62,6 +63,8 @@ class ServerManager:
                     server_class = SGLangServer
                 elif configs.server_type == "vllm":
                     server_class = VLLMServer
+                elif configs.server_type == "ollama":
+                    server_class = OllamaServer
                 else:
                     raise ValueError(f"Invalid server type: {configs.server_type}")
             else:
@@ -73,6 +76,8 @@ class ServerManager:
                     server_class = SGLangServer
                 elif configs[0].server_type == "vllm":
                     server_class = VLLMServer
+                elif configs[0].server_type == "ollama":
+                    server_class = OllamaServer
                 else:
                     raise ValueError(f"Invalid server type: {configs[0].server_type}")
         if testing:
