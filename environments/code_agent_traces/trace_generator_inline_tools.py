@@ -336,7 +336,7 @@ class OllamaClient:
             if messages:
                 last_msg = messages[-1]
                 print(f"[API] Last message role: {last_msg.get('role')}")
-                content = last_msg.get('content', '')[:200]
+                content = last_msg.get("content", "")[:200]
                 print(f"[API] Last message preview: {content}...")
 
         async with self.session.post(url, json=payload) as resp:
