@@ -754,6 +754,18 @@ Test cases:
                 response_json = json.dumps(result)
                 assistant_content += f"<tool_response>{response_json}</tool_response>\n"
 
+                # Error Recovery: Add continuation hint after errors
+                if result.get("error"):
+                    error_msg = result["error"]
+                    if len(error_msg) > 150:
+                        error_msg = error_msg[:150] + "..."
+                    assistant_content += f"\nI see there's an error: {error_msg}\nLet me analyze and fix the issue.\n\n"
+                elif result.get("passed", 0) < result.get("total", 1):
+                    # Partial success - encourage fixing
+                    passed = result.get("passed", 0)
+                    total = result.get("total", 1)
+                    assistant_content += f"\nI got {passed}/{total} tests passing. Let me fix the failing cases.\n\n"
+
                 trace_segments.append(
                     {
                         "type": "tool_call",
