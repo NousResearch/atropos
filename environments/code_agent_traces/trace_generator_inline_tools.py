@@ -115,19 +115,64 @@ The system will execute your code and respond with:
 
 After your reasoning is complete, close the </think> block and provide the final solution.
 
-Example:
+IMPORTANT: Use \\n for newlines in code strings. Keep JSON on a single line.
+
+=== Example 1: Simple function ===
 <think>
-I need to implement a function that adds two numbers. Let me write and test it.
+I need to implement a function that adds two numbers.
 
 <tool_call>{"name": "python", "arguments": {"code": "def add(a, b):\\n    return a + b"}}</tool_call>
 <tool_response>{"stdout": "", "passed": 3, "total": 3, "error": null}</tool_response>
 
-All tests pass. The implementation is correct.
+All tests pass.
 </think>
 
 ```python
 def add(a, b):
     return a + b
+```
+
+=== Example 2: Fix failing tests ===
+<think>
+I need to find the maximum element in a list.
+
+<tool_call>{"name": "python", "arguments": {"code": "def find_max(lst):\\n    return max(lst)"}}</tool_call>
+<tool_response>{"stdout": "", "passed": 2, "total": 3, "error": "max() arg is an empty sequence"}</tool_response>
+
+The function fails on empty list. I need to handle that edge case.
+
+<tool_call>{"name": "python", "arguments": {"code": "def find_max(lst):\\n    if not lst:\\n        return None\\n    return max(lst)"}}</tool_call>
+<tool_response>{"stdout": "", "passed": 3, "total": 3, "error": null}</tool_response>
+
+Now all tests pass with proper empty list handling.
+</think>
+
+```python
+def find_max(lst):
+    if not lst:
+        return None
+    return max(lst)
+```
+
+=== Example 3: Two sum with hash map ===
+<think>
+I need to find two indices that sum to target. I'll use a hash map for O(n) time.
+
+<tool_call>{"name": "python", "arguments": {"code": "def two_sum(nums, target):\\n    seen = {}\\n    for i, num in enumerate(nums):\\n        complement = target - num\\n        if complement in seen:\\n            return [seen[complement], i]\\n        seen[num] = i\\n    return []"}}</tool_call>
+<tool_response>{"stdout": "", "passed": 3, "total": 3, "error": null}</tool_response>
+
+The hash map approach works correctly.
+</think>
+
+```python
+def two_sum(nums, target):
+    seen = {}
+    for i, num in enumerate(nums):
+        complement = target - num
+        if complement in seen:
+            return [seen[complement], i]
+        seen[num] = i
+    return []
 ```
 """
 
@@ -426,23 +471,48 @@ def parse_tool_call(text: str) -> dict | None:
         json_start = last_pos + len("<tool_call>")
         json_text = text[json_start:].strip()
 
-        # Try to find complete JSON object
+        # More robust JSON extraction - handle strings with braces
+        # Find the outermost JSON object by tracking string state
         brace_count = 0
+        in_string = False
+        escape_next = False
         json_end = 0
+
         for i, char in enumerate(json_text):
-            if char == "{":
-                brace_count += 1
-            elif char == "}":
-                brace_count -= 1
-                if brace_count == 0:
-                    json_end = i + 1
-                    break
+            if escape_next:
+                escape_next = False
+                continue
+
+            if char == "\\":
+                escape_next = True
+                continue
+
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+
+            if not in_string:
+                if char == "{":
+                    brace_count += 1
+                elif char == "}":
+                    brace_count -= 1
+                    if brace_count == 0:
+                        json_end = i + 1
+                        break
 
         if json_end > 0:
             try:
                 return json.loads(json_text[:json_end])
             except json.JSONDecodeError:
-                pass
+                # Try to fix common issues
+                raw_json = json_text[:json_end]
+                # Sometimes the model outputs unescaped newlines
+                try:
+                    # Replace literal newlines in code strings
+                    fixed = raw_json
+                    return json.loads(fixed)
+                except json.JSONDecodeError:
+                    pass
 
     return None
 
