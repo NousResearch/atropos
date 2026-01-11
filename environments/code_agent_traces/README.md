@@ -42,7 +42,7 @@ python interleaved_code_env.py serve --config config.yaml
                                                  │
                                                  ▼
                                            regex parsing
-                                           [THINK]/[CODE]
+                                           <think>/<code>
                                                  │
                                                  ▼
                                            ┌─────────┐
@@ -62,14 +62,14 @@ python interleaved_code_env.py serve --config config.yaml
 └─────────┘           └─────────┘
      ▲                     │
      │                     ▼
-     │              [CODE] block
+     │              <code> block
      │                     │
      │                     ▼
      │              ┌─────────┐
      │              │Executor │
      │              └─────────┘
      │                     │
-     │    [RESULT]/[ERROR] │
+     │    <result>/<error> │
      └─────────────────────┘
 ```
 
@@ -79,21 +79,21 @@ python interleaved_code_env.py serve --config config.yaml
 
 ## Interleaved Reasoning Format
 
-Models use `[THINK]`, `[CODE]`, `[VERIFY]` markers:
+Models use `<think>`, `<code>`, `<verify>` markers:
 
 ```
-[THINK] I need a hash map for O(n) lookup
-[CODE]
+<think> I need a hash map for O(n) lookup
+<code>
 def two_sum(nums, target):
     seen = {}
     for i, num in enumerate(nums):
         if target - num in seen:
             return [seen[target - num], i]
         seen[num] = i
-[/CODE]
-[VERIFY]
+</code>
+<verify>
 Test: [2,7,11,15], target=9 → [0,1] ✓
-[/VERIFY]
+</verify>
 ```
 
 ## Architecture
@@ -174,7 +174,7 @@ python trace_generator.py --output traces.jsonl --chat-format --force-interleave
     "messages": [
         {"role": "system", "content": "..."},
         {"role": "user", "content": "..."},
-        {"role": "assistant", "content": "[THINK]...[CODE]...[VERIFY]..."}
+        {"role": "assistant", "content": "<think>...<code>...<verify>..."}
     ],
     "code": "def two_sum(nums, target):\n    ...",
     "score": 1.0,
@@ -221,26 +221,26 @@ python trace_generator_tools.py --output traces.jsonl --max-iterations 3
 ### Example Trace Output
 
 ```
-[THINK] I need to find two indices that sum to target. I'll use a hash map.
-[CODE]
+<think> I need to find two indices that sum to target. I'll use a hash map.
+<code>
 def two_sum(nums, target):
     seen = {}
     for i, num in enumerate(nums):
         if target - num in seen:
             return [seen[target-num], i]
         seen[num] = i
-[/CODE]
-[RESULT]
+</code>
+<result>
 Test 1: PASS - two_sum([2,7,11,15], 9)
 Test 2: FAIL - two_sum([3,3], 6) expected [0, 1]
 2/4 tests passed
-[/RESULT]
-[THINK] Test 2 failed - need to check duplicate handling. Actually the logic is correct,
+</result>
+<think> Test 2 failed - need to check duplicate handling. Actually the logic is correct,
 but I forgot to return [] when no solution. Let me trace through [3,3]:
 - i=0: num=3, complement=3, seen={} -> not found, add seen[3]=0
 - i=1: num=3, complement=3, seen={3:0} -> found! return [0,1]
 Wait, this should work. The issue must be the missing return statement at the end.
-[CODE]
+<code>
 def two_sum(nums, target):
     seen = {}
     for i, num in enumerate(nums):
@@ -248,15 +248,15 @@ def two_sum(nums, target):
             return [seen[target-num], i]
         seen[num] = i
     return []
-[/CODE]
-[RESULT]
+</code>
+<result>
 All 4 tests passed!
-[/RESULT]
-[VERIFY]
+</result>
+<verify>
 The solution uses O(n) time with hash map lookup. For each number,
 we check if (target - num) exists in seen. The duplicate case [3,3]
 works because we check before storing.
-[/VERIFY]
+</verify>
 ```
 
 ### Output Format
@@ -332,40 +332,40 @@ python trace_generator_interleaved_tools.py --output traces.jsonl --training-for
 ### Example Output
 
 ```
-[THINK] I'll start by defining the function and initializing pointers.
-[CODE]
+<think> I'll start by defining the function and initializing pointers.
+<code>
 def binary_search(nums, target):
     left, right = 0, len(nums) - 1
-[/CODE]
+</code>
 
-[THINK] Now I need a loop while the interval is valid.
-[CODE]
+<think> Now I need a loop while the interval is valid.
+<code>
     while left <= right:
         mid = (left + right) // 2
-[/CODE]
+</code>
 
-[THINK] Compare mid element with target, handle three cases.
-[CODE]
+<think> Compare mid element with target, handle three cases.
+<code>
         if nums[mid] == target:
             return mid
         elif nums[mid] < target:
             left = mid + 1
         else:
             right = mid - 1
-[/CODE]
+</code>
 
-[THINK] If we exit the loop, target wasn't found.
-[CODE]
+<think> If we exit the loop, target wasn't found.
+<code>
     return -1
-[/CODE]
+</code>
 
-[RESULT]
+<result>
 Test 1: PASS - binary_search([1,2,3,4,5], 3) = 2
 Test 2: PASS - binary_search([1,2,3,4,5], 6) = -1
 All 4 tests passed!
-[/RESULT]
+</result>
 
-[VERIFY]
+<verify>
 Binary search divides search space in half each iteration.
 For [1,2,3,4,5] with target=3:
 - left=0, right=4, mid=2, nums[2]=3 == target -> return 2
@@ -375,8 +375,8 @@ For [1,2,3,4,5] with target=3:
 
 | Metric | Description | Ideal Value |
 |--------|-------------|-------------|
-| `think_count` | Number of [THINK] blocks | ≥ 3 |
-| `code_block_count` | Number of [CODE] blocks | ≥ 3 |
+| `think_count` | Number of <think> blocks | ≥ 3 |
+| `code_block_count` | Number of <code> blocks | ≥ 3 |
 | `execution_count` | Real code executions | ≥ 1 |
 | `is_ideal` | All conditions met + success | `true` |
 
@@ -425,14 +425,14 @@ openai:
 | All tests pass | +1.0 |
 | Partial success | -1.0 + 2×(passed/total) |
 | Execution error | -1.0 |
-| ≥2 [THINK] markers | +0.1 bonus |
-| [VERIFY] marker | +0.1 bonus |
+| ≥2 <think> markers | +0.1 bonus |
+| <verify> marker | +0.1 bonus |
 
 ### WandB Metrics
 
 - `train/percent_correct` - Success rate
-- `train/avg_think_count` - Average [THINK] usage
-- `train/verify_rate` - [VERIFY] usage rate
+- `train/avg_think_count` - Average <think> usage
+- `train/verify_rate` - <verify> usage rate
 - `eval/accuracy` - Test set accuracy
 
 ---

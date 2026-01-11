@@ -61,40 +61,40 @@ except ImportError:
 
 SYSTEM_PROMPT = """You are an expert Python programmer who thinks step-by-step while coding.
 
-You MUST interleave your reasoning with code using these markers:
+You MUST interleave your reasoning with code using XML tags:
 
-[THINK] Your reasoning about the problem or next step
-[CODE]
+<think>Your reasoning about the problem or next step</think>
+<code>
 your_python_code_here()
-[/CODE]
-[VERIFY] Trace through your solution with test cases
+</code>
+<verify>Trace through your solution with test cases</verify>
 
 Example format:
-[THINK] I need to understand what we're solving - find two indices that sum to target
-[THINK] I'll use a hash map for O(n) lookup instead of O(n²) brute force
-[CODE]
+<think>I need to understand what we're solving - find two indices that sum to target</think>
+<think>I'll use a hash map for O(n) lookup instead of O(n²) brute force</think>
+<code>
 def two_sum(nums, target):
     seen = {}
-[/CODE]
-[THINK] For each number, check if its complement exists in seen
-[CODE]
+</code>
+<think>For each number, check if its complement exists in seen</think>
+<code>
     for i, num in enumerate(nums):
         complement = target - num
         if complement in seen:
             return [seen[complement], i]
         seen[num] = i
     return []
-[/CODE]
-[VERIFY]
+</code>
+<verify>
 Test with nums=[2,7,11,15], target=9:
 - i=0: num=2, complement=7, seen={} → not found, add seen[2]=0
 - i=1: num=7, complement=2, seen={2:0} → found! return [0,1] ✓
-[/VERIFY]
+</verify>
 
 RULES:
-1. Use [THINK] before EVERY code block
-2. Use [THINK] WAIT if you catch a potential bug
-3. Use [VERIFY] to trace through with a concrete example
+1. Use <think> before EVERY code block
+2. Use <think>WAIT...</think> if you catch a potential bug
+3. Use <verify> to trace through with a concrete example
 4. Return ONLY the function, no test code or print statements"""
 
 
@@ -104,39 +104,39 @@ FORCED_INTERLEAVE_SYSTEM = """You are an expert Python programmer who thinks ste
 CRITICAL: You must output EXACTLY ONE step at a time!
 
 Valid step patterns:
-1. [THINK] your reasoning here (1-2 sentences max)
-2. [CODE]\nyour_code_lines\n[/CODE] (max 3 lines of code)
-3. [VERIFY]\ntest trace\n[/VERIFY] (only when code is complete)
+1. <think>your reasoning here (1-2 sentences max)</think>
+2. <code>your_code_lines (max 3 lines)</code>
+3. <verify>test trace</verify> (only when code is complete)
 
 RULES:
-- Output ONLY ONE [THINK] or [CODE] or [VERIFY] per response
-- After [CODE], STOP immediately and wait for next prompt
+- Output ONLY ONE <think> or <code> or <verify> per response
+- After </code>, STOP immediately and wait for next prompt
 - Do NOT write the entire solution at once
-- Each [CODE] block should have 1-3 lines maximum
-- Use [VERIFY] only when the function is complete
+- Each <code> block should have 1-3 lines maximum
+- Use <verify> only when the function is complete
 
 Example of a SINGLE valid response:
-[THINK] I need to initialize a hash map to store seen values and their indices"""
+<think>I need to initialize a hash map to store seen values and their indices</think>"""
 
 
 FORCED_CONTINUE_PROMPT = """Continue with the next step.
 
 Remember:
-- Output EXACTLY ONE step: either [THINK] or [CODE] (1-3 lines max)
-- If the function is complete, use [VERIFY] to trace through a test case
+- Output EXACTLY ONE step: either <think> or <code> (1-3 lines max)
+- If the function is complete, use <verify> to trace through a test case
 - Do NOT repeat previous code
 - Do NOT write the entire solution"""
 
 
 FORCED_VERIFY_PROMPT = """The function appears complete. Now verify it works correctly.
 
-Output a [VERIFY] block that traces through this test case step by step:
+Output a <verify> block that traces through this test case step by step:
 {test_case}
 
 Format:
-[VERIFY]
+<verify>
 Step-by-step trace showing each variable value
-[/VERIFY]"""
+</verify>"""
 
 
 # ============================================================================
@@ -408,15 +408,14 @@ class TraceGenerator:
         think_count = 0
         has_verify = False
 
-        # Pattern for markers
-        pattern = r"\[(THINK|CODE|VERIFY|WAIT)\](.*?)(?=\[(?:THINK|CODE|VERIFY|WAIT|/CODE)\]|$)"
+        # Pattern for XML tags
+        pattern = r"<(think|code|verify|wait)>(.*?)</\1>"
         matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
 
         for marker, content in matches:
-            marker = marker.upper()
+            marker = marker.lower()
 
-            if marker == "CODE":
-                content = re.sub(r"\[/CODE\].*$", "", content, flags=re.DOTALL)
+            if marker == "code":
                 lines = content.split("\n")
                 while lines and not lines[0].strip():
                     lines.pop(0)
@@ -428,7 +427,7 @@ class TraceGenerator:
                     code_parts.append(content)
                     steps.append(TraceStep(step_type="code", content=content))
 
-            elif marker == "THINK":
+            elif marker == "think":
                 content = content.strip()
                 if content:
                     if content.upper().startswith("WAIT"):
@@ -437,13 +436,13 @@ class TraceGenerator:
                         think_count += 1
                         steps.append(TraceStep(step_type="think", content=content))
 
-            elif marker == "VERIFY":
+            elif marker == "verify":
                 content = content.strip()
                 if content:
                     has_verify = True
                     steps.append(TraceStep(step_type="verify", content=content))
 
-            elif marker == "WAIT":
+            elif marker == "wait":
                 content = content.strip()
                 if content:
                     steps.append(TraceStep(step_type="wait", content=content))
@@ -517,7 +516,7 @@ class TraceGenerator:
 
 {prompt}
 
-Use [THINK], [CODE], and [VERIFY] markers. Return ONLY the function."""
+Use <think>, <code>, and <verify> tags. Return ONLY the function."""
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -621,7 +620,7 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
                         messages.append(
                             {
                                 "role": "user",
-                                "content": "Invalid format. Output EXACTLY ONE step: [THINK] your thought OR [CODE]\\ncode\\n[/CODE]",
+                                "content": "Invalid format. Output EXACTLY ONE step: <think>your thought</think> OR <code>your code</code>",
                             }
                         )
                         continue
@@ -636,7 +635,7 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
                     messages.append(
                         {
                             "role": "user",
-                            "content": "Now output the next step: either another [THINK] or [CODE]\\nyour_code\\n[/CODE] (max 3 lines)",
+                            "content": "Now output the next step: either another <think> or <code>your_code</code> (max 3 lines)",
                         }
                     )
 
@@ -669,7 +668,7 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
                     messages.append(
                         {
                             "role": "user",
-                            "content": "Good catch! Now continue with [CODE] to fix it or [THINK] to reason more.",
+                            "content": "Good catch! Now continue with <code> to fix it or <think> to reason more.",
                         }
                     )
 
@@ -688,7 +687,7 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
                 },  # Use original system prompt for training
                 {
                     "role": "user",
-                    "content": f"Solve this coding problem step-by-step:\n\n{prompt}\n\nUse [THINK], [CODE], and [VERIFY] markers.",
+                    "content": f"Solve this coding problem step-by-step:\n\n{prompt}\n\nUse <think>, <code>, and <verify> tags.",
                 },
                 {"role": "assistant", "content": combined_response},
             ]
@@ -719,16 +718,16 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
         """Parse a single step from response. Returns (step_type, content) or (None, '') if invalid."""
         text = text.strip()
 
-        # Check for [VERIFY]
+        # Check for <verify>
         verify_match = re.search(
-            r"\[VERIFY\](.*?)(?:\[/VERIFY\]|$)", text, re.DOTALL | re.IGNORECASE
+            r"<verify>(.*?)</verify>", text, re.DOTALL | re.IGNORECASE
         )
         if verify_match:
             return "verify", verify_match.group(1).strip()
 
-        # Check for [CODE]...[/CODE]
+        # Check for <code>...</code>
         code_match = re.search(
-            r"\[CODE\](.*?)\[/CODE\]", text, re.DOTALL | re.IGNORECASE
+            r"<code>(.*?)</code>", text, re.DOTALL | re.IGNORECASE
         )
         if code_match:
             content = code_match.group(1)
@@ -739,9 +738,9 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
                 lines.pop()
             return "code", "\n".join(lines)
 
-        # Check for [THINK]
+        # Check for <think>
         think_match = re.search(
-            r"\[THINK\]\s*(.*?)(?:\[|$)", text, re.DOTALL | re.IGNORECASE
+            r"<think>(.*?)</think>", text, re.DOTALL | re.IGNORECASE
         )
         if think_match:
             content = think_match.group(1).strip()
@@ -749,9 +748,9 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
                 return "wait", content
             return "think", content
 
-        # Check for [WAIT]
+        # Check for <wait>
         wait_match = re.search(
-            r"\[WAIT\]\s*(.*?)(?:\[|$)", text, re.DOTALL | re.IGNORECASE
+            r"<wait>(.*?)</wait>", text, re.DOTALL | re.IGNORECASE
         )
         if wait_match:
             return "wait", wait_match.group(1).strip()
@@ -810,13 +809,13 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
         parts = []
         for step in steps:
             if step.step_type == "think":
-                parts.append(f"[THINK] {step.content}")
+                parts.append(f"<think>{step.content}</think>")
             elif step.step_type == "wait":
-                parts.append(f"[THINK] WAIT - {step.content}")
+                parts.append(f"<think>WAIT - {step.content}</think>")
             elif step.step_type == "code":
-                parts.append(f"[CODE]\n{step.content}\n[/CODE]")
+                parts.append(f"<code>\n{step.content}\n</code>")
             elif step.step_type == "verify":
-                parts.append(f"[VERIFY]\n{step.content}\n[/VERIFY]")
+                parts.append(f"<verify>\n{step.content}\n</verify>")
         return "\n".join(parts)
 
     async def generate_traces(

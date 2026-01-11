@@ -75,28 +75,28 @@ SYSTEM_PROMPT = """You are an expert Python programmer with access to a code exe
 
 ## CRITICAL RULES
 
-1. You can ONLY output these markers:
-   - [THINK] your reasoning
-   - [CODE] ... [/CODE] your code
-   - [VERIFY] your verification (only after tests pass)
+1. You can ONLY output these XML tags:
+   - <think>your reasoning</think>
+   - <code>your code</code>
+   - <verify>your verification</verify> (only after tests pass)
 
-2. You must NEVER output [RESULT] or [ERROR] - those come from the SYSTEM only!
+2. You must NEVER output <result> or <error> - those come from the SYSTEM only!
 
-3. After writing [CODE]...[/CODE], STOP and WAIT for test results.
+3. After writing <code>...</code>, STOP and WAIT for test results.
 
 ## Workflow
 
-1. [THINK] - Reason about the problem
-2. [CODE] - Write code, then STOP
-3. << SYSTEM provides [RESULT] or [ERROR] >>
-4. [THINK] - Analyze results, fix if needed
+1. <think> - Reason about the problem
+2. <code> - Write code, then STOP
+3. << SYSTEM provides <result> or <error> >>
+4. <think> - Analyze results, fix if needed
 5. Repeat until success
-6. [VERIFY] - Explain your solution
+6. <verify> - Explain your solution
 
 ## Example (YOUR output only, not system messages)
 
-[THINK] I need to find two indices that sum to target. I'll use a hash map.
-[CODE]
+<think>I need to find two indices that sum to target. I'll use a hash map.</think>
+<code>
 def two_sum(nums, target):
     seen = {}
     for i, num in enumerate(nums):
@@ -104,22 +104,22 @@ def two_sum(nums, target):
             return [seen[target-num], i]
         seen[num] = i
     return []
-[/CODE]
+</code>
 
 << STOP HERE - wait for system to execute and return results >>
 
 ## After receiving results, you may continue:
 
-[THINK] The test failed because... Let me fix it.
-[CODE]
+<think>The test failed because... Let me fix it.</think>
+<code>
 # fixed code here
-[/CODE]
+</code>
 
 ## When all tests pass:
 
-[VERIFY]
+<verify>
 The solution works by... (trace through the algorithm)
-[/VERIFY]"""
+</verify>"""
 
 
 INITIAL_PROMPT_TEMPLATE = """Solve this coding problem. Your code will be executed and tested automatically.
@@ -128,23 +128,23 @@ Problem:
 {problem}
 
 Instructions:
-1. Start with [THINK] to analyze the problem
-2. Write your solution in [CODE]...[/CODE]
-3. STOP after [/CODE] - do NOT write [RESULT] or test output
+1. Start with <think> to analyze the problem
+2. Write your solution in <code>...</code>
+3. STOP after </code> - do NOT write <result> or test output
 4. Wait for the system to execute your code and show results"""
 
 
 CONTINUE_AFTER_RESULT = """The code was executed. Review the results above.
 
-If all tests passed: Use [VERIFY] to trace through your solution and confirm it's correct.
-If tests failed: Use [THINK] to analyze the failure, then [CODE] to fix it.
+If all tests passed: Use <verify> to trace through your solution and confirm it's correct.
+If tests failed: Use <think> to analyze the failure, then <code> to fix it.
 
 Remember: Maximum 5 code iterations. Current iteration: {iteration}/5"""
 
 
 CONTINUE_AFTER_ERROR = """Your code raised an error. Review the error message above.
 
-Use [THINK] to understand what went wrong, then [CODE] to fix it.
+Use <think> to understand what went wrong, then <code> to fix it.
 
 Iteration: {iteration}/5"""
 
@@ -224,15 +224,15 @@ class GeneratedTrace:
         parts = []
         for step in self.trace:
             if step.step_type == "think":
-                parts.append(f"[THINK] {step.content}")
+                parts.append(f"<think>{step.content}</think>")
             elif step.step_type == "code":
-                parts.append(f"[CODE]\n{step.content}\n[/CODE]")
+                parts.append(f"<code>\n{step.content}\n</code>")
             elif step.step_type == "result":
-                parts.append(f"[RESULT]\n{step.content}\n[/RESULT]")
+                parts.append(f"<result>\n{step.content}\n</result>")
             elif step.step_type == "error":
-                parts.append(f"[ERROR]\n{step.content}\n[/ERROR]")
+                parts.append(f"<error>\n{step.content}\n</error>")
             elif step.step_type == "verify":
-                parts.append(f"[VERIFY]\n{step.content}\n[/VERIFY]")
+                parts.append(f"<verify>\n{step.content}\n</verify>")
         return "\n\n".join(parts)
 
 
@@ -434,7 +434,7 @@ class ToolBasedTraceGenerator:
                 "num_predict": self.max_tokens,
                 # Stop sequences to prevent model from hallucinating results
                 "stop": (
-                    ["[RESULT]", "[ERROR]", "\n[RESULT]", "\n[ERROR]"]
+                    ["<result>", "<error>", "\n<result>", "\n<error>"]
                     if stop_after_code
                     else []
                 ),
@@ -454,25 +454,25 @@ class ToolBasedTraceGenerator:
                 return response
 
     def _strip_hallucinated_results(self, text: str) -> str:
-        """Remove any hallucinated [RESULT] or [ERROR] blocks from model output."""
-        # These markers should ONLY come from the system, not the model
+        """Remove any hallucinated <result> or <error> blocks from model output."""
+        # These tags should ONLY come from the system, not the model
         # If model outputs them, it's hallucinating
 
-        # Find and remove [RESULT]...[/RESULT] or [RESULT]... to end
+        # Find and remove <result>...</result> or <result>... to end
         text = re.sub(
-            r"\[RESULT\].*?(?:\[/RESULT\]|$)", "", text, flags=re.DOTALL | re.IGNORECASE
+            r"<result>.*?(?:</result>|$)", "", text, flags=re.DOTALL | re.IGNORECASE
         )
 
-        # Find and remove [ERROR]...[/ERROR] or [ERROR]... to end
+        # Find and remove <error>...</error> or <error>... to end
         text = re.sub(
-            r"\[ERROR\].*?(?:\[/ERROR\]|$)", "", text, flags=re.DOTALL | re.IGNORECASE
+            r"<error>.*?(?:</error>|$)", "", text, flags=re.DOTALL | re.IGNORECASE
         )
 
         return text.strip()
 
     def _extract_code(self, text: str) -> Optional[str]:
-        """Extract code from [CODE]...[/CODE] block."""
-        match = re.search(r"\[CODE\](.*?)\[/CODE\]", text, re.DOTALL | re.IGNORECASE)
+        """Extract code from <code>...</code> block."""
+        match = re.search(r"<code>(.*?)</code>", text, re.DOTALL | re.IGNORECASE)
         if match:
             code = match.group(1)
             lines = code.split("\n")
@@ -484,15 +484,15 @@ class ToolBasedTraceGenerator:
         return None
 
     def _extract_thinks(self, text: str) -> List[str]:
-        """Extract all [THINK] blocks."""
-        pattern = r"\[THINK\]\s*(.*?)(?=\[(?:THINK|CODE|VERIFY)\]|$)"
+        """Extract all <think> blocks."""
+        pattern = r"<think>(.*?)</think>"
         matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
         return [m.strip() for m in matches if m.strip()]
 
     def _extract_verify(self, text: str) -> Optional[str]:
-        """Extract [VERIFY] block."""
+        """Extract <verify> block."""
         match = re.search(
-            r"\[VERIFY\](.*?)(?:\[/VERIFY\]|$)", text, re.DOTALL | re.IGNORECASE
+            r"<verify>(.*?)</verify>", text, re.DOTALL | re.IGNORECASE
         )
         if match:
             return match.group(1).strip()
@@ -621,7 +621,7 @@ class ToolBasedTraceGenerator:
                         messages.append(
                             {
                                 "role": "user",
-                                "content": f"[ERROR]\n{result_text}\n[/ERROR]\n\n{CONTINUE_AFTER_ERROR.format(iteration=code_iterations)}",
+                                "content": f"<error>\n{result_text}\n</error>\n\n{CONTINUE_AFTER_ERROR.format(iteration=code_iterations)}",
                             }
                         )
                     else:
@@ -635,7 +635,7 @@ class ToolBasedTraceGenerator:
                             messages.append(
                                 {
                                     "role": "user",
-                                    "content": f"[RESULT]\n{result_text}\n[/RESULT]\n\nExcellent! All tests passed. Now use [VERIFY] to trace through your solution and explain why it works.",
+                                    "content": f"<result>\n{result_text}\n</result>\n\nExcellent! All tests passed. Now use <verify> to trace through your solution and explain why it works.",
                                 }
                             )
                         else:
@@ -643,7 +643,7 @@ class ToolBasedTraceGenerator:
                             messages.append(
                                 {
                                     "role": "user",
-                                    "content": f"[RESULT]\n{result_text}\n[/RESULT]\n\n{CONTINUE_AFTER_RESULT.format(iteration=code_iterations)}",
+                                    "content": f"<result>\n{result_text}\n</result>\n\n{CONTINUE_AFTER_RESULT.format(iteration=code_iterations)}",
                                 }
                             )
                 else:
@@ -652,7 +652,7 @@ class ToolBasedTraceGenerator:
                     messages.append(
                         {
                             "role": "user",
-                            "content": "Please write your solution in a [CODE]...[/CODE] block.",
+                            "content": "Please write your solution in a <code>...</code> block.",
                         }
                     )
 
