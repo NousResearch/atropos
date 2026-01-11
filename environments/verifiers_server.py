@@ -10,7 +10,6 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    ScoredDataGroup,
 )
 
 
@@ -183,7 +182,7 @@ async def main():
 
     item = await env.get_next_item()
 
-    roll = await env.rollout_and_score_eval(
+    await env.rollout_and_score_eval(
         question=item["question"],
         answer=item["answer"],
         system_prompt=env.system_prompt,
