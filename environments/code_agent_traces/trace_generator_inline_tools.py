@@ -68,7 +68,7 @@ class Config:
     )
     api_key: str = field(default_factory=lambda: os.getenv("OLLAMA_API_KEY", ""))
     model: str = field(
-        default_factory=lambda: os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
+        default_factory=lambda: os.getenv("OLLAMA_MODEL", "deepseek-v3.2:cloud")
     )
     max_turns: int = 5
     max_tokens_per_turn: int = 1024
