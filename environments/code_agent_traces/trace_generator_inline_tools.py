@@ -787,12 +787,19 @@ async def main():
     parser.add_argument(
         "--temperature", type=float, default=0.7, help="Sampling temperature"
     )
+    parser.add_argument(
+        "--model", "-m", default=None, help="Model name (default: deepseek-v3.2:cloud)"
+    )
     args = parser.parse_args()
 
     config = Config(
         debug=True,  # Always enable debug for now
         temperature=args.temperature,
     )
+
+    # Override model if specified
+    if args.model:
+        config.model = args.model
 
     print(f"Loading problems...")
     problems = get_problems()
