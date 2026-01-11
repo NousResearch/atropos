@@ -472,7 +472,7 @@ def _fix_json_newlines(json_text: str) -> str:
             escape_next = False
             continue
 
-        if char == '\\':
+        if char == "\\":
             result.append(char)
             escape_next = True
             continue
@@ -482,18 +482,18 @@ def _fix_json_newlines(json_text: str) -> str:
             result.append(char)
             continue
 
-        if in_string and char == '\n':
+        if in_string and char == "\n":
             # Replace literal newline with escaped version
-            result.append('\\n')
+            result.append("\\n")
             continue
 
-        if in_string and char == '\t':
-            result.append('\\t')
+        if in_string and char == "\t":
+            result.append("\\t")
             continue
 
         result.append(char)
 
-    return ''.join(result)
+    return "".join(result)
 
 
 def parse_tool_call(text: str) -> dict | None:
@@ -537,7 +537,7 @@ def parse_tool_call(text: str) -> dict | None:
             escape_next = False
             continue
 
-        if char == '\\':
+        if char == "\\":
             escape_next = True
             continue
 
@@ -546,9 +546,9 @@ def parse_tool_call(text: str) -> dict | None:
             continue
 
         if not in_string:
-            if char == '{':
+            if char == "{":
                 brace_count += 1
-            elif char == '}':
+            elif char == "}":
                 brace_count -= 1
                 if brace_count == 0:
                     json_end = i + 1
