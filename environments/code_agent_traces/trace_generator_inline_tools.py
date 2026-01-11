@@ -52,7 +52,7 @@ import aiohttp
 
 # Add parent directory to path for local_executor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from local_executor import execute_code_with_tests
+from local_executor import execute_code_safe
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuration
@@ -350,34 +350,40 @@ def execute_tool(call_json: dict, problem: dict) -> dict:
     if name == "python":
         code = args.get("code", "")
 
-        # Build test code
-        test_lines = []
-        for i, test in enumerate(problem["tests"]):
-            test_lines.append(f"# Test {i+1}")
-            test_lines.append(f"result = {problem['entry_point']}({test['input']})")
-            test_lines.append(f"expected = {test['expected']}")
-            test_lines.append(
-                f"assert result == expected, f'Test {i+1} failed: got {{result}}, expected {{expected}}'"
-            )
-            test_lines.append(f"print(f'Test {i+1}: PASS')")
+        # Prepare test cases for execute_code_safe
+        test_inputs = []
+        test_outputs = []
+        for test in problem["tests"]:
+            try:
+                # Evaluate input and expected values
+                input_val = eval(test["input"])
+                expected_val = eval(test["expected"])
+                # Handle tuple inputs properly
+                if isinstance(input_val, tuple):
+                    test_inputs.append(list(input_val))
+                else:
+                    test_inputs.append([input_val])
+                test_outputs.append(expected_val)
+            except Exception:
+                # Skip malformed tests
+                pass
 
-        test_code = "\n".join(test_lines)
-        full_code = code + "\n\n" + test_code
+        test_cases = {
+            "fn_name": problem["entry_point"],
+            "inputs": test_inputs,
+            "outputs": test_outputs,
+        }
 
-        result = execute_code_with_tests(full_code, timeout=5.0)
+        results, metadata = execute_code_safe(code, test_cases, timeout=5.0)
 
         # Parse results
-        stdout = result.get("stdout", "")
-        stderr = result.get("stderr", "")
-        error = result.get("error")
-
-        # Count passed tests
-        passed = stdout.count("PASS")
-        total = len(problem["tests"])
+        stdout = metadata.get("output", "")
+        error = metadata.get("error")
+        passed = sum(1 for r in results if r)
+        total = len(results)
 
         return {
             "stdout": stdout,
-            "stderr": stderr,
             "passed": passed,
             "total": total,
             "error": error,
@@ -650,19 +656,29 @@ Test cases:
     tests_total = len(problem["tests"])
 
     if final_code:
-        # Build test code
-        test_lines = []
-        for i, test in enumerate(problem["tests"]):
-            test_lines.append(f"result = {problem['entry_point']}({test['input']})")
-            test_lines.append(f"expected = {test['expected']}")
-            test_lines.append(f"assert result == expected")
-            test_lines.append(f"print('PASS')")
+        # Prepare test cases for execute_code_safe
+        test_inputs = []
+        test_outputs = []
+        for test in problem["tests"]:
+            try:
+                input_val = eval(test["input"])
+                expected_val = eval(test["expected"])
+                if isinstance(input_val, tuple):
+                    test_inputs.append(list(input_val))
+                else:
+                    test_inputs.append([input_val])
+                test_outputs.append(expected_val)
+            except Exception:
+                pass
 
-        test_code = "\n".join(test_lines)
-        full_code = final_code + "\n\n" + test_code
+        test_cases = {
+            "fn_name": problem["entry_point"],
+            "inputs": test_inputs,
+            "outputs": test_outputs,
+        }
 
-        result = execute_code_with_tests(full_code, timeout=5.0)
-        tests_passed = result.get("stdout", "").count("PASS")
+        results, metadata = execute_code_safe(final_code, test_cases, timeout=5.0)
+        tests_passed = sum(1 for r in results if r)
 
         if tests_passed == tests_total:
             score = 1.0
