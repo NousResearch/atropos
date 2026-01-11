@@ -218,10 +218,7 @@ def _extract_tests_from_prompt(
     """Extract test cases from HumanEval test code."""
     tests = []
 
-    # Try to parse assert statements
-    full_code = prompt + solution + "\n" + test_code
-
-    # Extract simple assert patterns
+    # Try to parse assert statements from test code
     assert_pattern = re.compile(
         r"assert\s+(\w+)\s*\((.*?)\)\s*==\s*(.*?)(?:\n|$|,)", re.MULTILINE
     )
@@ -235,11 +232,21 @@ def _extract_tests_from_prompt(
                 }
             )
 
-    # If no tests found, create a placeholder
+    # Also try to extract from docstring examples (>>> lines)
     if not tests:
-        tests = [{"input": "...", "expected": "..."}]
+        docstring_pattern = re.compile(
+            rf">>>\s*{entry_point}\s*\((.*?)\)\s*\n\s*(.+?)(?:\n|$)", re.MULTILINE
+        )
+        for match in docstring_pattern.finditer(prompt):
+            args, expected = match.groups()
+            tests.append(
+                {
+                    "input": args.strip(),
+                    "expected": expected.strip(),
+                }
+            )
 
-    return tests[:5]  # Limit to 5 tests
+    return tests[:5]  # Limit to 5 tests, return empty if none found
 
 
 def _builtin_problems() -> list[dict]:
@@ -453,66 +460,105 @@ def execute_tool(call_json: dict, problem: dict) -> dict:
         return {"error": f"Unknown tool: {name}"}
 
 
+def _fix_json_newlines(json_text: str) -> str:
+    """Fix literal newlines inside JSON string values by escaping them."""
+    result = []
+    in_string = False
+    escape_next = False
+
+    for char in json_text:
+        if escape_next:
+            result.append(char)
+            escape_next = False
+            continue
+
+        if char == '\\':
+            result.append(char)
+            escape_next = True
+            continue
+
+        if char == '"':
+            in_string = not in_string
+            result.append(char)
+            continue
+
+        if in_string and char == '\n':
+            # Replace literal newline with escaped version
+            result.append('\\n')
+            continue
+
+        if in_string and char == '\t':
+            result.append('\\t')
+            continue
+
+        result.append(char)
+
+    return ''.join(result)
+
+
 def parse_tool_call(text: str) -> dict | None:
     """Extract the last tool_call JSON from text."""
-    # Find complete tool calls
-    pattern = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
-    matches = pattern.findall(text)
-
-    if matches:
-        try:
-            return json.loads(matches[-1])
-        except json.JSONDecodeError:
-            pass
-
-    # Try incomplete tool call (missing </tool_call>)
+    # Find the last <tool_call> tag
     last_pos = text.rfind("<tool_call>")
-    if last_pos != -1:
-        json_start = last_pos + len("<tool_call>")
+    if last_pos == -1:
+        return None
+
+    json_start = last_pos + len("<tool_call>")
+
+    # Find </tool_call> if present
+    end_tag_pos = text.find("</tool_call>", json_start)
+    if end_tag_pos != -1:
+        json_text = text[json_start:end_tag_pos].strip()
+    else:
+        # No closing tag - extract JSON by finding the end
         json_text = text[json_start:].strip()
 
-        # More robust JSON extraction - handle strings with braces
-        # Find the outermost JSON object by tracking string state
-        brace_count = 0
-        in_string = False
-        escape_next = False
-        json_end = 0
+    # Try to parse as-is first
+    try:
+        return json.loads(json_text)
+    except json.JSONDecodeError:
+        pass
 
-        for i, char in enumerate(json_text):
-            if escape_next:
-                escape_next = False
-                continue
+    # Fix literal newlines inside strings
+    fixed_json = _fix_json_newlines(json_text)
+    try:
+        return json.loads(fixed_json)
+    except json.JSONDecodeError:
+        pass
 
-            if char == "\\":
-                escape_next = True
-                continue
+    # Try to extract just the JSON object by finding balanced braces
+    brace_count = 0
+    in_string = False
+    escape_next = False
+    json_end = 0
 
-            if char == '"' and not escape_next:
-                in_string = not in_string
-                continue
+    for i, char in enumerate(fixed_json):
+        if escape_next:
+            escape_next = False
+            continue
 
-            if not in_string:
-                if char == "{":
-                    brace_count += 1
-                elif char == "}":
-                    brace_count -= 1
-                    if brace_count == 0:
-                        json_end = i + 1
-                        break
+        if char == '\\':
+            escape_next = True
+            continue
 
-        if json_end > 0:
-            try:
-                return json.loads(json_text[:json_end])
-            except json.JSONDecodeError:
-                # Try to fix common issues
-                raw_json = json_text[:json_end]
-                # Sometimes the model outputs unescaped newlines
-                try:
-                    # Replace literal newlines in code strings
-                    fixed = raw_json
-                    return json.loads(fixed)
-                except json.JSONDecodeError:
-                    pass
+        if char == '"':
+            in_string = not in_string
+            continue
+
+        if not in_string:
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    json_end = i + 1
+                    break
+
+    if json_end > 0:
+        try:
+            return json.loads(fixed_json[:json_end])
+        except json.JSONDecodeError:
+            pass
 
     return None
 
@@ -618,11 +664,12 @@ Test cases:
         if config.debug:
             print(f"\n[Turn {turn}] Generating...")
 
-        # Generate until </tool_call> or </think>
+        # Generate - no stop sequences, let model complete naturally
+        # We'll detect tool_call and think end in post-processing
         try:
             response = await client.chat_completion(
                 current_messages,
-                stop=["</tool_call>", "</think>\n\n```"],
+                stop=None,  # Don't cut off, parse the full response
                 max_tokens=config.max_tokens_per_turn,
             )
         except Exception as e:
@@ -641,10 +688,11 @@ Test cases:
         if config.debug:
             print(f"[Turn {turn}] Response: {response[:200]}...")
 
-        # Check if we hit a tool call
-        if has_pending_tool_call(assistant_content):
-            # Close the tool_call tag
-            assistant_content += "</tool_call>\n"
+        # Check if we hit a tool call (either complete or incomplete)
+        if "<tool_call>" in response and "</tool_response>" not in response:
+            # Check if we need to close the tag
+            if "</tool_call>" not in assistant_content.split("<tool_call>")[-1]:
+                assistant_content += "</tool_call>\n"
 
             # Parse and execute tool
             call_json = parse_tool_call(assistant_content)
