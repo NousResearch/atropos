@@ -54,17 +54,22 @@ import aiohttp
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from local_executor import execute_code_with_tests
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Config:
     """Configuration for trace generation."""
-    base_url: str = field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "https://ollama.com"))
+
+    base_url: str = field(
+        default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "https://ollama.com")
+    )
     api_key: str = field(default_factory=lambda: os.getenv("OLLAMA_API_KEY", ""))
-    model: str = field(default_factory=lambda: os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b"))
+    model: str = field(
+        default_factory=lambda: os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
+    )
     max_turns: int = 5
     max_tokens_per_turn: int = 1024
     temperature: float = 0.7
@@ -131,29 +136,40 @@ def add(a, b):
 # Problems Dataset
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def get_problems() -> list[dict]:
     """Load problems from HumanEval or use built-in examples."""
     try:
         from datasets import load_dataset
+
         ds = load_dataset("openai/openai_humaneval", split="test")
         problems = []
         for item in ds:
             # Parse test cases from prompt
-            tests = _extract_tests_from_prompt(item["prompt"], item["canonical_solution"], item["test"], item["entry_point"])
-            problems.append({
-                "id": item["task_id"],
-                "prompt": item["prompt"],
-                "entry_point": item["entry_point"],
-                "canonical_solution": item["canonical_solution"],
-                "tests": tests,
-            })
+            tests = _extract_tests_from_prompt(
+                item["prompt"],
+                item["canonical_solution"],
+                item["test"],
+                item["entry_point"],
+            )
+            problems.append(
+                {
+                    "id": item["task_id"],
+                    "prompt": item["prompt"],
+                    "entry_point": item["entry_point"],
+                    "canonical_solution": item["canonical_solution"],
+                    "tests": tests,
+                }
+            )
         return problems
     except Exception as e:
         print(f"[WARN] Could not load HumanEval: {e}")
         return _builtin_problems()
 
 
-def _extract_tests_from_prompt(prompt: str, solution: str, test_code: str, entry_point: str) -> list[dict]:
+def _extract_tests_from_prompt(
+    prompt: str, solution: str, test_code: str, entry_point: str
+) -> list[dict]:
     """Extract test cases from HumanEval test code."""
     tests = []
 
@@ -161,14 +177,18 @@ def _extract_tests_from_prompt(prompt: str, solution: str, test_code: str, entry
     full_code = prompt + solution + "\n" + test_code
 
     # Extract simple assert patterns
-    assert_pattern = re.compile(r"assert\s+(\w+)\s*\((.*?)\)\s*==\s*(.*?)(?:\n|$|,)", re.MULTILINE)
+    assert_pattern = re.compile(
+        r"assert\s+(\w+)\s*\((.*?)\)\s*==\s*(.*?)(?:\n|$|,)", re.MULTILINE
+    )
     for match in assert_pattern.finditer(test_code):
         func_name, args, expected = match.groups()
         if func_name == entry_point:
-            tests.append({
-                "input": args.strip(),
-                "expected": expected.strip(),
-            })
+            tests.append(
+                {
+                    "input": args.strip(),
+                    "expected": expected.strip(),
+                }
+            )
 
     # If no tests found, create a placeholder
     if not tests:
@@ -194,14 +214,14 @@ def _builtin_problems() -> list[dict]:
     """
 ''',
             "entry_point": "two_sum",
-            "canonical_solution": '''    seen = {}
+            "canonical_solution": """    seen = {}
     for i, num in enumerate(nums):
         complement = target - num
         if complement in seen:
             return [seen[complement], i]
         seen[num] = i
     return []
-''',
+""",
             "tests": [
                 {"input": "[2, 7, 11, 15], 9", "expected": "[0, 1]"},
                 {"input": "[3, 2, 4], 6", "expected": "[1, 2]"},
@@ -222,9 +242,9 @@ def _builtin_problems() -> list[dict]:
     """
 ''',
             "entry_point": "is_palindrome",
-            "canonical_solution": '''    cleaned = ''.join(c.lower() for c in s if c.isalnum())
+            "canonical_solution": """    cleaned = ''.join(c.lower() for c in s if c.isalnum())
     return cleaned == cleaned[::-1]
-''',
+""",
             "tests": [
                 {"input": '"A man, a plan, a canal: Panama"', "expected": "True"},
                 {"input": '"race a car"', "expected": "False"},
@@ -246,12 +266,12 @@ def _builtin_problems() -> list[dict]:
     """
 ''',
             "entry_point": "max_subarray",
-            "canonical_solution": '''    max_sum = current_sum = nums[0]
+            "canonical_solution": """    max_sum = current_sum = nums[0]
     for num in nums[1:]:
         current_sum = max(num, current_sum + num)
         max_sum = max(max_sum, current_sum)
     return max_sum
-''',
+""",
             "tests": [
                 {"input": "[-2, 1, -3, 4, -1, 2, 1, -5, 4]", "expected": "6"},
                 {"input": "[1]", "expected": "1"},
@@ -264,6 +284,7 @@ def _builtin_problems() -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 # Ollama API Client
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class OllamaClient:
     """Async client for Ollama API."""
@@ -320,6 +341,7 @@ class OllamaClient:
 # Tool Execution
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def execute_tool(call_json: dict, problem: dict) -> dict:
     """Execute a tool call and return the result."""
     name = call_json.get("name", "")
@@ -334,7 +356,9 @@ def execute_tool(call_json: dict, problem: dict) -> dict:
             test_lines.append(f"# Test {i+1}")
             test_lines.append(f"result = {problem['entry_point']}({test['input']})")
             test_lines.append(f"expected = {test['expected']}")
-            test_lines.append(f"assert result == expected, f'Test {i+1} failed: got {{result}}, expected {{expected}}'")
+            test_lines.append(
+                f"assert result == expected, f'Test {i+1} failed: got {{result}}, expected {{expected}}'"
+            )
             test_lines.append(f"print(f'Test {i+1}: PASS')")
 
         test_code = "\n".join(test_lines)
@@ -415,7 +439,7 @@ def extract_final_code(text: str, entry_point: str) -> str | None:
     if think_end == -1:
         return None
 
-    after_think = text[think_end + len("</think>"):]
+    after_think = text[think_end + len("</think>") :]
 
     # Try to find code block
     code_pattern = re.compile(r"```python\s*(.*?)```", re.DOTALL)
@@ -424,7 +448,9 @@ def extract_final_code(text: str, entry_point: str) -> str | None:
         return match.group(1).strip()
 
     # Try to find function definition
-    func_pattern = re.compile(rf"(def\s+{entry_point}\s*\(.*?\):.*?)(?:\n\n|\Z)", re.DOTALL)
+    func_pattern = re.compile(
+        rf"(def\s+{entry_point}\s*\(.*?\):.*?)(?:\n\n|\Z)", re.DOTALL
+    )
     match = func_pattern.search(after_think)
     if match:
         return match.group(1).strip()
@@ -436,9 +462,11 @@ def extract_final_code(text: str, entry_point: str) -> str | None:
 # Trace Generation
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Trace:
     """A single generation trace."""
+
     problem_id: str
     problem: str
     messages: list[dict]
@@ -544,17 +572,23 @@ Test cases:
                 response_json = json.dumps(result)
                 assistant_content += f"<tool_response>{response_json}</tool_response>\n"
 
-                trace_segments.append({
-                    "type": "tool_call",
-                    "content": json.dumps(call_json),
-                })
-                trace_segments.append({
-                    "type": "tool_response",
-                    "content": response_json,
-                })
+                trace_segments.append(
+                    {
+                        "type": "tool_call",
+                        "content": json.dumps(call_json),
+                    }
+                )
+                trace_segments.append(
+                    {
+                        "type": "tool_response",
+                        "content": response_json,
+                    }
+                )
 
                 if config.debug:
-                    print(f"[Turn {turn}] Tool result: passed={result.get('passed')}/{result.get('total')}")
+                    print(
+                        f"[Turn {turn}] Tool result: passed={result.get('passed')}/{result.get('total')}"
+                    )
             else:
                 if config.debug:
                     print("[Turn] Failed to parse tool call")
@@ -637,11 +671,11 @@ Test cases:
 
     # Determine if trace is "ideal"
     is_ideal = (
-        score >= 1.0 and
-        think_count >= 2 and
-        tool_calls >= 1 and
-        tool_responses >= 1 and
-        not had_errors
+        score >= 1.0
+        and think_count >= 2
+        and tool_calls >= 1
+        and tool_responses >= 1
+        and not had_errors
     )
 
     return Trace(
@@ -693,15 +727,34 @@ def trace_to_dict(trace: Trace, training_format: bool = False) -> dict:
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def main():
     parser = argparse.ArgumentParser(description="Generate inline tool traces")
-    parser.add_argument("--output", "-o", default="traces_inline.jsonl", help="Output JSONL file")
-    parser.add_argument("--num-traces", "-n", type=int, default=10, help="Number of traces to generate")
-    parser.add_argument("--only-success", action="store_true", help="Only save successful traces (score > 0)")
-    parser.add_argument("--only-ideal", action="store_true", help="Only save ideal traces (interleaved + tools + success)")
-    parser.add_argument("--training-format", action="store_true", help="Output in training format (messages + score only)")
+    parser.add_argument(
+        "--output", "-o", default="traces_inline.jsonl", help="Output JSONL file"
+    )
+    parser.add_argument(
+        "--num-traces", "-n", type=int, default=10, help="Number of traces to generate"
+    )
+    parser.add_argument(
+        "--only-success",
+        action="store_true",
+        help="Only save successful traces (score > 0)",
+    )
+    parser.add_argument(
+        "--only-ideal",
+        action="store_true",
+        help="Only save ideal traces (interleaved + tools + success)",
+    )
+    parser.add_argument(
+        "--training-format",
+        action="store_true",
+        help="Output in training format (messages + score only)",
+    )
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
-    parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
+    parser.add_argument(
+        "--temperature", type=float, default=0.7, help="Sampling temperature"
+    )
     args = parser.parse_args()
 
     config = Config(
@@ -763,6 +816,7 @@ async def main():
                 except Exception as e:
                     print(f"  [ERROR] {e}")
                     import traceback
+
                     traceback.print_exc()
 
     print(f"\n{'='*60}")
