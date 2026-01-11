@@ -329,12 +329,28 @@ class OllamaClient:
 
         url = f"{self.config.base_url}/api/chat"
 
+        if self.config.debug:
+            print(f"\n[API] POST {url}")
+            print(f"[API] Model: {self.config.model}")
+            print(f"[API] Messages: {len(messages)} messages")
+            if messages:
+                last_msg = messages[-1]
+                print(f"[API] Last message role: {last_msg.get('role')}")
+                content = last_msg.get('content', '')[:200]
+                print(f"[API] Last message preview: {content}...")
+
         async with self.session.post(url, json=payload) as resp:
             if resp.status != 200:
                 text = await resp.text()
                 raise RuntimeError(f"Ollama API error {resp.status}: {text}")
             data = await resp.json()
-            return data.get("message", {}).get("content", "")
+            content = data.get("message", {}).get("content", "")
+
+            if self.config.debug:
+                print(f"[API] Response length: {len(content)} chars")
+                print(f"[API] Response preview: {content[:300]}...")
+
+            return content
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -513,8 +529,8 @@ Test cases:
         {"role": "user", "content": user_prompt},
     ]
 
-    # Track state
-    assistant_content = ""
+    # Track state - pre-fill with <think> to guide model
+    assistant_content = "<think>\n"
     trace_segments = []
     tool_calls = 0
     tool_responses = 0
@@ -774,7 +790,7 @@ async def main():
     args = parser.parse_args()
 
     config = Config(
-        debug=args.debug,
+        debug=True,  # Always enable debug for now
         temperature=args.temperature,
     )
 
