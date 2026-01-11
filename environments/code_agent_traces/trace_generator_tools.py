@@ -491,9 +491,7 @@ class ToolBasedTraceGenerator:
 
     def _extract_verify(self, text: str) -> Optional[str]:
         """Extract <verify> block."""
-        match = re.search(
-            r"<verify>(.*?)</verify>", text, re.DOTALL | re.IGNORECASE
-        )
+        match = re.search(r"<verify>(.*?)</verify>", text, re.DOTALL | re.IGNORECASE)
         if match:
             return match.group(1).strip()
         return None

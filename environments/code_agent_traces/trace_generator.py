@@ -726,9 +726,7 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
             return "verify", verify_match.group(1).strip()
 
         # Check for <code>...</code>
-        code_match = re.search(
-            r"<code>(.*?)</code>", text, re.DOTALL | re.IGNORECASE
-        )
+        code_match = re.search(r"<code>(.*?)</code>", text, re.DOTALL | re.IGNORECASE)
         if code_match:
             content = code_match.group(1)
             lines = content.split("\n")
@@ -749,9 +747,7 @@ Start with ONE [THINK] explaining your approach (1-2 sentences only):"""
             return "think", content
 
         # Check for <wait>
-        wait_match = re.search(
-            r"<wait>(.*?)</wait>", text, re.DOTALL | re.IGNORECASE
-        )
+        wait_match = re.search(r"<wait>(.*?)</wait>", text, re.DOTALL | re.IGNORECASE)
         if wait_match:
             return "wait", wait_match.group(1).strip()
 
