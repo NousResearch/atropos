@@ -17,7 +17,7 @@ dependencies = [
     "numpy",
     "wandb",
     "gymnasium",
-    "math-verify==0.7.0",
+    "math-verify==0.8.0",
     "jinja2",
     "nltk",
     "rich",
@@ -26,6 +26,7 @@ dependencies = [
     "jsonlines",
     "pydantic-cli",
     "hf_transfer",
+    "verifiers>=0.1.9.post2",
 ]
 
 [project.scripts]
