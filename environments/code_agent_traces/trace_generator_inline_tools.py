@@ -491,12 +491,61 @@ def _fix_json_newlines(json_text: str) -> str:
             result.append("\\t")
             continue
 
+        if in_string and char == "\r":
+            result.append("\\r")
+            continue
+
         result.append(char)
 
     return "".join(result)
 
 
-def parse_tool_call(text: str) -> dict | None:
+def _extract_code_from_malformed_json(text: str) -> dict | None:
+    """Extract tool call from malformed JSON with multi-line code."""
+    # Pattern: {"name": "python", "arguments": {"code": "..."}}
+    # The code part might have real newlines
+
+    # Find the start of the code value
+    code_start_pattern = re.compile(r'"code"\s*:\s*"', re.DOTALL)
+    match = code_start_pattern.search(text)
+    if not match:
+        return None
+
+    code_start = match.end()
+
+    # Find the end of the code string - look for "}} or "}}\n or similar
+    # We need to find the closing quote that's followed by }}
+    pos = code_start
+    escape_next = False
+
+    while pos < len(text):
+        char = text[pos]
+
+        if escape_next:
+            escape_next = False
+            pos += 1
+            continue
+
+        if char == "\\":
+            escape_next = True
+            pos += 1
+            continue
+
+        if char == '"':
+            # Check if this is the closing quote (followed by }})
+            remaining = text[pos + 1 :].lstrip()
+            if remaining.startswith("}}") or remaining.startswith("}"):
+                # Found the end
+                code_value = text[code_start:pos]
+                # The code_value might have literal newlines, that's OK for our use
+                return {"name": "python", "arguments": {"code": code_value}}
+
+        pos += 1
+
+    return None
+
+
+def parse_tool_call(text: str, debug: bool = False) -> dict | None:
     """Extract the last tool_call JSON from text."""
     # Find the last <tool_call> tag
     last_pos = text.rfind("<tool_call>")
@@ -510,55 +559,48 @@ def parse_tool_call(text: str) -> dict | None:
     if end_tag_pos != -1:
         json_text = text[json_start:end_tag_pos].strip()
     else:
-        # No closing tag - extract JSON by finding the end
-        json_text = text[json_start:].strip()
+        # No closing tag - extract to end of text or next tag
+        next_tag = text.find("<", json_start)
+        if next_tag != -1 and next_tag > json_start:
+            json_text = text[json_start:next_tag].strip()
+        else:
+            json_text = text[json_start:].strip()
 
-    # Try to parse as-is first
+    if debug:
+        print(
+            f"[DEBUG parse_tool_call] Raw JSON ({len(json_text)} chars): {json_text[:200]}..."
+        )
+
+    # Method 1: Try to parse as-is
     try:
-        return json.loads(json_text)
-    except json.JSONDecodeError:
-        pass
+        result = json.loads(json_text)
+        if debug:
+            print("[DEBUG parse_tool_call] Method 1 (direct) succeeded")
+        return result
+    except json.JSONDecodeError as e:
+        if debug:
+            print(f"[DEBUG parse_tool_call] Method 1 failed: {e}")
 
-    # Fix literal newlines inside strings
+    # Method 2: Fix literal newlines inside strings
     fixed_json = _fix_json_newlines(json_text)
     try:
-        return json.loads(fixed_json)
-    except json.JSONDecodeError:
-        pass
+        result = json.loads(fixed_json)
+        if debug:
+            print("[DEBUG parse_tool_call] Method 2 (fix newlines) succeeded")
+        return result
+    except json.JSONDecodeError as e:
+        if debug:
+            print(f"[DEBUG parse_tool_call] Method 2 failed: {e}")
 
-    # Try to extract just the JSON object by finding balanced braces
-    brace_count = 0
-    in_string = False
-    escape_next = False
-    json_end = 0
+    # Method 3: Extract code value directly from malformed JSON
+    result = _extract_code_from_malformed_json(json_text)
+    if result:
+        if debug:
+            print("[DEBUG parse_tool_call] Method 3 (extract code) succeeded")
+        return result
 
-    for i, char in enumerate(fixed_json):
-        if escape_next:
-            escape_next = False
-            continue
-
-        if char == "\\":
-            escape_next = True
-            continue
-
-        if char == '"':
-            in_string = not in_string
-            continue
-
-        if not in_string:
-            if char == "{":
-                brace_count += 1
-            elif char == "}":
-                brace_count -= 1
-                if brace_count == 0:
-                    json_end = i + 1
-                    break
-
-    if json_end > 0:
-        try:
-            return json.loads(fixed_json[:json_end])
-        except json.JSONDecodeError:
-            pass
+    if debug:
+        print("[DEBUG parse_tool_call] All methods failed")
 
     return None
 
@@ -695,7 +737,7 @@ Test cases:
                 assistant_content += "</tool_call>\n"
 
             # Parse and execute tool
-            call_json = parse_tool_call(assistant_content)
+            call_json = parse_tool_call(assistant_content, debug=config.debug)
             if call_json:
                 tool_calls += 1
 
@@ -780,7 +822,7 @@ Test cases:
 
     # If no final code, try to extract from last tool call
     if not final_code:
-        last_call = parse_tool_call(assistant_content)
+        last_call = parse_tool_call(assistant_content, debug=config.debug)
         if last_call and last_call.get("arguments", {}).get("code"):
             final_code = last_call["arguments"]["code"]
 
