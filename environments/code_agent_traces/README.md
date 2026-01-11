@@ -1,12 +1,13 @@
 # Code Agent Traces
 
-Interleaved reasoning pipeline for code generation with **four modes**:
+Interleaved reasoning pipeline for code generation with **five modes**:
 
 | Mode | File | Interleaving | Tool Use | Purpose |
 |------|------|:------------:|:--------:|---------|
 | Marker-Based | `trace_generator.py` | ✓ (forced) | ✗ | Fast JSONL generation |
 | Tool-Based | `trace_generator_tools.py` | ✗ | ✓ | Execution feedback |
 | **Interleaved+Tools** | `trace_generator_interleaved_tools.py` | ✓ | ✓ | **IDEAL training data** |
+| **Inline Tools** | `trace_generator_inline_tools.py` | ✓ | ✓ | **RL-style inline tool calls** |
 | RL Environment | `interleaved_code_env.py` | ✓ | ✓ | Online RL training |
 
 ## Quick Start
@@ -20,6 +21,9 @@ python trace_generator_interleaved_tools.py --output traces.jsonl --num-traces 1
 
 # Only ideal traces (interleaved + tool + success)
 python trace_generator_interleaved_tools.py --output traces.jsonl --only-ideal
+
+# Inline tools (RL-style, tool calls inside <think> block)
+python trace_generator_inline_tools.py --output traces.jsonl --num-traces 10
 
 # Marker-based (fast, no execution feedback)
 python trace_generator.py --output traces.jsonl --num-traces 10 --force-interleave
@@ -100,12 +104,14 @@ Test: [2,7,11,15], target=9 → [0,1] ✓
 
 ```
 code_agent_traces/
-├── trace_generator.py       # Marker-based JSONL generation
-├── trace_generator_tools.py # Tool-based JSONL (with execution feedback)
-├── interleaved_code_env.py  # Atropos RL environment
-├── interleaved_agent.py     # Interactive demo
-├── run_structured_pipeline.py # Structured pipeline demo
-├── local_executor.py        # Safe code execution
+├── trace_generator.py              # Marker-based JSONL generation
+├── trace_generator_tools.py        # Tool-based JSONL (with execution feedback)
+├── trace_generator_interleaved_tools.py  # Interleaved + tools (ideal)
+├── trace_generator_inline_tools.py # Inline tool calls (RL-style)
+├── interleaved_code_env.py         # Atropos RL environment
+├── interleaved_agent.py            # Interactive demo
+├── run_structured_pipeline.py      # Structured pipeline demo
+├── local_executor.py               # Safe code execution
 └── README.md
 ```
 
@@ -434,6 +440,78 @@ openai:
 - `train/avg_think_count` - Average <think> usage
 - `train/verify_rate` - <verify> usage rate
 - `eval/accuracy` - Test set accuracy
+
+---
+
+## Mode 5: Inline Tool Calls (trace_generator_inline_tools.py)
+
+**RL-style inline tool calls** inside a still-open `<think>` block. Based on the pattern from `tool_use_interleaved_thinking.py`.
+
+### Key Concept
+
+Tool calls are emitted **inside** the `<think>` block, not as separate blocks:
+
+```
+<think>
+I need to implement two_sum with a hash map...
+
+<tool_call>{"name": "python", "arguments": {"code": "def two_sum..."}}</tool_call>
+<tool_response>{"stdout": "", "passed": 2, "total": 4, "error": null}</tool_response>
+
+The tests show 2/4 passed. Let me fix the edge case...
+
+<tool_call>{"name": "python", "arguments": {"code": "def two_sum..."}}</tool_call>
+<tool_response>{"stdout": "", "passed": 4, "total": 4, "error": null}</tool_response>
+
+All tests pass now.
+</think>
+
+Final solution: [code block]
+```
+
+### Usage
+
+```bash
+# Basic usage
+python trace_generator_inline_tools.py --output traces.jsonl --num-traces 10
+
+# Only successful traces
+python trace_generator_inline_tools.py --output traces.jsonl --only-success
+
+# Only ideal traces (interleaved + tools + success)
+python trace_generator_inline_tools.py --output traces.jsonl --only-ideal
+
+# Training format
+python trace_generator_inline_tools.py --output traces.jsonl --training-format
+```
+
+### Differences from Other Modes
+
+| Feature | Interleaved+Tools | Inline Tools |
+|---------|-------------------|--------------|
+| Tool call location | Separate `<code>` blocks | Inside `<think>` block |
+| Tool call format | `<code>...</code>` | `<tool_call>{JSON}</tool_call>` |
+| Response format | `<result>...</result>` | `<tool_response>{JSON}</tool_response>` |
+| Style | Granular code blocks | RL-style JSON tool calls |
+
+### Output Format
+
+```json
+{
+    "problem_id": "two_sum",
+    "problem": "def two_sum...",
+    "messages": [...],
+    "full_response": "<think>...<tool_call>...</tool_call>...",
+    "code": "def two_sum(nums, target):\n    ...",
+    "score": 1.0,
+    "tests_passed": 4,
+    "tests_total": 4,
+    "think_count": 2,
+    "tool_calls": 2,
+    "tool_responses": 2,
+    "is_ideal": true
+}
+```
 
 ---
 
