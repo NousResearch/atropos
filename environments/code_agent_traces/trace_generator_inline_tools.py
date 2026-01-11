@@ -115,7 +115,17 @@ The system will execute your code and respond with:
 
 After your reasoning is complete, close the </think> block and provide the final solution.
 
-IMPORTANT: Use \\n for newlines in code strings. Keep JSON on a single line.
+IMPORTANT JSON FORMATTING:
+- Use SINGLE escape (\\n) for newlines in code strings
+- NEVER use double (\\\\n) or quadruple (\\\\\\\\n) escaping
+- Keep entire JSON on a single line
+
+CORRECT format:
+{"code": "def foo():\\n    return 1"}
+
+INCORRECT formats (DO NOT USE):
+❌ {"code": "def foo():\\\\n    return 1"}
+❌ {"code": "def foo():\\\\\\\\n    return 1"}
 
 === Example 1: Simple function ===
 <think>
