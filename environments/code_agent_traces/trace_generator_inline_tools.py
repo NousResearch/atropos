@@ -470,106 +470,58 @@ def execute_tool(call_json: dict, problem: dict) -> dict:
         return {"error": f"Unknown tool: {name}"}
 
 
-def _fix_json_newlines(json_text: str) -> str:
-    """Fix literal newlines inside JSON string values by escaping them."""
-    result = []
-    in_string = False
-    escape_next = False
+def _extract_code_via_regex(content: str) -> str | None:
+    """
+    Стратегия 3: Извлечь код напрямую через regex.
+    Работает даже с docstrings и сложным форматированием.
+    """
+    # Паттерн для "code": "..." с возможными переносами
+    patterns = [
+        # Стандартный формат с кавычками
+        r'"code"\s*:\s*"((?:[^"\\]|\\.|[\n\r\t])*)"',
+        # Формат с тройными кавычками (иногда модели так делают)
+        r'"code"\s*:\s*"""(.*?)"""',
+        r'"code"\s*:\s*\'\'\'(.*?)\'\'\'',
+    ]
 
-    for char in json_text:
-        if escape_next:
-            result.append(char)
-            escape_next = False
-            continue
-
-        if char == "\\":
-            result.append(char)
-            escape_next = True
-            continue
-
-        if char == '"':
-            in_string = not in_string
-            result.append(char)
-            continue
-
-        if in_string and char == "\n":
-            # Replace literal newline with escaped version
-            result.append("\\n")
-            continue
-
-        if in_string and char == "\t":
-            result.append("\\t")
-            continue
-
-        if in_string and char == "\r":
-            result.append("\\r")
-            continue
-
-        result.append(char)
-
-    return "".join(result)
-
-
-def _extract_code_from_malformed_json(text: str) -> dict | None:
-    """Extract tool call from malformed JSON with multi-line code."""
-    # Pattern: {"name": "python", "arguments": {"code": "..."}}
-    # The code part might have real newlines
-
-    # Find the start of the code value
-    code_start_pattern = re.compile(r'"code"\s*:\s*"', re.DOTALL)
-    match = code_start_pattern.search(text)
-    if not match:
-        return None
-
-    code_start = match.end()
-
-    # Find the end of the code string - look for "}} or "}}\n or similar
-    # We need to find the closing quote that's followed by }}
-    pos = code_start
-    escape_next = False
-
-    while pos < len(text):
-        char = text[pos]
-
-        if escape_next:
-            escape_next = False
-            pos += 1
-            continue
-
-        if char == "\\":
-            escape_next = True
-            pos += 1
-            continue
-
-        if char == '"':
-            # Check if this is the closing quote (followed by }})
-            remaining = text[pos + 1 :].lstrip()
-            if remaining.startswith("}}") or remaining.startswith("}"):
-                # Found the end
-                code_value = text[code_start:pos]
-                # The code_value might have literal newlines, that's OK for our use
-                return {"name": "python", "arguments": {"code": code_value}}
-
-        pos += 1
+    for pattern in patterns:
+        match = re.search(pattern, content, re.DOTALL)
+        if match:
+            code = match.group(1)
+            # Декодируем escape sequences
+            try:
+                # Заменяем escaped newlines на реальные
+                code = code.replace('\\n', '\n')
+                code = code.replace('\\t', '\t')
+                code = code.replace('\\r', '\r')
+                code = code.replace('\\"', '"')
+                code = code.replace('\\\\', '\\')
+            except Exception:
+                pass
+            return code
 
     return None
 
 
 def parse_tool_call(text: str, debug: bool = False) -> dict | None:
-    """Extract the last tool_call JSON from text."""
-    # Find the last <tool_call> tag
+    """
+    Робастный парсер tool_call с 3 стратегиями fallback.
+
+    Решает проблему: модель генерирует реальные newlines (0x0A) вместо \\n
+    """
+    # Найти последний <tool_call> тег
     last_pos = text.rfind("<tool_call>")
     if last_pos == -1:
         return None
 
     json_start = last_pos + len("<tool_call>")
 
-    # Find </tool_call> if present
+    # Найти </tool_call> если есть
     end_tag_pos = text.find("</tool_call>", json_start)
     if end_tag_pos != -1:
         json_text = text[json_start:end_tag_pos].strip()
     else:
-        # No closing tag - extract to end of text or next tag
+        # Нет закрывающего тега - до конца или следующего тега
         next_tag = text.find("<", json_start)
         if next_tag != -1 and next_tag > json_start:
             json_text = text[json_start:next_tag].strip()
@@ -577,40 +529,45 @@ def parse_tool_call(text: str, debug: bool = False) -> dict | None:
             json_text = text[json_start:].strip()
 
     if debug:
-        print(
-            f"[DEBUG parse_tool_call] Raw JSON ({len(json_text)} chars): {json_text[:200]}..."
-        )
+        print(f"[DEBUG] Raw JSON ({len(json_text)} chars): {json_text[:200]}...")
 
-    # Method 1: Try to parse as-is
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Стратегия 1: Прямой JSON parse (для корректного JSON)
+    # ═══════════════════════════════════════════════════════════════════════════
     try:
         result = json.loads(json_text)
         if debug:
-            print("[DEBUG parse_tool_call] Method 1 (direct) succeeded")
+            print("[DEBUG] Strategy 1 (direct JSON) succeeded")
         return result
     except json.JSONDecodeError as e:
         if debug:
-            print(f"[DEBUG parse_tool_call] Method 1 failed: {e}")
+            print(f"[DEBUG] Strategy 1 failed: {e}")
 
-    # Method 2: Fix literal newlines inside strings
-    fixed_json = _fix_json_newlines(json_text)
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Стратегия 2: Fix newlines - заменяем реальные \n на escaped \\n
+    # ═══════════════════════════════════════════════════════════════════════════
     try:
-        result = json.loads(fixed_json)
+        # Простая замена - работает в большинстве случаев
+        fixed = json_text.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+        result = json.loads(fixed)
         if debug:
-            print("[DEBUG parse_tool_call] Method 2 (fix newlines) succeeded")
+            print("[DEBUG] Strategy 2 (fix newlines) succeeded")
         return result
     except json.JSONDecodeError as e:
         if debug:
-            print(f"[DEBUG parse_tool_call] Method 2 failed: {e}")
+            print(f"[DEBUG] Strategy 2 failed: {e}")
 
-    # Method 3: Extract code value directly from malformed JSON
-    result = _extract_code_from_malformed_json(json_text)
-    if result:
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Стратегия 3: REGEX extraction - для сложных случаев с docstrings
+    # ═══════════════════════════════════════════════════════════════════════════
+    code = _extract_code_via_regex(json_text)
+    if code:
         if debug:
-            print("[DEBUG parse_tool_call] Method 3 (extract code) succeeded")
-        return result
+            print("[DEBUG] Strategy 3 (regex extraction) succeeded")
+        return {"name": "python", "arguments": {"code": code}}
 
     if debug:
-        print("[DEBUG parse_tool_call] All methods failed")
+        print("[DEBUG] All strategies failed")
 
     return None
 
