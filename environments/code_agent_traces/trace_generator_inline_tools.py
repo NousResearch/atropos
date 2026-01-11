@@ -491,11 +491,11 @@ def _extract_code_via_regex(content: str) -> str | None:
             # Декодируем escape sequences
             try:
                 # Заменяем escaped newlines на реальные
-                code = code.replace('\\n', '\n')
-                code = code.replace('\\t', '\t')
-                code = code.replace('\\r', '\r')
+                code = code.replace("\\n", "\n")
+                code = code.replace("\\t", "\t")
+                code = code.replace("\\r", "\r")
                 code = code.replace('\\"', '"')
-                code = code.replace('\\\\', '\\')
+                code = code.replace("\\\\", "\\")
             except Exception:
                 pass
             return code
@@ -548,7 +548,7 @@ def parse_tool_call(text: str, debug: bool = False) -> dict | None:
     # ═══════════════════════════════════════════════════════════════════════════
     try:
         # Простая замена - работает в большинстве случаев
-        fixed = json_text.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+        fixed = json_text.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
         result = json.loads(fixed)
         if debug:
             print("[DEBUG] Strategy 2 (fix newlines) succeeded")
