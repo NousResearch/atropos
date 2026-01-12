@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import os
+import warnings
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, List, Optional, Union
 
@@ -394,12 +395,18 @@ class ServerManager:
                 most_available_server_num_slots = server.sem._value
 
         # Create ManagedServer wrapping the selected server
-        managed = ManagedServer(
-            server=self.servers[most_available_server], tokenizer=tokenizer
-        )
+        if isinstance(self.servers[most_available_server], OpenAIServer):
+            warnings.warn(
+                "Using OpenAIServer with managed_server does not allow for state tracking"
+            )
+            yield self.servers[most_available_server]
+        else:
+            managed = ManagedServer(
+                server=self.servers[most_available_server], tokenizer=tokenizer
+            )
 
-        try:
-            yield managed
-        finally:
-            # Clean up: reset tracked sequences
-            managed.reset()
+            try:
+                yield managed
+            finally:
+                # Clean up: reset tracked sequences
+                managed.reset()
