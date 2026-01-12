@@ -31,10 +31,9 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import verifiers as vf
+import wandb
 from openai import AsyncOpenAI
 from pydantic import Field
-
-import wandb
 
 from atroposlib.envs.base import (
     APIServerConfig,
