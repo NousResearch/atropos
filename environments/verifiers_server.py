@@ -271,24 +271,41 @@ class VerifiersEnv(BaseEnv):
         if not trajectory:
             return [], [], []
 
-        # For single-turn or multi-turn, we use the final trajectory state
-        # The last step contains the full accumulated prompt + completion
-        last_step = trajectory[-1]
-        tokens_data = last_step.get("tokens")
+        full_ids = []
+        full_mask = []
+        full_logprobs = []
 
-        if tokens_data is None:
-            return [], [], []
+        # Track the length of the sequence we have built so far to find the "diff"
+        # in the prompt tokens for subsequent turns.
+        current_len = 0
 
-        # Combine prompt + completion IDs
-        prompt_ids = tokens_data.get("prompt_ids", [])
-        completion_ids = tokens_data.get("completion_ids", [])
-        completion_logprobs = tokens_data.get("completion_logprobs", [])
+        for i, step in enumerate(trajectory):
+            tokens_data = step.get("tokens")
+            if not tokens_data:
+                # If any step is missing tokens, abort this vLLM-specific stitching
+                # and fall back to the generic tokenizer method.
+                return [], [], []
 
-        full_ids = prompt_ids + completion_ids
-        # Mask: -100 for prompt, token IDs for completion
-        full_mask = [-100] * len(prompt_ids) + completion_ids
-        # Logprobs: 0.0 placeholder for prompt, actual for completion
-        full_logprobs = [0.0] * len(prompt_ids) + completion_logprobs
+            p_ids = tokens_data.get("prompt_ids", [])
+            c_ids = tokens_data.get("completion_ids", [])
+            c_logprobs = tokens_data.get("completion_logprobs", [])
+
+            # --- 1. Handle Prompt (User/Env) ---
+            # For step 0, take the whole prompt.
+            # For step > 0, p_ids includes the entire history.
+            new_prompt_ids = p_ids[current_len:]
+
+            full_ids.extend(new_prompt_ids)
+            full_mask.extend([-100] * len(new_prompt_ids))  # Always mask prompt/env
+            full_logprobs.extend([0.0] * len(new_prompt_ids))
+
+            # --- 2. Handle Completion (Assistant) ---
+            full_ids.extend(c_ids)
+            full_mask.extend(c_ids)  # Unmasked: use IDs as labels
+            full_logprobs.extend(c_logprobs)
+
+            # Update current length for next iteration
+            current_len = len(p_ids) + len(c_ids)
 
         return full_ids, full_mask, full_logprobs
 
@@ -371,7 +388,11 @@ class VerifiersEnv(BaseEnv):
         ]
 
         # Sampling args for generation
-        sampling_args = {"max_tokens": self.config.max_token_length}
+        sampling_args = {
+            "max_tokens": self.config.max_token_length,
+            "logprobs": True,
+            "extra_body": {"return_token_ids": True},
+        }
         if self.config.eval_temperature is not None:
             sampling_args["temperature"] = self.config.eval_temperature
         else:
