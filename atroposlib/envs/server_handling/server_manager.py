@@ -167,6 +167,15 @@ class ServerManager:
         for server in self.servers:
             await server.update_weight(weight)
 
+    def _get_server_base_url(self, server_idx: int = 0) -> Optional[str]:
+        """Get the base_url from a server's config."""
+        if not self.servers:
+            return None
+        server = self.servers[server_idx]
+        if hasattr(server, "config") and hasattr(server.config, "base_url"):
+            return server.config.base_url
+        return None
+
     async def wait_for_sem(self, is_training: bool):
         """
         Wait for a server to be available. This is used to prevent the client from
