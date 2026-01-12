@@ -40,8 +40,9 @@ Docs: https://docs.primeintellect.ai/tutorials-environments/install
 """
 
 import asyncio
+import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import verifiers as vf
 from openai import AsyncOpenAI
@@ -55,6 +56,56 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Verifiers API Compatibility Layer
+# =============================================================================
+
+
+def _get_rubric_reward_funcs(rubric: vf.Rubric) -> List[Callable]:
+    """
+    Get reward functions from a Rubric with API version compatibility.
+
+    Handles different verifiers API versions:
+    - v0.1.9+: rubric._get_reward_funcs() (private)
+    - v0.1.5-0.1.8: rubric.get_reward_funcs() (public)
+    - fallback: rubric.funcs (direct access)
+    """
+    if hasattr(rubric, "_get_reward_funcs"):
+        return rubric._get_reward_funcs()
+    elif hasattr(rubric, "get_reward_funcs"):
+        return rubric.get_reward_funcs()
+    elif hasattr(rubric, "funcs"):
+        return rubric.funcs
+    else:
+        raise AttributeError(
+            f"Cannot find reward functions on rubric. "
+            f"Available attrs: {dir(rubric)}"
+        )
+
+
+def _get_rubric_reward_weights(rubric: vf.Rubric) -> List[float]:
+    """
+    Get reward weights from a Rubric with API version compatibility.
+
+    Handles different verifiers API versions:
+    - v0.1.9+: rubric._get_reward_weights() (private)
+    - v0.1.5-0.1.8: rubric.get_reward_weights() (public)
+    - fallback: rubric.weights (direct access)
+    """
+    if hasattr(rubric, "_get_reward_weights"):
+        return rubric._get_reward_weights()
+    elif hasattr(rubric, "get_reward_weights"):
+        return rubric.get_reward_weights()
+    elif hasattr(rubric, "weights"):
+        return rubric.weights
+    else:
+        raise AttributeError(
+            f"Cannot find reward weights on rubric. " f"Available attrs: {dir(rubric)}"
+        )
 
 
 class VfEnvConfig(BaseEnvConfig):
@@ -78,8 +129,11 @@ class VerifiersEnv(BaseEnv):
         testing=False,
     ):
         super().__init__(config, server_configs, slurm, testing)
-        self.percent_correct_buffer = list()
-        self.eval_metrics = list()
+        self.percent_correct_buffer: List[float] = []
+        self.eval_metrics: List[Tuple[str, float]] = []
+
+        # Load verifiers environment
+        logger.info("Loading verifiers environment: %s", config.vf_env_name)
         self.vf_env = vf.load_environment(config.vf_env_name, **config.env_args)
         self.rubric = self.vf_env.rubric
 
@@ -88,18 +142,26 @@ class VerifiersEnv(BaseEnv):
         # Handle both single Rubric and RubricGroup (composite)
         # RubricGroup has empty funcs/weights at top level - must extract from individual rubrics
         if hasattr(self.rubric, "rubrics"):
-            self.reward_funcs = []
-            self.reward_weights = []
-            for rubric in self.rubric.rubrics:
-                self.reward_funcs.extend(rubric.funcs)
-                self.reward_weights.extend(rubric.weights)
+            # RubricGroup: collect from all individual rubrics
+            self.reward_funcs: List[Callable] = []
+            self.reward_weights: List[float] = []
+            for rubric in self.rubric.rubrics:  # type: ignore[attr-defined]
+                self.reward_funcs.extend(_get_rubric_reward_funcs(rubric))
+                self.reward_weights.extend(_get_rubric_reward_weights(rubric))
         else:
-            self.reward_funcs = self.rubric.funcs
-            self.reward_weights = self.rubric.weights
+            # Single Rubric: use compatibility layer
+            self.reward_funcs = _get_rubric_reward_funcs(self.rubric)
+            self.reward_weights = _get_rubric_reward_weights(self.rubric)
 
         total = sum(self.reward_weights) if self.reward_weights else 1.0
         self.reward_scales = [weight / total for weight in self.reward_weights]
         self.system_prompt = self.vf_env.system_prompt
+
+        logger.info(
+            "Loaded environment with %d reward functions, system_prompt=%s",
+            len(self.reward_funcs),
+            bool(self.system_prompt),
+        )
 
     @classmethod
     def config_init(cls) -> Tuple[VfEnvConfig, List[APIServerConfig]]:
