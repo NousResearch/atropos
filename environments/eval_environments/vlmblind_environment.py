@@ -65,20 +65,29 @@ class VLMBlind(EvalBase):
 
         content = []
         if image_base64:
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{image_base64}"},
-            })
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image_base64}"},
+                }
+            )
         content.append({"type": "text", "text": prompt})
 
         return [{"role": "user", "content": content}]
 
-    def extract_and_score(self, response: str, answer: str, task: str) -> Tuple[bool, str]:
+    def extract_and_score(
+        self, response: str, answer: str, task: str
+    ) -> Tuple[bool, str]:
         """Task-specific answer extraction and scoring."""
         response_lower = response.lower().strip()
         answer_lower = str(answer).lower().strip()
 
-        if task in ["Subway Connections", "Nested Squares", "Line Plot Intersections", "Circled Letter"]:
+        if task in [
+            "Subway Connections",
+            "Nested Squares",
+            "Line Plot Intersections",
+            "Circled Letter",
+        ]:
             match = re.search(r"\{([^}]+)\}", response)
             if match:
                 extracted = match.group(1).strip().lower()
@@ -140,7 +149,9 @@ class VLMBlind(EvalBase):
 
             sample = {
                 "id": data_item.get("index", data_item.get("id", "")),
-                "question": data_item.get("prompt", data_item.get("question", ""))[:200],
+                "question": data_item.get("prompt", data_item.get("question", ""))[
+                    :200
+                ],
                 "task": task,
                 "answer": answer,
                 "prediction": extracted,

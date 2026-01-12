@@ -44,7 +44,9 @@ Example of expected JSON response format:
             print(f"Warning: Could not load DynaMath: {e}")
             try:
                 # Try sample_variant1 explicitly
-                dataset = load_dataset("DynaMath/DynaMath_Sample", split="sample_variant1")
+                dataset = load_dataset(
+                    "DynaMath/DynaMath_Sample", split="sample_variant1"
+                )
                 print(f"Loaded {len(dataset)} examples from DynaMath (sample_variant1)")
                 return list(dataset)
             except Exception:
@@ -88,10 +90,12 @@ Example of expected JSON response format:
 
         content = []
         if image_base64:
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{image_base64}"},
-            })
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image_base64}"},
+                }
+            )
         content.append({"type": "text", "text": prompt})
 
         return [{"role": "user", "content": content}]
@@ -100,14 +104,14 @@ Example of expected JSON response format:
         """Preprocess response to extract JSON."""
         response = str(response)
         if 0 <= response.find("{") < response.rfind("}"):
-            response = response[response.find("{"): response.rfind("}") + 1]
+            response = response[response.find("{") : response.rfind("}") + 1]
         response = response.replace("\\", "").replace("\\n", "\n")
         return response
 
     def transfer_pi(self, value: str) -> float:
         """Convert pi symbol to numeric value."""
         if "\u03c0" in value:
-            parts = value.split('\u03c0')
+            parts = value.split("\u03c0")
             return float(parts[0]) * np.pi
         return float(value)
 
@@ -116,7 +120,7 @@ Example of expected JSON response format:
         if answer_type == "float":
             if answer.isdigit():
                 return True, str(float(answer))
-            parts = answer.split(' ')
+            parts = answer.split(" ")
             answer = parts[0]
             try:
                 result = self.transfer_pi(answer)
@@ -136,7 +140,9 @@ Example of expected JSON response format:
         else:
             return True, answer
 
-    def extract_answer(self, response: str, answer_type: str) -> Tuple[bool, Optional[str]]:
+    def extract_answer(
+        self, response: str, answer_type: str
+    ) -> Tuple[bool, Optional[str]]:
         """Extract answer from response."""
         processed = self.preprocess_response(response)
 
@@ -156,7 +162,7 @@ Example of expected JSON response format:
                 if ch in response.upper()[:20]:
                     return True, ch
         elif answer_type == "float":
-            numbers = re.findall(r'-?\d+\.?\d*', response)
+            numbers = re.findall(r"-?\d+\.?\d*", response)
             if numbers:
                 try:
                     return True, str(float(numbers[0]))
@@ -186,7 +192,10 @@ Example of expected JSON response format:
 
         else:
             # Free form: substring match
-            return extracted.lower() in answer.lower() or answer.lower() in extracted.lower()
+            return (
+                extracted.lower() in answer.lower()
+                or answer.lower() in extracted.lower()
+            )
 
     async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
         try:

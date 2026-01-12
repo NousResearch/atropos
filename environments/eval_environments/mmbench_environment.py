@@ -77,15 +77,19 @@ class MMBench(EvalBase):
 
         content = []
         if image_base64:
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{image_base64}"},
-            })
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image_base64}"},
+                }
+            )
         content.append({"type": "text", "text": prompt})
 
         return [{"role": "user", "content": content}]
 
-    def extract_answer(self, response: str, num_choices: int) -> Tuple[Optional[str], str]:
+    def extract_answer(
+        self, response: str, num_choices: int
+    ) -> Tuple[Optional[str], str]:
         valid_letters = set(ascii_uppercase[:num_choices])
 
         letter, method = extract_letter_from_answer_tag(response, valid_letters)

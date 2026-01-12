@@ -29,14 +29,36 @@ class MMMU(EvalBase):
             dataset = load_dataset("MMMU/MMMU", subset, split=split)
         else:
             subjects = [
-                "Accounting", "Agriculture", "Architecture_and_Engineering",
-                "Art", "Art_Theory", "Basic_Medical_Science", "Biology",
-                "Chemistry", "Clinical_Medicine", "Computer_Science",
-                "Design", "Diagnostics_and_Laboratory_Medicine", "Economics",
-                "Electronics", "Energy_and_Power", "Finance", "Geography",
-                "History", "Literature", "Manage", "Marketing", "Materials",
-                "Math", "Mechanical_Engineering", "Music", "Pharmacy",
-                "Physics", "Psychology", "Public_Health", "Sociology"
+                "Accounting",
+                "Agriculture",
+                "Architecture_and_Engineering",
+                "Art",
+                "Art_Theory",
+                "Basic_Medical_Science",
+                "Biology",
+                "Chemistry",
+                "Clinical_Medicine",
+                "Computer_Science",
+                "Design",
+                "Diagnostics_and_Laboratory_Medicine",
+                "Economics",
+                "Electronics",
+                "Energy_and_Power",
+                "Finance",
+                "Geography",
+                "History",
+                "Literature",
+                "Manage",
+                "Marketing",
+                "Materials",
+                "Math",
+                "Mechanical_Engineering",
+                "Music",
+                "Pharmacy",
+                "Physics",
+                "Psychology",
+                "Public_Health",
+                "Sociology",
             ]
             all_data = []
             for subj in subjects:
@@ -80,24 +102,28 @@ class MMMU(EvalBase):
                 options = []
 
         if options:
-            options_text = "\n".join([
-                f"({ascii_uppercase[i]}) {opt}" for i, opt in enumerate(options)
-            ])
+            options_text = "\n".join(
+                [f"({ascii_uppercase[i]}) {opt}" for i, opt in enumerate(options)]
+            )
             prompt = f"Question: {question}\n\nOptions:\n{options_text}\n\nPlease select the correct answer from the options above."
         else:
             prompt = f"Question: {question}\n\nProvide your answer."
 
         content = []
         for img_b64 in images:
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{img_b64}"},
-            })
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{img_b64}"},
+                }
+            )
         content.append({"type": "text", "text": prompt})
 
         return [{"role": "user", "content": content}]
 
-    def extract_answer(self, response: str, num_choices: int) -> Tuple[Optional[str], str]:
+    def extract_answer(
+        self, response: str, num_choices: int
+    ) -> Tuple[Optional[str], str]:
         """Extract answer letter from response."""
         valid_letters = set(ascii_uppercase[:num_choices])
 

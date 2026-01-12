@@ -53,10 +53,12 @@ class POPE(EvalBase):
 
         content = []
         if image_base64:
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{image_base64}"},
-            })
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image_base64}"},
+                }
+            )
         content.append({"type": "text", "text": prompt})
 
         return [{"role": "user", "content": content}]
@@ -70,8 +72,8 @@ class POPE(EvalBase):
         if response_lower.startswith("no"):
             return "No"
 
-        yes_patterns = [r'\byes\b', r'\btrue\b', r'\bcorrect\b', r'\baffirmative\b']
-        no_patterns = [r'\bno\b', r'\bfalse\b', r'\bincorrect\b', r'\bnegative\b']
+        yes_patterns = [r"\byes\b", r"\btrue\b", r"\bcorrect\b", r"\baffirmative\b"]
+        no_patterns = [r"\bno\b", r"\bfalse\b", r"\bincorrect\b", r"\bnegative\b"]
 
         for pattern in yes_patterns:
             if re.search(pattern, response_lower):

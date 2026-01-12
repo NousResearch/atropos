@@ -32,7 +32,9 @@ class CountBench(EvalBase):
                 return list(dataset)
             except Exception:
                 try:
-                    dataset = load_dataset("google-research/countbenchqa", split="train")
+                    dataset = load_dataset(
+                        "google-research/countbenchqa", split="train"
+                    )
                     print(f"Loaded {len(dataset)} examples from CountBench (train)")
                     return list(dataset)
                 except Exception:
@@ -58,17 +60,19 @@ class CountBench(EvalBase):
 
         content = []
         if image_base64:
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{image_base64}"},
-            })
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image_base64}"},
+                }
+            )
         content.append({"type": "text", "text": prompt})
 
         return [{"role": "user", "content": content}]
 
     def extract_number(self, response: str) -> Optional[str]:
         """Extract a number from the response."""
-        numbers = re.findall(r'\b(\d+)\b', response)
+        numbers = re.findall(r"\b(\d+)\b", response)
         if numbers:
             return numbers[0]
         return None

@@ -17,16 +17,16 @@ class OCRBench(EvalBase):
 
     # Categories and their scoring
     CATEGORIES = [
-        'Regular Text Recognition',
-        'Irregular Text Recognition',
-        'Artistic Text Recognition',
-        'Handwriting Recognition',
-        'Digit String Recognition',
-        'Non-Semantic Text Recognition',
-        'Scene Text-centric VQA',
-        'Doc-oriented VQA',
-        'Key Information Extraction',
-        'Handwritten Mathematical Expression Recognition',
+        "Regular Text Recognition",
+        "Irregular Text Recognition",
+        "Artistic Text Recognition",
+        "Handwriting Recognition",
+        "Digit String Recognition",
+        "Non-Semantic Text Recognition",
+        "Scene Text-centric VQA",
+        "Doc-oriented VQA",
+        "Key Information Extraction",
+        "Handwritten Mathematical Expression Recognition",
     ]
 
     def setup_data(self) -> list:
@@ -65,10 +65,12 @@ class OCRBench(EvalBase):
 
         content = []
         if image_base64:
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{image_base64}"},
-            })
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image_base64}"},
+                }
+            )
         content.append({"type": "text", "text": prompt})
 
         return [{"role": "user", "content": content}]
@@ -77,16 +79,16 @@ class OCRBench(EvalBase):
         """Category-specific scoring for OCR tasks."""
         predict = prediction.strip()
 
-        if category == 'Handwritten Mathematical Expression Recognition':
-            predict_clean = predict.replace('\n', ' ').replace(' ', '')
+        if category == "Handwritten Mathematical Expression Recognition":
+            predict_clean = predict.replace("\n", " ").replace(" ", "")
             for answer in answers:
-                answer_clean = answer.strip().replace('\n', ' ').replace(' ', '')
+                answer_clean = answer.strip().replace("\n", " ").replace(" ", "")
                 if answer_clean in predict_clean:
                     return True
         else:
-            predict_lower = predict.lower().replace('\n', ' ')
+            predict_lower = predict.lower().replace("\n", " ")
             for answer in answers:
-                answer_lower = answer.lower().strip().replace('\n', ' ')
+                answer_lower = answer.lower().strip().replace("\n", " ")
                 if answer_lower in predict_lower:
                     return True
 

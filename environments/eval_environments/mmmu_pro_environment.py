@@ -39,7 +39,9 @@ class MMMUPro(EvalBase):
         except Exception as e:
             print(f"Error loading MMMU-Pro: {e}")
             try:
-                dataset = load_dataset("MMMU/MMMU_Pro", "standard (10 options)", split="test")
+                dataset = load_dataset(
+                    "MMMU/MMMU_Pro", "standard (10 options)", split="test"
+                )
                 print(f"Loaded {len(dataset)} examples from MMMU-Pro (test)")
                 return list(dataset)
             except Exception:
@@ -80,9 +82,9 @@ class MMMUPro(EvalBase):
             prompt = "Answer the following multiple-choice question in the image. Answer directly with the option letter from the given choices."
         else:
             if options:
-                options_text = "\n".join([
-                    f"{ascii_uppercase[i]}. {opt}" for i, opt in enumerate(options)
-                ])
+                options_text = "\n".join(
+                    [f"{ascii_uppercase[i]}. {opt}" for i, opt in enumerate(options)]
+                )
                 prompt = f"Question: {question}\n\nOptions:\n{options_text}\n\n"
 
                 if variant == "cot":
@@ -93,30 +95,37 @@ class MMMUPro(EvalBase):
                         "Think step by step before answering."
                     )
                 else:
-                    prompt += "Answer directly with the option letter from the given choices."
+                    prompt += (
+                        "Answer directly with the option letter from the given choices."
+                    )
             else:
                 prompt = f"Question: {question}\n\nProvide your answer."
 
         content = []
         for img_b64 in images:
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{img_b64}"},
-            })
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{img_b64}"},
+                }
+            )
         content.append({"type": "text", "text": prompt})
 
         return [{"role": "user", "content": content}]
 
     def extract_answer_cot(self, response: str) -> Optional[str]:
         """Extract answer from COT response format 'Answer: X'."""
-        lines = response.strip().split('\n')
+        lines = response.strip().split("\n")
         lines = [x.strip() for x in lines]
 
         for line in reversed(lines):
-            if line.startswith('Answer:'):
+            if line.startswith("Answer:"):
                 rest = line[7:].strip()
                 from collections import Counter
-                letter_counts = Counter(ch for ch in rest.upper() if ch in ascii_uppercase[:10])
+
+                letter_counts = Counter(
+                    ch for ch in rest.upper() if ch in ascii_uppercase[:10]
+                )
                 if len(letter_counts) == 1:
                     return list(letter_counts.keys())[0]
                 elif letter_counts:
@@ -125,7 +134,9 @@ class MMMUPro(EvalBase):
                             return ch
         return None
 
-    def extract_answer(self, response: str, num_choices: int) -> Tuple[Optional[str], str]:
+    def extract_answer(
+        self, response: str, num_choices: int
+    ) -> Tuple[Optional[str], str]:
         """Extract answer letter from response."""
         variant = getattr(self, "variant", "standard")
 

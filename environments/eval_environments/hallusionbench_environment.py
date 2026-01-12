@@ -36,7 +36,9 @@ class HallusionBench(EvalBase):
                     except Exception:
                         pass
                 if all_data:
-                    print(f"Loaded {len(all_data)} examples from HallusionBench (combined)")
+                    print(
+                        f"Loaded {len(all_data)} examples from HallusionBench (combined)"
+                    )
                     return all_data
                 raise ValueError(f"Could not load HallusionBench dataset: {e}")
             except Exception:
@@ -62,10 +64,12 @@ class HallusionBench(EvalBase):
 
         content = []
         if image_base64:
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{image_base64}"},
-            })
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image_base64}"},
+                }
+            )
         content.append({"type": "text", "text": prompt})
 
         return [{"role": "user", "content": content}]
@@ -79,8 +83,8 @@ class HallusionBench(EvalBase):
         if response_lower.startswith("no"):
             return "No"
 
-        yes_patterns = [r'\byes\b', r'\btrue\b', r'\bcorrect\b']
-        no_patterns = [r'\bno\b', r'\bfalse\b', r'\bincorrect\b']
+        yes_patterns = [r"\byes\b", r"\btrue\b", r"\bcorrect\b"]
+        no_patterns = [r"\bno\b", r"\bfalse\b", r"\bincorrect\b"]
 
         for pattern in yes_patterns:
             if re.search(pattern, response_lower):
