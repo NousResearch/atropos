@@ -41,6 +41,7 @@ Docs: https://docs.primeintellect.ai/tutorials-environments/install
 
 import asyncio
 import logging
+from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
 import verifiers as vf
@@ -75,13 +76,22 @@ class VerifiersEnv(BaseEnv):
         testing=False,
     ):
         super().__init__(config, server_configs, slurm, testing)
-        self.percent_correct_buffer: List[float] = []
+
+        # Metrics buffers for wandb logging
+        self.reward_buffer: List[float] = []
+        self.metrics_buffer: Dict[str, List[float]] = defaultdict(list)
+        self.num_turns_buffer: List[int] = []
+        self.groups_with_identical_scores: int = 0
+        self.groups_total: int = 0
 
         logger.info("Loading verifiers environment: %s", config.vf_env_name)
         self.vf_env = vf.load_environment(config.vf_env_name, **config.env_args)
         self.rubric = self.vf_env.rubric
         self.system_prompt = self.vf_env.system_prompt
-        logger.info("Reward functions: %s", self.rubric._get_reward_func_names())
+
+        # Get reward function names for metrics reporting
+        self.reward_func_names = self.rubric._get_reward_func_names()
+        logger.info("Reward functions: %s", self.reward_func_names)
 
     @classmethod
     def config_init(cls) -> Tuple[VfEnvConfig, List[APIServerConfig]]:
@@ -107,14 +117,57 @@ class VerifiersEnv(BaseEnv):
         return env_config, server_configs
 
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
+        """Enhanced wandb logging with verifiers-specific metrics."""
         if wandb_metrics is None:
             wandb_metrics = {}
 
-        if self.percent_correct_buffer:
-            wandb_metrics["train/percent_correct"] = sum(
-                self.percent_correct_buffer
-            ) / len(self.percent_correct_buffer)
-            self.percent_correct_buffer = []
+        # Log mean reward across all rollouts
+        if self.reward_buffer:
+            wandb_metrics["metrics/mean_reward"] = sum(self.reward_buffer) / len(
+                self.reward_buffer
+            )
+            wandb_metrics["metrics/reward_std"] = (
+                (
+                    sum(
+                        (r - wandb_metrics["metrics/mean_reward"]) ** 2
+                        for r in self.reward_buffer
+                    )
+                    / len(self.reward_buffer)
+                )
+                ** 0.5
+                if len(self.reward_buffer) > 1
+                else 0.0
+            )
+            self.reward_buffer = []
+
+        # Log per-reward-function metrics (e.g., strict_accuracy, format_score)
+        if self.metrics_buffer:
+            for metric_name, values in self.metrics_buffer.items():
+                if values:
+                    avg_metric = sum(values) / len(values)
+                    wandb_metrics[f"metrics/{metric_name}"] = avg_metric
+            self.metrics_buffer = defaultdict(list)
+
+        # Log multi-turn statistics
+        if self.num_turns_buffer:
+            wandb_metrics["metrics/avg_num_turns"] = sum(self.num_turns_buffer) / len(
+                self.num_turns_buffer
+            )
+            wandb_metrics["metrics/max_num_turns"] = max(self.num_turns_buffer)
+            self.num_turns_buffer = []
+
+        # Log group filtering statistics (helpful for debugging)
+        if self.groups_total > 0:
+            wandb_metrics["metrics/groups_with_identical_scores"] = (
+                self.groups_with_identical_scores
+            )
+            wandb_metrics["metrics/groups_total"] = self.groups_total
+            wandb_metrics["metrics/identical_score_rate"] = (
+                self.groups_with_identical_scores / self.groups_total
+            )
+            # Reset counters
+            self.groups_with_identical_scores = 0
+            self.groups_total = 0
 
         await super().wandb_log(wandb_metrics)
 
@@ -220,10 +273,29 @@ class VerifiersEnv(BaseEnv):
             scored_data["tokens"].append(tokenized["tokens"])
             scored_data["masks"].append(tokenized["masks"])
             scored_data["messages"].append(messages)
-            scored_data["scores"].append(state.get("reward", 0.0))
 
-        for score in scored_data["scores"]:
-            self.percent_correct_buffer.append(max(score, 0))
+            reward = state.get("reward", 0.0)
+            scored_data["scores"].append(reward)
+
+            # Capture metrics for wandb logging
+            self.reward_buffer.append(reward)
+            self.num_turns_buffer.append(len(trajectory))
+
+            # Extract per-function metrics from verifiers state
+            state_metrics = state.get("metrics", {})
+            if state_metrics:
+                for metric_name, metric_value in state_metrics.items():
+                    if isinstance(metric_value, (int, float)):
+                        self.metrics_buffer[metric_name].append(float(metric_value))
+
+        # Track group-level identical scores for debugging
+        self.groups_total += 1
+        if len(set(scored_data["scores"])) == 1:
+            self.groups_with_identical_scores += 1
+            logger.debug(
+                "Group has identical scores (%.3f) - will be filtered by base env",
+                scored_data["scores"][0],
+            )
 
         return scored_data, []
 
@@ -243,9 +315,8 @@ class VerifiersEnv(BaseEnv):
         score_sem = asyncio.Semaphore(self.config.group_size)
         model = self.server.servers[0].config.model_name
 
-        async def run_rollout(
-            example_id: int,
-        ) -> Tuple[List[int], List[int], List[float], float]:
+        async def run_rollout(example_id: int) -> Dict[str, Any]:
+            """Run a single rollout and return full state for metrics extraction."""
             async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
                 client = AtroposManagedClient(managed_server=managed, model=model)
 
@@ -262,9 +333,9 @@ class VerifiersEnv(BaseEnv):
                     sampling_args=sampling_args,
                 )
                 await self.rubric.score_rollout(state, score_sem=score_sem)
-                return self._extract_from_state(state)
+                return state
 
-        results = await asyncio.gather(
+        states = await asyncio.gather(
             *[run_rollout(i) for i in range(self.config.group_size)]
         )
 
@@ -274,14 +345,34 @@ class VerifiersEnv(BaseEnv):
         scored_data["scores"] = []
         scored_data["inference_logprobs"] = []
 
-        for tokens, masks, logprobs, score in results:
+        for state in states:
+            tokens, masks, logprobs, reward = self._extract_from_state(state)
             scored_data["tokens"].append(tokens)
             scored_data["masks"].append(masks)
             scored_data["inference_logprobs"].append(logprobs)
-            scored_data["scores"].append(score)
+            scored_data["scores"].append(reward)
 
-        for score in scored_data["scores"]:
-            self.percent_correct_buffer.append(max(score, 0))
+            # Capture metrics for wandb logging
+            self.reward_buffer.append(reward)
+
+            trajectory = state.get("trajectory", [])
+            self.num_turns_buffer.append(len(trajectory))
+
+            # Extract per-function metrics from verifiers state
+            state_metrics = state.get("metrics", {})
+            if state_metrics:
+                for metric_name, metric_value in state_metrics.items():
+                    if isinstance(metric_value, (int, float)):
+                        self.metrics_buffer[metric_name].append(float(metric_value))
+
+        # Track group-level identical scores for debugging
+        self.groups_total += 1
+        if len(set(scored_data["scores"])) == 1:
+            self.groups_with_identical_scores += 1
+            logger.debug(
+                "Group has identical scores (%.3f) - will be filtered by base env",
+                scored_data["scores"][0],
+            )
 
         return scored_data, []
 
