@@ -443,18 +443,25 @@ def _attach_to_vllm_shared_tensors(
     Returns:
         Model with parameters pointing to vLLM's tensors, or None if not possible
     """
+    print(f"[Setup] Reading bridge config from: {bridge_config_path}")
     try:
         with open(bridge_config_path, 'r') as f:
             bridge_config = json.load(f)
+        print(f"[Setup] Bridge config keys: {list(bridge_config.keys())}")
     except Exception as e:
         print(f"[Setup] Could not read bridge config: {e}")
         return None
     
-    if not bridge_config.get("single_copy_enabled", False):
-        print("[Setup] Single-copy mode not available (no IPC handles exported)")
+    single_copy_enabled = bridge_config.get("single_copy_enabled", False)
+    print(f"[Setup] single_copy_enabled in config: {single_copy_enabled}")
+    
+    if not single_copy_enabled:
+        print("[Setup] Single-copy mode not available (single_copy_enabled=False)")
+        print("[Setup] Make sure vLLM was started with VLLM_ENABLE_SHARED_WEIGHTS=1")
         return None
     
     ipc_handles_raw = bridge_config.get("ipc_handles", {})
+    print(f"[Setup] IPC handles count: {len(ipc_handles_raw)}")
     if not ipc_handles_raw:
         print("[Setup] No IPC handles found in bridge config")
         return None
@@ -611,21 +618,48 @@ def load_model_and_tokenizer(
     """
     tokenizer = AutoTokenizer.from_pretrained(config.model_name)
 
-    if config.weight_bridge_mode == "shared_vllm" and bridge is not None:
-        # Try single-copy mode first if enabled
-        if single_copy or os.environ.get("VLLM_SINGLE_COPY", "0") == "1":
-            log_dir = os.environ.get("LOGDIR", ".")
-            bridge_config_path = os.path.join(log_dir, "vllm_bridge_config.json")
-            
-            model = _attach_to_vllm_shared_tensors(config, bridge_config_path)
-            if model is not None:
-                print("[Setup] ✓ Single-copy mode active - using vLLM's tensors directly!")
-                model.train()
-                return model, tokenizer
-            else:
-                print("[Setup] Single-copy failed, falling back to broadcast mode...")
+    # Single-copy mode: attach to vLLM's shared tensors (no bridge needed)
+    if single_copy or os.environ.get("VLLM_SINGLE_COPY", "0") == "1":
+        # Try multiple possible locations for the config file
+        possible_paths = [
+            os.environ.get("LOGDIR", "."),
+            ".",
+            "/tmp/atropos_bridge",
+            os.path.dirname(os.path.abspath(__file__)),
+        ]
         
-        # Fallback: Load separate model, broadcast updates via NCCL
+        bridge_config_path = None
+        for log_dir in possible_paths:
+            candidate = os.path.join(log_dir, "vllm_bridge_config.json")
+            if os.path.exists(candidate):
+                bridge_config_path = candidate
+                print(f"[Setup] Found bridge config at: {candidate}")
+                break
+        
+        if bridge_config_path is None:
+            checked = [os.path.join(p, "vllm_bridge_config.json") for p in possible_paths]
+            raise RuntimeError(
+                f"[Setup] Could not find vllm_bridge_config.json\n"
+                f"Checked: {checked}\n"
+                f"Make sure vLLM is running with VLLM_ENABLE_SHARED_WEIGHTS=1"
+            )
+        
+        model = _attach_to_vllm_shared_tensors(config, bridge_config_path)
+        if model is not None:
+            print("[Setup] ✓ Single-copy mode active - using vLLM's tensors directly!")
+            model.train()
+            return model, tokenizer
+        else:
+            raise RuntimeError(
+                "[Setup] Single-copy mode FAILED to attach to vLLM's tensors.\n"
+                "Check:\n"
+                "  1. vLLM running with VLLM_ENABLE_SHARED_WEIGHTS=1\n"
+                "  2. vllm_bridge_config.json exists with ipc_handles\n"
+                "  3. Trainer is on SAME GPUs as vLLM"
+            )
+
+    elif config.weight_bridge_mode == "shared_vllm" and bridge is not None:
+        # Broadcast mode: Load separate model, broadcast updates via NCCL
         print("[Setup] Loading model for shared vLLM mode (broadcast)...")
         if config.use_shared_memory:
             print("[Setup] NCCL shared memory mode - updates broadcast to vLLM daemon")
