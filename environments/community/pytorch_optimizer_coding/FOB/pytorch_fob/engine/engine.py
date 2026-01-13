@@ -139,7 +139,9 @@ class Engine:
             else:
                 # TODO: option to split into multiple files
                 raise NotImplementedError(
-                    "evaluation.plot.single_file=False is not implemented yet."
+                    "evaluation.plot.single_file=False is not implemented yet. "
+                    "To create multiple subplots in a single file, use 'split_groups' or 'column_split_key' instead. "
+                    "See evaluation/default.yaml for configuration options."
                 )
         return figs
 
