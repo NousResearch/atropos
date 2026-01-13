@@ -34,8 +34,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from datasets import load_dataset
 from eval_helpers import (
     create_system_content,
+    extract_reasoning_from_completion,
     format_reasoning_debug_info,
     get_default_thinking_prompt,
+    get_reasoning_token_usage,
+    validate_thinking_format,
 )
 from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
@@ -229,6 +232,7 @@ class IFEvalEnv(BaseEnv):
         print(f"  Max tokens: {self.config.eval_max_tokens}")
         print(f"  Evaluation split: {self.config.eval_split}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
+        print(f"  Reasoning effort: {self.config.reasoning_effort}")
         if self.config.thinking_mode:
             thinking_prompt = self._get_thinking_prompt()
             if thinking_prompt:
@@ -274,28 +278,45 @@ class IFEvalEnv(BaseEnv):
         self.iter = 0
 
     def _validate_thinking_format(self, response: str) -> Tuple[bool, str]:
-        """Validate thinking format and extract content after </think> tags."""
-        if not self.config.thinking_mode:
-            return True, response
+        """
+        Validate thinking format and extract content after reasoning tags.
 
-        think_open_count = len(self._think_pattern.findall(response))
-        think_close_count = len(self._think_close_pattern.findall(response))
-
-        if think_open_count != 1 or think_close_count != 1:
-            return False, response
-
-        match = self._think_content_pattern.search(response)
-        if match:
-            return True, match.group(1).strip()
-        else:
-            return False, response
+        Supports both <think></think> and <|start_of_scratchpad|><|end_of_scratchpad|> formats.
+        """
+        return validate_thinking_format(response, self.config.thinking_mode)
 
     def _extract_thinking_content(self, response: str) -> Optional[str]:
-        """Extract the content inside <think></think> tags."""
+        """Extract the content inside <think></think> tags (legacy method)."""
         match = self._thinking_extract_pattern.search(response)
         if match:
             return match.group(1).strip()
         return None
+
+    def _extract_reasoning_content(
+        self, completion: Any, model_response: str
+    ) -> Tuple[Optional[str], str]:
+        """
+        Extract reasoning content from completion using multiple methods.
+
+        This handles different reasoning formats from various providers:
+        1. reasoning_content field (OpenAI reasoning models, some providers)
+        2. reasoning_details[].text field (OpenRouter style)
+        3. reasoning field on message
+        4. <think></think> blocks in message content (Hermes style)
+        5. <|start_of_scratchpad|><|end_of_scratchpad|> blocks
+
+        Args:
+            completion: The ChatCompletion response object
+            model_response: The message content string
+
+        Returns:
+            Tuple of (reasoning_content, source) where source indicates
+            where reasoning was found: "reasoning_content", "reasoning_details",
+            "reasoning", "think_block", "scratchpad_block", or "none"
+        """
+        # Use comprehensive extraction from eval_helpers
+        reasoning, source, _ = extract_reasoning_from_completion(completion)
+        return reasoning, source
 
     def _preprocess_response(self, response: str) -> List[str]:
         """
@@ -526,15 +547,22 @@ class IFEvalEnv(BaseEnv):
             if not model_response:
                 return {"result": None, "sample": None}
 
-            # Handle thinking mode - extract content after </think> for evaluation
+            # Handle thinking mode - extract content after reasoning tags for evaluation
             thinking_format_valid, response_for_eval = self._validate_thinking_format(
                 model_response
             )
 
-            # Extract thinking content for logging
-            thinking_content = None
-            if self.config.thinking_mode:
-                thinking_content = self._extract_thinking_content(model_response)
+            # Extract reasoning content using comprehensive method
+            # This handles multiple formats: reasoning_content field, reasoning_details,
+            # reasoning field, <think></think> blocks, and <|start_of_scratchpad|> blocks
+            # Extract reasoning content using comprehensive method
+            # Always extract, regardless of thinking_mode, since API reasoning may be available
+            thinking_content, reasoning_source = self._extract_reasoning_content(
+                completion, model_response
+            )
+            if self.config.full_debug and thinking_content:
+                print(f"  [Reasoning] Found via: {reasoning_source}")
+                print(f"  [Reasoning] Length: {len(thinking_content)} chars")
 
             # Check instructions
             check_result = self._check_instructions(
@@ -571,6 +599,7 @@ class IFEvalEnv(BaseEnv):
                     if thinking_content and len(thinking_content) > 500
                     else thinking_content
                 )
+                sample["reasoning_source"] = reasoning_source
 
             if self.config.full_debug:
                 strict_status = "✓" if check_result["prompt_level_strict"] else "✗"
@@ -599,6 +628,7 @@ class IFEvalEnv(BaseEnv):
         print(f"  Total prompts: {len(self.all_eval_items)}")
         print(f"  Max tokens: {self.config.eval_max_tokens}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
+        print(f"  Reasoning effort: {self.config.reasoning_effort}")
         print(f"{'='*60}\n")
 
         try:
@@ -678,6 +708,15 @@ class IFEvalEnv(BaseEnv):
         if self.config.thinking_mode:
             thinking_utilization = sum(1 for s in samples if s.get("thinking_content"))
 
+        # Reasoning source statistics (tracks where reasoning was extracted from)
+        reasoning_sources = {}
+        if self.config.thinking_mode:
+            for sample in samples:
+                source = sample.get("reasoning_source", "none")
+                if source not in reasoning_sources:
+                    reasoning_sources[source] = 0
+                reasoning_sources[source] += 1
+
         # Build metrics dictionary
         eval_metrics = {
             "eval/prompt_level_strict_acc": prompt_strict_acc,
@@ -723,6 +762,16 @@ class IFEvalEnv(BaseEnv):
         if self.config.thinking_mode:
             print(f"Thinking Format Compliance: {thinking_format_compliance_rate:.4f}")
             print(f"Thinking Utilization: {thinking_utilization}/{total_count}")
+
+        # Print reasoning source breakdown if thinking mode is enabled
+        if self.config.thinking_mode and reasoning_sources:
+            print("\nReasoning Source Breakdown:")
+            for source, count in sorted(
+                reasoning_sources.items(), key=lambda x: -x[1]
+            ):
+                pct = (count / total_count) * 100 if total_count > 0 else 0
+                print(f"  {source}: {count} ({pct:.1f}%)")
+
         print(f"{'='*60}\n")
 
         # Log evaluation results
@@ -736,6 +785,7 @@ class IFEvalEnv(BaseEnv):
                     "temperature": self.config.eval_temperature,
                     "max_tokens": self.config.eval_max_tokens,
                     "thinking_mode": self.config.thinking_mode,
+                    "reasoning_effort": self.config.reasoning_effort,
                 },
             )
         except Exception as e:

@@ -92,6 +92,16 @@ THINK_CONTENT_INSIDE_PATTERN = re.compile(
     r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE
 )
 
+# Pre-compiled regex for scratchpad mode (alternative reasoning format)
+SCRATCHPAD_OPEN_PATTERN = re.compile(r"<\|start_of_scratchpad\|>")
+SCRATCHPAD_CLOSE_PATTERN = re.compile(r"<\|end_of_scratchpad\|>")
+SCRATCHPAD_CONTENT_AFTER_PATTERN = re.compile(
+    r"<\|end_of_scratchpad\|>\s*(.*)", re.DOTALL
+)
+SCRATCHPAD_CONTENT_INSIDE_PATTERN = re.compile(
+    r"<\|start_of_scratchpad\|>(.*?)<\|end_of_scratchpad\|>", re.DOTALL
+)
+
 
 # Common prefixes that models use before stating their answer
 # These will be stripped to help isolate the actual answer
@@ -460,10 +470,11 @@ def validate_thinking_format(
     response: str, thinking_mode: bool = True
 ) -> Tuple[bool, str]:
     """
-    Validate thinking format and extract content after </think> tags.
+    Validate thinking format and extract content after reasoning tags.
 
-    In thinking mode, we expect exactly one pair of <think></think> tags.
-    Returns the content after </think> for answer extraction.
+    In thinking mode, we expect exactly one pair of reasoning tags.
+    Supports both <think></think> and <|start_of_scratchpad|><|end_of_scratchpad|> formats.
+    Returns the content after the closing tag for answer extraction.
 
     Args:
         response: The model's full response
@@ -475,34 +486,52 @@ def validate_thinking_format(
     if not thinking_mode:
         return True, response
 
-    # Check for exactly one pair of think tags
+    # Try <think></think> tags first
     think_open_count = len(THINK_OPEN_PATTERN.findall(response))
     think_close_count = len(THINK_CLOSE_PATTERN.findall(response))
 
-    if think_open_count != 1 or think_close_count != 1:
-        return False, response
+    if think_open_count == 1 and think_close_count == 1:
+        # Extract content after </think> tags for answer extraction
+        match = THINK_CONTENT_AFTER_PATTERN.search(response)
+        if match:
+            return True, match.group(1).strip()
 
-    # Extract content after </think> tags for answer extraction
-    match = THINK_CONTENT_AFTER_PATTERN.search(response)
-    if match:
-        return True, match.group(1).strip()
-    else:
-        return False, response
+    # Try <|start_of_scratchpad|><|end_of_scratchpad|> tags
+    scratchpad_open_count = len(SCRATCHPAD_OPEN_PATTERN.findall(response))
+    scratchpad_close_count = len(SCRATCHPAD_CLOSE_PATTERN.findall(response))
+
+    if scratchpad_open_count == 1 and scratchpad_close_count == 1:
+        # Extract content after <|end_of_scratchpad|> tags for answer extraction
+        match = SCRATCHPAD_CONTENT_AFTER_PATTERN.search(response)
+        if match:
+            return True, match.group(1).strip()
+
+    # No valid reasoning format found
+    return False, response
 
 
 def extract_thinking_content(response: str) -> Optional[str]:
     """
-    Extract the content inside <think></think> tags.
+    Extract the content inside reasoning tags.
+
+    Supports both <think></think> and <|start_of_scratchpad|><|end_of_scratchpad|> formats.
 
     Args:
         response: The model's full response
 
     Returns:
-        Content inside think tags, or None if not found
+        Content inside reasoning tags, or None if not found
     """
+    # Try <think></think> tags first
     match = THINK_CONTENT_INSIDE_PATTERN.search(response)
     if match:
         return match.group(1).strip()
+
+    # Try <|start_of_scratchpad|><|end_of_scratchpad|> tags
+    match = SCRATCHPAD_CONTENT_INSIDE_PATTERN.search(response)
+    if match:
+        return match.group(1).strip()
+
     return None
 
 
@@ -568,17 +597,19 @@ def extract_reasoning_from_response(
     2. reasoning_details[].text field (OpenRouter style for reasoning models)
     3. reasoning field on the message (some providers)
     4. <think></think> blocks in message content (Hermes style)
+    5. <|start_of_scratchpad|><|end_of_scratchpad|> blocks (alternative format)
 
     Args:
         response: The ChatCompletion response object from the API
         content: Optional message content string. If provided, will check for
-                <think> blocks in addition to API fields.
+                reasoning tag blocks in addition to API fields.
 
     Returns:
         Tuple of (reasoning_content, source) where:
         - reasoning_content: The extracted reasoning text, or None if not found
         - source: String indicating where reasoning was found:
-          "reasoning_content", "reasoning_details", "reasoning", "think_block", "none"
+          "reasoning_content", "reasoning_details", "reasoning", "think_block",
+          "scratchpad_block", or "none"
 
     Example:
         completion = await server.chat_completion(messages=messages)
@@ -630,6 +661,12 @@ def extract_reasoning_from_response(
         match = THINK_CONTENT_INSIDE_PATTERN.search(content)
         if match:
             return match.group(1).strip(), "think_block"
+
+    # Try <|start_of_scratchpad|> blocks in content (alternative reasoning format)
+    if content:
+        match = SCRATCHPAD_CONTENT_INSIDE_PATTERN.search(content)
+        if match:
+            return match.group(1).strip(), "scratchpad_block"
 
     return None, "none"
 
@@ -1032,11 +1069,13 @@ def extract_first_boxed_answer(
     Extract the first \\boxed{} answer from a response.
 
     Follows the rule: only accept if there's exactly ONE boxed answer
-    after the </think> tag (if thinking mode). Multiple boxed answers = failure.
+    after the reasoning tags (if thinking mode). Multiple boxed answers = failure.
+
+    Supports both <think></think> and <|start_of_scratchpad|><|end_of_scratchpad|> formats.
 
     Args:
         response: The model's full response
-        after_think: Whether to only look after </think> tags
+        after_think: Whether to only look after reasoning tags
         debug: Whether to print debug information
 
     Returns:
@@ -1044,13 +1083,18 @@ def extract_first_boxed_answer(
     """
     # Get content to search
     if after_think:
-        # Extract content after </think>
+        # Try to extract content after </think> first
         match = THINK_CONTENT_AFTER_PATTERN.search(response)
         if match:
             search_content = match.group(1)
         else:
-            # No think tags, use full response
-            search_content = response
+            # Try <|end_of_scratchpad|> tags
+            match = SCRATCHPAD_CONTENT_AFTER_PATTERN.search(response)
+            if match:
+                search_content = match.group(1)
+            else:
+                # No reasoning tags, use full response
+                search_content = response
     else:
         search_content = response
 
@@ -1306,13 +1350,18 @@ def score_math_answer(
     Returns:
         Tuple of (is_correct or None, method_used, has_multiple_boxed)
     """
-    # Get content to score
+    # Get content to score (check for both think and scratchpad tags)
     if after_think:
         match = THINK_CONTENT_AFTER_PATTERN.search(response)
         if match:
             score_content = match.group(1)
         else:
-            score_content = response
+            # Try scratchpad tags
+            match = SCRATCHPAD_CONTENT_AFTER_PATTERN.search(response)
+            if match:
+                score_content = match.group(1)
+            else:
+                score_content = response
     else:
         score_content = response
 
@@ -1391,13 +1440,18 @@ async def score_math_answer_async(
     """
     import asyncio
 
-    # Get content to score
+    # Get content to score (check for both think and scratchpad tags)
     if after_think:
         match = THINK_CONTENT_AFTER_PATTERN.search(response)
         if match:
             score_content = match.group(1)
         else:
-            score_content = response
+            # Try scratchpad tags
+            match = SCRATCHPAD_CONTENT_AFTER_PATTERN.search(response)
+            if match:
+                score_content = match.group(1)
+            else:
+                score_content = response
     else:
         score_content = response
 
