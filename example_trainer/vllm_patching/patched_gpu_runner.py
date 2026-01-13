@@ -245,32 +245,19 @@ def _create_patched_runner(BaseRunner: type) -> type:
                 if tensor.is_cuda:
                     try:
                         import base64
-                        # Get the storage's IPC handle tuple
                         storage = tensor.untyped_storage()
-                        # _share_cuda_() returns: (handle, storage_size, storage_offset, ...)
                         share_data = storage._share_cuda_()
                         
-                        # Convert handle to bytes - it's a cudaIpcMemHandle_t (64 bytes)
-                        handle = share_data[0]
-                        if isinstance(handle, bytes):
-                            handle_bytes = handle
-                        elif hasattr(handle, '__bytes__'):
-                            handle_bytes = bytes(handle)
-                        else:
-                            # For cudaIpcMemHandle_t object, get raw bytes via memoryview
-                            import ctypes
-                            # cudaIpcMemHandle_t is 64 bytes
-                            handle_bytes = bytes(memoryview(handle).cast('B')[:64])
+                        # DEBUG: Print what we're getting
+                        if param_names and len(param_names) == 1:  # Only first tensor
+                            print(f"[vLLM Patch DEBUG] share_data type: {type(share_data)}", flush=True)
+                            print(f"[vLLM Patch DEBUG] share_data length: {len(share_data)}", flush=True)
+                            for i, item in enumerate(share_data):
+                                print(f"[vLLM Patch DEBUG] share_data[{i}]: type={type(item).__name__}, value={repr(item)[:100]}", flush=True)
                         
-                        ipc_handles[name] = {
-                            "handle_b64": base64.b64encode(handle_bytes).decode('ascii'),
-                            "storage_size": share_data[1],
-                            "storage_offset": tensor.storage_offset(),
-                            "shape": list(tensor.shape),
-                            "stride": list(tensor.stride()),
-                            "dtype": str(tensor.dtype),
-                            "device_index": tensor.device.index,
-                        }
+                        # For now, skip IPC - just debug
+                        # We'll implement proper handling once we see what the data looks like
+                        
                     except Exception as e:
                         print(f"[vLLM Patch] Could not get IPC handle for {name}: {e}", flush=True)
                         import traceback
