@@ -1102,6 +1102,9 @@ def train_shared_vllm(config: TrainingConfig):
     # Load model with bridge attachment
     print("[2/3] Loading model with shared weights...")
     model, tokenizer = load_model_and_tokenizer(config, bridge=bridge)
+
+    # maybe we can actually pick optimizer 
+
     optimizer = AdamW(model.parameters(), lr=config.lr)
     
     # For NCCL mode, build mapping between trainer's and vLLM's param names

@@ -15,7 +15,12 @@ Usage:
     from vllm import AsyncLLM
 """
 
-from .patched_gpu_runner import PatchedGPUModelRunner, apply_patches
+from .patched_gpu_runner import (
+    PatchedGPUModelRunner,
+    apply_patches,
+    get_patched_runner,
+    is_patched,
+)
 from .weight_updater import weight_updater_process
 from .distributed_utils import (
     init_process_group,
@@ -27,6 +32,8 @@ from .distributed_utils import (
 __all__ = [
     "PatchedGPUModelRunner",
     "apply_patches",
+    "get_patched_runner",
+    "is_patched",
     "weight_updater_process",
     "init_process_group",
     "broadcast_object_list",
