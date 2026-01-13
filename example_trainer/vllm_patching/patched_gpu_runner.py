@@ -224,7 +224,7 @@ def _create_patched_runner(BaseRunner: type) -> type:
                 print(f"[vLLM Patch] Note: model.share_memory() not available: {e}")
             
             # Export parameter info to JSON for trainer
-            log_dir = os.environ.get("LOGDIR", "/tmp/atropos_bridge")
+            log_dir = os.environ.get("LOGDIR", ".")
             Path(log_dir).mkdir(parents=True, exist_ok=True)
             json_path = Path(log_dir) / "vllm_bridge_config.json"
             

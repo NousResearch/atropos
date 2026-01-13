@@ -626,7 +626,7 @@ async def init_app(args: Namespace, llm_engine: AsyncLLM | None = None) -> FastA
 
 def _export_state_dict_info(args: Namespace) -> None:
     """Export basic model info to JSON for trainer (backup if patches don't run)."""
-    log_dir = os.environ.get("LOGDIR", "/tmp/atropos_bridge")
+    log_dir = os.environ.get("LOGDIR", ".")
     Path(log_dir).mkdir(parents=True, exist_ok=True)
     json_path = Path(log_dir) / "vllm_bridge_config.json"
     
