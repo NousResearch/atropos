@@ -269,6 +269,22 @@ def _create_patched_runner(BaseRunner: type) -> type:
                 tp_degree = self.parallel_config.tensor_parallel_size
             except Exception as e:
                 print(f"[vLLM Patch] Warning: Could not get model config: {e}")
+
+            import base64
+            
+            # Convert bytes to base64 for JSON serialization
+            def serialize_ipc_handles(handles):
+                result = {}
+                for k, v in handles.items():
+                    if isinstance(v, bytes):
+                        result[k] = {"_bytes_b64_": base64.b64encode(v).decode('ascii')}
+                    elif isinstance(v, dict):
+                        result[k] = serialize_ipc_handles(v)
+                    else:
+                        result[k] = v
+                return result
+            
+            serialized_ipc_handles = serialize_ipc_handles(ipc_handles) if ipc_handles else {}
             
             info = {
                 "model": model_name,
@@ -276,7 +292,7 @@ def _create_patched_runner(BaseRunner: type) -> type:
                 "dp_shard_degree": 1,
                 "param_mappings": param_mappings,
                 "param_names": sorted(param_names),
-                "ipc_handles": ipc_handles,
+                "ipc_handles": serialized_ipc_handles,
                 "shared_weights_enabled": True,
                 "num_params": len(param_names),
                 "single_copy_enabled": len(ipc_handles) > 0,
