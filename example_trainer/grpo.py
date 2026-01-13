@@ -1263,7 +1263,7 @@ def train_shared_vllm(config: TrainingConfig):
     3. optimizer.step() modifies vLLM's weights in-place
     4. vLLM immediately uses updated weights (no restart!)
     """
-    if not BRIDGE_AVAILABLE:
+    if not BRIDGE_AVAILABLE and not config.single_copy:
         raise RuntimeError(
             "vLLM weight bridge not available. "
             "Ensure vllm_weight_bridge.py is in the same directory."
@@ -1275,13 +1275,18 @@ def train_shared_vllm(config: TrainingConfig):
     use_wandb = setup_wandb(config)
 
     print(f"\n{'='*60}")
-    if config.use_shared_memory:
+    if config.single_copy:
+        print("SINGLE-COPY MODE (CUDA IPC)")
+        print(">>> TRUE shared memory - only ONE model copy!")
+        print(">>> Trainer uses vLLM's tensors directly!")
+    elif config.use_shared_memory:
         print("SHARED VLLM MODE (NCCL BROADCAST)")
         print(">>> Weights broadcast to vLLM via NCCL!")
     else:
         print("SHARED VLLM MODE (HTTP notifications)")
     print(f"{'='*60}")
     print(f"Model: {config.model_name}")
+    print(f"Single Copy: {config.single_copy}")
     print(f"Shared Memory: {config.use_shared_memory}")
     print(f"Distributed: rank={config.trainer_rank}/{config.world_size}")
     print(f"Init method: {config.init_method}")
@@ -1289,25 +1294,44 @@ def train_shared_vllm(config: TrainingConfig):
     print(f"Save path: {config.save_path}")
     print(f"{'='*60}\n")
 
-    # Initialize weight bridge
-    print("[1/3] Initializing weight bridge...")
-    bridge = create_bridge_from_training_config(config)
+    # Single-copy mode: Skip bridge, attach directly to vLLM's tensors
+    if config.single_copy:
+        print("[1/3] Single-copy mode - skipping bridge (direct IPC)...")
+        bridge = None
+        
+        # Load model by attaching to vLLM's shared tensors
+        print("[2/3] Attaching to vLLM's shared tensors...")
+        model, tokenizer = load_model_and_tokenizer(
+            config, 
+            bridge=None, 
+            single_copy=True
+        )
+        
+        if model is None:
+            raise RuntimeError(
+                "Single-copy mode failed. Make sure:\n"
+                "1. vLLM is running with VLLM_ENABLE_SHARED_WEIGHTS=1\n"
+                "2. Trainer is on the SAME GPUs as vLLM\n"
+                "3. vllm_bridge_config.json exists with IPC handles"
+            )
+    else:
+        # Initialize weight bridge for NCCL broadcast mode
+        print("[1/3] Initializing weight bridge...")
+        bridge = create_bridge_from_training_config(config)
 
-    # Load model with bridge attachment
-    print("[2/3] Loading model with shared weights...")
-    model, tokenizer = load_model_and_tokenizer(
-        config, 
-        bridge=bridge, 
-        single_copy=config.single_copy
-    )
-
-    # maybe we can actually pick optimizer 
+        # Load model with bridge attachment
+        print("[2/3] Loading model with shared weights...")
+        model, tokenizer = load_model_and_tokenizer(
+            config, 
+            bridge=bridge, 
+            single_copy=False
+        )
+        
+        # For NCCL mode, build mapping between trainer's and vLLM's param names
+        if config.use_shared_memory:
+            bridge.build_param_mapping(model)
 
     optimizer = AdamW(model.parameters(), lr=config.lr)
-    
-    # For NCCL mode, build mapping between trainer's and vLLM's param names
-    if config.use_shared_memory:
-        bridge.build_param_mapping(model)
 
     print(f"[3/3] Starting training for {config.training_steps} steps")
     print("NOTE: vLLM sees weight updates immediately after each step!")
@@ -1369,11 +1393,14 @@ def train_shared_vllm(config: TrainingConfig):
 
         # Sync weights with vLLM
         sync_start = time.time()
-        if config.use_shared_memory:
+        if config.single_copy:
+            # Single-copy mode - weights already updated in-place (same memory!)
+            print(f"  [SINGLE-COPY] Weights updated in-place - step {step+1} (sync: 0ms)")
+        elif config.use_shared_memory and bridge is not None:
             # NCCL broadcast mode - weights sent directly to vLLM daemon
             bridge.broadcast_weights(model)
             print(f"  [SHARED] Weights broadcast via NCCL - step {step+1} (sync: {(time.time()-sync_start)*1000:.1f}ms)")
-        else:
+        elif bridge is not None:
             # HTTP notification mode - just notify
             bridge.notify_update()
             print(f"  [SHARED] Update notification sent - step {step+1}")
@@ -1398,7 +1425,8 @@ def train_shared_vllm(config: TrainingConfig):
             save_checkpoint(model, tokenizer, config.save_path, step + 1)
 
     # === Cleanup ===
-    bridge.cleanup()
+    if bridge is not None:
+        bridge.cleanup()
     save_checkpoint(model, tokenizer, config.save_path, config.training_steps, is_final=True)
     finalize_training(use_wandb, training_start_time, "shared_vllm", config.training_steps, benchmark_stats)
 
