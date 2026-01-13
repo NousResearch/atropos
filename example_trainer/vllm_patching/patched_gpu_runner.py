@@ -230,13 +230,36 @@ def _create_patched_runner(BaseRunner: type) -> type:
             
             param_mappings = {}
             param_names = []
+            ipc_handles = {}
+            
             for name, tensor in state_dict.items():
                 param_mappings[name] = {
                     "vllm_name": name,
                     "shape": list(tensor.shape),
                     "dtype": str(tensor.dtype),
+                    "device": str(tensor.device),
                 }
                 param_names.append(name)
+                
+                # Export CUDA IPC handles for true single-copy mode
+                if tensor.is_cuda:
+                    try:
+                        # Get the storage's IPC handle
+                        storage = tensor.untyped_storage()
+                        ipc_handle = storage._share_cuda_()
+                        ipc_handles[name] = {
+                            "handle": ipc_handle[0].hex() if isinstance(ipc_handle[0], bytes) else str(ipc_handle[0]),
+                            "storage_size": ipc_handle[1],
+                            "storage_offset": tensor.storage_offset(),
+                            "shape": list(tensor.shape),
+                            "stride": list(tensor.stride()),
+                            "dtype": str(tensor.dtype),
+                            "device_index": tensor.device.index,
+                        }
+                    except Exception as e:
+                        print(f"[vLLM Patch] Could not get IPC handle for {name}: {e}", flush=True)
+            
+            print(f"[vLLM Patch] Exported {len(ipc_handles)} IPC handles for single-copy mode", flush=True)
             
             # Get model info
             model_name = "unknown"
@@ -253,8 +276,10 @@ def _create_patched_runner(BaseRunner: type) -> type:
                 "dp_shard_degree": 1,
                 "param_mappings": param_mappings,
                 "param_names": sorted(param_names),
+                "ipc_handles": ipc_handles,
                 "shared_weights_enabled": True,
                 "num_params": len(param_names),
+                "single_copy_enabled": len(ipc_handles) > 0,
             }
             
             try:
