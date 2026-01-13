@@ -651,11 +651,21 @@ The Verifiers Server acts as a bridge between Atropos and the [Verifiers Environ
 To use these environments, you first need to install the Verifiers CLI tool (`prime`) and the specific environment you wish to run:
 
 ```bash
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh && source $HOME/.local/bin/env
+uv venv --python 3.12 --seed && source .venv/bin/activate
+
 # Install the Verifiers management tool
 uv tool install prime
 
 # Install a specific environment (e.g., Alphabet Sort)
 prime env install primeintellect/alphabet-sort
+
+# Install Atropos
+uv pip install -e '.[all]' # uv pip install atropos[all]
+
+# Install trainer requirements
+uv pip install -r example_trainer/requirements.txt
 ```
 
 #### 2. Serving the Environment
@@ -677,6 +687,32 @@ Many Verifiers environments require specific configuration (like dataset splits 
 
 #### 4. Training with GRPO
 The Verifiers bridge is designed to work out-of-the-box with the `grpo_trainer`. Because it uses the Verifiers' native rollout loop, it correctly captures rewards and advantages even in complex, multi-turn tool-use scenarios.
+
+1. Start Rollout Server.
+
+```bash
+run-api
+```
+
+2. Start trainer.
+
+```bash
+python example_trainer/grpo.py
+```
+
+3. Start Environment Worker.
+
+```bash
+uv run environments/verifiers_server.py serve \
+    --env.vf_env_name alphabet-sort \
+    --env.group_size 8 \
+    --openai.base_url http://localhost:9001/v1 \
+    --openai.api_key x \
+    --openai.model_name "Qwen/Qwen2.5-1.5B-Instruct" \
+    --env.use_wandb true \
+    --env.wandb_name "alphabet-sort" \
+    --env.env_args '{"min_turns": 3, "max_turns": 5, "power_per_turn": false}'
+```
 
 #### 5. SFT Data Generation
 If you want to generate high-quality reasoning traces for SFT using a Verifiers environment, use the `atropos-sft-gen` CLI.
