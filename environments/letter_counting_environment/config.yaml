@@ -1,0 +1,72 @@
+# Tinker-Atropos Configuration - Letter Counting Environment
+# This environment uses adaptive difficulty (curriculum learning) with 10 tiers
+# Evaluation uses static dataset from HuggingFace: NousResearch/Letter-Counting-Eval
+
+# Environment configuration
+env:
+  # Base environment config
+  group_size: 8
+  batch_size: 256
+  max_batches_offpolicy: 3
+  tokenizer_name: "Qwen/Qwen3-8B"
+  use_wandb: true
+  rollout_server_url: "http://localhost:8000"
+  wandb_name: "letter-counting-env"
+  ensure_scores_are_not_same: true
+  max_token_length: 8192
+  max_num_workers: 24
+  worker_timeout: 3600  # 1 hour - needed for high difficulty levels
+  total_steps: 5000
+  steps_per_eval: 5
+  inference_weight: 1.0
+  data_path_to_save_groups: null
+  eval_limit_ratio: 0.1
+
+  # Generation configuration
+  generation_temperature: 1.0
+  eval_temperature: 0.6
+  max_generation_tokens: 15360
+
+  # Training filtering (CRITICAL for stable training):
+  #   - Groups with >80% success rate are SKIPPED (too easy, no learning signal)
+  #   - Groups with <20% success rate are SKIPPED (too hard, no learning signal)
+  #   - Groups with all identical scores are SKIPPED (no variance)
+  difficulty_window_size: 150         # Number of recent groups to track (larger = more stable)
+  difficulty_increase_threshold: 0.8  # Increase difficulty if success rate > this (also skip group)
+  difficulty_decrease_threshold: 0.2  # Decrease difficulty if success rate < this (also skip group)
+  min_difficulty_level: 1             # Minimum difficulty (1 = easiest)
+  max_difficulty_level: 10            # Maximum difficulty (10 = 500 chars, 50 letters)
+  starting_difficulty_level: 4        # Start at medium difficulty
+
+  # Logging configuration
+  debug_logging: true
+  suppress_base_env_logs: true
+
+  # Data dumping configuration (for creating offline training datasets)
+  dump_rollouts: false
+  dump_batch_size: 100
+
+# OpenAI-compatible server configuration
+openai:
+  - model_name: "Qwen/Qwen3-8B"
+    base_url: "http://localhost:8001/v1"
+    api_key: "x"
+    weight: 1.0
+    num_requests_for_eval: 256
+
+# Tinker-specific example configuration
+tinker:
+  lora_rank: 32
+  learning_rate: 0.00004
+  max_token_trainer_length: 16864
+  checkpoint_dir: "./temp/"
+  save_checkpoint_interval: 0
+
+  # Wandb configuration for trainer
+  wandb_project: "tinker-letter-counting"
+  wandb_group: null
+  wandb_run_name: "tinker-letter-counting-run"
+
+# Standard Atropos flags
+slurm: false
+testing: false
