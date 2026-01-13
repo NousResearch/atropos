@@ -1,12 +1,12 @@
 """
 Verifiers Training Environment for Atropos
 
-Supports TWO modes:
-- serve: RL training with local inference server (requires ManagedServer for logprobs)
-- process: SFT data generation with ANY API (OpenAI, Claude, local, etc.)
+Unified environment that works for both RL training (serve) and SFT data generation (process).
+Uses vf_env.generate() with standard AsyncOpenAI client and tokenize_for_trainer() for
+token/mask generation. No inference logprobs needed - GRPO computes fresh logprobs during training.
 
 Usage:
-  # RL Training (requires local vLLM/SGLang server)
+  # RL Training (GRPO - no inference logprobs needed)
   python verifiers_server.py serve \
       --env.vf_env_name "primeintellect/alphabet-sort" \
       --openai.base_url http://localhost:9001/v1 \
@@ -27,11 +27,6 @@ Usage:
       --env.data_path_to_save_groups local_sft_data.jsonl \
       --openai.base_url http://localhost:9001/v1
 
-  # Evaluation (uses ManagedServer by default, falls back to direct API in process mode)
-  python verifiers_server.py evaluate \
-      --env.vf_env_name "primeintellect/alphabet-sort" \
-      --openai.base_url http://localhost:9001/v1
-
 To install a Verifiers/Prime environment:
 1. uv tool install prime
 2. prime login
@@ -39,7 +34,6 @@ To install a Verifiers/Prime environment:
 Docs: https://docs.primeintellect.ai/tutorials-environments/install
 """
 
-import asyncio
 import json
 import logging
 from collections import defaultdict
@@ -206,15 +200,12 @@ class VerifiersEnv(BaseEnv):
         return {}
 
     async def collect_trajectories(self, item) -> Tuple[ScoredDataGroup, list]:
-        is_process_mode = getattr(self, "process_mode", False)
-        if is_process_mode:
-            return await self._collect_for_sft(item)
-        return await self._collect_for_rl(item)
+        """Unified trajectory collection using vf_env.generate().
 
-    async def _collect_for_sft(
-        self, item: Dict[str, Any]
-    ) -> Tuple[ScoredDataGroup, list]:
-        """SFT mode: uses vf_env.generate() for parallel generation + scoring."""
+        Works for both RL training (serve) and SFT data generation (process).
+        Uses tokenize_for_trainer() for token/mask generation - no inference
+        logprobs needed since GRPO computes fresh logprobs during training.
+        """
         server_config = self.server.servers[0].config
         client = AsyncOpenAI(
             api_key=server_config.api_key,
@@ -222,7 +213,7 @@ class VerifiersEnv(BaseEnv):
             timeout=server_config.timeout,
         )
 
-        # item already has prompt, answer, example_id, task, info from dataset
+        # Build inputs for group_size rollouts
         inputs = [
             {
                 "prompt": item["prompt"],
@@ -234,6 +225,7 @@ class VerifiersEnv(BaseEnv):
             for _ in range(self.config.group_size)
         ]
 
+        # Use vf_env.generate() - handles batching and scoring internally
         results = await self.vf_env.generate(
             inputs=inputs,
             client=client,
@@ -255,11 +247,13 @@ class VerifiersEnv(BaseEnv):
         scored_data["messages"] = []
 
         for state in results["state"]:
+            # Extract messages from state
             messages = list(state.get("prompt", [])) + list(state.get("completion", []))
             messages = [
                 {**msg, "content": msg.get("content") or ""} for msg in messages
             ]
 
+            # Get finish_reason for proper tokenization
             trajectory = state.get("trajectory", [])
             finish_reason = (
                 trajectory[-1]["response"].choices[0].finish_reason
@@ -267,6 +261,7 @@ class VerifiersEnv(BaseEnv):
                 else "stop"
             )
 
+            # Tokenize with multi-turn support
             tokenized = tokenize_for_trainer(
                 tokenizer=self.tokenizer,
                 chat=messages,
@@ -282,18 +277,17 @@ class VerifiersEnv(BaseEnv):
             reward = state.get("reward", 0.0)
             scored_data["scores"].append(reward)
 
-            # Capture metrics for wandb logging
+            # Metrics logging
             self.reward_buffer.append(reward)
             num_turns = len(trajectory)
             self.num_turns_buffer.append(num_turns)
             logger.debug("Rollout: %d turns, reward=%.3f", num_turns, reward)
 
-            # Extract per-function metrics from verifiers state
+            # Per-function metrics from verifiers state
             state_metrics = state.get("metrics", {})
-            if state_metrics:
-                for metric_name, metric_value in state_metrics.items():
-                    if isinstance(metric_value, (int, float)):
-                        self.metrics_buffer[metric_name].append(float(metric_value))
+            for metric_name, metric_value in state_metrics.items():
+                if isinstance(metric_value, (int, float)):
+                    self.metrics_buffer[metric_name].append(float(metric_value))
 
         # Log group summary
         turns = [len(s.get("trajectory", [])) for s in results["state"]]
@@ -304,7 +298,7 @@ class VerifiersEnv(BaseEnv):
             [f"{s:.3f}" for s in scored_data["scores"]],
         )
 
-        # Track group-level identical scores for debugging
+        # Track identical scores for debugging
         self.groups_total += 1
         if len(set(scored_data["scores"])) == 1:
             self.groups_with_identical_scores += 1
@@ -314,116 +308,6 @@ class VerifiersEnv(BaseEnv):
             )
 
         return scored_data, []
-
-    async def _collect_for_rl(
-        self, item: Dict[str, Any]
-    ) -> Tuple[ScoredDataGroup, list]:
-        """RL mode: uses ManagedServer for logprobs tracking."""
-        from atroposlib.envs.server_handling.atropos_managed_client import (
-            AtroposManagedClient,
-        )
-
-        sampling_args = {
-            "temperature": 1.0,
-            "max_completion_tokens": self.config.max_token_length,
-        }
-        score_sem = asyncio.Semaphore(self.config.group_size)
-        model = self.server.servers[0].config.model_name
-
-        async def run_rollout() -> Dict[str, Any]:
-            """Run a single rollout and return full state for metrics extraction."""
-            async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
-                client = AtroposManagedClient(managed_server=managed, model=model)
-
-                state = await self.vf_env.rollout(
-                    input={
-                        "prompt": item["prompt"],
-                        "answer": item.get("answer", ""),
-                        "example_id": item["example_id"],
-                        "task": item.get("task", self.config.vf_env_name),
-                        "info": item.get("info", {}),
-                    },
-                    client=client,
-                    model=model,
-                    sampling_args=sampling_args,
-                )
-                await self.rubric.score_rollout(state, score_sem=score_sem)
-                return state
-
-        states = await asyncio.gather(
-            *[run_rollout() for _ in range(self.config.group_size)]
-        )
-
-        scored_data = ScoredDataGroup()
-        scored_data["tokens"] = []
-        scored_data["masks"] = []
-        scored_data["scores"] = []
-        scored_data["inference_logprobs"] = []
-
-        for state in states:
-            tokens, masks, logprobs, reward = self._extract_from_state(state)
-            scored_data["tokens"].append(tokens)
-            scored_data["masks"].append(masks)
-            scored_data["inference_logprobs"].append(logprobs)
-            scored_data["scores"].append(reward)
-
-            # Capture metrics for wandb logging
-            self.reward_buffer.append(reward)
-
-            trajectory = state.get("trajectory", [])
-            num_turns = len(trajectory)
-            self.num_turns_buffer.append(num_turns)
-            logger.debug("Rollout: %d turns, reward=%.3f", num_turns, reward)
-
-            # Extract per-function metrics from verifiers state
-            state_metrics = state.get("metrics", {})
-            if state_metrics:
-                for metric_name, metric_value in state_metrics.items():
-                    if isinstance(metric_value, (int, float)):
-                        self.metrics_buffer[metric_name].append(float(metric_value))
-
-        # Log group summary
-        turns = [len(s.get("trajectory", [])) for s in states]
-        logger.info(
-            "Group: %d rollouts, turns=%s, rewards=%s",
-            len(states),
-            turns,
-            [f"{s:.3f}" for s in scored_data["scores"]],
-        )
-
-        # Track group-level identical scores for debugging
-        self.groups_total += 1
-        if len(set(scored_data["scores"])) == 1:
-            self.groups_with_identical_scores += 1
-            logger.debug(
-                "Group has identical scores (%.3f) - will be filtered by base env",
-                scored_data["scores"][0],
-            )
-
-        return scored_data, []
-
-    def _extract_from_state(
-        self, state: Any
-    ) -> Tuple[List[int], List[int], List[float], float]:
-        """Extract tokens/masks/logprobs from rollout state (RL mode only)."""
-        all_tokens: List[int] = []
-        all_masks: List[int] = []
-        all_logprobs: List[float] = []
-
-        for step in state.get("trajectory", []):
-            tokens = step["tokens"]
-            prompt_ids = tokens["prompt_ids"]
-            completion_ids = tokens["completion_ids"]
-            completion_logprobs = tokens["completion_logprobs"]
-
-            all_tokens.extend(prompt_ids)
-            all_tokens.extend(completion_ids)
-            all_masks.extend([-100] * len(prompt_ids))
-            all_masks.extend(completion_ids)
-            all_logprobs.extend([1.0] * len(prompt_ids))
-            all_logprobs.extend(completion_logprobs)
-
-        return all_tokens, all_masks, all_logprobs, state["reward"]
 
 
 if __name__ == "__main__":
