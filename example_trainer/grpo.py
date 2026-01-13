@@ -535,7 +535,7 @@ def _attach_to_vllm_shared_tensors(
             device_index = ipc_info["device_index"]
             
             # Create storage from IPC handle
-            storage = torch.cuda.UntypedStorage._new_shared_cuda(
+            storage = torch.UntypedStorage._new_shared_cuda(
                 device_index,
                 handle_bytes,
                 storage_size,
