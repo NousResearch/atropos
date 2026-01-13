@@ -248,16 +248,27 @@ def _create_patched_runner(BaseRunner: type) -> type:
                         storage = tensor.untyped_storage()
                         share_data = storage._share_cuda_()
                         
-                        # DEBUG: Print what we're getting
-                        if param_names and len(param_names) == 1:  # Only first tensor
-                            print(f"[vLLM Patch DEBUG] share_data type: {type(share_data)}", flush=True)
-                            print(f"[vLLM Patch DEBUG] share_data length: {len(share_data)}", flush=True)
-                            for i, item in enumerate(share_data):
-                                print(f"[vLLM Patch DEBUG] share_data[{i}]: type={type(item).__name__}, value={repr(item)[:100]}", flush=True)
+                        # share_data structure (from PyTorch):
+                        # [0] = device index (int)
+                        # [1] = cudaIpcMemHandle_t (bytes, 64 bytes) <- THE HANDLE
+                        # [2] = storage size (int)
+                        # [3] = storage offset (int)
+                        # [4] = ref counter handle (bytes)
+                        # [5] = ref counter offset (int)
+                        # [6] = event handle (bytes)
+                        # [7] = event sync required (bool)
                         
-                        # For now, skip IPC - just debug
-                        # We'll implement proper handling once we see what the data looks like
+                        handle_bytes = share_data[1]  # The IPC handle is at index 1!
                         
+                        ipc_handles[name] = {
+                            "handle_b64": base64.b64encode(handle_bytes).decode('ascii'),
+                            "device_index": share_data[0],
+                            "storage_size": share_data[2],
+                            "storage_offset": tensor.storage_offset(),
+                            "shape": list(tensor.shape),
+                            "stride": list(tensor.stride()),
+                            "dtype": str(tensor.dtype),
+                        }
                     except Exception as e:
                         print(f"[vLLM Patch] Could not get IPC handle for {name}: {e}", flush=True)
                         import traceback
