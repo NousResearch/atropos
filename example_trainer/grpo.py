@@ -514,39 +514,42 @@ def _attach_to_vllm_shared_tensors(
         
         try:
             # Reconstruct tensor from IPC handle
-            # Handle is base64-encoded in the JSON
-            if "handle_b64" in ipc_info:
-                handle_bytes = base64.b64decode(ipc_info["handle_b64"])
-            elif "handle" in ipc_info:
-                # Legacy format - hex string or bytes
-                handle = ipc_info["handle"]
-                if isinstance(handle, bytes):
-                    handle_bytes = handle
-                elif isinstance(handle, str):
-                    handle_bytes = bytes.fromhex(handle)
-                else:
-                    print(f"[Setup] Unknown handle type for {hf_name}: {type(handle)}")
-                    continue
-            else:
-                print(f"[Setup] No handle found for {hf_name}")
+            # We need all 8 items from the original _share_cuda_() call
+            if "ipc_handle_b64" not in ipc_info:
+                print(f"[Setup] Missing ipc_handle_b64 for {hf_name}")
                 continue
-                
-            storage_size = ipc_info["storage_size"]
-            device_index = ipc_info["device_index"]
             
-            # Create storage from IPC handle
-            storage = torch.UntypedStorage._new_shared_cuda(
+            # Decode all the bytes fields from base64
+            device_index = ipc_info["device_index"]
+            ipc_handle = base64.b64decode(ipc_info["ipc_handle_b64"])
+            storage_size = ipc_info["storage_size"]
+            storage_offset_orig = ipc_info["storage_offset_orig"]
+            ref_counter_handle = base64.b64decode(ipc_info["ref_counter_handle_b64"])
+            ref_counter_offset = ipc_info["ref_counter_offset"]
+            event_handle = base64.b64decode(ipc_info["event_handle_b64"])
+            event_sync_required = ipc_info["event_sync_required"]
+            
+            # Reconstruct the 8-tuple that _new_shared_cuda expects
+            share_tuple = (
                 device_index,
-                handle_bytes,
+                ipc_handle,
                 storage_size,
+                storage_offset_orig,
+                ref_counter_handle,
+                ref_counter_offset,
+                event_handle,
+                event_sync_required,
             )
+            
+            # Create storage from IPC handle (needs all 8 items)
+            storage = torch.UntypedStorage._new_shared_cuda(*share_tuple)
             
             # Reconstruct tensor
             dtype = getattr(torch, ipc_info["dtype"].replace("torch.", ""))
             tensor = torch.tensor([], dtype=dtype, device=f"cuda:{device_index}")
             tensor.set_(
                 storage,
-                storage_offset=ipc_info["storage_offset"],
+                storage_offset=ipc_info["tensor_storage_offset"],
                 size=ipc_info["shape"],
                 stride=ipc_info["stride"],
             )

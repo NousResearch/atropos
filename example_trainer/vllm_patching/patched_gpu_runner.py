@@ -248,23 +248,27 @@ def _create_patched_runner(BaseRunner: type) -> type:
                         storage = tensor.untyped_storage()
                         share_data = storage._share_cuda_()
                         
-                        # share_data structure (from PyTorch):
+                        # share_data is a tuple of 8 items - we need ALL of them:
                         # [0] = device index (int)
-                        # [1] = cudaIpcMemHandle_t (bytes, 64 bytes) <- THE HANDLE
+                        # [1] = cudaIpcMemHandle_t (bytes)
                         # [2] = storage size (int)
-                        # [3] = storage offset (int)
-                        # [4] = ref counter handle (bytes)
+                        # [3] = storage offset in original (int)
+                        # [4] = ref counter handle (bytes - filename)
                         # [5] = ref counter offset (int)
                         # [6] = event handle (bytes)
                         # [7] = event sync required (bool)
                         
-                        handle_bytes = share_data[1]  # The IPC handle is at index 1!
-                        
                         ipc_handles[name] = {
-                            "handle_b64": base64.b64encode(handle_bytes).decode('ascii'),
                             "device_index": share_data[0],
+                            "ipc_handle_b64": base64.b64encode(share_data[1]).decode('ascii'),
                             "storage_size": share_data[2],
-                            "storage_offset": tensor.storage_offset(),
+                            "storage_offset_orig": share_data[3],
+                            "ref_counter_handle_b64": base64.b64encode(share_data[4]).decode('ascii'),
+                            "ref_counter_offset": share_data[5],
+                            "event_handle_b64": base64.b64encode(share_data[6]).decode('ascii'),
+                            "event_sync_required": share_data[7],
+                            # Tensor metadata for reconstruction
+                            "tensor_storage_offset": tensor.storage_offset(),
                             "shape": list(tensor.shape),
                             "stride": list(tensor.stride()),
                             "dtype": str(tensor.dtype),
