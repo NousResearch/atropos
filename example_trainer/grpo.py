@@ -514,14 +514,21 @@ def _attach_to_vllm_shared_tensors(
         
         try:
             # Reconstruct tensor from IPC handle
-            # Handle can be bytes (deserialized from base64) or hex string
-            handle = ipc_info["handle"]
-            if isinstance(handle, bytes):
-                handle_bytes = handle
-            elif isinstance(handle, str):
-                handle_bytes = bytes.fromhex(handle)
+            # Handle is base64-encoded in the JSON
+            if "handle_b64" in ipc_info:
+                handle_bytes = base64.b64decode(ipc_info["handle_b64"])
+            elif "handle" in ipc_info:
+                # Legacy format - hex string or bytes
+                handle = ipc_info["handle"]
+                if isinstance(handle, bytes):
+                    handle_bytes = handle
+                elif isinstance(handle, str):
+                    handle_bytes = bytes.fromhex(handle)
+                else:
+                    print(f"[Setup] Unknown handle type for {hf_name}: {type(handle)}")
+                    continue
             else:
-                print(f"[Setup] Unknown handle type for {hf_name}: {type(handle)}")
+                print(f"[Setup] No handle found for {hf_name}")
                 continue
                 
             storage_size = ipc_info["storage_size"]
