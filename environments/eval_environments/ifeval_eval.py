@@ -765,9 +765,7 @@ class IFEvalEnv(BaseEnv):
         # Print reasoning source breakdown if thinking mode is enabled
         if self.config.thinking_mode and reasoning_sources:
             print("\nReasoning Source Breakdown:")
-            for source, count in sorted(
-                reasoning_sources.items(), key=lambda x: -x[1]
-            ):
+            for source, count in sorted(reasoning_sources.items(), key=lambda x: -x[1]):
                 pct = (count / total_count) * 100 if total_count > 0 else 0
                 print(f"  {source}: {count} ({pct:.1f}%)")
 
