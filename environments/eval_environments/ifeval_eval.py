@@ -37,7 +37,6 @@ from eval_helpers import (
     extract_reasoning_from_completion,
     format_reasoning_debug_info,
     get_default_thinking_prompt,
-    get_reasoning_token_usage,
     validate_thinking_format,
 )
 from pydantic import Field
