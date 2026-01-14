@@ -2,8 +2,7 @@
 Verifiers Training Environment for Atropos
 
 Unified environment that works for both RL training (serve) and SFT data generation (process).
-Uses vf_env.generate() with standard AsyncOpenAI client and tokenize_for_trainer() for
-token/mask generation. No inference logprobs needed - GRPO computes fresh logprobs during training.
+Uses vf_env.generate() with ManagedServer (via adapter) for automatic token and logprob tracking.
 
 Usage:
   # RL Training (GRPO - no inference logprobs needed)
@@ -40,7 +39,6 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
 import verifiers as vf
-from openai import AsyncOpenAI
 
 from atroposlib.envs.base import (
     APIServerConfig,
@@ -48,9 +46,63 @@ from atroposlib.envs.base import (
     BaseEnvConfig,
     ScoredDataGroup,
 )
-from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
+from atroposlib.envs.server_handling.managed_server import ManagedServer
 
 logger = logging.getLogger(__name__)
+
+
+class ManagedServerAdapter:
+    """
+    Adapter that makes ManagedServer look like AsyncOpenAI for verifiers.
+
+    Implements the subset of AsyncOpenAI interface that verifiers uses:
+    - client.chat.completions.create()
+    - client.completions.create()
+    - client.base_url
+    """
+
+    def __init__(self, managed_server: ManagedServer, base_url: str):
+        self._managed = managed_server
+        self.base_url = base_url
+        self.chat = self._ChatNamespace(self._managed)
+        self.completions = self._CompletionsNamespace(self._managed)
+
+    class _ChatNamespace:
+        def __init__(self, managed: ManagedServer):
+            self._managed = managed
+            self.completions = ManagedServerAdapter._ChatCompletionsNamespace(managed)
+
+    class _ChatCompletionsNamespace:
+        def __init__(self, managed: ManagedServer):
+            self._managed = managed
+
+        async def create(self, **kwargs):
+            logger.info(
+                "ManagedServerAdapter.chat.completions.create called with model=%s",
+                kwargs.get("model"),
+            )
+            result = await self._managed.chat_completion(**kwargs)
+            logger.info("ManagedServerAdapter.chat.completions.create completed")
+            return result
+
+    class _CompletionsNamespace:
+        def __init__(self, managed: ManagedServer):
+            self._managed = managed
+
+        async def create(self, **kwargs):
+            return await self._managed.completion(**kwargs)
+
+    async def post(self, path: str, body: dict, cast_to: type):
+        raise NotImplementedError(
+            f"ManagedServerAdapter does not support post() for path '{path}'. "
+            "This is used for vLLM interleaved rollouts. Use standard chat completions."
+        )
+
+    def copy(self, **kwargs):
+        raise NotImplementedError(
+            "ManagedServerAdapter does not support copy(). "
+            "This is used for vLLM tokenization endpoints."
+        )
 
 
 class VfEnvConfig(BaseEnvConfig):
@@ -115,10 +167,11 @@ class VerifiersEnv(BaseEnv):
         )
         server_configs = [
             APIServerConfig(
-                model_name="gpt-4.1-nano",
-                base_url="https://api.openai.com/v1",
+                model_name="Qwen/Qwen2.5-1.5B-Instruct",
+                base_url="http://localhost:9001/v1",
                 api_key="x",
                 num_requests_for_eval=4,
+                server_type="sglang",
             ),
         ]
         return env_config, server_configs
@@ -200,18 +253,20 @@ class VerifiersEnv(BaseEnv):
         return {}
 
     async def collect_trajectories(self, item) -> Tuple[ScoredDataGroup, list]:
-        """Unified trajectory collection using vf_env.generate().
+        """Unified trajectory collection using vf_env.generate() with ManagedServer.
 
         Works for both RL training (serve) and SFT data generation (process).
-        Uses tokenize_for_trainer() for token/mask generation - no inference
-        logprobs needed since GRPO computes fresh logprobs during training.
+        Uses ManagedServer adapter for automatic token and logprob tracking.
         """
-        server_config = self.server.servers[0].config
-        client = AsyncOpenAI(
-            api_key=server_config.api_key,
-            base_url=server_config.base_url,
-            timeout=server_config.timeout,
-        )
+        # Get server config (handle both real servers and test harness)
+        if hasattr(self.server, "servers") and self.server.servers:
+            server_config = self.server.servers[0].config
+        else:
+            # Fallback for testing
+            server_config = APIServerConfig(
+                model_name=self.config.tokenizer_name,
+                base_url="http://localhost:8000/v1",
+            )
 
         # Build inputs for group_size rollouts
         inputs = [
@@ -225,56 +280,70 @@ class VerifiersEnv(BaseEnv):
             for _ in range(self.config.group_size)
         ]
 
-        # Use vf_env.generate() - handles batching and scoring internally
-        results = await self.vf_env.generate(
-            inputs=inputs,
-            client=client,
-            model=server_config.model_name,
-            sampling_args={
-                "temperature": 1.0,
-                "max_completion_tokens": self.config.max_token_length,
-            },
-            max_concurrent=self.config.group_size,
-            max_concurrent_scoring=self.config.group_size,
-            save_results=False,
-            independent_scoring=True,
-        )
+        # Use ManagedServer for automatic token/logprob tracking
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+            # Create adapter that looks like AsyncOpenAI for verifiers
+            adapter = ManagedServerAdapter(
+                managed_server=managed,
+                base_url=server_config.base_url,
+            )
 
-        scored_data = ScoredDataGroup()
-        scored_data["tokens"] = []
-        scored_data["masks"] = []
-        scored_data["scores"] = []
-        scored_data["messages"] = []
+            # Use vf_env.generate() - handles batching and scoring internally
+            results = await self.vf_env.generate(
+                inputs=inputs,
+                client=adapter,
+                model=server_config.model_name,
+                sampling_args={
+                    "temperature": 1.0,
+                    "max_completion_tokens": self.config.max_token_length,
+                },
+                max_concurrent=self.config.group_size,
+                max_concurrent_scoring=self.config.group_size,
+                save_results=False,
+                independent_scoring=True,
+            )
 
-        for state in results["state"]:
+            # Get tracked state from ManagedServer
+            managed_state = managed.get_state()
+            nodes = managed_state["nodes"]
+
+        scored_data: ScoredDataGroup = {
+            "tokens": [],
+            "masks": [],
+            "scores": [],
+            "messages": [],
+            "inference_logprobs": [],
+        }
+
+        # Zip verifiers states with ManagedServer nodes for logprob tracking
+        for i, vf_state in enumerate(results["state"]):
             # Extract messages from state
-            messages = list(state.get("prompt", [])) + list(state.get("completion", []))
+            messages = list(vf_state.get("prompt", [])) + list(
+                vf_state.get("completion", [])
+            )
             messages = [
                 {**msg, "content": msg.get("content") or ""} for msg in messages
             ]
 
-            # Get finish_reason for proper tokenization
-            trajectory = state.get("trajectory", [])
-            finish_reason = (
-                trajectory[-1]["response"].choices[0].finish_reason
-                if trajectory
-                else "stop"
-            )
+            # Get trajectory for metrics
+            trajectory = vf_state.get("trajectory", [])
 
-            # Tokenize with multi-turn support
-            tokenized = tokenize_for_trainer(
-                tokenizer=self.tokenizer,
-                chat=messages,
-                include_messages=True,
-                finish_reason=finish_reason,
-                train_on_all_assistant_turns=True,
-            )
+            # Get tokens, masks, and logprobs from ManagedServer
+            # IMPORTANT: We use ManagedServer's tokens (not re-tokenize) to ensure
+            # alignment with logprobs. ManagedServer tracks tokens and logprobs together.
+            if i >= len(nodes):
+                raise RuntimeError(
+                    f"Node count mismatch: expected at least {i + 1} nodes, got {len(nodes)}. "
+                    "ManagedServer should track all rollouts."
+                )
 
-            scored_data["tokens"].append(tokenized["tokens"])
-            scored_data["masks"].append(tokenized["masks"])
+            node = nodes[i]
+            scored_data["tokens"].append(node.tokens)
+            scored_data["masks"].append(node.masked_tokens)
+            scored_data["inference_logprobs"].append(node.logprobs)
             scored_data["messages"].append(messages)
 
-            reward = state.get("reward", 0.0)
+            reward = vf_state.get("reward", 0.0)
             scored_data["scores"].append(reward)
 
             # Metrics logging
@@ -284,7 +353,7 @@ class VerifiersEnv(BaseEnv):
             logger.debug("Rollout: %d turns, reward=%.3f", num_turns, reward)
 
             # Per-function metrics from verifiers state
-            state_metrics = state.get("metrics", {})
+            state_metrics = vf_state.get("metrics", {})
             for metric_name, metric_value in state_metrics.items():
                 if isinstance(metric_value, (int, float)):
                     self.metrics_buffer[metric_name].append(float(metric_value))
@@ -292,10 +361,11 @@ class VerifiersEnv(BaseEnv):
         # Log group summary
         turns = [len(s.get("trajectory", [])) for s in results["state"]]
         logger.info(
-            "Group: %d rollouts, turns=%s, rewards=%s",
+            "Group: %d rollouts, turns=%s, rewards=%s, nodes=%d",
             len(results["state"]),
             turns,
             [f"{s:.3f}" for s in scored_data["scores"]],
+            len(nodes),
         )
 
         # Track identical scores for debugging

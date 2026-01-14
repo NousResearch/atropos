@@ -169,6 +169,8 @@ class VLLMServer(APIServer):
             prompt_tokens = prompt_tokens[1:]
         if "max_new_tokens" in kwargs:
             kwargs["max_tokens"] = kwargs.pop("max_new_tokens")
+        if "max_completion_tokens" in kwargs:
+            kwargs["max_tokens"] = kwargs.pop("max_completion_tokens")
         if "model" in kwargs:
             kwargs.pop("model")
         # Prepare request for VLLM native API
