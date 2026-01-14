@@ -2,7 +2,6 @@
 
 import json
 
-
 from atroposlib.frontend.jsonl2html import create_html_for_group, generate_html
 
 
