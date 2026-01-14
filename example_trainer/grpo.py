@@ -493,20 +493,21 @@ def _attach_to_vllm_shared_tensors(
             device_indices.add(info["device_index"])
     
     device = f"cuda:{list(device_indices)[0]}" if device_indices else "cuda:0"
+    device_idx = int(device.split(':')[1])
     print(f"[Setup] Target device: {device}", flush=True)
     
     # Initialize CUDA context
-    torch.cuda.set_device(int(device.split(':')[1]))
+    torch.cuda.set_device(device_idx)
     torch.cuda.synchronize()
     print(f"[Setup] ✓ CUDA initialized", flush=True)
     
-    # APPROACH: Load model skeleton on CPU, then swap in IPC tensors
-    # This ensures buffers (like rotary_emb) are properly initialized
-    print(f"[Setup] Loading model structure...", flush=True)
+    # APPROACH: Load model to CPU first (doesn't use GPU memory)
+    # This properly initializes all buffers like rotary_emb.inv_freq
+    print(f"[Setup] Loading model structure to CPU...", flush=True)
     model = AutoModelForCausalLM.from_pretrained(
         config.model_name,
         torch_dtype=torch.bfloat16,
-        device_map=device,  # Load directly to GPU
+        device_map="cpu",  # Load to CPU first - no GPU memory used!
         low_cpu_mem_usage=True,
     )
     
@@ -601,17 +602,16 @@ def _attach_to_vllm_shared_tensors(
     if attached_count == 0:
         print("[Setup] Could not attach any tensors - IPC failed")
         print("[Setup] Model loaded normally (not sharing memory with vLLM)")
-        return model  # Return the normally-loaded model
+        model.to(device)
+        return model
     
-    print(f"[Setup] ✓ Swapped {attached_count} tensors to share vLLM's memory")
+    print(f"[Setup] ✓ Built {attached_count} IPC tensor references")
     
-    # Now swap the model's parameters with the IPC tensors
-    # This makes the model use vLLM's memory directly
+    # Swap model's parameters with IPC tensors (point to vLLM's GPU memory)
     swap_count = 0
     for name, param in model.named_parameters():
         if name in hf_state_dict:
             ipc_tensor = hf_state_dict[name]
-            # Verify shapes match
             if param.shape == ipc_tensor.shape:
                 param.data = ipc_tensor
                 swap_count += 1
@@ -619,6 +619,22 @@ def _attach_to_vllm_shared_tensors(
                 print(f"[Setup] Shape mismatch for {name}: model={param.shape}, ipc={ipc_tensor.shape}")
     
     print(f"[Setup] ✓ {swap_count} parameters now share vLLM's GPU memory!")
+    
+    # Move remaining buffers (like rotary_emb.inv_freq) to GPU
+    # These are small and weren't in the IPC handles
+    buffer_count = 0
+    for name, buffer in model.named_buffers():
+        if buffer.device.type == 'cpu':
+            buffer.data = buffer.to(device)
+            buffer_count += 1
+    
+    if buffer_count > 0:
+        print(f"[Setup] ✓ Moved {buffer_count} buffers to {device}")
+    
+    # Also move any remaining CPU parameters (shouldn't be many)
+    for name, param in model.named_parameters():
+        if param.device.type == 'cpu':
+            param.data = param.to(device)
     
     return model
 
