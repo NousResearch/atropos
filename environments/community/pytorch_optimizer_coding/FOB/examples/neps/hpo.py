@@ -70,7 +70,7 @@ def create_experiment(run: Run, config: dict) -> dict:
 # Define the run pipeline function
 
 
-def create_pipline(base_run: Run):
+def create_pipeline(base_run: Run):
     def run_pipeline(pipeline_directory, previous_pipeline_directory, **config) -> dict:
         # Initialize the first directory to store the event and checkpoints files
         init_dir = get_initial_directory(pipeline_directory)
@@ -183,7 +183,7 @@ if __name__ == "__main__":
 
     # Run NePS with specified parameters
     neps.run(
-        run_pipeline=create_pipline(run),
+        run_pipeline=create_pipeline(run),
         pipeline_space=search_space(run),
         root_directory=run.engine.output_dir,
         max_evaluations_total=args.n_trials,
