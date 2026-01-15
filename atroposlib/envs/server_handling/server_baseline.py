@@ -40,7 +40,6 @@ class ReasoningConfig:
 
     def __post_init__(self):
         """Validate and auto-enable if effort or max_tokens are set."""
-        # Validate effort if provided
         if self.effort is not None and self.effort not in VALID_REASONING_EFFORTS:
             raise ValueError(
                 f"Invalid reasoning_effort: {self.effort}. "
@@ -68,12 +67,12 @@ class ReasoningConfig:
     # Calculated as percentage of 32k base: none=min, minimal=10%, low=20%,
     # medium=50%, high=80%, xhigh=95%
     EFFORT_TO_MAX_TOKENS = {
-        "none": 1024,  # Minimum/disabled
-        "minimal": 3200,  # ~10% of 32k
-        "low": 6400,  # ~20% of 32k
-        "medium": 16000,  # ~50% of 32k
-        "high": 25600,  # ~80% of 32k
-        "xhigh": 30400,  # ~95% of 32k
+        "none": 1024,
+        "minimal": 3200,
+        "low": 6400,
+        "medium": 16000,
+        "high": 25600,
+        "xhigh": 30400,
     }
 
     def build_extra_body(
@@ -102,33 +101,20 @@ class ReasoningConfig:
         is_openai_official = base_url and "api.openai.com" in base_url
 
         if is_openai_official:
-            # OpenAI only accepts reasoning_effort at top level, not nested reasoning object
-            # They also don't support max_tokens for reasoning
+            # OpenAI uses top-level reasoning_effort
             effort = self.effort if self.effort else "medium"
-            # Map our extended effort levels to OpenAI's supported values
-            openai_effort_map = {
-                "none": "low",  # OpenAI doesn't have "none", use low
-                "minimal": "low",  # OpenAI doesn't have "minimal", use low
-                "low": "low",
-                "medium": "medium",
-                "high": "high",
-                "xhigh": "high",  # OpenAI doesn't have "xhigh", use high
-            }
-            return {"reasoning_effort": openai_effort_map.get(effort, "medium")}
+            return {"reasoning_effort": effort}
         else:
             # Standard format for OpenRouter, Nebius, Nous Portal, etc.
             reasoning = {"enabled": True}
 
-            # If use_max_tokens is True, convert effort to max_tokens
             if use_max_tokens and self.effort is not None:
                 reasoning["max_tokens"] = self.EFFORT_TO_MAX_TOKENS.get(
                     self.effort, 8192
                 )
             elif self.effort is not None:
-                # Pass effort string directly (provider may or may not support it)
                 reasoning["effort"] = self.effort
             elif self.max_tokens is not None:
-                # Use explicit max_tokens if provided
                 reasoning["max_tokens"] = self.max_tokens
 
             return {"reasoning": reasoning}
@@ -152,7 +138,6 @@ class ReasoningConfig:
         reasoning_effort = getattr(env_config, "reasoning_effort", None)
         max_reasoning_tokens = getattr(env_config, "max_reasoning_tokens", None)
 
-        # Determine if enabled: explicitly True, or implied by effort/max_tokens
         enabled = (
             thinking_mode
             or reasoning_effort is not None
@@ -325,7 +310,6 @@ class APIServer(ABC):
         if skip_reasoning:
             return kwargs
 
-        # Check if reasoning is configured and active
         if self.reasoning_config is None or not self.reasoning_config.is_reasoning_kwargs_active():
             return kwargs
 
@@ -333,17 +317,14 @@ class APIServer(ABC):
         base_url = getattr(self.config, "base_url", None)
         is_openai_official = base_url and "api.openai.com" in base_url
 
-        # Build the extra_body for reasoning
         reasoning_extra_body = self.reasoning_config.build_extra_body(base_url)
-
         if reasoning_extra_body:
             # Merge with any existing extra_body in kwargs
             existing_extra_body = kwargs.get("extra_body", {}) or {}
             kwargs["extra_body"] = {**existing_extra_body, **reasoning_extra_body}
 
-        # OpenAI reasoning models have specific requirements
+        # OpenAI requires temperature=1.0 and max_completion_tokens (not max_tokens)
         if is_openai_official:
-            # OpenAI reasoning models require temperature=1.0 (or unset)
             kwargs["temperature"] = 1.0
 
             # OpenAI reasoning models use max_completion_tokens instead of max_tokens
@@ -479,9 +460,7 @@ class APIServer(ABC):
         """
         if not self.initialized:
             if self.config.health_check:
-                if (
-                    self.config.base_url is not None
-                ):  # skip health check if using OpenAI API
+                if self.config.base_url is not None:
                     self.check_task = asyncio.create_task(
                         self.check_server_status_task()
                     )
@@ -493,7 +472,6 @@ class APIServer(ABC):
         kwargs["model"] = self.config.model_name
         split = kwargs.pop("split", "train")
 
-        # Inject reasoning config if enabled (can be skipped via skip_reasoning=True)
         kwargs = self._inject_reasoning_kwargs(kwargs)
 
         stat_dict = {}
