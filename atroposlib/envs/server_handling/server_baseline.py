@@ -58,7 +58,7 @@ class ReasoningConfig:
         if self.effort is not None or self.max_tokens is not None:
             self.enabled = True
 
-    def is_active(self) -> bool:
+    def is_reasoning_kwargs_active(self) -> bool:
         """Check if reasoning is active (enabled with any settings)."""
         return self.enabled
 
@@ -95,7 +95,7 @@ class ReasoningConfig:
             OpenRouter only allows ONE of effort or max_tokens, not both.
             When both are specified, effort takes priority (unless use_max_tokens=True).
         """
-        if not self.is_active():
+        if not self.is_reasoning_kwargs_active():
             return None
 
         # Detect if using official OpenAI endpoint
@@ -326,7 +326,7 @@ class APIServer(ABC):
             return kwargs
 
         # Check if reasoning is configured and active
-        if self.reasoning_config is None or not self.reasoning_config.is_active():
+        if self.reasoning_config is None or not self.reasoning_config.is_reasoning_kwargs_active():
             return kwargs
 
         # Get base_url to determine provider type

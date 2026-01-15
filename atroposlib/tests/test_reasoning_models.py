@@ -90,7 +90,7 @@ def test_reasoning_config_default():
     assert not config.enabled
     assert config.effort is None
     assert config.max_tokens is None
-    assert not config.is_active()
+    assert not config.is_reasoning_kwargs_active()
     assert config.build_extra_body() is None
     print("✓ Default ReasoningConfig is inactive")
 
@@ -99,7 +99,7 @@ def test_reasoning_config_enabled_only():
     """Test ReasoningConfig with only enabled=True."""
     config = ReasoningConfig(enabled=True)
     assert config.enabled
-    assert config.is_active()
+    assert config.is_reasoning_kwargs_active()
 
     # Test for non-OpenAI provider
     extra_body = config.build_extra_body("https://openrouter.ai/api/v1")
@@ -116,7 +116,7 @@ def test_reasoning_config_with_effort():
     config = ReasoningConfig(effort="high")
     assert config.enabled  # Should be auto-enabled
     assert config.effort == "high"
-    assert config.is_active()
+    assert config.is_reasoning_kwargs_active()
 
     # Test for non-OpenAI provider
     extra_body = config.build_extra_body("https://openrouter.ai/api/v1")
@@ -133,7 +133,7 @@ def test_reasoning_config_with_max_tokens():
     config = ReasoningConfig(max_tokens=4096)
     assert config.enabled  # Should be auto-enabled
     assert config.max_tokens == 4096
-    assert config.is_active()
+    assert config.is_reasoning_kwargs_active()
 
     # Test for non-OpenAI provider
     extra_body = config.build_extra_body("https://openrouter.ai/api/v1")
@@ -286,7 +286,7 @@ def test_reasoning_config_from_env_config():
     )
     reasoning_config = ReasoningConfig.from_env_config(env_config)
     assert reasoning_config.enabled is False
-    assert not reasoning_config.is_active()
+    assert not reasoning_config.is_reasoning_kwargs_active()
     print("✓ ReasoningConfig.from_env_config with defaults (disabled) works")
 
 
