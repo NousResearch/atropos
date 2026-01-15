@@ -547,8 +547,8 @@ class APIServer(ABC):
         """
         Completion handler, waits for the server to be healthy and then calls the completion wrapper.
 
-        Automatically injects reasoning config if configured. Pass `skip_reasoning=True`
-        to bypass reasoning injection for this specific call.
+        Note: Reasoning config is NOT injected for completions as the completion API
+        does not support reasoning features (only chat completions do).
         """
         if not self.initialized:
             if self.config.health_check:
@@ -566,9 +566,6 @@ class APIServer(ABC):
             self.initialized = True
         kwargs["model"] = self.config.model_name
         split = kwargs.pop("split", "train")
-
-        # Inject reasoning config if enabled (can be skipped via skip_reasoning=True)
-        kwargs = self._inject_reasoning_kwargs(kwargs)
 
         stat_dict = {}
         stat_dict["attempts"] = 0
