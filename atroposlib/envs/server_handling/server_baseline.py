@@ -326,7 +326,10 @@ class APIServer(ABC):
             return kwargs
 
         # Check if reasoning is configured and active
-        if self.reasoning_config is None or not self.reasoning_config.is_reasoning_kwargs_active():
+        if (
+            self.reasoning_config is None
+            or not self.reasoning_config.is_reasoning_kwargs_active()
+        ):
             return kwargs
 
         # Get base_url to determine provider type
