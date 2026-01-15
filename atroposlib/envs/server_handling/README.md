@@ -67,4 +67,3 @@ await server.chat_completion(messages=messages, skip_reasoning=True)
 1. **OpenRouter**: Only accepts ONE of `effort` or `max_tokens`, not both. When both specified, effort takes priority.
 2. **OpenAI**: All effort levels are passed through directly.
 3. **Auto-enable**: Setting `effort` or `max_tokens` automatically enables reasoning mode.
-
