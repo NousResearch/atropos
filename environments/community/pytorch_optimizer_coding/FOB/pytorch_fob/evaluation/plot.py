@@ -175,7 +175,7 @@ def create_matrix_plot(
     colormap_name = config.plotstyle.color_palette
     low_is_better = dataframe["evaluation.plot.test_metric_mode"].iloc[0] == "min"
     if low_is_better:
-        colormap_name += "_r"  # this will "inver" / "flip" the colorbar
+        colormap_name += "_r"  # this will "invert" / "flip" the colorbar
     colormap = sns.color_palette(colormap_name, as_cmap=True)
     metric_legend = pretty_name(metric_name)
 
