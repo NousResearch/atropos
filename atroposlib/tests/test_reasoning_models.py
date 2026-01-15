@@ -164,30 +164,24 @@ def test_reasoning_config_full():
         }
     }
 
-    # Test for OpenAI provider (xhigh maps to high)
+    # Test for OpenAI provider (effort passed through directly)
     extra_body = config.build_extra_body("https://api.openai.com/v1")
-    assert extra_body == {"reasoning_effort": "high"}
+    assert extra_body == {"reasoning_effort": "xhigh"}
     print("✓ ReasoningConfig with full options works correctly")
 
 
 def test_reasoning_config_effort_mapping():
-    """Test that effort levels are correctly mapped for OpenAI."""
-    mappings = {
-        "none": "low",
-        "minimal": "low",
-        "low": "low",
-        "medium": "medium",
-        "high": "high",
-        "xhigh": "high",
-    }
+    """Test that effort levels are passed through directly for OpenAI."""
+    # All effort levels are now passed through 1:1
+    effort_levels = ["none", "minimal", "low", "medium", "high", "xhigh"]
 
-    for our_effort, expected_openai in mappings.items():
-        config = ReasoningConfig(effort=our_effort)
+    for effort in effort_levels:
+        config = ReasoningConfig(effort=effort)
         extra_body = config.build_extra_body("https://api.openai.com/v1")
         assert (
-            extra_body["reasoning_effort"] == expected_openai
-        ), f"Expected {our_effort} to map to {expected_openai}, got {extra_body}"
-    print("✓ Effort level mapping for OpenAI works correctly")
+            extra_body["reasoning_effort"] == effort
+        ), f"Expected {effort} to pass through, got {extra_body}"
+    print("✓ Effort levels pass through correctly for OpenAI")
 
 
 def test_reasoning_config_invalid_effort():
