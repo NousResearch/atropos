@@ -64,16 +64,11 @@ A flexible environment that integrates with the [Verifiers](https://docs.primein
 | `server/server_0_request_time_*` | API latency metrics (avg, std, 99p) |
 | `eval/avg_total_score` | Average score on evaluation dataset |
 
-**W&B Metrics Logged (Evaluation - `verifiers_eval.py`):**
+**Output (Evaluation - `verifiers_eval.py`):**
 
-| Metric | Description |
-|--------|-------------|
-| `verifiers/accuracy` | Proportion of items with score > 0 |
-| `verifiers/avg_score` | Average weighted score across all items |
-| `verifiers/total_evaluated` | Number of successfully evaluated items |
-| `verifiers/total_correct` | Number of items with score > 0 |
-| `verifiers/reward_func_N_avg` | Per-reward function average score |
-| `verifiers/reward_func_N_correct` | Per-reward function correct count |
+Uses `evaluate_log()` from `atroposlib.envs.eval` to output:
+- Console: Metrics table with accuracy, avg_score, time, and per-reward function breakdown
+- File: `metrics.json` and `samples.jsonl` (when `--eval-dir` is specified)
 
 **Configuration Options (`VfEnvConfig` for `verifiers_server.py`):**
 
@@ -82,18 +77,19 @@ A flexible environment that integrates with the [Verifiers](https://docs.primein
 | `vf_env_name` | str | `""` | Prime environment identifier (e.g., `"will/wordle"`, `"primeintellect/gsm8k"`) |
 | `env_args` | Dict | `{}` | Additional arguments passed to `vf.load_environment()`. Read environment specific documentation to get these args. |
 
-**Configuration Options (`VerifiersEvaluationConfig` for `verifiers_eval.py`):**
+**CLI Options (`verifiers_eval.py`):**
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `vf_env_name` | str | `""` | Prime environment identifier |
-| `env_args` | dict | `{}` | Additional arguments for verifiers environment |
-| `temperature` | float | `0.0` | Temperature for generation (0.0 for deterministic) |
-| `max_retries` | int | `3` | Maximum retries for failed API calls |
-| `retry_delay` | float | `1.0` | Delay between retries in seconds |
-| `min_response_length` | int | `1` | Minimum response length to consider valid |
-| `full_debug` | bool | `False` | Enable verbose per-item debug output |
-| `max_eval_items` | int | `-1` | Maximum number of items to evaluate (-1 for all) |
+| `--server-url` | str | `http://localhost:8000/v1` | URL of the inference server |
+| `--model-name` | str | (required) | Model name to evaluate |
+| `--api-key` | str | `$OPENAI_API_KEY` | API key (defaults to env var) |
+| `--vf-env-name` | str | `primeintellect/gsm8k` | Prime environment identifier |
+| `--temperature` | float | `0.0` | Temperature for generation |
+| `--max-tokens` | int | `2048` | Maximum tokens per completion |
+| `--max-eval-items` | int | `-1` | Maximum items to evaluate (-1 for all) |
+| `--max-concurrent` | int | `64` | Maximum concurrent requests |
+| `--eval-dir` | str | `None` | Directory to save evaluation results |
 
 **Usage Examples:**
 
@@ -124,31 +120,32 @@ python verifiers_server.py evaluate \
     --env.vf_env_name "will/wordle" \
     --openai.base_url http://localhost:9001/v1
 
-# Standalone Evaluation with detailed metrics (verifiers_eval.py)
-python eval_environments/verifiers_eval.py evaluate \
-    --env.vf_env_name "primeintellect/gsm8k" \
-    --openai.model_name gpt-4o \
-    --openai.api_key $OPENAI_API_KEY
+# Standalone Evaluation with OpenAI (verifiers_eval.py)
+python eval_environments/verifiers_eval.py \
+    --server-url https://api.openai.com/v1 \
+    --model-name gpt-4o \
+    --vf-env-name primeintellect/gsm8k
 
 # Quick test run with limited items
-python eval_environments/verifiers_eval.py evaluate \
-    --env.vf_env_name "primeintellect/gsm8k" \
-    --env.max_eval_items 10 \
-    --openai.model_name gpt-4o \
-    --openai.api_key $OPENAI_API_KEY
+python eval_environments/verifiers_eval.py \
+    --server-url https://api.openai.com/v1 \
+    --model-name gpt-4o-mini \
+    --vf-env-name primeintellect/alphabet-sort \
+    --max-eval-items 10
 
-# Evaluation with debug output
-python eval_environments/verifiers_eval.py evaluate \
-    --env.vf_env_name "primeintellect/gsm8k" \
-    --env.full_debug true \
-    --openai.base_url http://localhost:9001/v1
+# Evaluation with local server and results saved
+python eval_environments/verifiers_eval.py \
+    --server-url http://localhost:9001/v1 \
+    --model-name Qwen/Qwen2.5-7B-Instruct \
+    --vf-env-name primeintellect/gsm8k \
+    --eval-dir ./eval_results
 ```
 
 **Key Implementation Details:**
 
 - **RL Training Mode (`serve`)**: Uses `ManagedServer` for proper token/logprob alignment required by policy gradient methods (GRPO, PPO, REINFORCE). Returns `ScoredDataGroup` with `tokens`, `masks`, `scores`, and `inference_logprobs`.
 - **SFT Datagen Mode (`process`)**: Uses `tokenize_for_trainer` to tokenize API responses with your target model's tokenizer (e.g., GPT-4o responses tokenized for Qwen/Llama). Does NOT require logprobs.
-- **Evaluation (`evaluate`)**: Runs on the environment's eval dataset with greedy decoding (temperature=0). The standalone `verifiers_eval.py` provides more detailed metrics and retry logic for production evaluation.
+- **Evaluation (`verifiers_eval.py`)**: Standalone evaluation script using `EvalBase` pattern. Uses verifiers' native batch evaluation for efficiency and outputs results via `evaluate_log()`. Works with any OpenAI-compatible API.
 
 **Prime Environment Installation:**
 ```bash
