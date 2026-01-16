@@ -12,6 +12,7 @@ Includes:
 - Math answer verification (using math_verify library)
 - System prompt creation
 - Results saving utilities
+- Reasoning content extraction from various API response formats
 """
 
 import json
@@ -19,7 +20,50 @@ import os
 import re
 from concurrent.futures import ProcessPoolExecutor
 from string import ascii_uppercase
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+# =============================================================================
+# REASONING/THINKING PROMPTS
+# =============================================================================
+# Standard prompts for triggering reasoning mode in various models.
+# These are NOT automatically injected - use explicitly when desired.
+
+HERMES_REASONING_PROMPT = (
+    "You are a deep thinking AI, you may use extremely long chains of thought to deeply "
+    "consider the problem and deliberate with yourself via systematic reasoning processes "
+    "to help come to a correct solution prior to answering. You should enclose your "
+    "thoughts and internal monologue inside <think> </think> tags, and then provide your "
+    "solution or response to the problem."
+)
+"""
+Standard reasoning prompt for Hermes models.
+
+This prompt triggers the model to use extended chain-of-thought reasoning
+with explicit <think></think> tags. Use this when you want visible reasoning
+in the response content.
+
+Example usage:
+    from eval_helpers import HERMES_REASONING_PROMPT
+
+    messages = [
+        {"role": "system", "content": HERMES_REASONING_PROMPT},
+        {"role": "user", "content": question},
+    ]
+"""
+
+HERMES_REASONING_PROMPT_WITH_ANSWER = (
+    "You are a deep thinking AI, you may use extremely long chains of thought to deeply "
+    "consider the problem and deliberate with yourself via systematic reasoning processes "
+    "to help come to a correct solution prior to answering. You should enclose your "
+    "thoughts and internal monologue inside <think> </think> tags, and then provide your "
+    "solution or response to the problem. After your thinking, provide your final answer "
+    "inside <answer></answer> tags."
+)
+"""
+Standard reasoning prompt for Hermes models with explicit answer tag instruction.
+
+Use this when you want the model to clearly separate reasoning from the final answer.
+"""
 
 # Try to import math_verify libraries (optional dependency for math evals)
 try:
@@ -46,6 +90,16 @@ THINK_CLOSE_PATTERN = re.compile(r"</think>", re.IGNORECASE)
 THINK_CONTENT_AFTER_PATTERN = re.compile(r"</think>\s*(.*)", re.DOTALL | re.IGNORECASE)
 THINK_CONTENT_INSIDE_PATTERN = re.compile(
     r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE
+)
+
+# Pre-compiled regex for scratchpad mode (alternative reasoning format)
+SCRATCHPAD_OPEN_PATTERN = re.compile(r"<\|start_of_scratchpad\|>")
+SCRATCHPAD_CLOSE_PATTERN = re.compile(r"<\|end_of_scratchpad\|>")
+SCRATCHPAD_CONTENT_AFTER_PATTERN = re.compile(
+    r"<\|end_of_scratchpad\|>\s*(.*)", re.DOTALL
+)
+SCRATCHPAD_CONTENT_INSIDE_PATTERN = re.compile(
+    r"<\|start_of_scratchpad\|>(.*?)<\|end_of_scratchpad\|>", re.DOTALL
 )
 
 
@@ -416,10 +470,11 @@ def validate_thinking_format(
     response: str, thinking_mode: bool = True
 ) -> Tuple[bool, str]:
     """
-    Validate thinking format and extract content after </think> tags.
+    Validate thinking format and extract content after reasoning tags.
 
-    In thinking mode, we expect exactly one pair of <think></think> tags.
-    Returns the content after </think> for answer extraction.
+    In thinking mode, we expect exactly one pair of reasoning tags.
+    Supports both <think></think> and <|start_of_scratchpad|><|end_of_scratchpad|> formats.
+    Returns the content after the closing tag for answer extraction.
 
     Args:
         response: The model's full response
@@ -431,56 +486,393 @@ def validate_thinking_format(
     if not thinking_mode:
         return True, response
 
-    # Check for exactly one pair of think tags
+    # Try <think></think> tags first
     think_open_count = len(THINK_OPEN_PATTERN.findall(response))
     think_close_count = len(THINK_CLOSE_PATTERN.findall(response))
 
-    if think_open_count != 1 or think_close_count != 1:
-        return False, response
+    if think_open_count == 1 and think_close_count == 1:
+        # Extract content after </think> tags for answer extraction
+        match = THINK_CONTENT_AFTER_PATTERN.search(response)
+        if match:
+            return True, match.group(1).strip()
 
-    # Extract content after </think> tags for answer extraction
-    match = THINK_CONTENT_AFTER_PATTERN.search(response)
-    if match:
-        return True, match.group(1).strip()
-    else:
-        return False, response
+    # Try <|start_of_scratchpad|><|end_of_scratchpad|> tags
+    scratchpad_open_count = len(SCRATCHPAD_OPEN_PATTERN.findall(response))
+    scratchpad_close_count = len(SCRATCHPAD_CLOSE_PATTERN.findall(response))
+
+    if scratchpad_open_count == 1 and scratchpad_close_count == 1:
+        # Extract content after <|end_of_scratchpad|> tags for answer extraction
+        match = SCRATCHPAD_CONTENT_AFTER_PATTERN.search(response)
+        if match:
+            return True, match.group(1).strip()
+
+    # No valid reasoning format found
+    return False, response
 
 
 def extract_thinking_content(response: str) -> Optional[str]:
     """
-    Extract the content inside <think></think> tags.
+    Extract the content inside reasoning tags.
+
+    Supports both <think></think> and <|start_of_scratchpad|><|end_of_scratchpad|> formats.
 
     Args:
         response: The model's full response
 
     Returns:
-        Content inside think tags, or None if not found
+        Content inside reasoning tags, or None if not found
     """
+    # Try <think></think> tags first
     match = THINK_CONTENT_INSIDE_PATTERN.search(response)
     if match:
         return match.group(1).strip()
+
+    # Try <|start_of_scratchpad|><|end_of_scratchpad|> tags
+    match = SCRATCHPAD_CONTENT_INSIDE_PATTERN.search(response)
+    if match:
+        return match.group(1).strip()
+
     return None
 
 
-def get_default_thinking_prompt(custom_prompt: Optional[str] = None) -> str:
+def get_default_thinking_prompt(custom_prompt: Optional[str] = None) -> Optional[str]:
     """
     Get the thinking system prompt.
 
+    By default, returns None (no prompt injection). Pass a custom prompt or use
+    HERMES_REASONING_PROMPT explicitly if you want reasoning prompt injection.
+
     Args:
-        custom_prompt: Optional custom thinking prompt to use instead of default
+        custom_prompt: Optional custom thinking prompt to use. If None, returns None.
+                      Use HERMES_REASONING_PROMPT for the standard Hermes prompt.
 
     Returns:
-        The thinking prompt string
-    """
-    if custom_prompt:
-        return custom_prompt
+        The thinking prompt string, or None if no prompt specified.
 
-    return (
-        "You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the "
-        "problem and deliberate with yourself via systematic reasoning processes to help come to a correct "
-        "solution prior to answering. You should enclose your thoughts and internal monologue inside <think> "
-        "</think> tags, and then provide your solution or response to the problem."
-    )
+    Example:
+        # No prompt injection (default):
+        prompt = get_default_thinking_prompt()  # Returns None
+
+        # Use Hermes reasoning prompt:
+        from eval_helpers import HERMES_REASONING_PROMPT
+        prompt = get_default_thinking_prompt(HERMES_REASONING_PROMPT)
+    """
+    return custom_prompt  # None means no prompt injection
+
+
+def get_thinking_prompt_or_hermes(custom_prompt: Optional[str] = None) -> str:
+    """
+    Get thinking prompt, defaulting to HERMES_REASONING_PROMPT if none provided.
+
+    Use this when you want to ensure a thinking prompt is always used.
+
+    Args:
+        custom_prompt: Optional custom thinking prompt. If None, uses HERMES_REASONING_PROMPT.
+
+    Returns:
+        The thinking prompt string (never None).
+    """
+    return custom_prompt if custom_prompt else HERMES_REASONING_PROMPT
+
+
+# =============================================================================
+# REASONING CONTENT EXTRACTION
+# =============================================================================
+# Functions for extracting reasoning content from various API response formats.
+# Different providers return reasoning in different ways:
+# - OpenRouter/Nebius: reasoning_details[].text or reasoning_content field
+# - Some providers: reasoning field in message
+# - Hermes/others: <think></think> blocks in message content
+
+
+def extract_reasoning_from_response(
+    response: Any,
+    content: Optional[str] = None,
+) -> Tuple[Optional[str], str]:
+    """
+    Extract reasoning content from various API response formats.
+
+    This function handles multiple reasoning formats:
+    1. reasoning_content field on the message (some providers)
+    2. reasoning_details[].text field (OpenRouter style for reasoning models)
+    3. reasoning field on the message (some providers)
+    4. <think></think> blocks in message content (Hermes style)
+    5. <|start_of_scratchpad|><|end_of_scratchpad|> blocks (alternative format)
+
+    Args:
+        response: The ChatCompletion response object from the API
+        content: Optional message content string. If provided, will check for
+                reasoning tag blocks in addition to API fields.
+
+    Returns:
+        Tuple of (reasoning_content, source) where:
+        - reasoning_content: The extracted reasoning text, or None if not found
+        - source: String indicating where reasoning was found:
+          "reasoning_content", "reasoning_details", "reasoning", "think_block",
+          "scratchpad_block", or "none"
+
+    Example:
+        completion = await server.chat_completion(messages=messages)
+        message = completion.choices[0].message
+        reasoning, source = extract_reasoning_from_response(
+            completion.choices[0],
+            content=message.content
+        )
+        if reasoning:
+            print(f"Found reasoning via {source}: {len(reasoning)} chars")
+    """
+    # Try reasoning_content field (some providers like certain OpenAI-compatible APIs)
+    if hasattr(response, "reasoning_content") and response.reasoning_content:
+        return response.reasoning_content, "reasoning_content"
+
+    # Try message.reasoning_content if response is a Choice
+    if hasattr(response, "message"):
+        message = response.message
+        if hasattr(message, "reasoning_content") and message.reasoning_content:
+            return message.reasoning_content, "reasoning_content"
+        if hasattr(message, "reasoning") and message.reasoning:
+            return message.reasoning, "reasoning"
+
+    # Try reasoning_details field (OpenRouter style)
+    if hasattr(response, "reasoning_details") and response.reasoning_details:
+        for detail in response.reasoning_details:
+            if hasattr(detail, "text") and detail.text:
+                return detail.text, "reasoning_details"
+            # Some formats use 'content' instead of 'text'
+            if isinstance(detail, dict) and detail.get("text"):
+                return detail["text"], "reasoning_details"
+
+    # Try message.reasoning_details if response is a Choice
+    if hasattr(response, "message"):
+        message = response.message
+        if hasattr(message, "reasoning_details") and message.reasoning_details:
+            for detail in message.reasoning_details:
+                if hasattr(detail, "text") and detail.text:
+                    return detail.text, "reasoning_details"
+                if isinstance(detail, dict) and detail.get("text"):
+                    return detail["text"], "reasoning_details"
+
+    # Try reasoning field directly
+    if hasattr(response, "reasoning") and response.reasoning:
+        return response.reasoning, "reasoning"
+
+    # Try <think> blocks in content (Hermes style)
+    if content:
+        match = THINK_CONTENT_INSIDE_PATTERN.search(content)
+        if match:
+            return match.group(1).strip(), "think_block"
+
+    # Try <|start_of_scratchpad|> blocks in content (alternative reasoning format)
+    if content:
+        match = SCRATCHPAD_CONTENT_INSIDE_PATTERN.search(content)
+        if match:
+            return match.group(1).strip(), "scratchpad_block"
+
+    return None, "none"
+
+
+def extract_reasoning_from_completion(
+    completion: Any,
+    choice_idx: int = 0,
+) -> Tuple[Optional[str], str, Optional[str]]:
+    """
+    Extract reasoning from a ChatCompletion object.
+
+    Convenience wrapper around extract_reasoning_from_response that handles
+    the common case of extracting from a ChatCompletion.
+
+    Args:
+        completion: The ChatCompletion response object
+        choice_idx: Index of the choice to extract from (default 0)
+
+    Returns:
+        Tuple of (reasoning_content, source, message_content) where:
+        - reasoning_content: The extracted reasoning text, or None
+        - source: Where reasoning was found (see extract_reasoning_from_response)
+        - message_content: The message content (for convenience)
+
+    Example:
+        completion = await server.chat_completion(messages=messages)
+        reasoning, source, content = extract_reasoning_from_completion(completion)
+    """
+    if not completion or not completion.choices:
+        return None, "none", None
+
+    if choice_idx >= len(completion.choices):
+        return None, "none", None
+
+    choice = completion.choices[choice_idx]
+    content = None
+
+    if hasattr(choice, "message") and hasattr(choice.message, "content"):
+        content = choice.message.content
+
+    reasoning, source = extract_reasoning_from_response(choice, content)
+    return reasoning, source, content
+
+
+def get_reasoning_token_usage(completion: Any) -> Dict[str, Any]:
+    """
+    Extract reasoning token usage information from a ChatCompletion.
+
+    This extracts token counts from the usage field, including reasoning-specific
+    metrics when available (e.g., reasoning_tokens from OpenRouter/OpenAI).
+
+    Works with all known providers:
+    - OpenAI: usage.completion_tokens_details.reasoning_tokens
+    - OpenRouter (Claude, Hermes, DeepSeek, etc.): Same location + provider/cost fields
+
+    Args:
+        completion: The ChatCompletion response object
+
+    Returns:
+        Dict with token usage info:
+        - model: Model name used
+        - completion_tokens: Total completion tokens
+        - prompt_tokens: Input tokens
+        - total_tokens: Total tokens used
+        - reasoning_tokens: Reasoning/thinking tokens (if available)
+        - cached_tokens: Cached prompt tokens (if available)
+        - cost: API cost (if available, OpenRouter)
+        - provider: Provider name (if available, OpenRouter)
+        - has_reasoning_content: Whether message contains reasoning field
+
+    Example:
+        completion = await server.chat_completion(messages=messages)
+        usage = get_reasoning_token_usage(completion)
+        if config.full_debug:
+            print(f"  Reasoning tokens: {usage.get('reasoning_tokens', 'N/A')}")
+    """
+    result = {
+        "model": None,
+        "completion_tokens": None,
+        "prompt_tokens": None,
+        "total_tokens": None,
+        "reasoning_tokens": None,
+        "cached_tokens": None,
+        "cost": None,
+        "provider": None,
+        "has_reasoning_content": False,
+    }
+
+    if not completion:
+        return result
+
+    # Extract model name
+    if hasattr(completion, "model"):
+        result["model"] = completion.model
+
+    # Extract provider (OpenRouter includes this)
+    if hasattr(completion, "provider"):
+        result["provider"] = completion.provider
+
+    # Check if message has reasoning content
+    if hasattr(completion, "choices") and completion.choices:
+        msg = (
+            completion.choices[0].message
+            if hasattr(completion.choices[0], "message")
+            else None
+        )
+        if msg:
+            # Check for reasoning field (OpenRouter normalized field)
+            if hasattr(msg, "reasoning") and msg.reasoning:
+                result["has_reasoning_content"] = True
+            # Check for reasoning_details (OpenRouter)
+            elif hasattr(msg, "reasoning_details") and msg.reasoning_details:
+                result["has_reasoning_content"] = True
+
+    # Extract usage info
+    if not hasattr(completion, "usage") or not completion.usage:
+        return result
+
+    usage = completion.usage
+
+    result["completion_tokens"] = getattr(usage, "completion_tokens", None)
+    result["prompt_tokens"] = getattr(usage, "prompt_tokens", None)
+    result["total_tokens"] = getattr(usage, "total_tokens", None)
+
+    # Extract cost (OpenRouter includes this)
+    if hasattr(usage, "cost"):
+        result["cost"] = usage.cost
+
+    # Extract reasoning tokens from completion_tokens_details
+    # This works for: OpenAI, OpenRouter (Claude, Hermes, DeepSeek, etc.)
+    if hasattr(usage, "completion_tokens_details") and usage.completion_tokens_details:
+        details = usage.completion_tokens_details
+        if hasattr(details, "reasoning_tokens"):
+            result["reasoning_tokens"] = details.reasoning_tokens
+
+    # Extract cached tokens from prompt_tokens_details (OpenRouter/OpenAI)
+    if hasattr(usage, "prompt_tokens_details") and usage.prompt_tokens_details:
+        details = usage.prompt_tokens_details
+        if hasattr(details, "cached_tokens"):
+            result["cached_tokens"] = details.cached_tokens
+
+    return result
+
+
+def format_reasoning_debug_info(
+    completion: Any, reasoning_content: Optional[str] = None
+) -> str:
+    """
+    Format reasoning debug information for logging.
+
+    Use this in evals when full_debug is enabled to show reasoning token usage.
+
+    Args:
+        completion: The ChatCompletion response object
+        reasoning_content: Optional pre-extracted reasoning content
+
+    Returns:
+        Formatted string with reasoning debug info
+
+    Example:
+        if self.config.full_debug:
+            print(format_reasoning_debug_info(completion))
+    """
+    usage = get_reasoning_token_usage(completion)
+
+    lines = ["  [Reasoning/Token Debug Info]"]
+
+    # Model and provider info
+    if usage["model"]:
+        lines.append(f"    Model: {usage['model']}")
+    if usage["provider"]:
+        lines.append(f"    Provider: {usage['provider']}")
+
+    # Token counts
+    if usage["prompt_tokens"] is not None:
+        prompt_info = f"    Prompt tokens: {usage['prompt_tokens']}"
+        if usage["cached_tokens"]:
+            prompt_info += f" (cached: {usage['cached_tokens']})"
+        lines.append(prompt_info)
+
+    if usage["completion_tokens"] is not None:
+        lines.append(f"    Completion tokens: {usage['completion_tokens']}")
+
+    # Reasoning-specific info
+    if usage["reasoning_tokens"] is not None:
+        lines.append(f"    Reasoning tokens: {usage['reasoning_tokens']}")
+        if usage["completion_tokens"] and usage["completion_tokens"] > 0:
+            pct = (usage["reasoning_tokens"] / usage["completion_tokens"]) * 100
+            lines.append(f"    Reasoning %: {pct:.1f}%")
+
+    if usage["has_reasoning_content"]:
+        lines.append("    Has reasoning content: Yes")
+
+    # Cost info
+    if usage["cost"] is not None:
+        lines.append(f"    Cost: ${usage['cost']:.6f}")
+
+    # Total
+    if usage["total_tokens"] is not None:
+        lines.append(f"    Total tokens: {usage['total_tokens']}")
+
+    # Reasoning content length if provided
+    if reasoning_content:
+        lines.append(f"    Reasoning content length: {len(reasoning_content)} chars")
+
+    return "\n".join(lines)
 
 
 # Fallback regex patterns for MCQA when answer tags don't work
@@ -677,11 +1069,13 @@ def extract_first_boxed_answer(
     Extract the first \\boxed{} answer from a response.
 
     Follows the rule: only accept if there's exactly ONE boxed answer
-    after the </think> tag (if thinking mode). Multiple boxed answers = failure.
+    after the reasoning tags (if thinking mode). Multiple boxed answers = failure.
+
+    Supports both <think></think> and <|start_of_scratchpad|><|end_of_scratchpad|> formats.
 
     Args:
         response: The model's full response
-        after_think: Whether to only look after </think> tags
+        after_think: Whether to only look after reasoning tags
         debug: Whether to print debug information
 
     Returns:
@@ -689,13 +1083,18 @@ def extract_first_boxed_answer(
     """
     # Get content to search
     if after_think:
-        # Extract content after </think>
+        # Try to extract content after </think> first
         match = THINK_CONTENT_AFTER_PATTERN.search(response)
         if match:
             search_content = match.group(1)
         else:
-            # No think tags, use full response
-            search_content = response
+            # Try <|end_of_scratchpad|> tags
+            match = SCRATCHPAD_CONTENT_AFTER_PATTERN.search(response)
+            if match:
+                search_content = match.group(1)
+            else:
+                # No reasoning tags, use full response
+                search_content = response
     else:
         search_content = response
 
@@ -951,13 +1350,18 @@ def score_math_answer(
     Returns:
         Tuple of (is_correct or None, method_used, has_multiple_boxed)
     """
-    # Get content to score
+    # Get content to score (check for both think and scratchpad tags)
     if after_think:
         match = THINK_CONTENT_AFTER_PATTERN.search(response)
         if match:
             score_content = match.group(1)
         else:
-            score_content = response
+            # Try scratchpad tags
+            match = SCRATCHPAD_CONTENT_AFTER_PATTERN.search(response)
+            if match:
+                score_content = match.group(1)
+            else:
+                score_content = response
     else:
         score_content = response
 
@@ -1036,13 +1440,18 @@ async def score_math_answer_async(
     """
     import asyncio
 
-    # Get content to score
+    # Get content to score (check for both think and scratchpad tags)
     if after_think:
         match = THINK_CONTENT_AFTER_PATTERN.search(response)
         if match:
             score_content = match.group(1)
         else:
-            score_content = response
+            # Try scratchpad tags
+            match = SCRATCHPAD_CONTENT_AFTER_PATTERN.search(response)
+            if match:
+                score_content = match.group(1)
+            else:
+                score_content = response
     else:
         score_content = response
 
