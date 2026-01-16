@@ -246,7 +246,7 @@ web_search(query="Arab slave trade East Africa history impact", num_results=5)
 [
   {
     "title": "The Arab Slave Trade: 1,400 Years of History",
-    "url": "https://www.fairplanet.org/story/the-arab-slave-trade-a-forgotten-crime-against-humanity/",
+    "url": "https://www.fairplanet.org/dossier/beyond-slavery/forgotten-slavery-the-arab-muslim-slave-trade-sex-trafficking/",
     "content": "The Arab slave trade began in the 7th century and lasted until the late 19th and early 20th centuries. The trade primarily involved the enslaving of Africans from the Sahel and East Africa regions...",
     "snippet": "The Arab slave trade began in the 7th century and lasted until the late 19th and early 20th centuries...",
     "date": "2021-02-21"
