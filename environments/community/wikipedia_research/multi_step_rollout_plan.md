@@ -336,7 +336,7 @@ web_search(query="anti-racism movements Arab world Black Lives Matter influence"
 [
   {
     "title": "Black Lives Matter Reaches Middle East and North Africa",
-    "url": "https://institute.global/policy/black-lives-matter-reaches-middle-east-and-north-africa",
+    "url": "https://www.theyoungdiplomats.com/post/black-lives-matter-in-the-middle-east-and-north-africa",
     "content": "The Black Lives Matter movement has inspired activists across the Middle East and North Africa to confront anti-Black racism in their societies. In Tunisia, Lebanon, and other countries, new anti-racism initiatives have emerged...",
     "snippet": "The Black Lives Matter movement has inspired activists across the Middle East and North Africa...",
     "date": "2020-07-13"
