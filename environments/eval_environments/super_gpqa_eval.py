@@ -6,7 +6,7 @@ This environment evaluates models on the SuperGPQA benchmark.
 Dataset: m-a-p/SuperGPQA
 Paper: https://www.arxiv.org/pdf/2502.14739
 
-SuperGPQA is a comprehensive benchmark designed to evaluate the knowledge and reasoning abilities of Large Language Models (LLMs) across 285 graduate-level disciplines. 
+SuperGPQA is a comprehensive benchmark designed to evaluate the knowledge and reasoning abilities of Large Language Models (LLMs) across 285 graduate-level disciplines.
 It features at least 50 questions per discipline, covering a broad spectrum of graduate-level topics.
 """
 
@@ -34,7 +34,6 @@ from atroposlib.envs.base import (
     EvalHandlingEnum,
 )
 
-
 SUPER_GPQA_ZERO_SHOT_PROMPT = """Answer the following multiple-choice question. There is only one correct answer.
 Provide your final answer within <answer></answer> tags, containing only the letter (A, B, C, D, E, F, G, H, I, or J.).
 
@@ -46,6 +45,7 @@ Question: {Question}"""
 
 class SuperGPQAEvalConfig(BaseEnvConfig):
     """Configuration for SuperGPQA eval environment"""
+
     custom_system_prompt: Optional[str] = Field(
         default=None,
         description="Custom system prompt to append after thinking prompt (if thinking_mode) or use directly.",
@@ -57,7 +57,7 @@ class SuperGPQAEvalConfig(BaseEnvConfig):
     )
 
     thinking_mode: bool = Field(
-        default=False, # set to False if eval_model_type is 'base'
+        default=False,  # set to False if eval_model_type is 'base'
         description="Whether to enable thinking mode with <think></think> tags.",
     )
 
@@ -238,10 +238,10 @@ class SuperGPQAEvalEnv(BaseEnv):
     async def setup(self) -> None:
         """Load SuperGPQA dataset and process all points to create prompts for rollout generation."""
         print("\nSuperGPQA Evaluation Setup:")
-        print("="*20 + "DATASET DETAILS" + "="*20)
+        print("=" * 20 + "DATASET DETAILS" + "=" * 20)
         print(f"  Dataset: {self.config.dataset_name}")
         print(f"  Evaluation split: {self.config.eval_split}")
-        print("="*20 + "GENERATION DETAILS" + "="*20)
+        print("=" * 20 + "GENERATION DETAILS" + "=" * 20)
         print(f"  Thinking mode: {self.config.thinking_mode}")
         print(f"  Max tokens: {self.config.eval_max_tokens}")
 
@@ -274,7 +274,7 @@ class SuperGPQAEvalEnv(BaseEnv):
         incorrect_answers = item["options"]
 
         # Randomly place correct answer
-        gold_index = self.shuffle_rng.randint(0, len(incorrect_answers)-1)
+        gold_index = self.shuffle_rng.randint(0, len(incorrect_answers) - 1)
         choices = incorrect_answers.copy()
         choices.insert(gold_index, correct_answer)
 
@@ -291,10 +291,17 @@ class SuperGPQAEvalEnv(BaseEnv):
         """
         Format a SuperGPQA question, add answer choices to the 0-shot prompt.
         """
-        return SUPER_GPQA_ZERO_SHOT_PROMPT.format(
-            Question=question.strip(),
-        ) + "\n\n" + "\n".join(
-            [f"{ascii_uppercase[i]}) {choice.strip()}" for i, choice in enumerate(choices)]
+        return (
+            SUPER_GPQA_ZERO_SHOT_PROMPT.format(
+                Question=question.strip(),
+            )
+            + "\n\n"
+            + "\n".join(
+                [
+                    f"{ascii_uppercase[i]}) {choice.strip()}"
+                    for i, choice in enumerate(choices)
+                ]
+            )
         )
 
     def _validate_thinking_format(self, response: str) -> Tuple[bool, str]:
@@ -423,7 +430,9 @@ class SuperGPQAEvalEnv(BaseEnv):
                 "temperature": self.config.eval_temperature,
                 "split": "eval",
             }
-            if self.config.eval_max_tokens > 0: # 0 means "use model default", so we don't pass the parameter
+            if (
+                self.config.eval_max_tokens > 0
+            ):  # 0 means "use model default", so we don't pass the parameter
                 completion_kwargs["max_tokens"] = self.config.eval_max_tokens
 
             for attempt in range(self.config.max_retries):
@@ -537,7 +546,9 @@ class SuperGPQAEvalEnv(BaseEnv):
             eval_tasks = [
                 self.rollout_and_score_eval(item) for item in self.all_eval_items
             ]
-            results = await tqdm_asyncio.gather(*eval_tasks, desc="Evaluating SuperGPQA")
+            results = await tqdm_asyncio.gather(
+                *eval_tasks, desc="Evaluating SuperGPQA"
+            )
 
             valid_results = [
                 r
@@ -623,7 +634,9 @@ class SuperGPQAEvalEnv(BaseEnv):
             if stats["total"] > 0:
                 subfield_accuracy = stats["correct"] / stats["total"]
                 subfield_key = subfield.replace(" ", "_").replace("-", "_").lower()
-                eval_metrics[f"eval/subfield_{subfield_key}_accuracy"] = subfield_accuracy
+                eval_metrics[f"eval/subfield_{subfield_key}_accuracy"] = (
+                    subfield_accuracy
+                )
 
         # Store metrics for wandb logging
         self.eval_metrics = [(k, v) for k, v in eval_metrics.items()]
