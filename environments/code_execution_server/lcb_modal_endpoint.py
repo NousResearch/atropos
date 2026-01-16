@@ -61,7 +61,7 @@ class TimeoutException(Exception):
 
 
 def timeout_handler(signum, frame):
-    print("timeout occured: alarm went off")
+    print("timeout occurred: alarm went off")
     raise TimeoutException
 
 
@@ -227,7 +227,7 @@ def compile_code(code: str, timeout: int):
             # else condition allows future extensibility to other platforms
             compiled_sol = tmp_sol.Solution()
         else:
-            # do nothing in the other case since function is accesible
+            # do nothing in the other case since function is accessible
             compiled_sol = tmp_sol
 
         assert compiled_sol is not None
