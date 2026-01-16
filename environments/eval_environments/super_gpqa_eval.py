@@ -1,24 +1,13 @@
 """
-GPQA-Diamond Evaluation Environment for Atropos (Generative/Reasoning Mode)
+SuperGPQA Evaluation Environment for Atropos
 
-This environment evaluates models on the GPQA (Graduate-Level Google-Proof Q&A) benchmark
-using a generative approach where models can reason before answering.
+This environment evaluates models on the SuperGPQA benchmark.
 
-Dataset: Idavidrein/gpqa (gpqa_diamond subset)
-Paper: https://arxiv.org/abs/2311.12022
+Dataset: m-a-p/SuperGPQA
+Paper: https://www.arxiv.org/pdf/2502.14739
 
-GPQA is a dataset of 448 expert-written multiple-choice questions in biology,
-physics, and chemistry, designed to test graduate-level reasoning. The questions
-are extremely difficult—PhD-level experts score about 65%, skilled non-experts
-34% (even with web access), and GPT-4 around 39%.
-
-The evaluation follows the lighteval generative approach:
-- Models are prompted to "think step by step before answering"
-- Models output their reasoning followed by "Answer: X"
-- Answer is extracted using regex patterns from the response
-- Simple string matching validates the extracted answer
-
-Supports optional thinking mode with <think></think> tags for extended reasoning.
+SuperGPQA is a comprehensive benchmark designed to evaluate the knowledge and reasoning abilities of Large Language Models (LLMs) across 285 graduate-level disciplines. 
+It features at least 50 questions per discipline, covering a broad spectrum of graduate-level topics.
 """
 
 import asyncio
@@ -119,11 +108,11 @@ class SuperGPQAEvalConfig(BaseEnvConfig):
 
 class SuperGPQAEvalEnv(BaseEnv):
     """
-    SuperGPQA eval environment for Atropos, supporting base models via a 5-shot prompt and reasoning/instruct models via a 0-shot prompt.
+    SuperGPQA eval environment for Atropos, supporting reasoning/instruct models via a 0-shot prompt.
 
     Pipeline:
     - Load SuperGPQA from HuggingFace
-    - Use 0-shot and 5-shot prompts from the SuperGPQA paper
+    - Use 0-shot prompts from the SuperGPQA paper
     - Extract answer choice via regex
     """
 
@@ -228,7 +217,6 @@ class SuperGPQAEvalEnv(BaseEnv):
             eval_handling=EvalHandlingEnum.STOP_TRAIN,
             max_eval_workers=256,
             max_num_workers=1024,
-            # GPQA-specific defaults
             dataset_name="m-a-p/SuperGPQA",
             eval_temperature=0,
             eval_max_tokens=0,  # this uses the default model max
@@ -270,12 +258,12 @@ class SuperGPQAEvalEnv(BaseEnv):
 
         self.all_eval_items = []
         for item in self.eval_data:
-            processed = self._process_gpqa_item(item)
+            processed = self._process_super_gpqa_item(item)
             self.all_eval_items.append(processed)
 
         self.iter = 0
 
-    def _process_gpqa_item(self, item: Dict) -> Dict:
+    def _process_super_gpqa_item(self, item: Dict) -> Dict:
         # check if shuffling is done per rollout or once per eval
         """
         Process a SuperGPQA item.
@@ -301,9 +289,7 @@ class SuperGPQAEvalEnv(BaseEnv):
 
     def _format_super_gpqa_prompt(self, question: str, choices: List[str]) -> str:
         """
-        Format a GPQA question using the lighteval template.
-
-        Uses the exact prompt format from lighteval's gpqa_instruct_prompt.
+        Format a SuperGPQA question, add answer choices to the 0-shot prompt.
         """
         return SUPER_GPQA_ZERO_SHOT_PROMPT.format(
             Question=question.strip(),
@@ -535,11 +521,11 @@ class SuperGPQAEvalEnv(BaseEnv):
             return {"is_correct": None, "sample": None}
 
     async def evaluate(self, *args, **kwargs) -> None:
-        """Run GPQA evaluation."""
+        """Run SuperGPQA evaluation."""
         start_time = time.time()
 
         print(f"\n{'='*60}")
-        print("Starting GPQA Evaluation (Generative/Reasoning Mode)")
+        print("Starting SuperGPQA Evaluation:")
         print(f"{'='*60}")
         print(f"  Subset: {self.config.subset}")
         print(f"  Total questions: {len(self.all_eval_items)}")
