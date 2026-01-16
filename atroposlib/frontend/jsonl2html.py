@@ -60,9 +60,31 @@ def create_html_for_group(group_data, index):
 
     items_html = ""
     for i, (msg, score) in enumerate(zip(messages, scores)):
+        # Handle both string and nested message formats
+        if isinstance(msg, str):
+            # Simple string format (original behavior)
+            content = msg
+        elif isinstance(msg, list):
+            # Nested conversation format: List[Message] where Message is a dict
+            # Format each message with its role
+            parts = []
+            for m in msg:
+                if isinstance(m, dict):
+                    role = m.get("role", "unknown")
+                    content_text = m.get("content", "")
+                    parts.append(f"**{role.capitalize()}**: {content_text}")
+                else:
+                    # Fallback for unexpected format
+                    parts.append(str(m))
+            content = "\n\n".join(parts)
+        else:
+            # Fallback for any other type
+            content = str(msg)
+
         rendered_markdown = markdown.markdown(
-            msg, extensions=["fenced_code", "tables", "nl2br"]
+            content, extensions=["fenced_code", "tables", "nl2br"]
         )
+
         score_class = get_score_class(score)
         item_id = f"group-{index}-item-{i}"
         items_html += textwrap.dedent(
