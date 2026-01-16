@@ -6,8 +6,11 @@ This environment evaluates models on the SuperGPQA benchmark.
 Dataset: m-a-p/SuperGPQA
 Paper: https://www.arxiv.org/pdf/2502.14739
 
-SuperGPQA is a comprehensive benchmark designed to evaluate the knowledge and reasoning abilities of Large Language Models (LLMs) across 285 graduate-level disciplines.
-It features at least 50 questions per discipline, covering a broad spectrum of graduate-level topics.
+SuperGPQA is a comprehensive benchmark designed to evaluate the
+knowledge and reasoning abilities of Large Language Models (LLMs)
+across 285 graduate-level disciplines.
+It features at least 50 questions per discipline,
+covering a broad spectrum of graduate-level topics.
 """
 
 import asyncio
@@ -57,7 +60,7 @@ class SuperGPQAEvalConfig(BaseEnvConfig):
     )
 
     thinking_mode: bool = Field(
-        default=False,  # set to False if eval_model_type is 'base'
+        default=False,
         description="Whether to enable thinking mode with <think></think> tags.",
     )
 
@@ -103,6 +106,11 @@ class SuperGPQAEvalConfig(BaseEnvConfig):
     full_debug: bool = Field(
         default=False,
         description="Enable verbose debug logging.",
+    )
+
+    shuffle_seed: Optional[int] = Field(
+        default=42,
+        description="Seed for shuffling answer positions. Set to None for random shuffling each run.",
     )
 
 
@@ -267,16 +275,14 @@ class SuperGPQAEvalEnv(BaseEnv):
         # check if shuffling is done per rollout or once per eval
         """
         Process a SuperGPQA item.
-        Shuffle answer positions to avoid reward hacking where the model might learn positions rather than the correct option.
+        Shuffle answer positions to avoid reward hacking where the model
+        might learn positions rather than the correct option.
         """
-        # actual ans not the options
         correct_answer = item["answer"]
-        incorrect_answers = item["options"]
-
-        # Randomly place correct answer
-        gold_index = self.shuffle_rng.randint(0, len(incorrect_answers) - 1)
-        choices = incorrect_answers.copy()
-        choices.insert(gold_index, correct_answer)
+        all_answers = item["options"]
+        choices = all_answers.copy()
+        self.shuffle_rng.shuffle(choices)
+        gold_index = choices.index(correct_answer)
 
         return {
             "question": item["question"],
@@ -536,7 +542,6 @@ class SuperGPQAEvalEnv(BaseEnv):
         print(f"\n{'='*60}")
         print("Starting SuperGPQA Evaluation:")
         print(f"{'='*60}")
-        print(f"  Subset: {self.config.subset}")
         print(f"  Total questions: {len(self.all_eval_items)}")
         print(f"  Max tokens (for reasoning): {self.config.eval_max_tokens}")
         print(f"  Thinking mode: {self.config.thinking_mode}")
@@ -643,7 +648,7 @@ class SuperGPQAEvalEnv(BaseEnv):
 
         # Print summary
         print(f"\n{'='*60}")
-        print(f"SuperGPQA Evaluation Results")
+        print("SuperGPQA Evaluation Results")
         print(f"{'='*60}")
         print(
             f"Overall Accuracy: {overall_accuracy:.4f} ({total_correct}/{total_count})"
