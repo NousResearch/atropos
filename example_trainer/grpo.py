@@ -595,31 +595,130 @@ def _attach_to_vllm_shared_tensors(
     # Initialize any remaining meta tensors (buffers like rotary embeddings)
     # These are not in vLLM's state_dict but need to be initialized
     device = f"cuda:{list(device_indices)[0]}" if device_indices else "cuda:0"
-    meta_count = 0
+    
+    # =========================================================================
+    # DIAGNOSTIC: Count what's on meta vs cuda after load_state_dict
+    # =========================================================================
+    meta_params = []
+    cuda_params = []
     for name, param in model.named_parameters():
         if param.device.type == 'meta':
-            # Initialize with zeros - these will be computed during forward
-            new_param = torch.zeros(param.shape, dtype=param.dtype, device=device)
-            param.data = new_param
-            meta_count += 1
+            meta_params.append(name)
+        elif param.device.type == 'cuda':
+            cuda_params.append(name)
     
+    meta_buffers = []
+    cuda_buffers = []
     for name, buffer in model.named_buffers():
         if buffer.device.type == 'meta':
+            meta_buffers.append(name)
+        elif buffer.device.type == 'cuda':
+            cuda_buffers.append(name)
+    
+    print(f"\n[DIAGNOSTIC] After load_state_dict:")
+    print(f"  - Parameters on CUDA: {len(cuda_params)}")
+    print(f"  - Parameters on META: {len(meta_params)}")
+    print(f"  - Buffers on CUDA: {len(cuda_buffers)}")
+    print(f"  - Buffers on META: {len(meta_buffers)}")
+    
+    if meta_params:
+        print(f"\n[DIAGNOSTIC] First 10 META parameters:")
+        for name in meta_params[:10]:
+            param = dict(model.named_parameters())[name]
+            print(f"    {name}: shape={param.shape}, dtype={param.dtype}, device={param.device}")
+    
+    if meta_buffers:
+        print(f"\n[DIAGNOSTIC] META buffers:")
+        for name in meta_buffers[:10]:
+            buffer = dict(model.named_buffers())[name]
+            print(f"    {name}: shape={buffer.shape}, dtype={buffer.dtype}, device={buffer.device}")
+    
+    # =========================================================================
+    # Helper function to navigate module hierarchy
+    # =========================================================================
+    def get_parent_and_name(model, full_name):
+        """Get parent module and attribute name from full parameter name."""
+        parts = full_name.split('.')
+        parent = model
+        for part in parts[:-1]:
+            parent = getattr(parent, part)
+        return parent, parts[-1]
+    
+    # =========================================================================
+    # Initialize remaining meta parameters
+    # NOTE: Can't use param.data = ... on meta tensors!
+    # Must use setattr() to replace the entire parameter in the parent module
+    # =========================================================================
+    meta_count = 0
+    
+    for name in meta_params:
+        param = dict(model.named_parameters()).get(name)
+        if param is None:
+            continue
+            
+        try:
+            print(f"[DIAGNOSTIC] Initializing meta param: {name}")
+            print(f"  - Old: device={param.device}, dtype={param.dtype}, shape={param.shape}")
+            
+            # Create new parameter with actual data on CUDA
+            new_data = torch.zeros(param.shape, dtype=param.dtype, device=device)
+            new_param = torch.nn.Parameter(new_data, requires_grad=param.requires_grad)
+            
+            print(f"  - New: device={new_param.device}, dtype={new_param.dtype}, shape={new_param.shape}")
+            
+            # Replace in parent module using setattr (NOT param.data = ...)
+            parent, attr_name = get_parent_and_name(model, name)
+            print(f"  - Parent module: {type(parent).__name__}, attr: {attr_name}")
+            
+            setattr(parent, attr_name, new_param)
+            meta_count += 1
+            print(f"  - ✓ Replaced successfully!")
+            
+        except Exception as e:
+            print(f"[DIAGNOSTIC] FAILED to initialize {name}: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    # =========================================================================
+    # Initialize remaining meta buffers
+    # =========================================================================
+    for name in meta_buffers:
+        buffer = dict(model.named_buffers()).get(name)
+        if buffer is None:
+            continue
+            
+        try:
+            print(f"[DIAGNOSTIC] Initializing meta buffer: {name}")
+            print(f"  - Old: device={buffer.device}, dtype={buffer.dtype}, shape={buffer.shape}")
+            
             # For buffers like inv_freq, we need proper initialization
             if 'inv_freq' in name:
                 # Rotary embedding inverse frequencies
-                # These need to be computed based on model config
                 dim = buffer.shape[0] * 2  # inv_freq has shape [dim/2]
                 base = 10000.0  # Default RoPE base
                 inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
-                buffer.data = inv_freq.to(dtype=buffer.dtype, device=device)
+                new_buffer = inv_freq.to(dtype=buffer.dtype, device=device)
+                print(f"  - Computed inv_freq with dim={dim}, base={base}")
             else:
                 # Other buffers - initialize with zeros
-                buffer.data = torch.zeros(buffer.shape, dtype=buffer.dtype, device=device)
+                new_buffer = torch.zeros(buffer.shape, dtype=buffer.dtype, device=device)
+            
+            print(f"  - New: device={new_buffer.device}, dtype={new_buffer.dtype}, shape={new_buffer.shape}")
+            
+            # Replace in parent module
+            parent, attr_name = get_parent_and_name(model, name)
+            print(f"  - Parent module: {type(parent).__name__}, attr: {attr_name}")
+            
+            parent.register_buffer(attr_name, new_buffer)
             meta_count += 1
+            print(f"  - ✓ Replaced successfully!")
+            
+        except Exception as e:
+            print(f"[DIAGNOSTIC] FAILED to initialize buffer {name}: {e}")
+            import traceback
+            traceback.print_exc()
     
-    if meta_count > 0:
-        print(f"[Setup] Initialized {meta_count} remaining meta tensors")
+    print(f"\n[Setup] Initialized {meta_count} remaining meta tensors")
     
     return model
 
