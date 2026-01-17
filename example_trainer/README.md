@@ -9,14 +9,14 @@ The trainer supports three weight synchronization modes:
 | Mode | Description | Sync Latency | Best For |
 |------|-------------|--------------|----------|
 | **Legacy** (`none`) | Save checkpoints, restart vLLM | ~30-60 seconds | Simple setups, debugging |
-| **Shared vLLM** (`shared_vllm`) | Direct shared memory updates via NCCL | ~0 ms | Production, maximum throughput |
+| **Single-Copy** (`shared_vllm`) | Direct CUDA IPC - ONE model copy! | 0 ms | Production, memory efficiency |
 | **LoRA** (`lora_only`) | Train adapters, hot-swap | ~1-5 seconds | Memory-constrained, fast iteration |
 
 ---
 
-## Quick Start with GSM8k (Shared vLLM Mode)
+## Quick Start with GSM8k (Single-Copy Mode)
 
-This is the **recommended** production setup for maximum training throughput.
+This is the **recommended** production setup for maximum training throughput and memory efficiency.
 
 ### Prerequisites
 
@@ -32,193 +32,27 @@ pip install datasets latex2sympy2_extended math_verify
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    SHARED VLLM TRAINING ARCHITECTURE                        │
-│                                                                             │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────────────────┐ │
-│  │ GSM8k Env   │───▶│ Atropos API │◀───│ GRPO Trainer (GPU 2)            │ │
-│  │ (problems)  │    │ (batching)  │    │ - Loads model for training      │ │
-│  └─────────────┘    └─────────────┘    │ - Broadcasts weights via NCCL   │ │
-│         │                              └─────────────────────────────────┘ │
-│         │                                              │                    │
-│         │                                              │ NCCL Broadcast     │
-│         ▼                                              ▼                    │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │              vLLM Inference Server (GPUs 0-1)                        │   │
-│  │         - Model weights in shared memory                             │   │
-│  │         - Weight updater threads receive NCCL updates               │   │
-│  │         - Generates rollouts for scoring                            │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+│                    SINGLE-COPY TRAINING ARCHITECTURE                         │
+│                                                                              │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────────────────┐  │
+│  │ GSM8k Env   │───▶│ Atropos API │◀───│ GRPO Trainer                    │  │
+│  │ (problems)  │    │ (batching)  │    │ - Attached to vLLM's tensors    │  │
+│  └─────────────┘    └─────────────┘    │ - optimizer.step() updates both │  │
+│         │                              └─────────────────────────────────┘  │
+│         │                                              │                     │
+│         │                                              │ CUDA IPC            │
+│         │                                              │ (same memory!)      │
+│         ▼                                              ▼                     │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │              vLLM Inference Server (GPU 0)                           │    │
+│  │         - Model weights in GPU memory                                │    │
+│  │         - Trainer sees same tensors via IPC                         │    │
+│  │         - Generates rollouts for scoring                            │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Step-by-Step Guide (Tested & Working)
-
-**IMPORTANT: GPU Allocation**
-- vLLM runs on GPUs 0-1 (tensor-parallel)
-- Trainer runs on GPU 2 (separate to avoid OOM)
-
----
-
-#### Step 1: Kill Any Existing Processes
-
-```bash
-pkill -9 -u $USER -f "vllm|grpo|python|run-api" 2>/dev/null; sleep 3
-```
-
-#### Step 2: Setup Directory
-
-```bash
-cd ~/atropos_stuff/atropos
-rm -f vllm_bridge_config.json vllm.log trainer.log api.log gsm8k.log
-```
-
-#### Step 3: Set Environment Variables
-
-```bash
-export VLLM_ENABLE_SHARED_WEIGHTS=1
-export NUM_INFERENCE_NODES=0
-export MASTER_ADDR=localhost
-export MASTER_PORT=29500
-```
-
-#### Step 4: Start Atropos API
-
-```bash
-python -m atroposlib.cli.run_api > api.log 2>&1 &
-echo "Atropos API started"
-sleep 3
-```
-
-#### Step 5: Start GSM8K Environment
-
-```bash
-python environments/gsm8k_server.py > gsm8k.log 2>&1 &
-echo "GSM8K environment started"
-sleep 3
-```
-
-#### Step 6: Start vLLM Server on GPUs 0-1
-
-```bash
-CUDA_VISIBLE_DEVICES=0,1 python -u example_trainer/vllm_api_server.py \
-    --model Qwen/Qwen2.5-14B-Instruct \
-    --tensor-parallel-size 2 \
-    --port 9001 \
-    --dtype bfloat16 \
-    > vllm.log 2>&1 &
-echo "vLLM starting on GPUs 0,1..."
-```
-
-#### Step 7: Wait for vLLM to Load
-
-```bash
-tail -f vllm.log
-```
-
-Wait until you see: `Uvicorn running on http://0.0.0.0:9001`
-
-Then press **Ctrl+C** to stop tailing.
-
-#### Step 8: Verify Shared Memory Setup
-
-```bash
-grep -E "thread|updater|Exported|Shared memory" vllm.log
-```
-
-You should see:
-```
-[vLLM Patch] ✓ Shared memory setup complete!
-[vLLM Patch] ✓ Weight updater thread started (name: WeightUpdater_TP0)
-[vLLM Patch] ✓ Weight updater thread started (name: WeightUpdater_TP1)
-```
-
-#### Step 9: Start Trainer on GPU 2
-
-```bash
-CUDA_VISIBLE_DEVICES=2 python -u example_trainer/grpo.py \
-    --model-name Qwen/Qwen2.5-14B-Instruct \
-    --weight-bridge-mode shared_vllm \
-    --vllm-port 9001 \
-    --lr 1e-6 \
-    --batch-size 4 \
-    --training-steps 100 \
-    --use-shared-memory \
-    2>&1 | tee trainer.log
-```
-
-#### Step 10: Monitor Training
-
-```bash
-tail -f trainer.log
-```
-
-You should see:
-```
-[Bridge] ✓ Gloo group created
-[Bridge] ✓ NCCL group created
-[Bridge] ✓ All ranks synchronized and ready
-[Bridge] Mapped 195/339 params from vLLM to trainer
-Step 1/100
-```
-
----
-
-### Quick Copy-Paste (All-in-One)
-
-```bash
-# Kill everything and setup
-pkill -9 -u $USER -f "vllm|grpo|python|run-api" 2>/dev/null; sleep 3
-cd ~/atropos_stuff/atropos
-rm -f vllm_bridge_config.json vllm.log trainer.log api.log gsm8k.log
-
-# Environment variables
-export VLLM_ENABLE_SHARED_WEIGHTS=1 NUM_INFERENCE_NODES=0 MASTER_ADDR=localhost MASTER_PORT=29500
-
-# Start services
-python -m atroposlib.cli.run_api > api.log 2>&1 &
-sleep 3
-python environments/gsm8k_server.py > gsm8k.log 2>&1 &
-sleep 3
-CUDA_VISIBLE_DEVICES=0,1 python -u example_trainer/vllm_api_server.py --model Qwen/Qwen2.5-14B-Instruct --tensor-parallel-size 2 --port 9001 --dtype bfloat16 > vllm.log 2>&1 &
-
-echo "Waiting for vLLM to load... (check: tail -f vllm.log)"
-echo "Once ready, run the trainer command below:"
-echo ""
-echo "CUDA_VISIBLE_DEVICES=2 python -u example_trainer/grpo.py --model-name Qwen/Qwen2.5-14B-Instruct --weight-bridge-mode shared_vllm --vllm-port 9001 --lr 1e-6 --batch-size 4 --training-steps 100 --use-shared-memory 2>&1 | tee trainer.log"
-```
-
----
-
-## How Shared vLLM Mode Works
-
-### The Problem
-Traditional RL training requires syncing model weights between the trainer and inference server. This is slow:
-- Save checkpoint → Load into vLLM → Restart server = **30-60 seconds per sync**
-
-### Two Solutions Available
-
-#### Option 1: Broadcast Mode (`--use-shared-memory`)
-Two copies of the model, but instant NCCL sync. Use when trainer is on **different GPUs**.
-
-```
-Trainer (GPU 2)              NCCL               vLLM Workers (GPUs 0-1)
-     │                         │                        │
-     │ optimizer.step()        │                        │
-     │ ─────────────────────────────────────────────►   │
-     │   broadcast_weights()   │                        │ Thread receives
-     │                         │                        │ weights via NCCL
-     │                         │                        │ Copies to shared
-     │                         │                        │ memory tensors
-     │                         │                        │
-     │ Next training step      │                        │ Ready for inference
-```
-
-- **Memory**: 2x model size (trainer copy + vLLM copy)
-- **Sync Latency**: ~0ms (NCCL broadcast)
-- **GPU Layout**: Trainer on different GPUs than vLLM
-
-#### Option 2: Single-Copy Mode (`--single-copy`) ⭐ RECOMMENDED
-TRUE shared memory - only ONE copy of the model! Use when trainer is on **same GPUs**.
+### How Single-Copy Mode Works
 
 ```
 ┌────────────────────────────────────────────────────────────┐
@@ -244,32 +78,145 @@ TRUE shared memory - only ONE copy of the model! Use when trainer is on **same G
 
 - **Memory**: 1x model size (truly shared via CUDA IPC!)
 - **Sync Latency**: 0ms (same memory, no copy needed)
-- **GPU Layout**: Trainer on SAME GPUs as vLLM (required!)
+- **Requirement**: Trainer and vLLM on SAME GPU(s)
 
-### When to Use Which
+---
 
-| Mode | Memory | Sync | Use When |
-|------|--------|------|----------|
-| **Broadcast** (`--use-shared-memory`) | 2x model | ~0ms NCCL | Trainer on different GPUs |
-| **Single-Copy** (`--single-copy`) | 1x model | 0ms | Trainer on same GPUs, memory constrained |
+### Step-by-Step Guide
 
-### Single-Copy Mode Usage
+**IMPORTANT: GPU Allocation**
+- vLLM and Trainer run on the SAME GPU(s)
+- Use `tensor-parallel-size 1` for single-copy mode (TP>1 not yet supported)
+
+---
+
+#### Step 1: Kill Any Existing Processes
 
 ```bash
-# vLLM and Trainer on SAME GPUs (0,1)
-CUDA_VISIBLE_DEVICES=0,1 python -u example_trainer/vllm_api_server.py \
+pkill -9 -u $USER -f "vllm|grpo|python|run-api" 2>/dev/null; sleep 3
+```
+
+#### Step 2: Setup Directory
+
+```bash
+cd ~/atropos_stuff/atropos
+rm -f vllm_bridge_config.json vllm.log trainer.log api.log gsm8k.log
+```
+
+#### Step 3: Set Environment Variables
+
+```bash
+export VLLM_ENABLE_SHARED_WEIGHTS=1
+export VLLM_SKIP_WEIGHT_DAEMON=1
+export NUM_INFERENCE_NODES=0
+export LOGDIR=.
+```
+
+#### Step 4: Start vLLM Server
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -u example_trainer/vllm_api_server.py \
     --model Qwen/Qwen2.5-14B-Instruct \
-    --tensor-parallel-size 2 \
+    --tensor-parallel-size 1 \
     --port 9001 \
     > vllm.log 2>&1 &
+echo "vLLM starting on GPU 0..."
+```
 
-# Wait for vLLM to load...
+#### Step 5: Wait for vLLM to Load
 
-# Trainer also on GPUs 0,1 - shares vLLM's tensors!
-CUDA_VISIBLE_DEVICES=0,1 python -u example_trainer/grpo.py \
+```bash
+tail -f vllm.log
+```
+
+Wait until you see: `Uvicorn running on http://0.0.0.0:9001`
+
+Then press **Ctrl+C** to stop tailing.
+
+#### Step 6: Verify IPC Handles Exported
+
+```bash
+grep -E "IPC|Exported|single_copy" vllm.log
+```
+
+You should see:
+```
+[vLLM Patch] Exported X IPC handles for single-copy mode
+[vLLM Patch] ✓ Exported 339 params to vllm_bridge_config.json
+```
+
+#### Step 7: Start GSM8K Environment
+
+```bash
+python environments/gsm8k_server.py serve \
+    --slurm False \
+    --openai.model_name Qwen/Qwen2.5-14B-Instruct \
+    --openai.base_url http://localhost:9001/v1 \
+    --openai.server_type vllm \
+    --openai.api_key x \
+    --env.tokenizer_name Qwen/Qwen2.5-14B-Instruct \
+    --env.use_wandb False \
+    > gsm8k.log 2>&1 &
+echo "GSM8K environment started"
+sleep 10
+```
+
+#### Step 8: Start Trainer (Same GPU as vLLM!)
+
+```bash
+CUDA_VISIBLE_DEVICES=0 LOGDIR=. python -u example_trainer/grpo.py \
     --model-name Qwen/Qwen2.5-14B-Instruct \
     --weight-bridge-mode shared_vllm \
-    --single-copy \
+    --training-steps 100 \
+    2>&1 | tee trainer.log
+```
+
+#### Step 9: Monitor Training
+
+```bash
+tail -f trainer.log
+```
+
+You should see:
+```
+[Setup] ✓ Attached 195 tensors to vLLM's shared memory
+[Setup] ✓ Single-copy mode active - using vLLM's tensors directly!
+[2/2] Starting training for 100 steps
+Step 1/100
+  [SINGLE-COPY] Weights updated in-place - step 1
+```
+
+---
+
+### Quick Copy-Paste (All-in-One)
+
+```bash
+# Kill everything and setup
+pkill -9 -u $USER -f "vllm|grpo|python" 2>/dev/null; sleep 3
+cd ~/atropos_stuff/atropos
+rm -f vllm_bridge_config.json *.log
+
+# Environment variables
+export VLLM_ENABLE_SHARED_WEIGHTS=1 VLLM_SKIP_WEIGHT_DAEMON=1 NUM_INFERENCE_NODES=0 LOGDIR=.
+
+# Start vLLM
+CUDA_VISIBLE_DEVICES=0 python -u example_trainer/vllm_api_server.py \
+    --model Qwen/Qwen2.5-14B-Instruct --tensor-parallel-size 1 --port 9001 > vllm.log 2>&1 &
+echo "Waiting 90s for vLLM..."; sleep 90
+
+# Start GSM8k environment
+python environments/gsm8k_server.py serve --slurm False \
+    --openai.model_name Qwen/Qwen2.5-14B-Instruct \
+    --openai.base_url http://localhost:9001/v1 \
+    --openai.server_type vllm --openai.api_key x \
+    --env.tokenizer_name Qwen/Qwen2.5-14B-Instruct \
+    --env.use_wandb False > gsm8k.log 2>&1 &
+sleep 10
+
+# Start trainer (same GPU!)
+CUDA_VISIBLE_DEVICES=0 LOGDIR=. python -u example_trainer/grpo.py \
+    --model-name Qwen/Qwen2.5-14B-Instruct \
+    --weight-bridge-mode shared_vllm \
     --training-steps 100 \
     2>&1 | tee trainer.log
 ```
@@ -280,7 +227,7 @@ CUDA_VISIBLE_DEVICES=0,1 python -u example_trainer/grpo.py \
 
 ### Mode 1: Legacy (Checkpoint + Restart)
 
-For simple setups or debugging. Saves checkpoints and can restart vLLM.
+For simple setups or debugging. Saves checkpoints and restarts vLLM to load new weights.
 
 ```bash
 python example_trainer/grpo.py \
@@ -315,11 +262,11 @@ python example_trainer/grpo.py \
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `VLLM_ENABLE_SHARED_WEIGHTS` | Yes (shared mode) | Enable vLLM patching | `1` |
+| `VLLM_ENABLE_SHARED_WEIGHTS` | Yes (single-copy) | Enable vLLM patching for IPC | `1` |
+| `VLLM_SKIP_WEIGHT_DAEMON` | Yes (single-copy) | Skip NCCL daemon (not needed) | `1` |
 | `NUM_INFERENCE_NODES` | Yes | Number of vLLM nodes (0 = local) | `0` |
-| `MASTER_ADDR` | Yes | Rendezvous address | `localhost` |
-| `MASTER_PORT` | Yes | Rendezvous port | `29500` |
-| `CUDA_VISIBLE_DEVICES` | Recommended | GPU allocation | `0,1` or `2` |
+| `LOGDIR` | Recommended | Directory for vllm_bridge_config.json | `.` |
+| `CUDA_VISIBLE_DEVICES` | Recommended | GPU allocation | `0` |
 
 ### Trainer CLI Options
 
@@ -327,7 +274,6 @@ python example_trainer/grpo.py \
 |--------|---------|-------------|
 | `--model-name` | (required) | HuggingFace model ID |
 | `--weight-bridge-mode` | `none` | `none`, `shared_vllm`, or `lora_only` |
-| `--use-shared-memory` | `False` | Enable NCCL weight broadcasting |
 | `--vllm-port` | `9001` | vLLM server port |
 | `--training-steps` | `10` | Total optimization steps |
 | `--batch-size` | `2` | Micro-batch size |
@@ -339,7 +285,7 @@ python example_trainer/grpo.py \
 | Option | Description |
 |--------|-------------|
 | `--model` | HuggingFace model ID |
-| `--tensor-parallel-size` | Number of GPUs for tensor parallelism |
+| `--tensor-parallel-size` | Number of GPUs (use 1 for single-copy) |
 | `--port` | Server port (default: 9001) |
 | `--dtype` | Model dtype (`bfloat16`, `float16`, `auto`) |
 
@@ -347,76 +293,39 @@ python example_trainer/grpo.py \
 
 ## FAQ & Troubleshooting
 
-### Q: The trainer is stuck at "Creating Gloo process group..."
+### Q: I get "Could not find vllm_bridge_config.json"
 
-**A:** This means the trainer is waiting for the vLLM weight updater threads to connect. Check if the threads started:
+**A:** vLLM didn't export the IPC handles. Check:
 
-```bash
-grep -E "thread|updater|ERROR" vllm.log
-```
-
-You should see:
-```
-[vLLM Patch] ✓ Weight updater thread started (name: WeightUpdater_TP0)
-[vLLM Patch] ✓ Weight updater thread started (name: WeightUpdater_TP1)
-```
-
-If not, ensure `VLLM_ENABLE_SHARED_WEIGHTS=1` was set **before** starting vLLM.
-
----
-
-### Q: I get "CUDA out of memory" when starting the trainer
-
-**A:** The trainer is trying to load the model on the same GPUs as vLLM. Use separate GPUs:
-
-```bash
-# vLLM on GPUs 0-1
-CUDA_VISIBLE_DEVICES=0,1 python -u example_trainer/vllm_api_server.py ...
-
-# Trainer on GPU 2
-CUDA_VISIBLE_DEVICES=2 python -u example_trainer/grpo.py ...
-```
-
----
-
-### Q: I see "daemonic processes are not allowed to have children"
-
-**A:** This was a bug in older versions. The fix uses **threads** instead of **processes** for the weight updater. Make sure you have the latest `patched_gpu_runner.py`.
-
----
-
-### Q: The `vllm_bridge_config.json` shows `param_mappings: {}`
-
-**A:** The vLLM patches didn't run. Check:
-
-1. `VLLM_ENABLE_SHARED_WEIGHTS=1` was set before starting vLLM
-2. Look for `[vLLM Patch] ✓ Exported X params` in vllm.log
-
+1. `VLLM_ENABLE_SHARED_WEIGHTS=1` was set **before** starting vLLM
+2. Look for export messages in vllm.log:
 ```bash
 grep "Exported" vllm.log
 ```
 
 ---
 
-### Q: How do I verify the NCCL connection is working?
+### Q: I get "CUDA out of memory" when starting the trainer
 
-**A:** Check the trainer log for these messages:
+**A:** For single-copy mode, trainer and vLLM MUST be on the same GPU(s). Check:
 
-```
-[Bridge] ✓ Gloo group created
-[Bridge] ✓ NCCL group created
-[Bridge] ✓ All ranks synchronized and ready
+```bash
+# Both should use the same CUDA_VISIBLE_DEVICES
+CUDA_VISIBLE_DEVICES=0 python ... vllm_api_server.py ...
+CUDA_VISIBLE_DEVICES=0 python ... grpo.py ...
 ```
 
 ---
 
-### Q: What's the difference between Gloo and NCCL?
+### Q: Trainer crashes with "Cannot copy out of meta tensor"
 
-**A:** 
-- **Gloo**: CPU-based coordination protocol. Used for synchronization barriers.
-- **NCCL**: GPU-based high-speed protocol. Used for broadcasting weight tensors.
+**A:** Some model buffers (like rotary embeddings) weren't initialized. This is a known issue being fixed. Update to the latest code.
 
-Both are needed: Gloo for coordination, NCCL for fast tensor transfers.
+---
+
+### Q: Single-copy mode doesn't work with tensor-parallel > 1
+
+**A:** Currently, single-copy mode only works with `tensor-parallel-size 1`. For larger models that need tensor parallelism, use a single GPU with a smaller model, or wait for multi-GPU single-copy support.
 
 ---
 
@@ -427,9 +336,8 @@ Both are needed: Gloo for coordination, NCCL for fast tensor transfers.
 nvidia-smi
 ```
 
-Expected for Qwen2.5-14B with shared mode:
-- GPUs 0-1: ~168GB each (vLLM workers)
-- GPU 2: ~29GB (trainer)
+For single-copy mode with Qwen2.5-14B:
+- GPU 0: ~28GB (shared between vLLM and trainer)
 
 ---
 
@@ -442,54 +350,13 @@ pkill -9 -u $USER -f "vllm|grpo|python|run-api"
 
 ---
 
-### Q: The training is slow / not progressing
-
-**A:** Check if all services are running:
-
-```bash
-ps aux | grep -E "(run_api|vllm|grpo|gsm8k)" | grep $USER
-```
-
-Check logs for errors:
-```bash
-tail -20 api.log
-tail -20 gsm8k.log
-tail -20 vllm.log
-tail -20 trainer.log
-```
-
----
-
-### Q: How do I use a smaller model for testing?
-
-**A:** Use Qwen2.5-3B-Instruct with single GPU:
-
-```bash
-# vLLM on GPU 0
-CUDA_VISIBLE_DEVICES=0 python -u example_trainer/vllm_api_server.py \
-    --model Qwen/Qwen2.5-3B-Instruct \
-    --port 9001 \
-    > vllm.log 2>&1 &
-
-# Trainer on GPU 1
-CUDA_VISIBLE_DEVICES=1 python -u example_trainer/grpo.py \
-    --model-name Qwen/Qwen2.5-3B-Instruct \
-    --weight-bridge-mode shared_vllm \
-    --use-shared-memory \
-    --training-steps 10 \
-    2>&1 | tee trainer.log
-```
-
----
-
 ## Files in This Directory
 
 | File | Description |
 |------|-------------|
 | `grpo.py` | Main trainer script with all modes |
 | `vllm_api_server.py` | Custom vLLM server with shared memory patches |
-| `vllm_weight_bridge.py` | NCCL bridge for weight synchronization |
-| `vllm_patching/` | vLLM patches for shared memory support |
+| `vllm_patching/` | vLLM patches for CUDA IPC support |
 | `requirements.txt` | Python dependencies |
 | `README.md` | This documentation |
 
@@ -497,10 +364,9 @@ CUDA_VISIBLE_DEVICES=1 python -u example_trainer/grpo.py \
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Module exports |
-| `patched_gpu_runner.py` | Patches GPUModelRunner for shared memory |
-| `weight_updater.py` | Thread that receives NCCL weight broadcasts |
-| `distributed_utils.py` | Process group initialization helpers |
+| `__init__.py` | Module exports and patch application |
+| `patched_gpu_runner.py` | Patches GPUModelRunner to export IPC handles |
+| `distributed_utils.py` | Distributed training utilities |
 
 ---
 
@@ -509,7 +375,7 @@ CUDA_VISIBLE_DEVICES=1 python -u example_trainer/grpo.py \
 | Mode | Sync Latency | Memory (14B model) | Best For |
 |------|--------------|-------------------|----------|
 | **Legacy** | 30-60s | 2x model | Debugging |
-| **Shared vLLM** | ~0ms | 1x model (shared) + trainer | Production |
+| **Single-Copy** | 0ms | 1x model (shared!) | Production |
 | **LoRA** | 5-10s | 1x model + adapters | Memory-constrained |
 
 ---
@@ -519,48 +385,5 @@ CUDA_VISIBLE_DEVICES=1 python -u example_trainer/grpo.py \
 | Mode | Location | Size |
 |------|----------|------|
 | Legacy | `trained_model_checkpoints/step_N/` | ~28GB (14B model) |
-| Shared vLLM | `trained_model_checkpoints/step_N/` | ~28GB |
+| Single-Copy | `trained_model_checkpoints/step_N/` | ~28GB |
 | LoRA | `trained_model_checkpoints/adapter_step_N/` | ~50MB |
-
----
-
-## Example Training Runs
-
-### Quick Test (3B model, LoRA)
-```bash
-python example_trainer/grpo.py \
-    --model-name Qwen/Qwen2.5-3B-Instruct \
-    --weight-bridge-mode lora_only \
-    --training-steps 5 \
-    --batch-size 1
-```
-
-### Production (14B model, Shared vLLM)
-```bash
-# See Step-by-Step Guide above
-CUDA_VISIBLE_DEVICES=2 python -u example_trainer/grpo.py \
-    --model-name Qwen/Qwen2.5-14B-Instruct \
-    --weight-bridge-mode shared_vllm \
-    --use-shared-memory \
-    --training-steps 1000 \
-    --batch-size 4 \
-    --lr 1e-6
-```
-
-### Multi-GPU Training (70B model)
-```bash
-# vLLM on GPUs 0-3 (tensor parallel 4)
-CUDA_VISIBLE_DEVICES=0,1,2,3 python -u example_trainer/vllm_api_server.py \
-    --model Qwen/Qwen2.5-72B-Instruct \
-    --tensor-parallel-size 4 \
-    --port 9001 \
-    > vllm.log 2>&1 &
-
-# Trainer on GPUs 4-5
-CUDA_VISIBLE_DEVICES=4,5 python -u example_trainer/grpo.py \
-    --model-name Qwen/Qwen2.5-72B-Instruct \
-    --weight-bridge-mode shared_vllm \
-    --use-shared-memory \
-    --training-steps 100 \
-    2>&1 | tee trainer.log
-```
