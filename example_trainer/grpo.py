@@ -20,16 +20,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from torch.optim import AdamW
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Import weight bridge for shared vLLM mode
-try:
-    from example_trainer.vllm_weight_bridge import (
-        BridgeConfig,
-        VLLMWeightBridge,
-        create_bridge_from_training_config,
-    )
-    BRIDGE_AVAILABLE = True
-except ImportError:
-    BRIDGE_AVAILABLE = False
+# Weight bridge removed - single-copy mode uses direct CUDA IPC instead
 
 # Import PEFT for LoRA training
 try:
@@ -143,16 +134,6 @@ class TrainingConfig(BaseModel):
         description=(
             "List of module names to apply LoRA to. "
             "If None, defaults to ['q_proj', 'v_proj'] for most models."
-        ),
-    )
-    
-    # Shared memory mode (for shared_vllm mode - NCCL weight broadcast)
-    use_shared_memory: bool = Field(
-        False,
-        description=(
-            "Enable shared memory weight updates via NCCL. "
-            "vLLM must be started with VLLM_ENABLE_SHARED_WEIGHTS=1. "
-            "Weight updates are broadcast to vLLM's daemon process."
         ),
     )
     
@@ -484,202 +465,161 @@ def _attach_to_vllm_shared_tensors(
     ipc_handles = deserialize_ipc_handles(ipc_handles_raw)
     
     print(f"[Setup] Attaching to vLLM's shared tensors ({len(ipc_handles)} tensors)...")
-    print("[Setup] TRUE SINGLE-COPY MODE - sharing vLLM's GPU memory!")
+    print("[Setup] TRUE SINGLE-COPY MODE - No additional model memory!")
     
-    # Get device from IPC handles
+    # Load model config (not weights) to get architecture
+    from transformers import AutoConfig
+    model_config = AutoConfig.from_pretrained(config.model_name)
+    
+    # Create empty model on meta device (no memory allocation)
+    with torch.device('meta'):
+        model = AutoModelForCausalLM.from_config(
+            model_config,
+            torch_dtype=torch.bfloat16,
+        )
+    
+    # Get parameter names from the empty model
+    param_names = list(model.state_dict().keys())
+    print(f"[Setup] Model architecture has {len(param_names)} parameters", flush=True)
+    
+    # Initialize CUDA before IPC operations
+    # Get the device indices we'll be using
     device_indices = set()
     for name, info in ipc_handles.items():
         if "device_index" in info:
             device_indices.add(info["device_index"])
     
-    device = f"cuda:{list(device_indices)[0]}" if device_indices else "cuda:0"
-    device_idx = int(device.split(':')[1])
-    print(f"[Setup] Target device: {device}", flush=True)
+    print(f"[Setup] IPC handles span devices: {sorted(device_indices)}", flush=True)
     
-    # Initialize CUDA context
-    torch.cuda.set_device(device_idx)
-    torch.cuda.synchronize()
-    print(f"[Setup] ✓ CUDA initialized", flush=True)
-    
-    # APPROACH: Load model to CPU first (doesn't use GPU memory)
-    # This properly initializes all buffers like rotary_emb.inv_freq
-    print(f"[Setup] Loading model structure to CPU...", flush=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        config.model_name,
-        torch_dtype=torch.bfloat16,
-        device_map="cpu",  # Load to CPU first - no GPU memory used!
-        low_cpu_mem_usage=True,
-    )
-    
-    param_names = list(model.state_dict().keys())
-    print(f"[Setup] Model has {len(param_names)} parameters", flush=True)
+    # Initialize CUDA context on each device
+    for dev_idx in sorted(device_indices):
+        print(f"[Setup] Initializing CUDA on device {dev_idx}...", flush=True)
+        torch.cuda.set_device(dev_idx)
+        torch.cuda.synchronize(dev_idx)
+        print(f"[Setup] ✓ Device {dev_idx} ready", flush=True)
     
     # Map vLLM tensor names to HuggingFace model parameter names
     hf_state_dict = {}
     vllm_to_hf_mapping = _create_vllm_to_hf_mapping(model, ipc_handles)
     
-    # Helper to create tensor from IPC handle
-    def _create_ipc_tensor(ipc_info):
-        device_index = ipc_info["device_index"]
-        ipc_handle = base64.b64decode(ipc_info["ipc_handle_b64"])
-        storage_size = ipc_info["storage_size"]
-        storage_offset_orig = ipc_info["storage_offset_orig"]
-        ref_counter_handle = base64.b64decode(ipc_info["ref_counter_handle_b64"])
-        ref_counter_offset = ipc_info["ref_counter_offset"]
-        event_handle = base64.b64decode(ipc_info["event_handle_b64"])
-        event_sync_required = ipc_info["event_sync_required"]
-        
-        share_tuple = (device_index, ipc_handle, storage_size, storage_offset_orig,
-                      ref_counter_handle, ref_counter_offset, event_handle, event_sync_required)
-        
-        storage = torch.UntypedStorage._new_shared_cuda(*share_tuple)
-        dtype = getattr(torch, ipc_info["dtype"].replace("torch.", ""))
-        tensor = torch.tensor([], dtype=dtype, device=f"cuda:{device_index}")
-        tensor.set_(storage, storage_offset=ipc_info["tensor_storage_offset"],
-                   size=ipc_info["shape"], stride=ipc_info["stride"])
-        return tensor
-    
-    # Cache for fused tensors (avoid recreating from IPC multiple times)
-    fused_tensor_cache = {}
-    
-    # Extract fused mappings
-    fused_mappings = vllm_to_hf_mapping.pop('_fused_', {})
-    
     attached_count = 0
-    
-    # First, handle direct mappings
     for hf_name, vllm_name in vllm_to_hf_mapping.items():
         if vllm_name not in ipc_handles:
             continue
+            
+        ipc_info = ipc_handles[vllm_name]
         
         try:
-            ipc_info = ipc_handles[vllm_name]
+            # Reconstruct tensor from IPC handle
+            # We need all 8 items from the original _share_cuda_() call
             if "ipc_handle_b64" not in ipc_info:
+                print(f"[Setup] Missing ipc_handle_b64 for {hf_name}")
                 continue
             
-            tensor = _create_ipc_tensor(ipc_info)
+            # DEBUG: Only try first tensor to see if IPC works at all
+            if attached_count == 0:
+                print(f"[Setup DEBUG] Attempting first tensor: {hf_name}", flush=True)
+                print(f"[Setup DEBUG] device_index: {ipc_info['device_index']}", flush=True)
+                print(f"[Setup DEBUG] storage_size: {ipc_info['storage_size']}", flush=True)
+                print(f"[Setup DEBUG] shape: {ipc_info['shape']}", flush=True)
+            
+            # Decode all the bytes fields from base64
+            device_index = ipc_info["device_index"]
+            ipc_handle = base64.b64decode(ipc_info["ipc_handle_b64"])
+            storage_size = ipc_info["storage_size"]
+            storage_offset_orig = ipc_info["storage_offset_orig"]
+            ref_counter_handle = base64.b64decode(ipc_info["ref_counter_handle_b64"])
+            ref_counter_offset = ipc_info["ref_counter_offset"]
+            event_handle = base64.b64decode(ipc_info["event_handle_b64"])
+            event_sync_required = ipc_info["event_sync_required"]
+            
+            if attached_count == 0:
+                print(f"[Setup DEBUG] Decoded IPC handle, len={len(ipc_handle)}", flush=True)
+                print(f"[Setup DEBUG] About to call _new_shared_cuda...", flush=True)
+            
+            # Reconstruct the 8-tuple that _new_shared_cuda expects
+            share_tuple = (
+                device_index,
+                ipc_handle,
+                storage_size,
+                storage_offset_orig,
+                ref_counter_handle,
+                ref_counter_offset,
+                event_handle,
+                event_sync_required,
+            )
+            
+            # Create storage from IPC handle (needs all 8 items)
+            storage = torch.UntypedStorage._new_shared_cuda(*share_tuple)
+            
+            if attached_count == 0:
+                print(f"[Setup DEBUG] Storage created! size={storage.size()}", flush=True)
+            
+            # Reconstruct tensor
+            dtype = getattr(torch, ipc_info["dtype"].replace("torch.", ""))
+            tensor = torch.tensor([], dtype=dtype, device=f"cuda:{device_index}")
+            tensor.set_(
+                storage,
+                storage_offset=ipc_info["tensor_storage_offset"],
+                size=ipc_info["shape"],
+                stride=ipc_info["stride"],
+            )
+            
+            if attached_count == 0:
+                print(f"[Setup DEBUG] Tensor set! shape={tensor.shape}", flush=True)
+            
+            # Make tensor require gradients for training
             tensor.requires_grad_(True)
+            
             hf_state_dict[hf_name] = tensor
             attached_count += 1
             
             if attached_count == 1:
-                print(f"[Setup DEBUG] ✓ First tensor attached: {hf_name}", flush=True)
+                print(f"[Setup DEBUG] ✓ First tensor attached successfully!", flush=True)
             
         except Exception as e:
             print(f"[Setup] Failed to attach {hf_name}: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             continue
-    
-    print(f"[Setup] Direct attachments: {attached_count}")
-    
-    # Now handle fused mappings (QKV, gate_up)
-    fused_count = 0
-    for hf_name, (vllm_name, fuse_type, slice_idx) in fused_mappings.items():
-        if vllm_name not in ipc_handles:
-            continue
-        
-        try:
-            # Get or create the fused tensor
-            if vllm_name not in fused_tensor_cache:
-                ipc_info = ipc_handles[vllm_name]
-                if "ipc_handle_b64" not in ipc_info:
-                    continue
-                fused_tensor_cache[vllm_name] = _create_ipc_tensor(ipc_info)
-            
-            fused_tensor = fused_tensor_cache[vllm_name]
-            
-            # Slice the fused tensor
-            # vLLM fuses along the first dimension (output features)
-            if fuse_type == 'qkv':
-                # QKV is fused: [hidden, (q_size + k_size + v_size)]
-                # For Qwen: q_size = num_heads * head_dim, k_size = v_size = num_kv_heads * head_dim
-                total_size = fused_tensor.shape[0]
-                # Assume equal splits for Q, K, V (common case)
-                # Actually for GQA: Q is larger, K=V are smaller
-                # We'll get sizes from the HF model's expected shapes
-                hf_param = dict(model.named_parameters())[hf_name]
-                expected_size = hf_param.shape[0]
-                
-                if slice_idx == 0:  # Q
-                    sliced = fused_tensor[:expected_size]
-                elif slice_idx == 1:  # K
-                    # K starts after Q
-                    q_size = dict(model.named_parameters())[hf_name.replace('.k_proj.', '.q_proj.')].shape[0]
-                    sliced = fused_tensor[q_size:q_size + expected_size]
-                else:  # V
-                    q_size = dict(model.named_parameters())[hf_name.replace('.v_proj.', '.q_proj.')].shape[0]
-                    k_size = dict(model.named_parameters())[hf_name.replace('.v_proj.', '.k_proj.')].shape[0]
-                    sliced = fused_tensor[q_size + k_size:q_size + k_size + expected_size]
-            
-            elif fuse_type == 'gate_up':
-                # gate_up is fused: [hidden, gate_size + up_size]
-                total_size = fused_tensor.shape[0]
-                half_size = total_size // 2
-                if slice_idx == 0:  # gate
-                    sliced = fused_tensor[:half_size]
-                else:  # up
-                    sliced = fused_tensor[half_size:]
-            
-            # The slice shares memory with the original!
-            sliced.requires_grad_(True)
-            hf_state_dict[hf_name] = sliced
-            fused_count += 1
-            
-        except Exception as e:
-            print(f"[Setup] Failed to slice {hf_name} from {vllm_name}: {e}", flush=True)
-            continue
-    
-    print(f"[Setup] Fused slices: {fused_count}")
-    attached_count += fused_count
     
     if attached_count == 0:
-        print("[Setup] Could not attach any tensors - IPC failed")
-        print("[Setup] Model loaded normally (not sharing memory with vLLM)")
-        model.to(device)
-        return model
+        print("[Setup] Could not attach any tensors, falling back to regular loading")
+        return None
     
-    print(f"[Setup] ✓ Built {attached_count} IPC tensor references")
+    print(f"[Setup] ✓ Attached {attached_count} tensors to vLLM's shared memory")
     
-    # Swap model's parameters with IPC tensors (point to vLLM's GPU memory)
-    swap_count = 0
+    # Load state dict into model
+    model.load_state_dict(hf_state_dict, strict=False, assign=True)
+    
+    # Initialize any remaining meta tensors (buffers like rotary embeddings)
+    # These are not in vLLM's state_dict but need to be initialized
+    device = f"cuda:{list(device_indices)[0]}" if device_indices else "cuda:0"
+    meta_count = 0
     for name, param in model.named_parameters():
-        if name in hf_state_dict:
-            ipc_tensor = hf_state_dict[name]
-            if param.shape == ipc_tensor.shape:
-                param.data = ipc_tensor
-                swap_count += 1
-            else:
-                print(f"[Setup] Shape mismatch for {name}: model={param.shape}, ipc={ipc_tensor.shape}")
+        if param.device.type == 'meta':
+            # Initialize with zeros - these will be computed during forward
+            new_param = torch.zeros(param.shape, dtype=param.dtype, device=device)
+            param.data = new_param
+            meta_count += 1
     
-    print(f"[Setup] ✓ {swap_count} parameters now share vLLM's GPU memory!")
-    
-    # Move remaining buffers (like rotary_emb.inv_freq) to GPU
-    # These are small and weren't in the IPC handles
-    buffer_count = 0
     for name, buffer in model.named_buffers():
-        if buffer.device.type == 'cpu':
-            buffer.data = buffer.to(device)
-            buffer_count += 1
+        if buffer.device.type == 'meta':
+            # For buffers like inv_freq, we need proper initialization
+            if 'inv_freq' in name:
+                # Rotary embedding inverse frequencies
+                # These need to be computed based on model config
+                dim = buffer.shape[0] * 2  # inv_freq has shape [dim/2]
+                base = 10000.0  # Default RoPE base
+                inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+                buffer.data = inv_freq.to(dtype=buffer.dtype, device=device)
+            else:
+                # Other buffers - initialize with zeros
+                buffer.data = torch.zeros(buffer.shape, dtype=buffer.dtype, device=device)
+            meta_count += 1
     
-    if buffer_count > 0:
-        print(f"[Setup] ✓ Moved {buffer_count} buffers to {device}")
-    
-    # Check for unmatched parameters still on CPU
-    # These indicate a name mapping issue - don't try to move large ones
-    unmatched_cpu = []
-    for name, param in model.named_parameters():
-        if param.device.type == 'cpu':
-            unmatched_cpu.append((name, param.numel()))
-    
-    if unmatched_cpu:
-        total_unmatched = sum(n for _, n in unmatched_cpu)
-        print(f"[Setup] WARNING: {len(unmatched_cpu)} parameters ({total_unmatched:,} elements) not matched!")
-        print(f"[Setup] First few unmatched: {[n for n, _ in unmatched_cpu[:5]]}")
-        print(f"[Setup] This may cause issues - check name mapping between vLLM and HuggingFace")
-        
-        # Only move small parameters (< 1M elements) - skip large unmatched ones
-        for name, param in model.named_parameters():
-            if param.device.type == 'cpu' and param.numel() < 1_000_000:
-                param.data = param.to(device)
+    if meta_count > 0:
+        print(f"[Setup] Initialized {meta_count} remaining meta tensors")
     
     return model
 
@@ -688,18 +628,13 @@ def _create_vllm_to_hf_mapping(model: torch.nn.Module, ipc_handles: dict) -> dic
     """
     Create mapping from HuggingFace parameter names to vLLM tensor names.
     
-    vLLM uses fused layers that need special handling:
-    - qkv_proj -> q_proj, k_proj, v_proj (need slicing)
-    - gate_up_proj -> gate_proj, up_proj (need slicing)
+    vLLM uses slightly different naming conventions than HuggingFace.
+    This function creates the bidirectional mapping.
     """
     hf_params = set(model.state_dict().keys())
     vllm_params = set(ipc_handles.keys())
     
-    print(f"[Setup] HF model has {len(hf_params)} params, vLLM exported {len(vllm_params)} tensors")
-    
     mapping = {}
-    # Track fused tensors that need slicing
-    fused_mappings = {}  # hf_name -> (vllm_name, slice_type, slice_index)
     
     for hf_name in hf_params:
         # Try direct match first
@@ -707,55 +642,24 @@ def _create_vllm_to_hf_mapping(model: torch.nn.Module, ipc_handles: dict) -> dic
             mapping[hf_name] = hf_name
             continue
         
-        # Check for fused QKV projection
-        # HF: model.layers.X.self_attn.q_proj.weight -> vLLM: model.layers.X.self_attn.qkv_proj.weight
-        if '.self_attn.q_proj.' in hf_name:
-            vllm_name = hf_name.replace('.q_proj.', '.qkv_proj.')
-            if vllm_name in vllm_params:
-                fused_mappings[hf_name] = (vllm_name, 'qkv', 0)  # Q is first
-                continue
-        if '.self_attn.k_proj.' in hf_name:
-            vllm_name = hf_name.replace('.k_proj.', '.qkv_proj.')
-            if vllm_name in vllm_params:
-                fused_mappings[hf_name] = (vllm_name, 'qkv', 1)  # K is second
-                continue
-        if '.self_attn.v_proj.' in hf_name:
-            vllm_name = hf_name.replace('.v_proj.', '.qkv_proj.')
-            if vllm_name in vllm_params:
-                fused_mappings[hf_name] = (vllm_name, 'qkv', 2)  # V is third
-                continue
-        
-        # Check for fused gate_up projection
-        # HF: model.layers.X.mlp.gate_proj.weight -> vLLM: model.layers.X.mlp.gate_up_proj.weight
-        if '.mlp.gate_proj.' in hf_name:
-            vllm_name = hf_name.replace('.gate_proj.', '.gate_up_proj.')
-            if vllm_name in vllm_params:
-                fused_mappings[hf_name] = (vllm_name, 'gate_up', 0)  # gate is first
-                continue
-        if '.mlp.up_proj.' in hf_name:
-            vllm_name = hf_name.replace('.up_proj.', '.gate_up_proj.')
-            if vllm_name in vllm_params:
-                fused_mappings[hf_name] = (vllm_name, 'gate_up', 1)  # up is second
-                continue
-        
-        # For lm_head, check if it's tied to embed_tokens
-        if hf_name == "lm_head.weight" and "model.embed_tokens.weight" in vllm_params:
-            mapping[hf_name] = "model.embed_tokens.weight"
+        # Try common transformations
+        # vLLM often uses 'model.' prefix
+        vllm_name = f"model.{hf_name}" if not hf_name.startswith("model.") else hf_name
+        if vllm_name in vllm_params:
+            mapping[hf_name] = vllm_name
             continue
-    
-    total_mapped = len(mapping) + len(fused_mappings)
-    print(f"[Setup] Direct mappings: {len(mapping)}, Fused mappings: {len(fused_mappings)}")
-    print(f"[Setup] Total mapped: {total_mapped} / {len(hf_params)}")
-    
-    # Store fused mappings for later slicing
-    mapping['_fused_'] = fused_mappings
+        
+        # Remove 'model.' prefix if present
+        if hf_name.startswith("model."):
+            vllm_name = hf_name[6:]
+            if vllm_name in vllm_params:
+                mapping[hf_name] = vllm_name
     
     return mapping
 
 
 def load_model_and_tokenizer(
     config: TrainingConfig,
-    bridge: Optional["VLLMWeightBridge"] = None,
     single_copy: bool = False,
 ) -> Tuple[torch.nn.Module, "AutoTokenizer"]:
     """
@@ -763,16 +667,15 @@ def load_model_and_tokenizer(
 
     Args:
         config: Training configuration
-        bridge: Optional weight bridge for shared_vllm mode
-        single_copy: If True, try to attach to vLLM's shared tensors (no extra memory)
+        single_copy: If True, attach to vLLM's shared tensors via CUDA IPC
 
     Returns:
         Tuple of (model, tokenizer)
     """
     tokenizer = AutoTokenizer.from_pretrained(config.model_name)
 
-    # Single-copy mode: attach to vLLM's shared tensors (no bridge needed)
-    if single_copy or os.environ.get("VLLM_SINGLE_COPY", "0") == "1":
+    # Single-copy mode: attach to vLLM's shared tensors via CUDA IPC
+    if single_copy or config.weight_bridge_mode == "shared_vllm":
         # Try multiple possible locations for the config file
         possible_paths = [
             os.environ.get("LOGDIR", "."),
@@ -781,15 +684,15 @@ def load_model_and_tokenizer(
             os.path.dirname(os.path.abspath(__file__)),
         ]
         
-        bridge_config_path = None
+        config_path = None
         for log_dir in possible_paths:
             candidate = os.path.join(log_dir, "vllm_bridge_config.json")
             if os.path.exists(candidate):
-                bridge_config_path = candidate
-                print(f"[Setup] Found bridge config at: {candidate}")
+                config_path = candidate
+                print(f"[Setup] Found vLLM config at: {candidate}")
                 break
         
-        if bridge_config_path is None:
+        if config_path is None:
             checked = [os.path.join(p, "vllm_bridge_config.json") for p in possible_paths]
             raise RuntimeError(
                 f"[Setup] Could not find vllm_bridge_config.json\n"
@@ -797,7 +700,7 @@ def load_model_and_tokenizer(
                 f"Make sure vLLM is running with VLLM_ENABLE_SHARED_WEIGHTS=1"
             )
         
-        model = _attach_to_vllm_shared_tensors(config, bridge_config_path)
+        model = _attach_to_vllm_shared_tensors(config, config_path)
         if model is not None:
             print("[Setup] ✓ Single-copy mode active - using vLLM's tensors directly!")
             model.train()
@@ -810,18 +713,6 @@ def load_model_and_tokenizer(
                 "  2. vllm_bridge_config.json exists with ipc_handles\n"
                 "  3. Trainer is on SAME GPUs as vLLM"
             )
-
-    elif config.weight_bridge_mode == "shared_vllm" and bridge is not None:
-        # Broadcast mode: Load separate model, broadcast updates via NCCL
-        print("[Setup] Loading model for shared vLLM mode (broadcast)...")
-        if config.use_shared_memory:
-            print("[Setup] NCCL shared memory mode - updates broadcast to vLLM daemon")
-        else:
-            print("[Setup] HTTP notification mode - vLLM notified of updates")
-        model = AutoModelForCausalLM.from_pretrained(
-            config.model_name, torch_dtype=torch.bfloat16
-        )
-        model.to(config.device)
 
     elif config.weight_bridge_mode == "lora_only":
         model = _load_model_with_lora(config)
@@ -1446,81 +1337,45 @@ def train_shared_vllm(config: TrainingConfig):
 
     Instead of saving checkpoints and restarting vLLM, this mode:
     1. Joins the same distributed group as vLLM
-    2. Attaches to vLLM's weight tensors directly
+    2. Attaches to vLLM's weight tensors directly via CUDA IPC
     3. optimizer.step() modifies vLLM's weights in-place
     4. vLLM immediately uses updated weights (no restart!)
+    
+    Requirements:
+    - vLLM running with VLLM_ENABLE_SHARED_WEIGHTS=1
+    - Trainer on same GPU(s) as vLLM (for IPC to work)
     """
-    if not BRIDGE_AVAILABLE and not config.single_copy:
-        raise RuntimeError(
-            "vLLM weight bridge not available. "
-            "Ensure vllm_weight_bridge.py is in the same directory."
-        )
-
     training_start_time = time.time()
 
     # === Setup ===
     use_wandb = setup_wandb(config)
 
     print(f"\n{'='*60}")
-    if config.single_copy:
-        print("SINGLE-COPY MODE (CUDA IPC)")
-        print(">>> TRUE shared memory - only ONE model copy!")
-        print(">>> Trainer uses vLLM's tensors directly!")
-    elif config.use_shared_memory:
-        print("SHARED VLLM MODE (NCCL BROADCAST)")
-        print(">>> Weights broadcast to vLLM via NCCL!")
-    else:
-        print("SHARED VLLM MODE (HTTP notifications)")
+    print("SINGLE-COPY MODE (CUDA IPC)")
+    print(">>> TRUE shared memory - only ONE model copy!")
+    print(">>> Trainer uses vLLM's tensors directly!")
     print(f"{'='*60}")
     print(f"Model: {config.model_name}")
-    print(f"Single Copy: {config.single_copy}")
-    print(f"Shared Memory: {config.use_shared_memory}")
     print(f"Distributed: rank={config.trainer_rank}/{config.world_size}")
     print(f"Init method: {config.init_method}")
-    print(f"Inference nodes: {config.num_inference_nodes}")
     print(f"Save path: {config.save_path}")
     print(f"{'='*60}\n")
 
-    # Single-copy mode: Skip bridge, attach directly to vLLM's tensors
-    if config.single_copy:
-        print("[1/3] Single-copy mode - skipping bridge (direct IPC)...")
-        bridge = None
-        
-        # Load model by attaching to vLLM's shared tensors
-        print("[2/3] Attaching to vLLM's shared tensors...")
-        model, tokenizer = load_model_and_tokenizer(
-            config, 
-            bridge=None, 
-            single_copy=True
+    # Single-copy mode: attach directly to vLLM's tensors via CUDA IPC
+    print("[1/2] Attaching to vLLM's shared tensors...")
+    model, tokenizer = load_model_and_tokenizer(config, single_copy=True)
+    
+    if model is None:
+        raise RuntimeError(
+            "Single-copy mode failed. Make sure:\n"
+            "1. vLLM is running with VLLM_ENABLE_SHARED_WEIGHTS=1\n"
+            "2. Trainer is on the SAME GPUs as vLLM\n"
+            "3. vllm_bridge_config.json exists with IPC handles"
         )
-        
-        if model is None:
-            raise RuntimeError(
-                "Single-copy mode failed. Make sure:\n"
-                "1. vLLM is running with VLLM_ENABLE_SHARED_WEIGHTS=1\n"
-                "2. Trainer is on the SAME GPUs as vLLM\n"
-                "3. vllm_bridge_config.json exists with IPC handles"
-            )
-    else:
-        # Initialize weight bridge for NCCL broadcast mode
-        print("[1/3] Initializing weight bridge...")
-        bridge = create_bridge_from_training_config(config)
-
-        # Load model with bridge attachment
-        print("[2/3] Loading model with shared weights...")
-        model, tokenizer = load_model_and_tokenizer(
-            config, 
-            bridge=bridge, 
-            single_copy=False
-        )
-        
-        # For NCCL mode, build mapping between trainer's and vLLM's param names
-        if config.use_shared_memory:
-            bridge.build_param_mapping(model)
 
     optimizer = AdamW(model.parameters(), lr=config.lr)
 
-    print(f"[3/3] Starting training for {config.training_steps} steps")
+    print(f"[2/2] Starting training for {config.training_steps} steps")
     print("NOTE: vLLM sees weight updates immediately after each step!")
     print("-" * 60)
 
@@ -1578,20 +1433,10 @@ def train_shared_vllm(config: TrainingConfig):
             gpu_mem_gb = 0
             gpu_mem_reserved_gb = 0
 
-        # Sync weights with vLLM
-        sync_start = time.time()
-        if config.single_copy:
-            # Single-copy mode - weights already updated in-place (same memory!)
-            print(f"  [SINGLE-COPY] Weights updated in-place - step {step+1} (sync: 0ms)")
-        elif config.use_shared_memory and bridge is not None:
-            # NCCL broadcast mode - weights sent directly to vLLM daemon
-            bridge.broadcast_weights(model)
-            print(f"  [SHARED] Weights broadcast via NCCL - step {step+1} (sync: {(time.time()-sync_start)*1000:.1f}ms)")
-        elif bridge is not None:
-            # HTTP notification mode - just notify
-            bridge.notify_update()
-            print(f"  [SHARED] Update notification sent - step {step+1}")
-        sync_time = time.time() - sync_start
+        # In single-copy mode, weights are already updated in-place (same GPU memory!)
+        # No synchronization needed - vLLM sees changes immediately
+        sync_time = 0.0
+        print(f"  [SINGLE-COPY] Weights updated in-place - step {step+1}")
         benchmark_stats["sync_times"].append(sync_time)
 
         # Add timing metrics
@@ -1604,7 +1449,7 @@ def train_shared_vllm(config: TrainingConfig):
         # Log metrics
         log_metrics(metrics, step + 1, use_wandb, {
             "train/learning_rate": optimizer.param_groups[0]["lr"],
-            "bridge/update_count": step + 1,
+            "train/update_count": step + 1,
         })
 
         # Periodic checkpoint save (for recovery, not for vLLM sync)
@@ -1612,8 +1457,6 @@ def train_shared_vllm(config: TrainingConfig):
             save_checkpoint(model, tokenizer, config.save_path, step + 1)
 
     # === Cleanup ===
-    if bridge is not None:
-        bridge.cleanup()
     save_checkpoint(model, tokenizer, config.save_path, config.training_steps, is_final=True)
     finalize_training(use_wandb, training_start_time, "shared_vllm", config.training_steps, benchmark_stats)
 
@@ -1963,17 +1806,6 @@ def parse_args() -> argparse.Namespace:
         help="Module names to apply LoRA to (default: q_proj v_proj)",
     )
     
-    # --- Shared memory arguments ---
-    parser.add_argument(
-        "--use-shared-memory",
-        action="store_true",
-        help=(
-            "Enable NCCL shared memory weight updates (shared_vllm mode only). "
-            "Weights are broadcast to vLLM's daemon via NCCL. "
-            "vLLM must be started with VLLM_ENABLE_SHARED_WEIGHTS=1."
-        ),
-    )
-    
     parser.add_argument(
         "--single-copy",
         action="store_true",
@@ -2015,7 +1847,6 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
         lora_target_modules=args.lora_target_modules,
-        use_shared_memory=getattr(args, 'use_shared_memory', False),
         single_copy=getattr(args, 'single_copy', False),
     )
 
