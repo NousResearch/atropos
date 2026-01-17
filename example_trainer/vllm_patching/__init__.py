@@ -1,13 +1,20 @@
 """
-vLLM Patching Module - Enables shared memory weight updates.
+vLLM Patching Module - Enables CUDA IPC shared memory for single-copy training.
 
 This module patches vLLM's GPUModelRunner to:
 1. Call share_memory_() on model weights after loading
-2. Spawn a daemon process that receives NCCL weight updates from trainers
-3. Enable real-time weight synchronization without restarting vLLM
+2. Export CUDA IPC handles to vllm_bridge_config.json
+3. Enable the trainer to attach to vLLM's tensors directly
+
+The result: ONE copy of model weights in GPU memory, shared between
+vLLM (inference) and the trainer (gradient updates).
 
 Usage:
-    # Import this BEFORE importing vllm
+    # Set environment BEFORE importing
+    import os
+    os.environ["VLLM_ENABLE_SHARED_WEIGHTS"] = "1"
+    
+    # Import and apply patches BEFORE importing vllm
     from example_trainer.vllm_patching import apply_patches
     apply_patches()
     
@@ -21,24 +28,10 @@ from .patched_gpu_runner import (
     get_patched_runner,
     is_patched,
 )
-from .weight_updater import weight_updater_process
-from .distributed_utils import (
-    init_process_group,
-    broadcast_object_list,
-    get_inference_urls,
-    get_json_data,
-)
 
 __all__ = [
     "PatchedGPUModelRunner",
     "apply_patches",
     "get_patched_runner",
     "is_patched",
-    "weight_updater_process",
-    "init_process_group",
-    "broadcast_object_list",
-    "get_inference_urls",
-    "get_json_data",
 ]
-
-
