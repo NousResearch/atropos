@@ -645,7 +645,7 @@ python text_reversal_environment.py serve \
 
 ### Verifiers Server (`verifiers_server.py`)
 
-The Verifiers Server acts as a bridge between Atropos and the [Verifiers Environment Hub](https://github.com/NousResearch/verifiers). This allows you to leverage any Verifiers-native environment for RL (via GRPO), SFT data generation, or large-scale evaluation while maintaining correct multi-turn logic and token-level accuracy.
+The Verifiers Server acts as a bridge between Atropos and any environment built with [Verifiers](https://github.com/PrimeIntellect-ai/verifiers), including the 100+ environments hosted on the [Environments Hub](https://app.primeintellect.ai/dashboard/environments). This allows you to leverage any Verifiers-native environment for RL (via GRPO), SFT data generation, or large-scale evaluation while maintaining correct multi-turn logic and token-level accuracy.
 
 #### 1. Setup & Installation
 To use these environments, you first need to install the Verifiers CLI tool (`prime`) and the specific environment you wish to run:
