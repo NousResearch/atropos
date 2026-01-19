@@ -615,9 +615,7 @@ def _attach_to_vllm_shared_tensors(
             attached_count += 1
 
             if attached_count == 1 and config.debug_loading:
-                print(
-                    "[Setup DEBUG] ✓ First tensor attached successfully!", flush=True
-                )
+                print("[Setup DEBUG] ✓ First tensor attached successfully!", flush=True)
 
         except Exception as e:
             print(f"[Setup] Failed to attach {hf_name}: {e}", flush=True)
