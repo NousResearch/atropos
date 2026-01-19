@@ -832,7 +832,7 @@ def load_model_and_tokenizer(
                 "/tmp/atropos_bridge",
                 os.path.dirname(os.path.abspath(__file__)),
             ]
-            
+
             config_path = None
             for log_dir in possible_paths:
                 candidate = os.path.join(log_dir, "vllm_bridge_config.json")
@@ -840,16 +840,18 @@ def load_model_and_tokenizer(
                     config_path = candidate
                     print(f"[Setup] Found vLLM config at: {candidate}")
                     break
-            
+
             if config_path is None:
-                checked = [os.path.join(p, "vllm_bridge_config.json") for p in possible_paths]
+                checked = [
+                    os.path.join(p, "vllm_bridge_config.json") for p in possible_paths
+                ]
                 raise RuntimeError(
                     f"[Setup] Could not find vllm_bridge_config.json\n"
                     f"Checked: {checked}\n"
                     f"Tip: Use --vllm-config-path to specify the path explicitly\n"
                     f"Make sure vLLM is running with VLLM_ENABLE_SHARED_WEIGHTS=1 and LOGDIR set"
                 )
-        
+
         model = _attach_to_vllm_shared_tensors(config, config_path)
         if model is not None:
             print("[Setup] ✓ Single-copy mode active - using vLLM's tensors directly!")
@@ -1576,7 +1578,9 @@ def train_shared_vllm(config: TrainingConfig):
             "3. vllm_bridge_config.json exists with IPC handles"
         )
 
-    optimizer = AdamW(model.parameters(), lr=config.lr) # maybe we need to make this configurable in the future 
+    optimizer = AdamW(
+        model.parameters(), lr=config.lr
+    )  # maybe we need to make this configurable in the future
 
     print(f"[2/2] Starting training for {config.training_steps} steps")
     print("NOTE: vLLM sees weight updates immediately after each step!")
@@ -2098,8 +2102,8 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
         lora_target_modules=args.lora_target_modules,
-        single_copy=getattr(args, 'single_copy', False),
-        vllm_config_path=getattr(args, 'vllm_config_path', None),
+        single_copy=getattr(args, "single_copy", False),
+        vllm_config_path=getattr(args, "vllm_config_path", None),
     )
 
 
