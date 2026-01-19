@@ -19,12 +19,6 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import TYPE_CHECKING
-
-# Lazy imports to avoid circular dependencies
-if TYPE_CHECKING:
-    from vllm.v1.worker.gpu_model_runner import GPUModelRunner
-
 
 # Flag to track if patches have been applied
 _PATCHES_APPLIED = False

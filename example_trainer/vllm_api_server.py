@@ -747,7 +747,6 @@ async def lora_unload() -> JSONResponse:
 
 def build_app(args: Namespace) -> FastAPI:
     """Build the FastAPI application."""
-    global app
     app.root_path = args.root_path
     return app
 
