@@ -1112,7 +1112,7 @@ class ForbiddenWords(Instruction):
         """Build the instruction description.
 
         Args:
-          forbidden_words: A sequences of strings respresenting words that are not
+          forbidden_words: A sequences of strings representing words that are not
             allowed in the response.
 
         Returns:
@@ -1155,7 +1155,7 @@ class RephraseParagraph(Instruction):
 
         Args:
           original_paragraph: A string presenting the original paragraph. The
-            rephrases response should have betweeb low-high words in common.
+            rephrases response should have between low-high words in common.
           low: An integer presenting the lower bound of similar words.
           high: An integer representing the upper bound of similar words.
 
