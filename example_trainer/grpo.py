@@ -24,7 +24,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Import PEFT for LoRA training
 try:
-    from peft import LoraConfig, TaskType, get_peft_model, PeftModel
+    from peft import LoraConfig, PeftModel, TaskType, get_peft_model
+
     PEFT_AVAILABLE = True
 except ImportError:
     PEFT_AVAILABLE = False
@@ -136,7 +137,7 @@ class TrainingConfig(BaseModel):
             "If None, defaults to ['q_proj', 'v_proj'] for most models."
         ),
     )
-    
+
     # Single-copy mode (TRUE shared memory - no extra model copy)
     single_copy: bool = Field(
         False,
@@ -153,14 +154,15 @@ class TrainingConfig(BaseModel):
 def check_atropos_api(timeout: float = 30.0) -> bool:
     """
     Check if the Atropos API server is reachable.
-    
+
     Args:
         timeout: Maximum time to wait for the server
-        
+
     Returns:
         True if server is reachable
     """
     import time as _time
+
     start = _time.time()
     while _time.time() - start < timeout:
         try:
@@ -173,7 +175,7 @@ def check_atropos_api(timeout: float = 30.0) -> bool:
         except Exception as e:
             print(f"[Trainer] Waiting for Atropos API... ({e})")
         _time.sleep(1)
-    
+
     print("[Trainer] ⚠ Warning: Atropos API server not reachable")
     return False
 
@@ -182,7 +184,7 @@ def check_atropos_api(timeout: float = 30.0) -> bool:
 def register_trainer(config: TrainingConfig):
     """
     Register the trainer with the Atropos API.
-    
+
     Verifies registration succeeded before returning.
     """
     response = requests.post(
@@ -203,23 +205,23 @@ def register_trainer(config: TrainingConfig):
 
     # Check for HTTP errors
     response.raise_for_status()
-    
+
     # Verify we got a valid response with UUID
     data = response.json()
     if "uuid" not in data:
         raise RuntimeError(f"Registration failed: {data}")
-    
+
     print(f"[Trainer] ✓ Registered with Atropos API (uuid: {data['uuid']})")
 
 
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=30))
 def get_batch():
     data = requests.get("http://localhost:8000/batch", timeout=10).json()
-    
+
     # Check if there was an error (trainer not registered)
     if data.get("status") == "error":
         raise RuntimeError(f"Atropos API error: {data.get('message', 'Unknown error')}")
-    
+
     return data
 
 
@@ -413,43 +415,43 @@ def _attach_to_vllm_shared_tensors(
 ) -> Optional[torch.nn.Module]:
     """
     Attach to vLLM's shared tensors via CUDA IPC (true single-copy mode).
-    
+
     This creates a model whose parameters point to the SAME GPU memory as vLLM,
     meaning only ONE copy of the model exists in GPU memory.
-    
+
     Args:
         config: Training configuration
         bridge_config_path: Path to vllm_bridge_config.json
-        
+
     Returns:
         Model with parameters pointing to vLLM's tensors, or None if not possible
     """
     print(f"[Setup] Reading bridge config from: {bridge_config_path}")
     try:
-        with open(bridge_config_path, 'r') as f:
+        with open(bridge_config_path, "r") as f:
             bridge_config = json.load(f)
         print(f"[Setup] Bridge config keys: {list(bridge_config.keys())}")
     except Exception as e:
         print(f"[Setup] Could not read bridge config: {e}")
         return None
-    
+
     single_copy_enabled = bridge_config.get("single_copy_enabled", False)
     print(f"[Setup] single_copy_enabled in config: {single_copy_enabled}")
-    
+
     if not single_copy_enabled:
         print("[Setup] Single-copy mode not available (single_copy_enabled=False)")
         print("[Setup] Make sure vLLM was started with VLLM_ENABLE_SHARED_WEIGHTS=1")
         return None
-    
+
     ipc_handles_raw = bridge_config.get("ipc_handles", {})
     print(f"[Setup] IPC handles count: {len(ipc_handles_raw)}")
     if not ipc_handles_raw:
         print("[Setup] No IPC handles found in bridge config")
         return None
-    
+
     # Deserialize base64-encoded bytes back to bytes
     import base64
-    
+
     def deserialize_ipc_handles(handles):
         result = {}
         for k, v in handles.items():
@@ -461,68 +463,75 @@ def _attach_to_vllm_shared_tensors(
             else:
                 result[k] = v
         return result
-    
+
     ipc_handles = deserialize_ipc_handles(ipc_handles_raw)
-    
+
     print(f"[Setup] Attaching to vLLM's shared tensors ({len(ipc_handles)} tensors)...")
     print("[Setup] TRUE SINGLE-COPY MODE - No additional model memory!")
-    
+
     # Load model config (not weights) to get architecture
     from transformers import AutoConfig
+
     model_config = AutoConfig.from_pretrained(config.model_name)
-    
+
     # Create empty model on meta device (no memory allocation)
-    with torch.device('meta'):
+    with torch.device("meta"):
         model = AutoModelForCausalLM.from_config(
             model_config,
             torch_dtype=torch.bfloat16,
         )
-    
+
     # Get parameter names from the empty model
     param_names = list(model.state_dict().keys())
     print(f"[Setup] Model architecture has {len(param_names)} parameters", flush=True)
-    
+
     # Initialize CUDA before IPC operations
     # Get the device indices we'll be using
     device_indices = set()
     for name, info in ipc_handles.items():
         if "device_index" in info:
             device_indices.add(info["device_index"])
-    
+
     print(f"[Setup] IPC handles span devices: {sorted(device_indices)}", flush=True)
-    
+
     # Initialize CUDA context on each device
     for dev_idx in sorted(device_indices):
         print(f"[Setup] Initializing CUDA on device {dev_idx}...", flush=True)
         torch.cuda.set_device(dev_idx)
         torch.cuda.synchronize(dev_idx)
         print(f"[Setup] ✓ Device {dev_idx} ready", flush=True)
-    
+
     # Map vLLM tensor names to HuggingFace model parameter names
     hf_state_dict = {}
     vllm_to_hf_mapping = _create_vllm_to_hf_mapping(model, ipc_handles)
-    
+
     attached_count = 0
     for hf_name, vllm_name in vllm_to_hf_mapping.items():
         if vllm_name not in ipc_handles:
             continue
-            
+
         ipc_info = ipc_handles[vllm_name]
-        
+
         try:
             # Reconstruct tensor from IPC handle
             # We need all 8 items from the original _share_cuda_() call
             if "ipc_handle_b64" not in ipc_info:
                 print(f"[Setup] Missing ipc_handle_b64 for {hf_name}")
                 continue
-            
+
             # DEBUG: Only try first tensor to see if IPC works at all
             if attached_count == 0:
                 print(f"[Setup DEBUG] Attempting first tensor: {hf_name}", flush=True)
-                print(f"[Setup DEBUG] device_index: {ipc_info['device_index']}", flush=True)
-                print(f"[Setup DEBUG] storage_size: {ipc_info['storage_size']}", flush=True)
+                print(
+                    f"[Setup DEBUG] device_index: {ipc_info['device_index']}",
+                    flush=True,
+                )
+                print(
+                    f"[Setup DEBUG] storage_size: {ipc_info['storage_size']}",
+                    flush=True,
+                )
                 print(f"[Setup DEBUG] shape: {ipc_info['shape']}", flush=True)
-            
+
             # Decode all the bytes fields from base64
             device_index = ipc_info["device_index"]
             ipc_handle = base64.b64decode(ipc_info["ipc_handle_b64"])
@@ -532,11 +541,14 @@ def _attach_to_vllm_shared_tensors(
             ref_counter_offset = ipc_info["ref_counter_offset"]
             event_handle = base64.b64decode(ipc_info["event_handle_b64"])
             event_sync_required = ipc_info["event_sync_required"]
-            
+
             if attached_count == 0:
-                print(f"[Setup DEBUG] Decoded IPC handle, len={len(ipc_handle)}", flush=True)
+                print(
+                    f"[Setup DEBUG] Decoded IPC handle, len={len(ipc_handle)}",
+                    flush=True,
+                )
                 print(f"[Setup DEBUG] About to call _new_shared_cuda...", flush=True)
-            
+
             # Reconstruct the 8-tuple that _new_shared_cuda expects
             share_tuple = (
                 device_index,
@@ -548,13 +560,15 @@ def _attach_to_vllm_shared_tensors(
                 event_handle,
                 event_sync_required,
             )
-            
+
             # Create storage from IPC handle (needs all 8 items)
             storage = torch.UntypedStorage._new_shared_cuda(*share_tuple)
-            
+
             if attached_count == 0:
-                print(f"[Setup DEBUG] Storage created! size={storage.size()}", flush=True)
-            
+                print(
+                    f"[Setup DEBUG] Storage created! size={storage.size()}", flush=True
+                )
+
             # Reconstruct tensor
             dtype = getattr(torch, ipc_info["dtype"].replace("torch.", ""))
             tensor = torch.tensor([], dtype=dtype, device=f"cuda:{device_index}")
@@ -564,121 +578,133 @@ def _attach_to_vllm_shared_tensors(
                 size=ipc_info["shape"],
                 stride=ipc_info["stride"],
             )
-            
+
             if attached_count == 0:
                 print(f"[Setup DEBUG] Tensor set! shape={tensor.shape}", flush=True)
-            
+
             # Make tensor require gradients for training
             tensor.requires_grad_(True)
-            
+
             hf_state_dict[hf_name] = tensor
             attached_count += 1
-            
+
             if attached_count == 1:
-                print(f"[Setup DEBUG] ✓ First tensor attached successfully!", flush=True)
-            
+                print(
+                    f"[Setup DEBUG] ✓ First tensor attached successfully!", flush=True
+                )
+
         except Exception as e:
             print(f"[Setup] Failed to attach {hf_name}: {e}", flush=True)
             import traceback
+
             traceback.print_exc()
             continue
-    
+
     if attached_count == 0:
         print("[Setup] Could not attach any tensors, falling back to regular loading")
         return None
-    
+
     print(f"[Setup] ✓ Attached {attached_count} tensors to vLLM's shared memory")
-    
+
     # Load state dict into model
     model.load_state_dict(hf_state_dict, strict=False, assign=True)
-    
+
     # Initialize any remaining meta tensors (buffers like rotary embeddings)
     # These are not in vLLM's state_dict but need to be initialized
     device = f"cuda:{list(device_indices)[0]}" if device_indices else "cuda:0"
-    
+
     # =========================================================================
     # DIAGNOSTIC: Count what's on meta vs cuda after load_state_dict
     # =========================================================================
     meta_params = []
     cuda_params = []
     for name, param in model.named_parameters():
-        if param.device.type == 'meta':
+        if param.device.type == "meta":
             meta_params.append(name)
-        elif param.device.type == 'cuda':
+        elif param.device.type == "cuda":
             cuda_params.append(name)
-    
+
     meta_buffers = []
     cuda_buffers = []
     for name, buffer in model.named_buffers():
-        if buffer.device.type == 'meta':
+        if buffer.device.type == "meta":
             meta_buffers.append(name)
-        elif buffer.device.type == 'cuda':
+        elif buffer.device.type == "cuda":
             cuda_buffers.append(name)
-    
+
     print(f"\n[DIAGNOSTIC] After load_state_dict:")
     print(f"  - Parameters on CUDA: {len(cuda_params)}")
     print(f"  - Parameters on META: {len(meta_params)}")
     print(f"  - Buffers on CUDA: {len(cuda_buffers)}")
     print(f"  - Buffers on META: {len(meta_buffers)}")
-    
+
     if meta_params:
         print(f"\n[DIAGNOSTIC] First 10 META parameters:")
         for name in meta_params[:10]:
             param = dict(model.named_parameters())[name]
-            print(f"    {name}: shape={param.shape}, dtype={param.dtype}, device={param.device}")
-    
+            print(
+                f"    {name}: shape={param.shape}, dtype={param.dtype}, device={param.device}"
+            )
+
     if meta_buffers:
         print(f"\n[DIAGNOSTIC] META buffers:")
         for name in meta_buffers[:10]:
             buffer = dict(model.named_buffers())[name]
-            print(f"    {name}: shape={buffer.shape}, dtype={buffer.dtype}, device={buffer.device}")
-    
+            print(
+                f"    {name}: shape={buffer.shape}, dtype={buffer.dtype}, device={buffer.device}"
+            )
+
     # =========================================================================
     # Helper function to navigate module hierarchy
     # =========================================================================
     def get_parent_and_name(model, full_name):
         """Get parent module and attribute name from full parameter name."""
-        parts = full_name.split('.')
+        parts = full_name.split(".")
         parent = model
         for part in parts[:-1]:
             parent = getattr(parent, part)
         return parent, parts[-1]
-    
+
     # =========================================================================
     # Initialize remaining meta parameters
     # NOTE: Can't use param.data = ... on meta tensors!
     # Must use setattr() to replace the entire parameter in the parent module
     # =========================================================================
     meta_count = 0
-    
+
     for name in meta_params:
         param = dict(model.named_parameters()).get(name)
         if param is None:
             continue
-            
+
         try:
             print(f"[DIAGNOSTIC] Initializing meta param: {name}")
-            print(f"  - Old: device={param.device}, dtype={param.dtype}, shape={param.shape}")
-            
+            print(
+                f"  - Old: device={param.device}, dtype={param.dtype}, shape={param.shape}"
+            )
+
             # Create new parameter with actual data on CUDA
             new_data = torch.zeros(param.shape, dtype=param.dtype, device=device)
             new_param = torch.nn.Parameter(new_data, requires_grad=param.requires_grad)
-            
-            print(f"  - New: device={new_param.device}, dtype={new_param.dtype}, shape={new_param.shape}")
-            
+
+            print(
+                f"  - New: device={new_param.device}, dtype={new_param.dtype}, shape={new_param.shape}"
+            )
+
             # Replace in parent module using setattr (NOT param.data = ...)
             parent, attr_name = get_parent_and_name(model, name)
             print(f"  - Parent module: {type(parent).__name__}, attr: {attr_name}")
-            
+
             setattr(parent, attr_name, new_param)
             meta_count += 1
             print(f"  - ✓ Replaced successfully!")
-            
+
         except Exception as e:
             print(f"[DIAGNOSTIC] FAILED to initialize {name}: {e}")
             import traceback
+
             traceback.print_exc()
-    
+
     # =========================================================================
     # Initialize remaining meta buffers
     # =========================================================================
@@ -686,74 +712,83 @@ def _attach_to_vllm_shared_tensors(
         buffer = dict(model.named_buffers()).get(name)
         if buffer is None:
             continue
-            
+
         try:
             print(f"[DIAGNOSTIC] Initializing meta buffer: {name}")
-            print(f"  - Old: device={buffer.device}, dtype={buffer.dtype}, shape={buffer.shape}")
-            
+            print(
+                f"  - Old: device={buffer.device}, dtype={buffer.dtype}, shape={buffer.shape}"
+            )
+
             # For buffers like inv_freq, we need proper initialization
-            if 'inv_freq' in name:
+            if "inv_freq" in name:
                 # Rotary embedding inverse frequencies
                 dim = buffer.shape[0] * 2  # inv_freq has shape [dim/2]
                 base = 10000.0  # Default RoPE base
-                inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+                inv_freq = 1.0 / (
+                    base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim)
+                )
                 new_buffer = inv_freq.to(dtype=buffer.dtype, device=device)
                 print(f"  - Computed inv_freq with dim={dim}, base={base}")
             else:
                 # Other buffers - initialize with zeros
-                new_buffer = torch.zeros(buffer.shape, dtype=buffer.dtype, device=device)
-            
-            print(f"  - New: device={new_buffer.device}, dtype={new_buffer.dtype}, shape={new_buffer.shape}")
-            
+                new_buffer = torch.zeros(
+                    buffer.shape, dtype=buffer.dtype, device=device
+                )
+
+            print(
+                f"  - New: device={new_buffer.device}, dtype={new_buffer.dtype}, shape={new_buffer.shape}"
+            )
+
             # Replace in parent module
             parent, attr_name = get_parent_and_name(model, name)
             print(f"  - Parent module: {type(parent).__name__}, attr: {attr_name}")
-            
+
             parent.register_buffer(attr_name, new_buffer)
             meta_count += 1
             print(f"  - ✓ Replaced successfully!")
-            
+
         except Exception as e:
             print(f"[DIAGNOSTIC] FAILED to initialize buffer {name}: {e}")
             import traceback
+
             traceback.print_exc()
-    
+
     print(f"\n[Setup] Initialized {meta_count} remaining meta tensors")
-    
+
     return model
 
 
 def _create_vllm_to_hf_mapping(model: torch.nn.Module, ipc_handles: dict) -> dict:
     """
     Create mapping from HuggingFace parameter names to vLLM tensor names.
-    
+
     vLLM uses slightly different naming conventions than HuggingFace.
     This function creates the bidirectional mapping.
     """
     hf_params = set(model.state_dict().keys())
     vllm_params = set(ipc_handles.keys())
-    
+
     mapping = {}
-    
+
     for hf_name in hf_params:
         # Try direct match first
         if hf_name in vllm_params:
             mapping[hf_name] = hf_name
             continue
-        
+
         # Try common transformations
         # vLLM often uses 'model.' prefix
         vllm_name = f"model.{hf_name}" if not hf_name.startswith("model.") else hf_name
         if vllm_name in vllm_params:
             mapping[hf_name] = vllm_name
             continue
-        
+
         # Remove 'model.' prefix if present
         if hf_name.startswith("model."):
             vllm_name = hf_name[6:]
             if vllm_name in vllm_params:
                 mapping[hf_name] = vllm_name
-    
+
     return mapping
 
 
@@ -782,7 +817,7 @@ def load_model_and_tokenizer(
             "/tmp/atropos_bridge",
             os.path.dirname(os.path.abspath(__file__)),
         ]
-        
+
         config_path = None
         for log_dir in possible_paths:
             candidate = os.path.join(log_dir, "vllm_bridge_config.json")
@@ -790,15 +825,17 @@ def load_model_and_tokenizer(
                 config_path = candidate
                 print(f"[Setup] Found vLLM config at: {candidate}")
                 break
-        
+
         if config_path is None:
-            checked = [os.path.join(p, "vllm_bridge_config.json") for p in possible_paths]
+            checked = [
+                os.path.join(p, "vllm_bridge_config.json") for p in possible_paths
+            ]
             raise RuntimeError(
                 f"[Setup] Could not find vllm_bridge_config.json\n"
                 f"Checked: {checked}\n"
                 f"Make sure vLLM is running with VLLM_ENABLE_SHARED_WEIGHTS=1"
             )
-        
+
         model = _attach_to_vllm_shared_tensors(config, config_path)
         if model is not None:
             print("[Setup] ✓ Single-copy mode active - using vLLM's tensors directly!")
@@ -830,11 +867,13 @@ def load_model_and_tokenizer(
         # and require use_reentrant=False for proper gradient flow
         if hasattr(model, "enable_input_require_grads"):
             model.enable_input_require_grads()
-        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        model.gradient_checkpointing_enable(
+            gradient_checkpointing_kwargs={"use_reentrant": False}
+        )
     else:
         # Standard gradient checkpointing
         model.gradient_checkpointing_enable()
-    
+
     model.train()
 
     return model, tokenizer
@@ -851,9 +890,7 @@ def _load_model_with_lora(config: TrainingConfig) -> torch.nn.Module:
         PEFT model with LoRA adapters applied
     """
     if not PEFT_AVAILABLE:
-        raise RuntimeError(
-            "PEFT library not available. Install with: pip install peft"
-    )
+        raise RuntimeError("PEFT library not available. Install with: pip install peft")
 
     print("[Setup] Loading base model for LoRA mode...")
     base_model = AutoModelForCausalLM.from_pretrained(
@@ -1030,8 +1067,12 @@ def run_training_step(
         advantages = advantages.to(config.device)
 
         loss, metrics = compute_grpo_loss(
-            model, tokens, labels, advantages, temperatures,
-            config.gradient_accumulation_steps
+            model,
+            tokens,
+            labels,
+            advantages,
+            temperatures,
+            config.gradient_accumulation_steps,
         )
 
         loss.backward()
@@ -1041,12 +1082,12 @@ def run_training_step(
         total_pos += metrics["pos_count"]
         total_neg += metrics["neg_count"]
 
-    # Gradient clipping and optimizer step
+        # Gradient clipping and optimizer step
         grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         optimizer.zero_grad()
 
-    # Normalize metrics
+        # Normalize metrics
         if total_pos > 0:
             total_pos_logp /= total_pos
         if total_neg > 0:
@@ -1123,18 +1164,24 @@ def log_metrics(
         timing_str += f", Data fetch: {metrics['data_fetch_time']:.2f}s"
     if "gpu_memory_gb" in metrics:
         timing_str += f", GPU mem: {metrics['gpu_memory_gb']:.2f}GB"
-    
+
     # Show loss with more precision since GRPO loss is often very small
-    loss_str = f"{metrics['loss']:.6f}" if abs(metrics['loss']) < 0.01 else f"{metrics['loss']:.4f}"
+    loss_str = (
+        f"{metrics['loss']:.6f}"
+        if abs(metrics["loss"]) < 0.01
+        else f"{metrics['loss']:.4f}"
+    )
     print(f"  Loss: {loss_str}, Grad norm: {metrics['grad_norm']:.4f}{timing_str}")
-    
+
     # Show GRPO-specific metrics if available
     if "pos_count" in metrics or "neg_count" in metrics:
-        pos_count = metrics.get('pos_count', 0)
-        neg_count = metrics.get('neg_count', 0)
-        pos_logp = metrics.get('pos_logp', 0)
-        neg_logp = metrics.get('neg_logp', 0)
-        print(f"    Advantages: +{int(pos_count)} / -{int(neg_count)}, LogP: pos={pos_logp:.3f}, neg={neg_logp:.3f}")
+        pos_count = metrics.get("pos_count", 0)
+        neg_count = metrics.get("neg_count", 0)
+        pos_logp = metrics.get("pos_logp", 0)
+        neg_logp = metrics.get("neg_logp", 0)
+        print(
+            f"    Advantages: +{int(pos_count)} / -{int(neg_count)}, LogP: pos={pos_logp:.3f}, neg={neg_logp:.3f}"
+        )
 
     if use_wandb:
         log_dict = {
@@ -1167,7 +1214,7 @@ def finalize_training(
     benchmark_stats: Optional[dict] = None,
 ) -> None:
     """Clean up after training and log benchmark summary.
-    
+
     Args:
         use_wandb: Whether wandb is enabled
         training_start_time: Start time of training
@@ -1180,30 +1227,34 @@ def finalize_training(
             - gpu_memories: List of GPU memory readings (GB)
     """
     print("\nTraining finished.")
-    
+
     # Default empty stats
     if benchmark_stats is None:
         benchmark_stats = {}
-    
+
     # Log benchmark summary
     if training_start_time is not None:
         total_time = time.time() - training_start_time
-        peak_gpu_mem_gb = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0
-        
+        peak_gpu_mem_gb = (
+            torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0
+        )
+
         # Calculate averages from collected stats
         step_times = benchmark_stats.get("step_times", [])
         sync_times = benchmark_stats.get("sync_times", [])
         data_fetch_times = benchmark_stats.get("data_fetch_times", [])
         gpu_memories = benchmark_stats.get("gpu_memories", [])
-        
+
         avg_step_time = sum(step_times) / len(step_times) if step_times else 0
         total_step_time = sum(step_times)
         avg_sync_time = sum(sync_times) / len(sync_times) if sync_times else 0
         total_sync_time = sum(sync_times)
-        avg_data_fetch = sum(data_fetch_times) / len(data_fetch_times) if data_fetch_times else 0
+        avg_data_fetch = (
+            sum(data_fetch_times) / len(data_fetch_times) if data_fetch_times else 0
+        )
         total_data_fetch = sum(data_fetch_times)
         avg_gpu_mem = sum(gpu_memories) / len(gpu_memories) if gpu_memories else 0
-        
+
         print(f"\n{'='*70}")
         print(f"BENCHMARK SUMMARY ({mode})")
         print(f"{'='*70}")
@@ -1213,7 +1264,9 @@ def finalize_training(
         print(f"  TIMING BREAKDOWN:")
         print(f"    Avg step time:         {avg_step_time:.2f}s")
         print(f"    Total step time:       {total_step_time:.2f}s")
-        print(f"    Avg sync time:         {avg_sync_time:.2f}s (x{len(sync_times)} syncs)")
+        print(
+            f"    Avg sync time:         {avg_sync_time:.2f}s (x{len(sync_times)} syncs)"
+        )
         print(f"    Total sync time:       {total_sync_time:.2f}s")
         print(f"    Avg data fetch time:   {avg_data_fetch:.2f}s")
         print(f"    Total data fetch time: {total_data_fetch:.2f}s")
@@ -1222,31 +1275,31 @@ def finalize_training(
         print(f"    Peak GPU memory:       {peak_gpu_mem_gb:.2f} GB")
         print(f"    Avg GPU memory:        {avg_gpu_mem:.2f} GB")
         print(f"{'='*70}\n")
-        
+
         if use_wandb:
             # Total time metrics
             wandb.summary["benchmark/total_time_seconds"] = total_time
             wandb.summary["benchmark/total_time_minutes"] = total_time / 60
             wandb.summary["benchmark/mode"] = mode
             wandb.summary["benchmark/total_steps"] = total_steps
-            
+
             # Step timing metrics
             wandb.summary["benchmark/avg_step_time_seconds"] = avg_step_time
             wandb.summary["benchmark/total_step_time_seconds"] = total_step_time
-            
+
             # Sync timing metrics
             wandb.summary["benchmark/avg_sync_time_seconds"] = avg_sync_time
             wandb.summary["benchmark/total_sync_time_seconds"] = total_sync_time
             wandb.summary["benchmark/num_syncs"] = len(sync_times)
-            
+
             # Data fetch timing metrics
             wandb.summary["benchmark/avg_data_fetch_time_seconds"] = avg_data_fetch
             wandb.summary["benchmark/total_data_fetch_time_seconds"] = total_data_fetch
-            
+
             # Memory metrics
             wandb.summary["benchmark/peak_gpu_memory_gb"] = peak_gpu_mem_gb
             wandb.summary["benchmark/avg_gpu_memory_gb"] = avg_gpu_mem
-    
+
     if use_wandb:
         wandb.finish()
 
@@ -1297,12 +1350,16 @@ def train(config: TrainingConfig):
         data_fetch_start = time.time()
         if len(batches) == 0:
             batches = get_data(config.batch_size, config.seq_len)
-        token_batches, label_batches, advantage_batches, temperature_batches = batches.pop(0)
+        token_batches, label_batches, advantage_batches, temperature_batches = (
+            batches.pop(0)
+        )
         data_fetch_time = time.time() - data_fetch_start
         benchmark_stats["data_fetch_times"].append(data_fetch_time)
 
         # Terminate vLLM before training step (to free GPU memory)
-        should_sync = (step + 1) % config.vllm_restart_interval == 0 or step == config.training_steps - 1
+        should_sync = (
+            step + 1
+        ) % config.vllm_restart_interval == 0 or step == config.training_steps - 1
         if should_sync:
             _terminate_vllm_process()
 
@@ -1311,9 +1368,13 @@ def train(config: TrainingConfig):
 
         # Run training step using common helper
         metrics = run_training_step(
-            model, optimizer,
-            token_batches, label_batches, advantage_batches, temperature_batches,
-            config
+            model,
+            optimizer,
+            token_batches,
+            label_batches,
+            advantage_batches,
+            temperature_batches,
+            config,
         )
 
         step_time = time.time() - step_start
@@ -1332,7 +1393,9 @@ def train(config: TrainingConfig):
         sync_time = 0
         if should_sync:
             sync_start = time.time()
-            checkpoint_path = save_checkpoint(model, tokenizer, config.save_path, step + 1)
+            checkpoint_path = save_checkpoint(
+                model, tokenizer, config.save_path, step + 1
+            )
             torch.cuda.empty_cache()
             vllm_process = _launch_vllm_server(config, checkpoint_path)
             sync_time = time.time() - sync_start
@@ -1346,16 +1409,25 @@ def train(config: TrainingConfig):
         metrics["gpu_memory_reserved_gb"] = gpu_mem_reserved_gb
 
         # Log metrics
-        log_metrics(metrics, step + 1, use_wandb, {
-            "train/learning_rate": optimizer.param_groups[0]["lr"],
-        })
+        log_metrics(
+            metrics,
+            step + 1,
+            use_wandb,
+            {
+                "train/learning_rate": optimizer.param_groups[0]["lr"],
+            },
+        )
 
         # Check for unexpected vLLM termination
         _check_vllm_process_health()
 
     # === Cleanup ===
-    save_checkpoint(model, tokenizer, config.save_path, config.training_steps, is_final=True)
-    finalize_training(use_wandb, training_start_time, "legacy", config.training_steps, benchmark_stats)
+    save_checkpoint(
+        model, tokenizer, config.save_path, config.training_steps, is_final=True
+    )
+    finalize_training(
+        use_wandb, training_start_time, "legacy", config.training_steps, benchmark_stats
+    )
 
 
 # =============================================================================
@@ -1363,9 +1435,11 @@ def train(config: TrainingConfig):
 # =============================================================================
 
 
-def _launch_vllm_server(config: TrainingConfig, model_path: str) -> Optional[subprocess.Popen]:
+def _launch_vllm_server(
+    config: TrainingConfig, model_path: str
+) -> Optional[subprocess.Popen]:
     """Launch a vLLM server process using our custom vllm_api_server.py.
-    
+
     Uses the custom server instead of standard vLLM because:
     - Standard vLLM only has /v1/completions (OpenAI-compatible)
     - Our custom server has /generate endpoint needed by VLLMServer class
@@ -1377,12 +1451,16 @@ def _launch_vllm_server(config: TrainingConfig, model_path: str) -> Optional[sub
     # This provides the /generate endpoint that VLLMServer needs
     script_dir = os.path.dirname(os.path.abspath(__file__))
     custom_server_path = os.path.join(script_dir, "vllm_api_server.py")
-    
+
     vllm_command = [
-        "python", custom_server_path,
-        "--model", model_path,
-        "--port", str(config.vllm_port),
-        "--gpu-memory-utilization", str(config.vllm_gpu_memory_utilization),
+        "python",
+        custom_server_path,
+        "--model",
+        model_path,
+        "--port",
+        str(config.vllm_port),
+        "--gpu-memory-utilization",
+        str(config.vllm_gpu_memory_utilization),
     ]
     # Add served-model-name if using checkpoint path
     if model_path != config.model_name:
@@ -1436,7 +1514,9 @@ def _check_vllm_process_health() -> None:
     global vllm_process
 
     if vllm_process is not None and vllm_process.poll() is not None:
-        print(f"  WARNING: vLLM terminated unexpectedly (code: {vllm_process.returncode})")
+        print(
+            f"  WARNING: vLLM terminated unexpectedly (code: {vllm_process.returncode})"
+        )
         vllm_process = None
 
 
@@ -1449,7 +1529,7 @@ def train_shared_vllm(config: TrainingConfig):
     2. Attaches to vLLM's weight tensors directly via CUDA IPC
     3. optimizer.step() modifies vLLM's weights in-place
     4. vLLM immediately uses updated weights (no restart!)
-    
+
     Requirements:
     - vLLM running with VLLM_ENABLE_SHARED_WEIGHTS=1
     - Trainer on same GPU(s) as vLLM (for IPC to work)
@@ -1473,7 +1553,7 @@ def train_shared_vllm(config: TrainingConfig):
     # Single-copy mode: attach directly to vLLM's tensors via CUDA IPC
     print("[1/2] Attaching to vLLM's shared tensors...")
     model, tokenizer = load_model_and_tokenizer(config, single_copy=True)
-    
+
     if model is None:
         raise RuntimeError(
             "Single-copy mode failed. Make sure:\n"
@@ -1489,13 +1569,12 @@ def train_shared_vllm(config: TrainingConfig):
     print("-" * 60)
 
     os.makedirs(config.save_path, exist_ok=True)
-    
+
     # Check Atropos API and register BEFORE training loop
     print("\n[Setup] Connecting to Atropos API...")
     if not check_atropos_api(timeout=30):
         raise RuntimeError(
-            "Atropos API server not reachable. "
-            "Please start it with: run-api"
+            "Atropos API server not reachable. " "Please start it with: run-api"
         )
     register_trainer(config)
 
@@ -1516,7 +1595,9 @@ def train_shared_vllm(config: TrainingConfig):
         data_fetch_start = time.time()
         if len(batches) == 0:
             batches = get_data(config.batch_size, config.seq_len)
-        token_batches, label_batches, advantage_batches, temperature_batches = batches.pop(0)
+        token_batches, label_batches, advantage_batches, temperature_batches = (
+            batches.pop(0)
+        )
         data_fetch_time = time.time() - data_fetch_start
         benchmark_stats["data_fetch_times"].append(data_fetch_time)
 
@@ -1525,9 +1606,13 @@ def train_shared_vllm(config: TrainingConfig):
 
         # Run training step using common helper
         metrics = run_training_step(
-            model, optimizer,
-            token_batches, label_batches, advantage_batches, temperature_batches,
-            config
+            model,
+            optimizer,
+            token_batches,
+            label_batches,
+            advantage_batches,
+            temperature_batches,
+            config,
         )
 
         step_time = time.time() - step_start
@@ -1556,18 +1641,31 @@ def train_shared_vllm(config: TrainingConfig):
         metrics["gpu_memory_reserved_gb"] = gpu_mem_reserved_gb
 
         # Log metrics
-        log_metrics(metrics, step + 1, use_wandb, {
-            "train/learning_rate": optimizer.param_groups[0]["lr"],
-            "train/update_count": step + 1,
-        })
+        log_metrics(
+            metrics,
+            step + 1,
+            use_wandb,
+            {
+                "train/learning_rate": optimizer.param_groups[0]["lr"],
+                "train/update_count": step + 1,
+            },
+        )
 
         # Periodic checkpoint save (for recovery, not for vLLM sync)
         if (step + 1) % config.vllm_restart_interval == 0:
             save_checkpoint(model, tokenizer, config.save_path, step + 1)
 
     # === Cleanup ===
-    save_checkpoint(model, tokenizer, config.save_path, config.training_steps, is_final=True)
-    finalize_training(use_wandb, training_start_time, "shared_vllm", config.training_steps, benchmark_stats)
+    save_checkpoint(
+        model, tokenizer, config.save_path, config.training_steps, is_final=True
+    )
+    finalize_training(
+        use_wandb,
+        training_start_time,
+        "shared_vllm",
+        config.training_steps,
+        benchmark_stats,
+    )
 
 
 def _check_vllm_health(port: int) -> bool:
@@ -1582,11 +1680,11 @@ def _check_vllm_health(port: int) -> bool:
 def _hotswap_lora_adapter(port: int, adapter_path: str) -> bool:
     """
     Request vLLM to hot-swap to a new LoRA adapter.
-    
+
     Args:
         port: vLLM server port
         adapter_path: Path to the saved adapter directory
-        
+
     Returns:
         True if successful, False otherwise
     """
@@ -1612,9 +1710,9 @@ def train_lora(config: TrainingConfig):
     GRPO training with LoRA adapters.
 
     This mode keeps the base model frozen and only trains LoRA adapter weights.
-    
+
     REQUIRES: External vLLM server running via vllm_api_server.py
-    
+
     Benefits:
     - Much faster training (fewer parameters)
     - Smaller checkpoint sizes (adapter only, not full model)
@@ -1684,7 +1782,9 @@ def train_lora(config: TrainingConfig):
         data_fetch_start = time.time()
         if len(batches) == 0:
             batches = get_data(config.batch_size, config.seq_len)
-        token_batches, label_batches, advantage_batches, temperature_batches = batches.pop(0)
+        token_batches, label_batches, advantage_batches, temperature_batches = (
+            batches.pop(0)
+        )
         data_fetch_time = time.time() - data_fetch_start
         benchmark_stats["data_fetch_times"].append(data_fetch_time)
 
@@ -1693,9 +1793,13 @@ def train_lora(config: TrainingConfig):
 
         # Run training step
         metrics = run_training_step(
-            model, optimizer,
-            token_batches, label_batches, advantage_batches, temperature_batches,
-            config
+            model,
+            optimizer,
+            token_batches,
+            label_batches,
+            advantage_batches,
+            temperature_batches,
+            config,
         )
 
         step_time = time.time() - step_start
@@ -1729,24 +1833,37 @@ def train_lora(config: TrainingConfig):
         metrics["gpu_memory_reserved_gb"] = gpu_mem_reserved_gb
 
         # Log metrics
-        log_metrics(metrics, step + 1, use_wandb, {
-            "train/learning_rate": optimizer.param_groups[0]["lr"],
-            "lora/trainable_params": sum(p.numel() for p in trainable_params),
-        })
+        log_metrics(
+            metrics,
+            step + 1,
+            use_wandb,
+            {
+                "train/learning_rate": optimizer.param_groups[0]["lr"],
+                "lora/trainable_params": sum(p.numel() for p in trainable_params),
+            },
+        )
 
     # === Cleanup ===
     # NOTE: No vLLM termination - external server keeps running
 
     # Save final adapter (track this sync time too)
     final_sync_start = time.time()
-    final_adapter_path = save_lora_checkpoint(model, config.save_path, config.training_steps, is_final=True)
-    
+    final_adapter_path = save_lora_checkpoint(
+        model, config.save_path, config.training_steps, is_final=True
+    )
+
     # Hot-swap to final adapter
     _hotswap_lora_adapter(config.vllm_port, final_adapter_path)
     final_sync_time = time.time() - final_sync_start
     benchmark_stats["sync_times"].append(final_sync_time)
-    
-    finalize_training(use_wandb, training_start_time, "lora_only", config.training_steps, benchmark_stats)
+
+    finalize_training(
+        use_wandb,
+        training_start_time,
+        "lora_only",
+        config.training_steps,
+        benchmark_stats,
+    )
 
     # Also save tokenizer for convenience
     tokenizer_path = os.path.join(config.save_path, "tokenizer")
@@ -1914,7 +2031,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Module names to apply LoRA to (default: q_proj v_proj)",
     )
-    
+
     parser.add_argument(
         "--single-copy",
         action="store_true",
@@ -1956,7 +2073,7 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
         lora_target_modules=args.lora_target_modules,
-        single_copy=getattr(args, 'single_copy', False),
+        single_copy=getattr(args, "single_copy", False),
     )
 
 

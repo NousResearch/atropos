@@ -13,11 +13,11 @@ Usage:
     # Set environment BEFORE importing
     import os
     os.environ["VLLM_ENABLE_SHARED_WEIGHTS"] = "1"
-    
+
     # Import and apply patches BEFORE importing vllm
     from example_trainer.vllm_patching import apply_patches
     apply_patches()
-    
+
     # Then import vllm normally
     from vllm import AsyncLLM
 """
