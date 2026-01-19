@@ -149,6 +149,16 @@ class TrainingConfig(BaseModel):
             "vLLM must be started with VLLM_ENABLE_SHARED_WEIGHTS=1."
         ),
     )
+    vllm_config_path: Optional[str] = Field(
+        None,
+        description=(
+            "Explicit path to vllm_bridge_config.json. "
+            "If not provided, auto-detects from LOGDIR environment variable, "
+            "current directory, or /tmp/atropos_bridge. "
+            "This file is created by vLLM when VLLM_ENABLE_SHARED_WEIGHTS=1 "
+            "and contains CUDA IPC handles for single-copy mode."
+        ),
+    )
 
 
 def check_atropos_api(timeout: float = 30.0) -> bool:
@@ -810,32 +820,36 @@ def load_model_and_tokenizer(
 
     # Single-copy mode: attach to vLLM's shared tensors via CUDA IPC
     if single_copy or config.weight_bridge_mode == "shared_vllm":
-        # Try multiple possible locations for the config file
-        possible_paths = [
-            os.environ.get("LOGDIR", "."),
-            ".",
-            "/tmp/atropos_bridge",
-            os.path.dirname(os.path.abspath(__file__)),
-        ]
-
-        config_path = None
-        for log_dir in possible_paths:
-            candidate = os.path.join(log_dir, "vllm_bridge_config.json")
-            if os.path.exists(candidate):
-                config_path = candidate
-                print(f"[Setup] Found vLLM config at: {candidate}")
-                break
-
-        if config_path is None:
-            checked = [
-                os.path.join(p, "vllm_bridge_config.json") for p in possible_paths
+        # Check for explicit path first
+        if config.vllm_config_path and os.path.exists(config.vllm_config_path):
+            config_path = config.vllm_config_path
+            print(f"[Setup] Using explicit vLLM config path: {config_path}")
+        else:
+            # Auto-detect from common locations
+            possible_paths = [
+                os.environ.get("LOGDIR", "."),
+                ".",
+                "/tmp/atropos_bridge",
+                os.path.dirname(os.path.abspath(__file__)),
             ]
-            raise RuntimeError(
-                f"[Setup] Could not find vllm_bridge_config.json\n"
-                f"Checked: {checked}\n"
-                f"Make sure vLLM is running with VLLM_ENABLE_SHARED_WEIGHTS=1"
-            )
-
+            
+            config_path = None
+            for log_dir in possible_paths:
+                candidate = os.path.join(log_dir, "vllm_bridge_config.json")
+                if os.path.exists(candidate):
+                    config_path = candidate
+                    print(f"[Setup] Found vLLM config at: {candidate}")
+                    break
+            
+            if config_path is None:
+                checked = [os.path.join(p, "vllm_bridge_config.json") for p in possible_paths]
+                raise RuntimeError(
+                    f"[Setup] Could not find vllm_bridge_config.json\n"
+                    f"Checked: {checked}\n"
+                    f"Tip: Use --vllm-config-path to specify the path explicitly\n"
+                    f"Make sure vLLM is running with VLLM_ENABLE_SHARED_WEIGHTS=1 and LOGDIR set"
+                )
+        
         model = _attach_to_vllm_shared_tensors(config, config_path)
         if model is not None:
             print("[Setup] ✓ Single-copy mode active - using vLLM's tensors directly!")
@@ -2043,6 +2057,17 @@ def parse_args() -> argparse.Namespace:
             "vLLM must be started with VLLM_ENABLE_SHARED_WEIGHTS=1."
         ),
     )
+    parser.add_argument(
+        "--vllm-config-path",
+        type=str,
+        default=None,
+        help=(
+            "Explicit path to vllm_bridge_config.json. "
+            "If not provided, auto-detects from LOGDIR, current directory, "
+            "or /tmp/atropos_bridge. "
+            "This file contains CUDA IPC handles created by vLLM."
+        ),
+    )
 
     return parser.parse_args()
 
@@ -2073,7 +2098,8 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
         lora_target_modules=args.lora_target_modules,
-        single_copy=getattr(args, "single_copy", False),
+        single_copy=getattr(args, 'single_copy', False),
+        vllm_config_path=getattr(args, 'vllm_config_path', None),
     )
 
 
