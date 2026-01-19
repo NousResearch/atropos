@@ -14,6 +14,49 @@ The trainer supports three weight synchronization modes:
 
 ---
 
+## Model Compatibility
+
+This training pipeline works with models that meet the following requirements:
+
+### Required Compatibility
+
+| Component | Requirement |
+|-----------|-------------|
+| **HuggingFace** | Must support `AutoModelForCausalLM` |
+| **vLLM** | Must be in [vLLM's supported model list](https://docs.vllm.ai/en/latest/models/supported_models.html) |
+| **Architecture** | Decoder-only (causal language model) |
+
+### ✅ Compatible Model Families
+
+- **Qwen** (Qwen2, Qwen2.5)
+- **Llama** (Llama-2, Llama-3, Llama-3.1)
+- **Mistral** (Mistral, Mixtral)
+- **Phi** (Phi-2, Phi-3)
+- **Gemma** (Gemma, Gemma-2)
+- **DeepSeek** (DeepSeek-Coder, DeepSeek-V2)
+- **Yi** (Yi, Yi-1.5)
+- **StarCoder** (StarCoder2)
+
+### ❌ Not Compatible
+
+| Type | Reason |
+|------|--------|
+| Encoder-only (BERT, RoBERTa) | No causal language modeling head |
+| Encoder-decoder (T5, BART) | Different architecture, not supported by vLLM |
+| Non-HuggingFace models | Requires `AutoModelForCausalLM.from_pretrained()` |
+
+### Single-Copy Mode Constraints
+
+| Constraint | Reason |
+|------------|--------|
+| `tensor-parallel-size` must be 1 | Multi-GPU tensor parallelism not yet supported for IPC |
+| Model must fit on single GPU | No model sharding in single-copy mode |
+| Trainer and vLLM on same GPU(s) | CUDA IPC requires same device |
+
+> **Tip**: For models too large for a single GPU, use **LoRA mode** (`--weight-bridge-mode lora_only`) instead.
+
+---
+
 ## Quick Start with GSM8k (Single-Copy Mode)
 
 This is the **recommended** production setup for maximum training throughput and memory efficiency.

@@ -1576,7 +1576,7 @@ def train_shared_vllm(config: TrainingConfig):
             "3. vllm_bridge_config.json exists with IPC handles"
         )
 
-    optimizer = AdamW(model.parameters(), lr=config.lr)
+    optimizer = AdamW(model.parameters(), lr=config.lr) # maybe we need to make this configurable in the future 
 
     print(f"[2/2] Starting training for {config.training_steps} steps")
     print("NOTE: vLLM sees weight updates immediately after each step!")
