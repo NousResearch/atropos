@@ -127,7 +127,6 @@ def _create_patched_runner(BaseRunner: type) -> type:
     Returns a new class that inherits from the original and adds
     CUDA IPC export functionality for single-copy training.
     """
-    import torch
 
     class PatchedGPUModelRunner(BaseRunner):
         """
@@ -146,12 +145,12 @@ def _create_patched_runner(BaseRunner: type) -> type:
 
         def load_model(self, *args, **kwargs) -> None:
             """Load model and set up shared memory + update daemon."""
-            print(f"[vLLM Patch] PatchedGPUModelRunner.load_model() called!")
+            print("[vLLM Patch] PatchedGPUModelRunner.load_model() called!")
 
             # Call original load_model
             super().load_model(*args, **kwargs)
 
-            print(f"[vLLM Patch] Model loaded, checking shared weights setup...")
+            print("[vLLM Patch] Model loaded, checking shared weights setup...")
 
             # Check if shared memory updates are enabled
             enable_shared = os.environ.get("VLLM_ENABLE_SHARED_WEIGHTS", "0") == "1"
