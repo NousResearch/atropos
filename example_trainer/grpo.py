@@ -159,6 +159,22 @@ class TrainingConfig(BaseModel):
             "and contains CUDA IPC handles for single-copy mode."
         ),
     )
+    
+    # Debug flags
+    debug_loading: bool = Field(
+        False,
+        description=(
+            "Enable verbose debug output during model loading and IPC attachment. "
+            "Useful for diagnosing single-copy mode issues."
+        ),
+    )
+    benchmark: bool = Field(
+        False,
+        description=(
+            "Enable benchmark timing output showing step time, sync time, "
+            "data fetch time, and GPU memory usage per step."
+        ),
+    )
 
 
 def check_atropos_api(timeout: float = 30.0) -> bool:
@@ -530,7 +546,7 @@ def _attach_to_vllm_shared_tensors(
                 continue
 
             # DEBUG: Only try first tensor to see if IPC works at all
-            if attached_count == 0:
+            if attached_count == 0 and config.debug_loading:
                 print(f"[Setup DEBUG] Attempting first tensor: {hf_name}", flush=True)
                 print(
                     f"[Setup DEBUG] device_index: {ipc_info['device_index']}",
@@ -552,7 +568,7 @@ def _attach_to_vllm_shared_tensors(
             event_handle = base64.b64decode(ipc_info["event_handle_b64"])
             event_sync_required = ipc_info["event_sync_required"]
 
-            if attached_count == 0:
+            if attached_count == 0 and config.debug_loading:
                 print(
                     f"[Setup DEBUG] Decoded IPC handle, len={len(ipc_handle)}",
                     flush=True,
@@ -574,7 +590,7 @@ def _attach_to_vllm_shared_tensors(
             # Create storage from IPC handle (needs all 8 items)
             storage = torch.UntypedStorage._new_shared_cuda(*share_tuple)
 
-            if attached_count == 0:
+            if attached_count == 0 and config.debug_loading:
                 print(
                     f"[Setup DEBUG] Storage created! size={storage.size()}", flush=True
                 )
@@ -589,7 +605,7 @@ def _attach_to_vllm_shared_tensors(
                 stride=ipc_info["stride"],
             )
 
-            if attached_count == 0:
+            if attached_count == 0 and config.debug_loading:
                 print(f"[Setup DEBUG] Tensor set! shape={tensor.shape}", flush=True)
 
             # Make tensor require gradients for training
@@ -598,7 +614,7 @@ def _attach_to_vllm_shared_tensors(
             hf_state_dict[hf_name] = tensor
             attached_count += 1
 
-            if attached_count == 1:
+            if attached_count == 1 and config.debug_loading:
                 print(
                     f"[Setup DEBUG] ✓ First tensor attached successfully!", flush=True
                 )
@@ -642,27 +658,28 @@ def _attach_to_vllm_shared_tensors(
         elif buffer.device.type == "cuda":
             cuda_buffers.append(name)
 
-    print(f"\n[DIAGNOSTIC] After load_state_dict:")
-    print(f"  - Parameters on CUDA: {len(cuda_params)}")
-    print(f"  - Parameters on META: {len(meta_params)}")
-    print(f"  - Buffers on CUDA: {len(cuda_buffers)}")
-    print(f"  - Buffers on META: {len(meta_buffers)}")
+    if config.debug_loading:
+        print(f"\n[DIAGNOSTIC] After load_state_dict:")
+        print(f"  - Parameters on CUDA: {len(cuda_params)}")
+        print(f"  - Parameters on META: {len(meta_params)}")
+        print(f"  - Buffers on CUDA: {len(cuda_buffers)}")
+        print(f"  - Buffers on META: {len(meta_buffers)}")
 
-    if meta_params:
-        print(f"\n[DIAGNOSTIC] First 10 META parameters:")
-        for name in meta_params[:10]:
-            param = dict(model.named_parameters())[name]
-            print(
-                f"    {name}: shape={param.shape}, dtype={param.dtype}, device={param.device}"
-            )
+        if meta_params:
+            print(f"\n[DIAGNOSTIC] First 10 META parameters:")
+            for name in meta_params[:10]:
+                param = dict(model.named_parameters())[name]
+                print(
+                    f"    {name}: shape={param.shape}, dtype={param.dtype}, device={param.device}"
+                )
 
-    if meta_buffers:
-        print(f"\n[DIAGNOSTIC] META buffers:")
-        for name in meta_buffers[:10]:
-            buffer = dict(model.named_buffers())[name]
-            print(
-                f"    {name}: shape={buffer.shape}, dtype={buffer.dtype}, device={buffer.device}"
-            )
+        if meta_buffers:
+            print(f"\n[DIAGNOSTIC] META buffers:")
+            for name in meta_buffers[:10]:
+                buffer = dict(model.named_buffers())[name]
+                print(
+                    f"    {name}: shape={buffer.shape}, dtype={buffer.dtype}, device={buffer.device}"
+                )
 
     # =========================================================================
     # Helper function to navigate module hierarchy
@@ -688,29 +705,34 @@ def _attach_to_vllm_shared_tensors(
             continue
 
         try:
-            print(f"[DIAGNOSTIC] Initializing meta param: {name}")
-            print(
-                f"  - Old: device={param.device}, dtype={param.dtype}, shape={param.shape}"
-            )
+            if config.debug_loading:
+                print(f"[DIAGNOSTIC] Initializing meta param: {name}")
+                print(
+                    f"  - Old: device={param.device}, dtype={param.dtype}, shape={param.shape}"
+                )
 
             # Create new parameter with actual data on CUDA
             new_data = torch.zeros(param.shape, dtype=param.dtype, device=device)
             new_param = torch.nn.Parameter(new_data, requires_grad=param.requires_grad)
 
-            print(
-                f"  - New: device={new_param.device}, dtype={new_param.dtype}, shape={new_param.shape}"
-            )
+            if config.debug_loading:
+                print(
+                    f"  - New: device={new_param.device}, dtype={new_param.dtype}, shape={new_param.shape}"
+                )
 
             # Replace in parent module using setattr (NOT param.data = ...)
             parent, attr_name = get_parent_and_name(model, name)
-            print(f"  - Parent module: {type(parent).__name__}, attr: {attr_name}")
+            if config.debug_loading:
+                print(f"  - Parent module: {type(parent).__name__}, attr: {attr_name}")
 
             setattr(parent, attr_name, new_param)
             meta_count += 1
-            print(f"  - ✓ Replaced successfully!")
+            if config.debug_loading:
+                print(f"  - ✓ Replaced successfully!")
 
         except Exception as e:
-            print(f"[DIAGNOSTIC] FAILED to initialize {name}: {e}")
+            if config.debug_loading:
+                print(f"[DIAGNOSTIC] FAILED to initialize {name}: {e}")
             import traceback
 
             traceback.print_exc()
@@ -724,10 +746,11 @@ def _attach_to_vllm_shared_tensors(
             continue
 
         try:
-            print(f"[DIAGNOSTIC] Initializing meta buffer: {name}")
-            print(
-                f"  - Old: device={buffer.device}, dtype={buffer.dtype}, shape={buffer.shape}"
-            )
+            if config.debug_loading:
+                print(f"[DIAGNOSTIC] Initializing meta buffer: {name}")
+                print(
+                    f"  - Old: device={buffer.device}, dtype={buffer.dtype}, shape={buffer.shape}"
+                )
 
             # For buffers like inv_freq, we need proper initialization
             if "inv_freq" in name:
@@ -738,27 +761,32 @@ def _attach_to_vllm_shared_tensors(
                     base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim)
                 )
                 new_buffer = inv_freq.to(dtype=buffer.dtype, device=device)
-                print(f"  - Computed inv_freq with dim={dim}, base={base}")
+                if config.debug_loading:
+                    print(f"  - Computed inv_freq with dim={dim}, base={base}")
             else:
                 # Other buffers - initialize with zeros
                 new_buffer = torch.zeros(
                     buffer.shape, dtype=buffer.dtype, device=device
                 )
 
-            print(
-                f"  - New: device={new_buffer.device}, dtype={new_buffer.dtype}, shape={new_buffer.shape}"
-            )
+            if config.debug_loading:
+                print(
+                    f"  - New: device={new_buffer.device}, dtype={new_buffer.dtype}, shape={new_buffer.shape}"
+                )
 
             # Replace in parent module
             parent, attr_name = get_parent_and_name(model, name)
-            print(f"  - Parent module: {type(parent).__name__}, attr: {attr_name}")
+            if config.debug_loading:
+                print(f"  - Parent module: {type(parent).__name__}, attr: {attr_name}")
 
             parent.register_buffer(attr_name, new_buffer)
             meta_count += 1
-            print(f"  - ✓ Replaced successfully!")
+            if config.debug_loading:
+                print(f"  - ✓ Replaced successfully!")
 
         except Exception as e:
-            print(f"[DIAGNOSTIC] FAILED to initialize buffer {name}: {e}")
+            if config.debug_loading:
+                print(f"[DIAGNOSTIC] FAILED to initialize buffer {name}: {e}")
             import traceback
 
             traceback.print_exc()
@@ -1160,6 +1188,7 @@ def log_metrics(
     step: int,
     use_wandb: bool,
     extra_metrics: Optional[dict] = None,
+    benchmark: bool = False,
 ) -> None:
     """
     Log training metrics to console and optionally wandb.
@@ -1169,17 +1198,19 @@ def log_metrics(
         step: Current step number
         use_wandb: Whether to log to wandb
         extra_metrics: Optional additional metrics to log
+        benchmark: Whether to show timing/benchmark info
     """
-    # Console output with timing info
+    # Console output with timing info (only if benchmark enabled)
     timing_str = ""
-    if "step_time" in metrics:
-        timing_str += f", Step time: {metrics['step_time']:.2f}s"
-    if "sync_time" in metrics and metrics["sync_time"] > 0:
-        timing_str += f", Sync time: {metrics['sync_time']:.2f}s"
-    if "data_fetch_time" in metrics:
-        timing_str += f", Data fetch: {metrics['data_fetch_time']:.2f}s"
-    if "gpu_memory_gb" in metrics:
-        timing_str += f", GPU mem: {metrics['gpu_memory_gb']:.2f}GB"
+    if benchmark:
+        if "step_time" in metrics:
+            timing_str += f", Step time: {metrics['step_time']:.2f}s"
+        if "sync_time" in metrics and metrics["sync_time"] > 0:
+            timing_str += f", Sync time: {metrics['sync_time']:.2f}s"
+        if "data_fetch_time" in metrics:
+            timing_str += f", Data fetch: {metrics['data_fetch_time']:.2f}s"
+        if "gpu_memory_gb" in metrics:
+            timing_str += f", GPU mem: {metrics['gpu_memory_gb']:.2f}GB"
 
     # Show loss with more precision since GRPO loss is often very small
     loss_str = (
@@ -1228,6 +1259,7 @@ def finalize_training(
     mode: str = "unknown",
     total_steps: int = 0,
     benchmark_stats: Optional[dict] = None,
+    benchmark: bool = False,
 ) -> None:
     """Clean up after training and log benchmark summary.
 
@@ -1241,6 +1273,7 @@ def finalize_training(
             - sync_times: List of sync durations
             - data_fetch_times: List of data fetch durations
             - gpu_memories: List of GPU memory readings (GB)
+        benchmark: Whether to print benchmark summary to console
     """
     print("\nTraining finished.")
 
@@ -1271,26 +1304,28 @@ def finalize_training(
         total_data_fetch = sum(data_fetch_times)
         avg_gpu_mem = sum(gpu_memories) / len(gpu_memories) if gpu_memories else 0
 
-        print(f"\n{'='*70}")
-        print(f"BENCHMARK SUMMARY ({mode})")
-        print(f"{'='*70}")
-        print(f"  Total training time:     {total_time:.2f}s ({total_time/60:.2f} min)")
-        print(f"  Total steps:             {total_steps}")
-        print(f"  ")
-        print(f"  TIMING BREAKDOWN:")
-        print(f"    Avg step time:         {avg_step_time:.2f}s")
-        print(f"    Total step time:       {total_step_time:.2f}s")
-        print(
-            f"    Avg sync time:         {avg_sync_time:.2f}s (x{len(sync_times)} syncs)"
-        )
-        print(f"    Total sync time:       {total_sync_time:.2f}s")
-        print(f"    Avg data fetch time:   {avg_data_fetch:.2f}s")
-        print(f"    Total data fetch time: {total_data_fetch:.2f}s")
-        print(f"  ")
-        print(f"  MEMORY:")
-        print(f"    Peak GPU memory:       {peak_gpu_mem_gb:.2f} GB")
-        print(f"    Avg GPU memory:        {avg_gpu_mem:.2f} GB")
-        print(f"{'='*70}\n")
+        # Print benchmark summary only if benchmark flag is enabled
+        if benchmark:
+            print(f"\n{'='*70}")
+            print(f"BENCHMARK SUMMARY ({mode})")
+            print(f"{'='*70}")
+            print(f"  Total training time:     {total_time:.2f}s ({total_time/60:.2f} min)")
+            print(f"  Total steps:             {total_steps}")
+            print(f"  ")
+            print(f"  TIMING BREAKDOWN:")
+            print(f"    Avg step time:         {avg_step_time:.2f}s")
+            print(f"    Total step time:       {total_step_time:.2f}s")
+            print(
+                f"    Avg sync time:         {avg_sync_time:.2f}s (x{len(sync_times)} syncs)"
+            )
+            print(f"    Total sync time:       {total_sync_time:.2f}s")
+            print(f"    Avg data fetch time:   {avg_data_fetch:.2f}s")
+            print(f"    Total data fetch time: {total_data_fetch:.2f}s")
+            print(f"  ")
+            print(f"  MEMORY:")
+            print(f"    Peak GPU memory:       {peak_gpu_mem_gb:.2f} GB")
+            print(f"    Avg GPU memory:        {avg_gpu_mem:.2f} GB")
+            print(f"{'='*70}\n")
 
         if use_wandb:
             # Total time metrics
@@ -1432,6 +1467,7 @@ def train(config: TrainingConfig):
             {
                 "train/learning_rate": optimizer.param_groups[0]["lr"],
             },
+            benchmark=config.benchmark,
         )
 
         # Check for unexpected vLLM termination
@@ -1442,7 +1478,8 @@ def train(config: TrainingConfig):
         model, tokenizer, config.save_path, config.training_steps, is_final=True
     )
     finalize_training(
-        use_wandb, training_start_time, "legacy", config.training_steps, benchmark_stats
+        use_wandb, training_start_time, "legacy", config.training_steps, benchmark_stats,
+        benchmark=config.benchmark,
     )
 
 
@@ -1667,6 +1704,7 @@ def train_shared_vllm(config: TrainingConfig):
                 "train/learning_rate": optimizer.param_groups[0]["lr"],
                 "train/update_count": step + 1,
             },
+            benchmark=config.benchmark,
         )
 
         # Periodic checkpoint save (for recovery, not for vLLM sync)
@@ -1683,6 +1721,7 @@ def train_shared_vllm(config: TrainingConfig):
         "shared_vllm",
         config.training_steps,
         benchmark_stats,
+        benchmark=config.benchmark,
     )
 
 
@@ -1859,6 +1898,7 @@ def train_lora(config: TrainingConfig):
                 "train/learning_rate": optimizer.param_groups[0]["lr"],
                 "lora/trainable_params": sum(p.numel() for p in trainable_params),
             },
+            benchmark=config.benchmark,
         )
 
     # === Cleanup ===
@@ -1881,6 +1921,7 @@ def train_lora(config: TrainingConfig):
         "lora_only",
         config.training_steps,
         benchmark_stats,
+        benchmark=config.benchmark,
     )
 
     # Also save tokenizer for convenience
@@ -2073,6 +2114,24 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
+    # --- Debug flags ---
+    parser.add_argument(
+        "--debug-loading",
+        action="store_true",
+        help=(
+            "Enable verbose debug output during model loading and IPC attachment. "
+            "Useful for diagnosing single-copy mode issues."
+        ),
+    )
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help=(
+            "Enable benchmark timing output showing step time, sync time, "
+            "data fetch time, and GPU memory usage per step."
+        ),
+    )
+
     return parser.parse_args()
 
 
@@ -2102,8 +2161,10 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
         lora_target_modules=args.lora_target_modules,
-        single_copy=getattr(args, "single_copy", False),
-        vllm_config_path=getattr(args, "vllm_config_path", None),
+        single_copy=getattr(args, 'single_copy', False),
+        vllm_config_path=getattr(args, 'vllm_config_path', None),
+        debug_loading=getattr(args, 'debug_loading', False),
+        benchmark=getattr(args, 'benchmark', False),
     )
 
 

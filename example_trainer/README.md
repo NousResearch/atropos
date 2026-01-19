@@ -188,7 +188,7 @@ You should see:
 [vLLM Patch] ✓ Exported 339 params to vllm_bridge_config.json
 ```
 
-#### Step 7: Start GSM8K Environment
+#### Step 7: Start an Environment (THE EXAMPLE HERE IS GSM8K in this case)
 
 ```bash
 python environments/gsm8k_server.py serve \
@@ -475,15 +475,6 @@ CUDA_VISIBLE_DEVICES=0 LOGDIR=. python -u example_trainer/grpo.py \
 │  └─────────────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
-
-**Key Points:**
-- ✅ Simple to understand
-- ✅ Works on any setup
-- ✅ Good for debugging
-- ⚠️ 30-60 second sync latency
-- ⚠️ 2x GPU memory (trainer + vLLM)
-- ⚠️ Large checkpoint files (~28GB each)
-
 ---
 
 ## Mode Comparison Summary
@@ -498,7 +489,7 @@ CUDA_VISIBLE_DEVICES=0 LOGDIR=. python -u example_trainer/grpo.py \
 │ GPU Memory     │ 1x model      │ 2x model       │ 2x model                       │
 │ Disk Space     │ 28GB/ckpt     │ 50MB/adapter   │ 28GB/ckpt                      │
 │ Complexity     │ Medium        │ Medium         │ Simple                         │
-│ Same GPU?      │ Required ⚠️   │ Optional       │ Optional                       │
+│ Same GPU?      │ Required      │ Optional       │ Optional                       │
 │ Best For       │ Production    │ Experiments    │ Debugging                      │
 └────────────────┴───────────────┴────────────────┴────────────────────────────────┘
 ```
@@ -820,3 +811,177 @@ pkill -9 -u $USER -f "vllm|grpo|python|run-api"
 | Legacy | `trained_model_checkpoints/step_N/` | ~28GB (14B model) |
 | Single-Copy | `trained_model_checkpoints/step_N/` | ~28GB |
 | LoRA | `trained_model_checkpoints/adapter_step_N/` | ~50MB |
+
+---
+
+## Feature Availability Matrix
+
+### What's Available 
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Single-Copy Mode** |  Working | True shared memory via CUDA IPC |
+| **LoRA Mode** |  Working | Hot-swap adapters without restart |
+| **Legacy Mode** |  Working | Checkpoint-based, restart vLLM |
+| **Qwen Models** |  Working | Qwen2, Qwen2.5 (0.5B - 72B) |
+| **Llama Models** |  Working | Llama-2, Llama-3, Llama-3.1 |
+| **Mistral Models** |  Working | Mistral-7B, Mixtral |
+| **Single GPU** |  Working | All modes supported |
+| **bfloat16/float16** |  Working | Configurable via `--dtype` |
+| **Gradient Checkpointing** |  Available | Reduces memory usage |
+| **Wandb Logging** |  Working | Via `--use-wandb` flag |
+| **Custom Environments** |  Working | Extend `BaseEnv` class |
+
+### What's NOT Available 
+
+| Feature | Mode | Status | Reason / Workaround |
+|---------|------|--------|---------------------|
+| **Multi-GPU (TP > 1)** | Single-Copy |  Not Supported | CUDA IPC handles are per-device; sharding complicates sharing |
+| **Multi-GPU (TP > 1)** | LoRA |  Supported | vLLM handles TP, trainer only swaps adapters |
+| **Multi-GPU (TP > 1)** | Legacy |  Supported | Standard vLLM with TP supported |
+| **Pipeline Parallel** | Single-Copy |  Not Supported | Would need cross-device IPC |
+| **Pipeline Parallel** | LoRA/Legacy |  Via vLLM | Use `--pipeline-parallel-size` flag |
+| **Data Parallel** | Single-Copy |  Not Supported | Shared tensors can't be safely updated by multiple trainers |
+| **Data Parallel** | LoRA/Legacy |  Manual | Run multiple trainer instances (see docs below) |
+| **Multi-Node** | Single-Copy |  Not Supported | CUDA IPC is single-node only |
+| **Multi-Node** | LoRA/Legacy |  Via vLLM | vLLM supports distributed inference |
+| **DeepSpeed/FSDP** | All |  Not Integrated | Would require custom integration with trainer |
+| **Quantized Models** | Single-Copy |  Not Supported | IPC handles may not work with quantized tensors |
+| **Quantized Models** | LoRA/Legacy |  Supported | Standard vLLM quantization (GPTQ, AWQ, etc.) |
+| **Encoder-Decoder** | All |  Not Supported | Architecture not supported by vLLM |
+
+### Multi-GPU Support Summary
+
+| Mode | Tensor Parallel | Pipeline Parallel | Data Parallel |
+|------|-----------------|-------------------|---------------|
+| **Single-Copy** |  TP=1 only |  Not Supported |  Not Supported |
+| **LoRA** |  Supported |  Via vLLM |  Multiple Trainers |
+| **Legacy** |  Supported |  Via vLLM |  Multiple Trainers |
+
+> **Key Point**: The multi-GPU limitation is **ONLY for single-copy mode** due to CUDA IPC constraints. 
+> LoRA and Legacy modes work with standard vLLM which fully supports tensor parallelism.
+
+#### Pipeline Parallel (PP)
+
+vLLM supports pipeline parallelism via `--pipeline-parallel-size`. For LoRA/Legacy modes:
+
+```bash
+# LoRA/Legacy with Pipeline Parallel (2 GPUs for PP)
+python -u example_trainer/vllm_api_server.py \
+    --model Qwen/Qwen2.5-14B-Instruct \
+    --tensor-parallel-size 1 \
+    --pipeline-parallel-size 2 \
+    --port 9001
+```
+
+**Note**: PP requires the model to be split across GPUs by layers. Performance may vary.
+
+#### Data Parallel (DP)
+
+Data parallelism means running **multiple trainer instances** against the same vLLM server. Each trainer processes different batches:
+
+```bash
+# Terminal 1: First trainer instance
+CUDA_VISIBLE_DEVICES=4 python -u example_trainer/grpo.py \
+    --model-name Qwen/Qwen2.5-7B-Instruct \
+    --weight-bridge-mode lora_only \
+    --trainer-rank 0 \
+    --world-size 2 \
+    > trainer_0.log 2>&1 &
+
+# Terminal 2: Second trainer instance
+CUDA_VISIBLE_DEVICES=5 python -u example_trainer/grpo.py \
+    --model-name Qwen/Qwen2.5-7B-Instruct \
+    --weight-bridge-mode lora_only \
+    --trainer-rank 1 \
+    --world-size 2 \
+    > trainer_1.log 2>&1 &
+```
+
+**Note**: DP requires gradient synchronization between trainers. Currently, trainers operate independently - true distributed DP would need additional coordination.
+
+### GPU Support
+
+| GPU Type | Single-Copy | LoRA | Legacy | Notes |
+|----------|-------------|------|--------|-------|
+| **NVIDIA A100** | YES | YES | YES | Recommended |
+| **NVIDIA H100** | YES | YES | YES | Recommended |
+| **NVIDIA B200** | YES | YES | YES | Recommended |
+| **NVIDIA RTX 4090** | YES | YES | YES | Consumer, works well |
+| **NVIDIA RTX 3090** | YES | YES | YES | Consumer, works well |
+| **NVIDIA V100** | ? | YES | YES | Old, may have IPC issues |
+
+### Memory Requirements (Approximate)
+
+| Model Size | Single-Copy | LoRA | Legacy |
+|------------|-------------|------|--------|
+| 0.5B - 1B | 4-6 GB | 4-6 GB | 8-12 GB |
+| 3B | 8-12 GB | 8-12 GB | 16-24 GB |
+| 7B | 16-20 GB | 16-20 GB | 32-40 GB |
+| 14B | 32-40 GB | 32-40 GB | 64-80 GB |
+| 32B | 70-80 GB | 70-80 GB | 140+ GB |
+| 70B+ | Single GPU impossible | 80+ GB | 160+ GB |
+
+> **Note**: Single-copy mode uses ~50% less memory than legacy because there's only ONE model copy.
+
+---
+
+## Known Limitations
+
+### Single-Copy Mode Specific
+
+| Limitation | Reason | Workaround |
+|------------|--------|------------|
+| **Same GPU Required** | CUDA IPC only works within same physical device | Use same `CUDA_VISIBLE_DEVICES` for trainer and vLLM |
+| **TP=1 Only** | Trainer expects unsharded model; IPC per-device | Use LoRA mode for TP > 1 |
+| **Custom Server Required** | Standard `vllm serve` doesn't export IPC handles | Use `vllm_api_server.py` |
+| **Single Node Only** | CUDA IPC is node-local | Use LoRA/Legacy for multi-node |
+
+### LoRA Mode Specific
+
+| Limitation | Reason | Workaround |
+|------------|--------|------------|
+| **~5s Swap Latency** | Adapter weights need to be loaded | Acceptable for most use cases |
+| **vLLM LoRA Support Required** | Model must support LoRA in vLLM | Check vLLM documentation |
+
+### General Limitations
+
+| Limitation | Reason | Workaround |
+|------------|--------|------------|
+| **GSM8k Needs `server_type=vllm`** | Default `openai` type lacks state tracking | Use `--openai.server_type vllm` |
+| **Decoder-Only Models Only** | vLLM architecture constraint | Use different framework for encoder-decoder |
+| **Custom vLLM Server Required** | Standard `vllm serve` lacks IPC patches | Use `vllm_api_server.py` for all modes |
+
+---
+
+## Future Work
+
+### High Priority 
+
+| Feature | Description |
+|---------|-------------|
+| **Multi-GPU Single-Copy** | Support `tensor-parallel-size > 1` with sharded IPC |
+| **Automatic Server Type Detection** | Auto-detect correct `server_type` for environments |
+| **Checkpoint Resume** | Resume training from checkpoints seamlessly |
+
+### Medium Priority 
+
+| Feature | Description | Difficulty |
+|---------|-------------|------------|
+| **DeepSpeed Integration** | ZeRO optimization for larger models | Hard |
+| **Quantization Support** | Test and document GPTQ/AWQ in single-copy | Medium |
+| **Multi-Node Training** | Distributed training across nodes | Hard |
+| **Streaming Weights** | Stream weight updates instead of full sync | Medium |
+| **Mixed Precision Training** | Support fp8/int8 training | Medium |
+
+
+## Contributing
+
+We welcome contributions! Priority areas:
+
+1. **Multi-GPU single-copy support** - The biggest missing feature
+2. **Better documentation** - More examples, tutorials
+3. **Environment implementations** - New RL environments
+4. **Bug fixes** - Especially edge cases in IPC handling
+
+See the main repository CONTRIBUTING.md for guidelines.
