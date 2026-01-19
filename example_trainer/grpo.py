@@ -24,7 +24,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Import PEFT for LoRA training
 try:
-    from peft import LoraConfig, PeftModel, TaskType, get_peft_model
+    from peft import LoraConfig, TaskType, get_peft_model
 
     PEFT_AVAILABLE = True
 except ImportError:
@@ -573,7 +573,7 @@ def _attach_to_vllm_shared_tensors(
                     f"[Setup DEBUG] Decoded IPC handle, len={len(ipc_handle)}",
                     flush=True,
                 )
-                print(f"[Setup DEBUG] About to call _new_shared_cuda...", flush=True)
+                print("[Setup DEBUG] About to call _new_shared_cuda...", flush=True)
 
             # Reconstruct the 8-tuple that _new_shared_cuda expects
             share_tuple = (
@@ -616,7 +616,7 @@ def _attach_to_vllm_shared_tensors(
 
             if attached_count == 1 and config.debug_loading:
                 print(
-                    f"[Setup DEBUG] ✓ First tensor attached successfully!", flush=True
+                    "[Setup DEBUG] ✓ First tensor attached successfully!", flush=True
                 )
 
         except Exception as e:
@@ -659,14 +659,14 @@ def _attach_to_vllm_shared_tensors(
             cuda_buffers.append(name)
 
     if config.debug_loading:
-        print(f"\n[DIAGNOSTIC] After load_state_dict:")
+        print("\n[DIAGNOSTIC] After load_state_dict:")
         print(f"  - Parameters on CUDA: {len(cuda_params)}")
         print(f"  - Parameters on META: {len(meta_params)}")
         print(f"  - Buffers on CUDA: {len(cuda_buffers)}")
         print(f"  - Buffers on META: {len(meta_buffers)}")
 
         if meta_params:
-            print(f"\n[DIAGNOSTIC] First 10 META parameters:")
+            print("\n[DIAGNOSTIC] First 10 META parameters:")
             for name in meta_params[:10]:
                 param = dict(model.named_parameters())[name]
                 print(
@@ -674,7 +674,7 @@ def _attach_to_vllm_shared_tensors(
                 )
 
         if meta_buffers:
-            print(f"\n[DIAGNOSTIC] META buffers:")
+            print("\n[DIAGNOSTIC] META buffers:")
             for name in meta_buffers[:10]:
                 buffer = dict(model.named_buffers())[name]
                 print(
@@ -728,7 +728,7 @@ def _attach_to_vllm_shared_tensors(
             setattr(parent, attr_name, new_param)
             meta_count += 1
             if config.debug_loading:
-                print(f"  - ✓ Replaced successfully!")
+                print("  - ✓ Replaced successfully!")
 
         except Exception as e:
             if config.debug_loading:
@@ -782,7 +782,7 @@ def _attach_to_vllm_shared_tensors(
             parent.register_buffer(attr_name, new_buffer)
             meta_count += 1
             if config.debug_loading:
-                print(f"  - ✓ Replaced successfully!")
+                print("  - ✓ Replaced successfully!")
 
         except Exception as e:
             if config.debug_loading:
@@ -1313,8 +1313,8 @@ def finalize_training(
                 f"  Total training time:     {total_time:.2f}s ({total_time/60:.2f} min)"
             )
             print(f"  Total steps:             {total_steps}")
-            print(f"  ")
-            print(f"  TIMING BREAKDOWN:")
+            print("  ")
+            print("  TIMING BREAKDOWN:")
             print(f"    Avg step time:         {avg_step_time:.2f}s")
             print(f"    Total step time:       {total_step_time:.2f}s")
             print(
@@ -1323,8 +1323,8 @@ def finalize_training(
             print(f"    Total sync time:       {total_sync_time:.2f}s")
             print(f"    Avg data fetch time:   {avg_data_fetch:.2f}s")
             print(f"    Total data fetch time: {total_data_fetch:.2f}s")
-            print(f"  ")
-            print(f"  MEMORY:")
+            print("  ")
+            print("  MEMORY:")
             print(f"    Peak GPU memory:       {peak_gpu_mem_gb:.2f} GB")
             print(f"    Avg GPU memory:        {avg_gpu_mem:.2f} GB")
             print(f"{'='*70}\n")
@@ -1504,7 +1504,7 @@ def _launch_vllm_server(
     - Our custom server has /generate endpoint needed by VLLMServer class
     - This allows proper tokens_and_logprobs_completion support
     """
-    global vllm_process
+    vllm_process
 
     # Use our custom vllm_api_server.py instead of standard vLLM
     # This provides the /generate endpoint that VLLMServer needs
@@ -1805,10 +1805,10 @@ def train_lora(config: TrainingConfig):
     if not _check_vllm_health(config.vllm_port):
         print(f"\nERROR: vLLM server not running on port {config.vllm_port}")
         print("\nLoRA mode requires an external vLLM server. Start it first:")
-        print(f"  python example_trainer/vllm_api_server.py \\")
+        print("  python example_trainer/vllm_api_server.py \\")
         print(f"    --model {config.model_name} \\")
         print(f"    --port {config.vllm_port} \\")
-        print(f"    --gpu-memory-utilization 0.45")
+        print("    --gpu-memory-utilization 0.45")
         raise RuntimeError(f"External vLLM server required on port {config.vllm_port}")
     print(f"vLLM server healthy on port {config.vllm_port}")
 

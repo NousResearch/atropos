@@ -44,7 +44,7 @@ from argparse import Namespace
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 # =============================================================================
 # STEP 1: Apply patches BEFORE any vLLM imports!
@@ -789,7 +789,7 @@ def _export_state_dict_info(args: Namespace) -> None:
                     existing.get("param_mappings")
                     and len(existing["param_mappings"]) > 0
                 ):
-                    logger.info(f"Config already has param_mappings, not overwriting")
+                    logger.info("Config already has param_mappings, not overwriting")
                     return
 
         info = {
