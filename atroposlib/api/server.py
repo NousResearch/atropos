@@ -351,7 +351,7 @@ async def get_batch():
             "message": "Trainer not registered. Call /register first.",
             "batch": [],
         }
-    
+
     if not app.state.started:
         app.state.started = True
 
