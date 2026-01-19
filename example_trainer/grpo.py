@@ -159,7 +159,7 @@ class TrainingConfig(BaseModel):
             "and contains CUDA IPC handles for single-copy mode."
         ),
     )
-    
+
     # Debug flags
     debug_loading: bool = Field(
         False,
@@ -1309,7 +1309,9 @@ def finalize_training(
             print(f"\n{'='*70}")
             print(f"BENCHMARK SUMMARY ({mode})")
             print(f"{'='*70}")
-            print(f"  Total training time:     {total_time:.2f}s ({total_time/60:.2f} min)")
+            print(
+                f"  Total training time:     {total_time:.2f}s ({total_time/60:.2f} min)"
+            )
             print(f"  Total steps:             {total_steps}")
             print(f"  ")
             print(f"  TIMING BREAKDOWN:")
@@ -1478,7 +1480,11 @@ def train(config: TrainingConfig):
         model, tokenizer, config.save_path, config.training_steps, is_final=True
     )
     finalize_training(
-        use_wandb, training_start_time, "legacy", config.training_steps, benchmark_stats,
+        use_wandb,
+        training_start_time,
+        "legacy",
+        config.training_steps,
+        benchmark_stats,
         benchmark=config.benchmark,
     )
 
@@ -2161,10 +2167,10 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
         lora_target_modules=args.lora_target_modules,
-        single_copy=getattr(args, 'single_copy', False),
-        vllm_config_path=getattr(args, 'vllm_config_path', None),
-        debug_loading=getattr(args, 'debug_loading', False),
-        benchmark=getattr(args, 'benchmark', False),
+        single_copy=getattr(args, "single_copy", False),
+        vllm_config_path=getattr(args, "vllm_config_path", None),
+        debug_loading=getattr(args, "debug_loading", False),
+        benchmark=getattr(args, "benchmark", False),
     )
 
 

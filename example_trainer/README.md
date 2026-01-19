@@ -816,7 +816,7 @@ pkill -9 -u $USER -f "vllm|grpo|python|run-api"
 
 ## Feature Availability Matrix
 
-### What's Available 
+### What's Available
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -832,7 +832,7 @@ pkill -9 -u $USER -f "vllm|grpo|python|run-api"
 | **Wandb Logging** |  Working | Via `--use-wandb` flag |
 | **Custom Environments** |  Working | Extend `BaseEnv` class |
 
-### What's NOT Available 
+### What's NOT Available
 
 | Feature | Mode | Status | Reason / Workaround |
 |---------|------|--------|---------------------|
@@ -858,7 +858,7 @@ pkill -9 -u $USER -f "vllm|grpo|python|run-api"
 | **LoRA** |  Supported |  Via vLLM |  Multiple Trainers |
 | **Legacy** |  Supported |  Via vLLM |  Multiple Trainers |
 
-> **Key Point**: The multi-GPU limitation is **ONLY for single-copy mode** due to CUDA IPC constraints. 
+> **Key Point**: The multi-GPU limitation is **ONLY for single-copy mode** due to CUDA IPC constraints.
 > LoRA and Legacy modes work with standard vLLM which fully supports tensor parallelism.
 
 #### Pipeline Parallel (PP)
@@ -956,7 +956,7 @@ CUDA_VISIBLE_DEVICES=5 python -u example_trainer/grpo.py \
 
 ## Future Work
 
-### High Priority 
+### High Priority
 
 | Feature | Description |
 |---------|-------------|
@@ -964,7 +964,7 @@ CUDA_VISIBLE_DEVICES=5 python -u example_trainer/grpo.py \
 | **Automatic Server Type Detection** | Auto-detect correct `server_type` for environments |
 | **Checkpoint Resume** | Resume training from checkpoints seamlessly |
 
-### Medium Priority 
+### Medium Priority
 
 | Feature | Description | Difficulty |
 |---------|-------------|------------|
