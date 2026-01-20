@@ -745,7 +745,9 @@ async def lora_status() -> LoraStatusResponse:
         lora_available=LORA_AVAILABLE,
         active_adapter_path=bridge_state.active_lora_path,
         active_adapter_name=bridge_state.active_lora_name,
-        active_adapter_id=bridge_state.active_lora_id if bridge_state.active_lora_path else None,
+        active_adapter_id=(
+            bridge_state.active_lora_id if bridge_state.active_lora_path else None
+        ),
         load_count=bridge_state.lora_load_count,
         available_adapters=available,
     )
@@ -775,8 +777,12 @@ async def lora_load(request: LoraLoadRequest) -> JSONResponse:
 
     with bridge_state.lock:
         bridge_state.active_lora_path = request.adapter_path
-        bridge_state.active_lora_name = request.adapter_name or f"adapter_{bridge_state.lora_load_count}"
-        bridge_state.active_lora_id = bridge_state.lora_load_count + 1  # vLLM needs unique int ID
+        bridge_state.active_lora_name = (
+            request.adapter_name or f"adapter_{bridge_state.lora_load_count}"
+        )
+        bridge_state.active_lora_id = (
+            bridge_state.lora_load_count + 1
+        )  # vLLM needs unique int ID
         bridge_state.lora_load_count += 1
 
     logger.info(
@@ -806,11 +812,13 @@ async def lora_unload() -> JSONResponse:
         # Note: Keep active_lora_id - vLLM may cache adapters by ID
 
     logger.info(f"LoRA adapter unloaded: {prev_path} ({prev_name})")
-    return JSONResponse({
-        "status": "ok",
-        "previous_adapter": prev_path,
-        "previous_name": prev_name,
-    })
+    return JSONResponse(
+        {
+            "status": "ok",
+            "previous_adapter": prev_path,
+            "previous_name": prev_name,
+        }
+    )
 
 
 # =============================================================================

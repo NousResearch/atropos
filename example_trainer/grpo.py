@@ -1738,7 +1738,9 @@ def _check_vllm_health(port: int) -> bool:
         return False
 
 
-def _hotswap_lora_adapter(port: int, adapter_path: str, adapter_name: Optional[str] = None) -> bool:
+def _hotswap_lora_adapter(
+    port: int, adapter_path: str, adapter_name: Optional[str] = None
+) -> bool:
     """
     Request vLLM to hot-swap to a new LoRA adapter.
 
@@ -1764,7 +1766,9 @@ def _hotswap_lora_adapter(port: int, adapter_path: str, adapter_name: Optional[s
             result = response.json()
             name = result.get("adapter_name", "unknown")
             adapter_id = result.get("adapter_id", "?")
-            print(f"  [LORA] Hot-swapped adapter: {name} (id={adapter_id}, path={adapter_path})")
+            print(
+                f"  [LORA] Hot-swapped adapter: {name} (id={adapter_id}, path={adapter_path})"
+            )
             return True
         else:
             print(f"  [LORA] Hot-swap failed: {response.text}")
