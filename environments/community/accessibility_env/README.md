@@ -65,7 +65,7 @@ A well-trained model could catch and fix common accessibility errors early, stre
    ```bash
    # Install via pyproject.toml (recommended)
    pip install -e .[accessibility-env]
-   
+
    # Or install from requirements file (legacy method)
    pip install -r requirements.txt
    pip install lxml

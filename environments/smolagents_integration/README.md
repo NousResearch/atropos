@@ -30,7 +30,7 @@ The integration consists of:
    ```bash
    # Install via pyproject.toml (recommended)
    pip install -e .[smolagents-integration]
-   
+
    # Or install manually (legacy method)
    pip install smolagents
    pip install datasets pandas huggingface_hub
