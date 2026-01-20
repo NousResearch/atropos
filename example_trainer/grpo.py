@@ -1738,25 +1738,33 @@ def _check_vllm_health(port: int) -> bool:
         return False
 
 
-def _hotswap_lora_adapter(port: int, adapter_path: str) -> bool:
+def _hotswap_lora_adapter(port: int, adapter_path: str, adapter_name: Optional[str] = None) -> bool:
     """
     Request vLLM to hot-swap to a new LoRA adapter.
 
     Args:
         port: vLLM server port
         adapter_path: Path to the saved adapter directory
+        adapter_name: Optional friendly name for the adapter
 
     Returns:
         True if successful, False otherwise
     """
     try:
+        payload = {"adapter_path": adapter_path}
+        if adapter_name:
+            payload["adapter_name"] = adapter_name
+
         response = requests.post(
             f"http://localhost:{port}/lora/load",
-            json={"adapter_path": adapter_path},
+            json=payload,
             timeout=30,
         )
         if response.status_code == 200:
-            print(f"  [LORA] Hot-swapped adapter: {adapter_path}")
+            result = response.json()
+            name = result.get("adapter_name", "unknown")
+            adapter_id = result.get("adapter_id", "?")
+            print(f"  [LORA] Hot-swapped adapter: {name} (id={adapter_id}, path={adapter_path})")
             return True
         else:
             print(f"  [LORA] Hot-swap failed: {response.text}")
@@ -1882,7 +1890,7 @@ def train_lora(config: TrainingConfig):
             sync_start = time.time()
             adapter_path = save_lora_checkpoint(model, config.save_path, step + 1)
             # Try to hot-swap the adapter in vLLM (non-blocking, best effort)
-            _hotswap_lora_adapter(config.vllm_port, adapter_path)
+            _hotswap_lora_adapter(config.vllm_port, adapter_path, f"step_{step + 1}")
             sync_time = time.time() - sync_start
             benchmark_stats["sync_times"].append(sync_time)
 
@@ -1915,7 +1923,7 @@ def train_lora(config: TrainingConfig):
     )
 
     # Hot-swap to final adapter
-    _hotswap_lora_adapter(config.vllm_port, final_adapter_path)
+    _hotswap_lora_adapter(config.vllm_port, final_adapter_path, "final")
     final_sync_time = time.time() - final_sync_start
     benchmark_stats["sync_times"].append(final_sync_time)
 
