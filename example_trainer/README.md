@@ -150,7 +150,6 @@ rm -f vllm_bridge_config.json vllm.log trainer.log api.log gsm8k.log
 
 ```bash
 export VLLM_ENABLE_SHARED_WEIGHTS=1
-export VLLM_SKIP_WEIGHT_DAEMON=1
 export NUM_INFERENCE_NODES=0
 export LOGDIR=.
 ```
@@ -240,7 +239,7 @@ cd ~/atropos_stuff/atropos
 rm -f vllm_bridge_config.json *.log
 
 # Environment variables
-export VLLM_ENABLE_SHARED_WEIGHTS=1 VLLM_SKIP_WEIGHT_DAEMON=1 NUM_INFERENCE_NODES=0 LOGDIR=.
+export VLLM_ENABLE_SHARED_WEIGHTS=1 NUM_INFERENCE_NODES=0 LOGDIR=.
 
 # Start vLLM
 CUDA_VISIBLE_DEVICES=0 python -u example_trainer/vllm_api_server.py \
@@ -620,7 +619,6 @@ CUDA_VISIBLE_DEVICES=1 python -u example_trainer/grpo.py \
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
 | `VLLM_ENABLE_SHARED_WEIGHTS` | Yes (single-copy) | Enable vLLM patching for IPC | `1` |
-| `VLLM_SKIP_WEIGHT_DAEMON` | Yes (single-copy) | Skip NCCL daemon (not needed) | `1` |
 | `NUM_INFERENCE_NODES` | Yes | Number of vLLM nodes (0 = local) | `0` |
 | `LOGDIR` | Recommended | Directory for vllm_bridge_config.json | `.` |
 | `CUDA_VISIBLE_DEVICES` | Recommended | GPU allocation | `0` |
