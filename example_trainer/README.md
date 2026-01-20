@@ -691,13 +691,13 @@ The JSON file contains everything needed to reconstruct tensor references in ano
   "model": "Qwen/Qwen2.5-3B-Instruct",
   "tp_degree": 1,
   "dp_shard_degree": 1,
-  
+
   "param_names": [
     "model.embed_tokens.weight",
     "model.layers.0.self_attn.qkv_proj.weight",
     ...
   ],
-  
+
   "param_mappings": {
     "model.embed_tokens.weight": {
       "vllm_name": "model.embed_tokens.weight",
@@ -707,23 +707,23 @@ The JSON file contains everything needed to reconstruct tensor references in ano
     },
     ...
   },
-  
+
   "ipc_handles": {
     "model.embed_tokens.weight": {
       "device_index": 0,
-      "ipc_handle_b64": "AmPA0pN...",     
+      "ipc_handle_b64": "AmPA0pN...",
       "storage_size": 623902720,
       "storage_offset": 0,
       "ref_counter_handle_b64": "Y2JY...",
       "ref_counter_offset": 0,
-      "event_handle_b64": "wRIs...",     
+      "event_handle_b64": "wRIs...",
       "event_sync_required": true,
       "shape": [152064, 2048],
       "dtype": "torch.bfloat16"
     },
     ...
   },
-  
+
   "shared_weights_enabled": true,
   "single_copy_enabled": true,
   "num_params": 255
@@ -756,15 +756,15 @@ The JSON file contains everything needed to reconstruct tensor references in ano
 for name, ipc_info in config["ipc_handles"].items():
     # Decode IPC handle from base64
     ipc_handle = base64.b64decode(ipc_info["ipc_handle_b64"])
-    
+
     # Reconstruct storage from IPC handle
     storage = torch.UntypedStorage._new_shared_cuda(
         device_index, ipc_handle, storage_size, ...
     )
-    
+
     # Create tensor from shared storage
     tensor = torch.tensor(storage).view(shape).to(dtype)
-    
+
     # Replace model parameter with shared tensor
     model.get_parameter(name).data = tensor
 ```
@@ -900,7 +900,7 @@ pkill -9 -u $USER -f "vllm|grpo|python|run-api"
 
 ## Feature Availability Matrix
 
-### What's Available 
+### What's Available
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -916,7 +916,7 @@ pkill -9 -u $USER -f "vllm|grpo|python|run-api"
 | **Wandb Logging** |  Working | Via `--use-wandb` flag |
 | **Custom Environments** |  Working | Extend `BaseEnv` class |
 
-### What's NOT Available 
+### What's NOT Available
 
 | Feature | Mode | Status | Reason / Workaround |
 |---------|------|--------|---------------------|
@@ -942,7 +942,7 @@ pkill -9 -u $USER -f "vllm|grpo|python|run-api"
 | **LoRA** |  Supported |  Via vLLM |  Multiple Trainers |
 | **Legacy** |  Supported |  Via vLLM |  Multiple Trainers |
 
-> **Key Point**: The multi-GPU limitation is **ONLY for single-copy mode** due to CUDA IPC constraints. 
+> **Key Point**: The multi-GPU limitation is **ONLY for single-copy mode** due to CUDA IPC constraints.
 > LoRA and Legacy modes work with standard vLLM which fully supports tensor parallelism.
 
 #### Pipeline Parallel (PP)
@@ -1040,7 +1040,7 @@ CUDA_VISIBLE_DEVICES=5 python -u example_trainer/grpo.py \
 
 ## Future Work
 
-### High Priority 
+### High Priority
 
 | Feature | Description |
 |---------|-------------|
@@ -1048,7 +1048,7 @@ CUDA_VISIBLE_DEVICES=5 python -u example_trainer/grpo.py \
 | **Automatic Server Type Detection** | Auto-detect correct `server_type` for environments |
 | **Checkpoint Resume** | Resume training from checkpoints seamlessly |
 
-### Medium Priority 
+### Medium Priority
 
 | Feature | Description | Difficulty |
 |---------|-------------|------------|
