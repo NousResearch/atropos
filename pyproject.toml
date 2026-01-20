@@ -58,6 +58,129 @@ examples = [
     "atroposlib[rewardfns]",
     "langdetect"
 ]
+# Environment-specific optional dependencies
+accessibility-env = [
+    "beautifulsoup4>=4.0.0",
+    "lxml>=4.0.0",
+]
+blackjack = [
+    "textarena",
+]
+bleuberi = [
+    "absl-py>=0.9.0",
+    "bert-score>=0.3.13",
+    "evaluate>=0.4.3",
+    "model2vec>=0.4.1",
+    "pandas>=2.2.3",
+    "rouge_score>=0.1.2",
+    "sacrebleu>=2.5.1",
+]
+conversational-style-dpo = [
+    "accelerate",
+    "bitsandbytes",
+    "trl",
+]
+diplomacy-environment = [
+    "coloredlogs>=15.0.1",
+    "tornado>=6.0",
+    "ujson>=5.0",
+    "websockets>=10.0",
+]
+dynastai = [
+    "fastapi>=0.105.0",
+    "httpx>=0.27.0",
+    "python-multipart>=0.0.7",
+    "setuptools>=68.0.0",
+    "typing-extensions>=4.9.0",
+    "uvicorn>=0.28.0",
+]
+ethereum-virtual-machine = [
+    "pyyaml>=6.0",
+]
+goofy-math = [
+    "latex2sympy2_extended",
+    "math_verify",
+]
+infinimath = [
+    "mathgenerator",
+]
+mcp-tool-calling = [
+    "vllm",
+]
+options-iv-prediction = [
+    "yahooquery",
+]
+padres-spatial = [
+    "pybullet>=3.2.5",
+    "websockets>=11.0.3",
+]
+pay-to-play = [
+    "base58>=2.1.0",
+    "eth-account>=0.8.0",
+    "web3>=6.0.0",
+]
+pokemon-showdown = [
+    "poke-env",
+]
+punchline-vrcli = [
+    "vllm>=0.8.5",
+]
+pytorch-optimizer-coding = [
+    "modal",
+    "verdict",
+]
+quantum-hybrid = [
+    "aiofiles>=24.1.0",
+    "httpcore>=1.0.0",
+    "httpx>=0.28.0",
+    "pennylane>=0.30.0",
+    "tenacity>=9.1.0",
+    "uvloop>=0.21.0",
+    "websockets>=15.0.0",
+]
+reasoning-gym-environment = [
+    "asyncio-throttle>=1.0.0",
+    "colorlog>=6.0.0",
+    "matplotlib>=3.5.0",
+    "pillow>=8.3.0",
+    "sympy>=1.9.0",
+]
+router-env = [
+    "apscheduler",
+    "google-api-python-client",
+    "google-auth-oauthlib",
+    "livekit-agents",
+    "livekit-plugins-deepgram",
+    "livekit-plugins-openai",
+    "livekit-plugins-silero",
+    "livekit-plugins-turn-detector",
+    "mem0ai",
+    "openai-agents-mcp",
+    "pydantic-ai",
+]
+selcube = [
+    "beautifulsoup4>=4.12.2",
+    "flask>=2.3.2",
+    "imageio>=2.31.0",
+    "matplotlib>=3.7.0",
+    "pandas>=2.0.0",
+    "pillow>=9.5.0",
+    "plotly>=5.14.0",
+    "scipy>=1.10.0",
+    "seaborn>=0.12.0",
+]
+smolagents-integration = [
+    "smolagents",
+    "tavily-python",
+    "huggingface_hub",
+]
+ufc-prediction-env = [
+    "Pillow>=9.0.0",
+]
+wikipedia-research = [
+    "smolagents>=0.0.4",
+    "tavily-python>=0.2.2",
+]
 
 [build-system]
 requires = ["hatchling"]

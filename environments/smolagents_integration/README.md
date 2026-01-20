@@ -28,6 +28,10 @@ The integration consists of:
 1. First, make sure you have Atropos installed.
 2. Install SmolaGents and dependencies:
    ```bash
+   # Install via pyproject.toml (recommended)
+   pip install -e .[smolagents-integration]
+   
+   # Or install manually (legacy method)
    pip install smolagents
    pip install datasets pandas huggingface_hub
    pip install tavily-python  # Required for web search tools (needed by most GAIA tasks)

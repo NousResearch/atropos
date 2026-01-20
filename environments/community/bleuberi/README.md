@@ -15,8 +15,13 @@ BLEUBERI uses BLEU scores (a simple n-gram matching metric) directly as rewards 
 Before using the BLEUBERI environment, you need to install its dependencies:
 
 ```bash
-# Install the required dependencies
-pip install -r environments/bleuberi/requirements.txt
+# Install the required dependencies via pyproject.toml
+pip install -e .[bleuberi]
+```
+
+Alternatively, you can install from the requirements file (legacy method):
+```bash
+pip install -r environments/community/bleuberi/requirements.txt
 ```
 
 The key dependencies include:
