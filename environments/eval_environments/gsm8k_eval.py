@@ -133,10 +133,10 @@ class GSM8KEvalEnv(BaseEnv):
         self,
         config: GSM8KEvalConfig,
         server_configs: List[APIServerConfig],
-        slurm_job_id: Optional[str] = None,
+        slurm=False,
         testing: bool = False,
     ):
-        super().__init__(config, server_configs, slurm_job_id, testing)
+        super().__init__(config, server_configs, slurm, testing)
         self.config: GSM8KEvalConfig = config
         self.eval_items: List[Dict] = []
         self._dataset_loaded = False
