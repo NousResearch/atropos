@@ -760,6 +760,26 @@ async def lora_load(request: LoraLoadRequest) -> JSONResponse:
             status_code=404, detail=f"Adapter not found: {request.adapter_path}"
         )
 
+    # Read adapter config to validate and log details
+    adapter_config_path = os.path.join(request.adapter_path, "adapter_config.json")
+    adapter_info = {}
+
+    if os.path.exists(adapter_config_path):
+        try:
+            with open(adapter_config_path, "r") as f:
+                adapter_config = json.load(f)
+            adapter_info = {
+                "r": adapter_config.get("r"),
+                "lora_alpha": adapter_config.get("lora_alpha"),
+                "target_modules": adapter_config.get("target_modules"),
+                "base_model": adapter_config.get("base_model_name_or_path"),
+            }
+            logger.info(f"LoRA adapter config: {adapter_info}")
+        except Exception as e:
+            logger.warning(f"Could not read adapter_config.json: {e}")
+    else:
+        logger.warning(f"No adapter_config.json found at {adapter_config_path}")
+
     with bridge_state.lock:
         bridge_state.active_lora_path = request.adapter_path
         bridge_state.active_lora_name = (
@@ -770,13 +790,16 @@ async def lora_load(request: LoraLoadRequest) -> JSONResponse:
         )  # vLLM needs unique int ID
         bridge_state.lora_load_count += 1
 
-    logger.info(f"LoRA adapter loaded: {request.adapter_path}")
+    logger.info(f"LoRA adapter loaded: {request.adapter_path} (id={bridge_state.active_lora_id})")
 
     return JSONResponse(
         {
             "status": "ok",
             "adapter_path": request.adapter_path,
+            "adapter_name": bridge_state.active_lora_name,
+            "adapter_id": bridge_state.active_lora_id,
             "load_count": bridge_state.lora_load_count,
+            "adapter_config": adapter_info,
         }
     )
 
