@@ -208,3 +208,6 @@ environments/community/word_hunt/word_hunt_rollouts*.html
 
 # Diplomacy artefacts
 environments/game_environments/diplomacy_environment/logs/
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.windsurf/rules/snyk_rules.md
