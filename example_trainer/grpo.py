@@ -904,6 +904,10 @@ def load_model_and_tokenizer(
 
     # Enable gradient checkpointing (saves memory)
     # For LoRA, use PEFT's method; for others, use standard method
+    # Disable KV cache - incompatible with gradient checkpointing
+    # Setting explicitly avoids the warning message
+    model.config.use_cache = False
+
     if config.weight_bridge_mode == "lora_only":
         # PEFT models need gradient_checkpointing enabled on base model
         # and require use_reentrant=False for proper gradient flow
@@ -1744,31 +1748,43 @@ def _hotswap_lora_adapter(
     """
     Request vLLM to hot-swap to a new LoRA adapter.
 
+    Tries both:
+    1. Native vLLM endpoint: /v1/load_lora_adapter (standard vLLM serve)
+    2. Custom endpoint: /lora/load (vllm_api_server.py)
+
     Args:
         port: vLLM server port
         adapter_path: Path to the saved adapter directory
-        adapter_name: Optional friendly name for the adapter
+        adapter_name: Optional name for the adapter
 
     Returns:
         True if successful, False otherwise
     """
-    try:
-        payload = {"adapter_path": adapter_path}
-        if adapter_name:
-            payload["adapter_name"] = adapter_name
+    base_url = f"http://localhost:{port}"
+    name = adapter_name or os.path.basename(adapter_path)
 
+    # Try native vLLM endpoint first (standard vllm serve)
+    try:
         response = requests.post(
-            f"http://localhost:{port}/lora/load",
-            json=payload,
+            f"{base_url}/v1/load_lora_adapter",
+            json={"lora_name": name, "lora_path": adapter_path},
             timeout=30,
         )
         if response.status_code == 200:
-            result = response.json()
-            name = result.get("adapter_name", "unknown")
-            adapter_id = result.get("adapter_id", "?")
-            print(
-                f"  [LORA] Hot-swapped adapter: {name} (id={adapter_id}, path={adapter_path})"
-            )
+            print(f"  [LORA] Hot-swapped adapter via native API: {name} ({adapter_path})")
+            return True
+    except Exception:
+        pass  # Try custom endpoint
+
+    # Try custom endpoint (vllm_api_server.py)
+    try:
+        response = requests.post(
+            f"{base_url}/lora/load",
+            json={"adapter_path": adapter_path, "adapter_name": name},
+            timeout=30,
+        )
+        if response.status_code == 200:
+            print(f"  [LORA] Hot-swapped adapter via custom API: {name} ({adapter_path})")
             return True
         else:
             print(f"  [LORA] Hot-swap failed: {response.text}")
