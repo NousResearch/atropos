@@ -164,7 +164,10 @@ class GSM8KEvalEnv(BaseEnv):
             thinking_prompt = get_default_thinking_prompt(
                 self.config.custom_thinking_prompt
             )
-            print(f"  Thinking prompt: {thinking_prompt[:80]}...")
+            if thinking_prompt:
+                print(f"  Thinking prompt: {thinking_prompt[:80]}...")
+            else:
+                print("  Thinking prompt: (using model's native reasoning)")
         print(f"  Loaded {len(self.eval_items)} evaluation items")
 
     async def _load_dataset(self) -> None:
