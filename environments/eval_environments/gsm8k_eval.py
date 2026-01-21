@@ -353,7 +353,7 @@ class GSM8KEvalEnv(BaseEnv):
 
         # Create evaluation tasks
         async def eval_task(item):
-            return await self.rollout_and_score_eval(item, self.server_configs[0])
+            return await self.rollout_and_score_eval(item, self.server.servers[0].config)
 
         tasks = [eval_task(item) for item in self.eval_items]
 
