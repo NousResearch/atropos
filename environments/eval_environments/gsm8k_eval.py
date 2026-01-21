@@ -148,8 +148,6 @@ class GSM8KEvalEnv(BaseEnv):
 
     async def setup(self) -> None:
         """Initialize the environment and load the dataset."""
-        await super().setup()
-
         # Initialize math executor
         self._math_executor = get_math_executor(self.config.max_math_workers)
 
