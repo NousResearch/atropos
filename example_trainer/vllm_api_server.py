@@ -785,8 +785,11 @@ async def lora_load(request: LoraLoadRequest) -> JSONResponse:
 async def lora_unload() -> JSONResponse:
     """Unload current LoRA adapter."""
     with bridge_state.lock:
-        prev = bridge_state.active_lora_path
+        prev_path = bridge_state.active_lora_path
+        prev_name = bridge_state.active_lora_name
         bridge_state.active_lora_path = None
+        bridge_state.active_lora_name = None
+        bridge_state.active_lora_id = 0
 
     logger.info(f"LoRA adapter unloaded: {prev_path} ({prev_name})")
     return JSONResponse(
