@@ -1,4 +1,50 @@
-# Atropos - Nous Research's LLM RL Gym
+# HYDRA - Security-Focused LLM Specialists
+
+**Hybrid Universal Dynamic Reinforcement Adversaries**
+
+> Built on [Atropos](https://github.com/NousResearch/atropos) | Integrated with [RelayOne](https://github.com/RelayOne/mvp)
+
+---
+
+## What is HYDRA?
+
+HYDRA is a **continuous specialization flywheel** for building security-focused LLM specialists that outperform frontier models on narrow, operational tasks.
+
+**Core Insight:** You don't beat frontier models by training once—you build a continuous improvement loop:
+1. Frontier models as **teachers** (selectively)
+2. **Verifiable, domain-specific data** that general models don't have
+3. **Regular refresh cycles** (weekly/monthly)
+4. **Eval-driven routing** between specialist and frontier
+
+### Target Products
+
+| Product | Target Users | Key Tasks |
+|---------|--------------|-----------|
+| **Detection Engineer** | SOC analysts, threat hunters | Sigma/YARA rules, alert triage, IOC extraction |
+| **Secure Code Review** | AppSec, DevSecOps | Vulnerability patches, security review, CI copilot |
+| **CTF Operator** | Red teams, pentesters | Attack chains, exploit dev (sandboxed, audited) |
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 CONTINUOUS SPECIALIZATION FLYWHEEL           │
+├─────────────────────────────────────────────────────────────┤
+│  FRONTIER TEACHER    → Generate hard scenarios, adjudicate  │
+│  VERIFIER LAYER      → Sandboxes, static analysis, tests    │
+│  SPECIALIST MODELS   → Trained LoRA products                │
+│  ROUTER (RelayOne)   → Confidence-based specialist/frontier │
+│  FEEDBACK LOOP       → Mine failures → retrain → ship       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**The moat isn't smarter weights—it's better verifiers + domain-specific data + faster iteration.**
+
+See [HYDRA Vision & Architecture](docs/Plans/01_HYDRA_Vision_and_Architecture.md) for full details.
+
+---
+
+## Training Platform: Atropos
 
 ![newatr-02](banner-image.jpg)
 
