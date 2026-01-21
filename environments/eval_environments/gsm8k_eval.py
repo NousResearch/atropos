@@ -128,6 +128,7 @@ class GSM8KEvalEnv(BaseEnv):
     """
 
     name = "gsm8k_eval"
+    env_config_cls = GSM8KEvalConfig
 
     def __init__(
         self,
