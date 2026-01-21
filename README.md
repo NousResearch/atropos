@@ -40,7 +40,7 @@ HYDRA is a **continuous specialization flywheel** for building security-focused 
 
 **The moat isn't smarter weights—it's better verifiers + domain-specific data + faster iteration.**
 
-See [HYDRA Vision & Architecture](docs/Plans/01_HYDRA_Vision_and_Architecture.md) for full details.
+See [HYDRA Vision & Architecture](docs/Hydra_Plans/01_HYDRA_Vision_and_Architecture.md) for full details.
 
 ---
 
