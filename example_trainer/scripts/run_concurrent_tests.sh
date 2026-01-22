@@ -139,10 +139,11 @@ echo "[3/6] Starting LoRA GSM8k environment..."
 python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name "$MODEL" \
     --env.use_wandb=False \
+    --env.rollout_server_url "http://localhost:${LORA_GSM8K_PORT}" \
     --openai.model_name "$MODEL" \
     --openai.base_url "http://localhost:${LORA_VLLM_PORT}/v1" \
     --openai.server_type vllm \
-    --server.port $LORA_GSM8K_PORT \
+    --slurm false \
     > "${LOG_DIR}/lora_gsm8k.log" 2>&1 &
 LORA_GSM8K_PID=$!
 echo "  PID: $LORA_GSM8K_PID"
@@ -152,10 +153,11 @@ echo "[4/6] Starting Single-Copy GSM8k environment..."
 python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name "$MODEL" \
     --env.use_wandb=False \
+    --env.rollout_server_url "http://localhost:${SINGLE_COPY_GSM8K_PORT}" \
     --openai.model_name "$MODEL" \
     --openai.base_url "http://localhost:${SINGLE_COPY_VLLM_PORT}/v1" \
     --openai.server_type vllm \
-    --server.port $SINGLE_COPY_GSM8K_PORT \
+    --slurm false \
     > "${LOG_DIR}/single_copy_gsm8k.log" 2>&1 &
 SINGLE_COPY_GSM8K_PID=$!
 echo "  PID: $SINGLE_COPY_GSM8K_PID"
