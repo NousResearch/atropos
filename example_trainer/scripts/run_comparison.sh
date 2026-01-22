@@ -56,6 +56,16 @@
 
 set -e
 
+# Get script directory and repo root
+# Script is at: atropos/example_trainer/scripts/run_comparison.sh
+# We need to be at: atropos/ (where example_trainer/ and environments/ are)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Change to repo root so all relative paths work correctly
+cd "$REPO_ROOT"
+echo "Working directory: $(pwd)"
+
 # Configuration
 export MODEL="${MODEL:-Qwen/Qwen2.5-3B-Instruct}"
 export TRAINING_STEPS="${1:-50}"
