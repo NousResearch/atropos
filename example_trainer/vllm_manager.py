@@ -7,6 +7,8 @@ for legacy mode training.
 
 import atexit
 import os
+import signal
+import socket
 import subprocess
 import time
 from typing import Optional
@@ -18,6 +20,73 @@ from .config import TrainingConfig
 
 # Global variable to keep track of the vLLM process
 _vllm_process: Optional[subprocess.Popen] = None
+
+
+def is_port_in_use(port: int) -> bool:
+    """Check if a port is already in use."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) == 0
+
+
+def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
+    """
+    Kill any process using the specified port.
+    
+    Returns True if no process was running or if it was successfully killed.
+    """
+    if not is_port_in_use(port):
+        return True
+    
+    print(f"  Port {port} is in use, attempting to kill existing process...")
+    
+    try:
+        # Try to find and kill the process using lsof (Linux/Mac)
+        result = subprocess.run(
+            ["lsof", "-t", "-i", f":{port}"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.stdout.strip():
+            pids = result.stdout.strip().split('\n')
+            for pid in pids:
+                try:
+                    os.kill(int(pid), signal.SIGTERM)
+                    print(f"  Sent SIGTERM to PID {pid}")
+                except (ProcessLookupError, ValueError):
+                    pass
+            
+            # Wait for port to be free
+            start = time.time()
+            while time.time() - start < timeout:
+                if not is_port_in_use(port):
+                    print(f"  Port {port} is now free")
+                    return True
+                time.sleep(0.5)
+            
+            # Force kill if still running
+            for pid in pids:
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                    print(f"  Sent SIGKILL to PID {pid}")
+                except (ProcessLookupError, ValueError):
+                    pass
+            
+            time.sleep(1)
+            return not is_port_in_use(port)
+    except FileNotFoundError:
+        # lsof not available, try fuser (Linux)
+        try:
+            subprocess.run(["fuser", "-k", f"{port}/tcp"], timeout=5)
+            time.sleep(1)
+            return not is_port_in_use(port)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+    except subprocess.TimeoutExpired:
+        pass
+    
+    print(f"  WARNING: Could not kill process on port {port}")
+    return False
 
 
 def cleanup_vllm():
@@ -61,6 +130,16 @@ def launch_vllm_server(
         Popen process object, or None if launch failed
     """
     global _vllm_process
+
+    # Check if port is in use and try to kill existing process
+    if is_port_in_use(config.vllm_port):
+        print(f"  WARNING: Port {config.vllm_port} is already in use!")
+        if not kill_process_on_port(config.vllm_port):
+            print(f"  ERROR: Could not free port {config.vllm_port}. Please manually kill the process.")
+            print(f"    Try: lsof -i :{config.vllm_port} | grep LISTEN")
+            print(f"    Or:  pkill -f 'vllm.*{config.vllm_port}'")
+            return None
+        print(f"  Successfully freed port {config.vllm_port}")
 
     # Use our custom vllm_api_server.py
     script_dir = os.path.dirname(os.path.abspath(__file__))
