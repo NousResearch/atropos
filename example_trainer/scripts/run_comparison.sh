@@ -189,10 +189,12 @@ wait_for_vllm 9001 "legacy (internal)" || { echo "Legacy vLLM failed to start"; 
 
 # NOW start environment server (after vLLM is ready)
 echo "  Starting environment server..."
-python environments/gsm8k_server.py serve \
-    --slurm.num_gpus 0 \
-    --env.tokenizer_name $MODEL \
-    --openai.base_url http://localhost:9001/v1 \
+python -u environments/gsm8k_server.py serve \
+    --env.tokenizer_name "$MODEL" \
+    --env.use_wandb=False \
+    --openai.model_name "$MODEL" \
+    --openai.base_url "http://localhost:9001/v1" \
+    --openai.server_type vllm \
     --server.port 8001 \
     > $LOGDIR/env_legacy.log 2>&1 &
 LEGACY_ENV_PID=$!
@@ -228,10 +230,12 @@ wait_for_vllm 9002 "shared" || { echo "Failed to start shared vLLM"; exit 1; }
 
 # Start environment server for Shared
 echo "  Starting environment server..."
-python environments/gsm8k_server.py serve \
-    --slurm.num_gpus 0 \
-    --env.tokenizer_name $MODEL \
-    --openai.base_url http://localhost:9002/v1 \
+python -u environments/gsm8k_server.py serve \
+    --env.tokenizer_name "$MODEL" \
+    --env.use_wandb=False \
+    --openai.model_name "$MODEL" \
+    --openai.base_url "http://localhost:9002/v1" \
+    --openai.server_type vllm \
     --server.port 8002 \
     > $LOGDIR/env_shared.log 2>&1 &
 SHARED_ENV_PID=$!
@@ -286,10 +290,12 @@ wait_for_vllm 9003 "lora" || { echo "Failed to start lora vLLM"; exit 1; }
 
 # Start environment server for LoRA
 echo "  Starting environment server..."
-python environments/gsm8k_server.py serve \
-    --slurm.num_gpus 0 \
-    --env.tokenizer_name $MODEL \
-    --openai.base_url http://localhost:9003/v1 \
+python -u environments/gsm8k_server.py serve \
+    --env.tokenizer_name "$MODEL" \
+    --env.use_wandb=False \
+    --openai.model_name "$MODEL" \
+    --openai.base_url "http://localhost:9003/v1" \
+    --openai.server_type vllm \
     --server.port 8003 \
     > $LOGDIR/env_lora.log 2>&1 &
 LORA_ENV_PID=$!
