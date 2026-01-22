@@ -858,9 +858,15 @@ async def init_app(args: Namespace, llm_engine: AsyncLLM | None = None) -> FastA
 
 def _export_state_dict_info(args: Namespace) -> None:
     """Export basic model info to JSON for trainer (backup if patches don't run)."""
-    log_dir = os.environ.get("LOGDIR", ".")
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    json_path = Path(log_dir) / "vllm_bridge_config.json"
+    # Allow explicit config path via env var, otherwise use LOGDIR
+    config_path = os.environ.get("VLLM_BRIDGE_CONFIG_PATH")
+    if config_path:
+        json_path = Path(config_path)
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        log_dir = os.environ.get("LOGDIR", ".")
+        Path(log_dir).mkdir(parents=True, exist_ok=True)
+        json_path = Path(log_dir) / "vllm_bridge_config.json"
 
     # Only write basic info if the file doesn't exist or is empty
     # The patched runner will write complete info with param_mappings

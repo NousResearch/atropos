@@ -295,9 +295,15 @@ def _create_patched_runner(BaseRunner: type) -> type:
                 print(f"[vLLM Patch] Note: model.share_memory() not available: {e}")
 
             # Export parameter info to JSON for trainer
-            log_dir = os.environ.get("LOGDIR", ".")
-            Path(log_dir).mkdir(parents=True, exist_ok=True)
-            json_path = Path(log_dir) / "vllm_bridge_config.json"
+            # Allow explicit config path via env var, otherwise use LOGDIR
+            config_path = os.environ.get("VLLM_BRIDGE_CONFIG_PATH")
+            if config_path:
+                json_path = Path(config_path)
+                json_path.parent.mkdir(parents=True, exist_ok=True)
+            else:
+                log_dir = os.environ.get("LOGDIR", ".")
+                Path(log_dir).mkdir(parents=True, exist_ok=True)
+                json_path = Path(log_dir) / "vllm_bridge_config.json"
 
             param_mappings = {}
             param_names = []
