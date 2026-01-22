@@ -75,10 +75,11 @@ echo "[2/4] Starting GSM8k environment..."
 python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name "$MODEL" \
     --env.use_wandb=False \
+    --env.rollout_server_url "http://localhost:${GSM8K_PORT}" \
     --openai.model_name "$MODEL" \
     --openai.base_url "http://localhost:${VLLM_PORT}/v1" \
     --openai.server_type vllm \
-    --server.port $GSM8K_PORT \
+    --slurm false \
     > "${LOG_DIR}/gsm8k.log" 2>&1 &
 
 echo "Waiting for GSM8k (10s)..."
