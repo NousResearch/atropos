@@ -141,18 +141,40 @@ cleanup() {
         kill $SHARED_TRAINER_PID $SHARED_VLLM_PID $SHARED_ENV_PID $SHARED_API_PID 2>/dev/null || true
         kill $LORA_TRAINER_PID $LORA_VLLM_PID $LORA_ENV_PID $LORA_API_PID 2>/dev/null || true
     fi
-    pkill -f "gsm8k_server.py.*800[123]" 2>/dev/null || true
-    pkill -f "run_api.*800[123]" 2>/dev/null || true
+    pkill -f "gsm8k_server.py" 2>/dev/null || true
+    pkill -f "run-api" 2>/dev/null || true
+    pkill -f "vllm_api_server.py" 2>/dev/null || true
+    # Also kill by port
+    for port in 8001 8002 8003 9001 9002 9003; do
+        fuser -k ${port}/tcp 2>/dev/null || true
+    done
     echo "Cleanup complete."
 }
 trap cleanup EXIT
 
-# Kill any existing processes on our ports
+# Kill any existing processes on our ports - be aggressive!
 echo "Killing any existing processes on ports 8001-8003, 9001-9003..."
-pkill -f "vllm_api_server.py.*900[123]" 2>/dev/null || true
-pkill -f "gsm8k_server.py.*800[123]" 2>/dev/null || true
-pkill -f "run_api.*800[123]" 2>/dev/null || true
-sleep 2
+
+# Kill by process name patterns
+pkill -9 -f "vllm_api_server.py" 2>/dev/null || true
+pkill -9 -f "gsm8k_server.py" 2>/dev/null || true
+pkill -9 -f "run-api" 2>/dev/null || true
+pkill -9 -f "grpo" 2>/dev/null || true
+
+# Kill by port using fuser (more reliable)
+for port in 8001 8002 8003 9001 9002 9003; do
+    fuser -k ${port}/tcp 2>/dev/null || true
+done
+
+sleep 3
+
+# Verify ports are free
+for port in 8001 8002 8003 9001 9002 9003; do
+    if lsof -i :${port} > /dev/null 2>&1; then
+        echo "WARNING: Port ${port} still in use!"
+        lsof -i :${port} | head -3
+    fi
+done
 
 # ==============================================================================
 # MODE 1: LEGACY (GPUs 0-1, API 8001, vLLM 9001)
@@ -175,6 +197,7 @@ CUDA_VISIBLE_DEVICES=0,1 python -m example_trainer.grpo \
     --model-name $MODEL \
     --weight-bridge-mode none \
     --vllm-port 9001 \
+    --vllm-gpu-memory-utilization 0.35 \
     --atropos-url http://localhost:8001 \
     --training-steps $TRAINING_STEPS \
     --batch-size $BATCH_SIZE \
@@ -223,7 +246,7 @@ VLLM_ENABLE_SHARED_WEIGHTS=1 VLLM_BRIDGE_CONFIG_PATH=$LOGDIR/vllm_bridge_config_
 CUDA_VISIBLE_DEVICES=2 python example_trainer/vllm_api_server.py \
     --model $MODEL \
     --port 9002 \
-    --gpu-memory-utilization 0.45 \
+    --gpu-memory-utilization 0.35 \
     > $LOGDIR/vllm_shared.log 2>&1 &
 SHARED_VLLM_PID=$!
 echo "  ✓ vLLM started (PID: $SHARED_VLLM_PID, port 9002)"
@@ -281,7 +304,7 @@ VLLM_BRIDGE_CONFIG_PATH=$LOGDIR/vllm_bridge_config_lora.json \
 CUDA_VISIBLE_DEVICES=4 python example_trainer/vllm_api_server.py \
     --model $MODEL \
     --port 9003 \
-    --gpu-memory-utilization 0.45 \
+    --gpu-memory-utilization 0.35 \
     --enable-lora \
     --max-lora-rank 32 \
     --enforce-eager \
