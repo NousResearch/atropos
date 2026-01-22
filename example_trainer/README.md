@@ -108,10 +108,12 @@ The simplest mode. Trainer manages vLLM internally.
 run-api --port 8000
 
 # Terminal 2: Start the environment server (generates rollouts)
-python environments/gsm8k_server.py serve \
-    --slurm.num_gpus 0 \
+python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name $MODEL \
-    --openai.base_url http://localhost:9001/v1
+    --env.use_wandb=False \
+    --openai.model_name $MODEL \
+    --openai.base_url http://localhost:9001/v1 \
+    --openai.server_type vllm
 
 # Terminal 3: Run training (trainer will launch its own vLLM)
 CUDA_VISIBLE_DEVICES=0 python -m example_trainer.grpo \
@@ -141,10 +143,12 @@ CUDA_VISIBLE_DEVICES=0 python example_trainer/vllm_api_server.py \
     --gpu-memory-utilization 0.45
 
 # Terminal 3: Start the environment server
-python environments/gsm8k_server.py serve \
-    --slurm.num_gpus 0 \
+python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name $MODEL \
-    --openai.base_url http://localhost:9001/v1
+    --env.use_wandb=False \
+    --openai.model_name $MODEL \
+    --openai.base_url http://localhost:9001/v1 \
+    --openai.server_type vllm
 
 # Terminal 4: Run training (attaches to vLLM's tensors)
 CUDA_VISIBLE_DEVICES=0 python -m example_trainer.grpo \
@@ -177,10 +181,12 @@ CUDA_VISIBLE_DEVICES=0 python example_trainer/vllm_api_server.py \
     --enforce-eager
 
 # Terminal 3: Start the environment server
-python environments/gsm8k_server.py serve \
-    --slurm.num_gpus 0 \
+python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name $MODEL \
-    --openai.base_url http://localhost:9001/v1
+    --env.use_wandb=False \
+    --openai.model_name $MODEL \
+    --openai.base_url http://localhost:9001/v1 \
+    --openai.server_type vllm
 
 # Terminal 4: Run LoRA training
 CUDA_VISIBLE_DEVICES=1 python -m example_trainer.grpo \
@@ -240,10 +246,12 @@ mkdir -p $LOGDIR
 run-api --port 8001
 
 # Terminal 2: Environment server
-python environments/gsm8k_server.py serve \
-    --slurm.num_gpus 0 \
+python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name $MODEL \
+    --env.use_wandb=False \
+    --openai.model_name $MODEL \
     --openai.base_url http://localhost:9001/v1 \
+    --openai.server_type vllm \
     --server.port 8001
 
 # Terminal 3: Trainer (manages its own vLLM)
@@ -269,10 +277,12 @@ CUDA_VISIBLE_DEVICES=2 python example_trainer/vllm_api_server.py \
     --model $MODEL --port 9002 --gpu-memory-utilization 0.45
 
 # Terminal 6: Environment server
-python environments/gsm8k_server.py serve \
-    --slurm.num_gpus 0 \
+python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name $MODEL \
+    --env.use_wandb=False \
+    --openai.model_name $MODEL \
     --openai.base_url http://localhost:9002/v1 \
+    --openai.server_type vllm \
     --server.port 8002
 
 # Terminal 7: Trainer (attaches to vLLM)
@@ -299,10 +309,12 @@ CUDA_VISIBLE_DEVICES=4 python example_trainer/vllm_api_server.py \
     --enable-lora --max-lora-rank 32 --enforce-eager
 
 # Terminal 10: Environment server
-python environments/gsm8k_server.py serve \
-    --slurm.num_gpus 0 \
+python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name $MODEL \
+    --env.use_wandb=False \
+    --openai.model_name $MODEL \
     --openai.base_url http://localhost:9003/v1 \
+    --openai.server_type vllm \
     --server.port 8003
 
 # Terminal 11: Trainer
