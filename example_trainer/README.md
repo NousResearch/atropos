@@ -249,10 +249,11 @@ run-api --port 8001
 python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name $MODEL \
     --env.use_wandb=False \
+    --env.rollout_server_url http://localhost:8001 \
     --openai.model_name $MODEL \
     --openai.base_url http://localhost:9001/v1 \
     --openai.server_type vllm \
-    --server.port 8001
+    --slurm false
 
 # Terminal 3: Trainer (manages its own vLLM)
 CUDA_VISIBLE_DEVICES=0,1 python -m example_trainer.grpo \
@@ -280,10 +281,11 @@ CUDA_VISIBLE_DEVICES=2 python example_trainer/vllm_api_server.py \
 python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name $MODEL \
     --env.use_wandb=False \
+    --env.rollout_server_url http://localhost:8002 \
     --openai.model_name $MODEL \
     --openai.base_url http://localhost:9002/v1 \
     --openai.server_type vllm \
-    --server.port 8002
+    --slurm false
 
 # Terminal 7: Trainer (attaches to vLLM)
 CUDA_VISIBLE_DEVICES=2 python -m example_trainer.grpo \
@@ -312,10 +314,11 @@ CUDA_VISIBLE_DEVICES=4 python example_trainer/vllm_api_server.py \
 python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name $MODEL \
     --env.use_wandb=False \
+    --env.rollout_server_url http://localhost:8003 \
     --openai.model_name $MODEL \
     --openai.base_url http://localhost:9003/v1 \
     --openai.server_type vllm \
-    --server.port 8003
+    --slurm false
 
 # Terminal 11: Trainer
 CUDA_VISIBLE_DEVICES=5 python -m example_trainer.grpo \

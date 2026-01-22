@@ -192,10 +192,11 @@ echo "  Starting environment server..."
 python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name "$MODEL" \
     --env.use_wandb=False \
+    --env.rollout_server_url "http://localhost:8001" \
     --openai.model_name "$MODEL" \
     --openai.base_url "http://localhost:9001/v1" \
     --openai.server_type vllm \
-    --server.port 8001 \
+    --slurm false \
     > $LOGDIR/env_legacy.log 2>&1 &
 LEGACY_ENV_PID=$!
 echo "  ✓ Environment server started (PID: $LEGACY_ENV_PID)"
@@ -233,10 +234,11 @@ echo "  Starting environment server..."
 python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name "$MODEL" \
     --env.use_wandb=False \
+    --env.rollout_server_url "http://localhost:8002" \
     --openai.model_name "$MODEL" \
     --openai.base_url "http://localhost:9002/v1" \
     --openai.server_type vllm \
-    --server.port 8002 \
+    --slurm false \
     > $LOGDIR/env_shared.log 2>&1 &
 SHARED_ENV_PID=$!
 echo "  ✓ Environment server started (PID: $SHARED_ENV_PID)"
@@ -293,10 +295,11 @@ echo "  Starting environment server..."
 python -u environments/gsm8k_server.py serve \
     --env.tokenizer_name "$MODEL" \
     --env.use_wandb=False \
+    --env.rollout_server_url "http://localhost:8003" \
     --openai.model_name "$MODEL" \
     --openai.base_url "http://localhost:9003/v1" \
     --openai.server_type vllm \
-    --server.port 8003 \
+    --slurm false \
     > $LOGDIR/env_lora.log 2>&1 &
 LORA_ENV_PID=$!
 echo "  ✓ Environment server started (PID: $LORA_ENV_PID)"
