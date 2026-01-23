@@ -10,10 +10,10 @@ from typing import Dict, List, Optional, Tuple
 
 import openai
 from datasets import load_dataset
-from openai import AsyncOpenAI
 from PIL import Image
 
-from environments.eval_environments.eval_base import EvalBase, eval_runner
+from atroposlib.envs.server_handling.server_manager import ServerManager
+from environments.eval_environments.eval import EvalBase, eval_runner
 
 DESCRIPTIVE_CATEGORIES = {
     1: "Information Extraction",
@@ -270,18 +270,12 @@ class CharXiv(EvalBase):
             inst_category = item.get("inst_category", 1)
             return REASONING_CATEGORIES.get(inst_category, "Text-in-Chart")
 
-    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
             mode = getattr(self, "mode", "descriptive")
 
-            gen_params = self.get_generation_params()
-            completion = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=gen_params["temperature"],
-                max_tokens=gen_params["max_tokens"],
-            )
+            completion = await self.chat_completion(server, messages)
 
             if not completion.choices:
                 return {"accuracy": 0.0, "score": 0.0}, {"error": "Empty response"}
@@ -374,12 +368,13 @@ def compute_category_metrics(samples: List[dict]) -> Dict:
 if __name__ == "__main__":
     asyncio.run(
         eval_runner(
-            CharXiv,
-            mode="descriptive",  # or "reasoning"
-            split="validation",
-            use_gpt_judge=True,
-            judge_model="gpt-4o-mini",
-            temperature=0.0,
-            max_tokens=1024,
+            CharXiv(
+                mode="descriptive",  # or "reasoning"
+                split="validation",
+                use_gpt_judge=True,
+                judge_model="gpt-4o-mini",
+                temperature=0.0,
+                max_tokens=1024,
+            )
         )
     )

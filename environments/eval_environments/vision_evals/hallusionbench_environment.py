@@ -1,4 +1,4 @@
-"""POPE (Polling-based Object Probing Evaluation) evaluation environment."""
+"""HallusionBench evaluation environment."""
 
 import asyncio
 import base64
@@ -7,31 +7,42 @@ import re
 from typing import List, Optional, Tuple
 
 from datasets import load_dataset
-from openai import AsyncOpenAI
 from PIL import Image
 
-from environments.eval_environments.eval_base import EvalBase, eval_runner
+from atroposlib.envs.server_handling.server_manager import ServerManager
+from environments.eval_environments.eval import EvalBase, eval_runner
 
 
-class POPE(EvalBase):
-    """POPE evaluation - object hallucination benchmark with yes/no questions."""
+class HallusionBench(EvalBase):
+    """HallusionBench evaluation - visual hallucination benchmark."""
 
     def setup_data(self) -> list:
-        split = getattr(self, "split", "test")
-        variant = getattr(self, "variant", "random")  # random, popular, adversarial
+        # HallusionBench has 'image' and 'non_image' splits
+        split = getattr(self, "split", "image")
 
         try:
-            dataset = load_dataset("lmms-lab/POPE", split=split)
-            print(f"Loaded {len(dataset)} examples from POPE ({split})")
+            dataset = load_dataset("lmms-lab/HallusionBench", split=split)
+            print(f"Loaded {len(dataset)} examples from HallusionBench ({split})")
             return list(dataset)
         except Exception as e:
-            print(f"Warning: Could not load POPE: {e}")
+            print(f"Warning: Could not load HallusionBench: {e}")
             try:
-                dataset = load_dataset("OpenGVLab/POPE", split=split)
-                print(f"Loaded {len(dataset)} examples from POPE ({split})")
-                return list(dataset)
+                # Try combining both splits
+                all_data = []
+                for s in ["image", "non_image"]:
+                    try:
+                        ds = load_dataset("lmms-lab/HallusionBench", split=s)
+                        all_data.extend(list(ds))
+                    except Exception:
+                        pass
+                if all_data:
+                    print(
+                        f"Loaded {len(all_data)} examples from HallusionBench (combined)"
+                    )
+                    return all_data
+                raise ValueError(f"Could not load HallusionBench dataset: {e}")
             except Exception:
-                raise ValueError(f"Could not load POPE dataset: {e}")
+                raise ValueError(f"Could not load HallusionBench dataset: {e}")
 
     def encode_image(self, pil_image: Image.Image) -> str:
         buffer = io.BytesIO()
@@ -72,8 +83,8 @@ class POPE(EvalBase):
         if response_lower.startswith("no"):
             return "No"
 
-        yes_patterns = [r"\byes\b", r"\btrue\b", r"\bcorrect\b", r"\baffirmative\b"]
-        no_patterns = [r"\bno\b", r"\bfalse\b", r"\bincorrect\b", r"\bnegative\b"]
+        yes_patterns = [r"\byes\b", r"\btrue\b", r"\bcorrect\b"]
+        no_patterns = [r"\bno\b", r"\bfalse\b", r"\bincorrect\b"]
 
         for pattern in yes_patterns:
             if re.search(pattern, response_lower):
@@ -85,17 +96,10 @@ class POPE(EvalBase):
 
         return "Unknown"
 
-    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
-
-            gen_params = self.get_generation_params()
-            completion = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=gen_params["temperature"],
-                max_tokens=gen_params["max_tokens"],
-            )
+            completion = await self.chat_completion(server, messages)
 
             if not completion.choices:
                 return {"accuracy": 0.0}, {"error": "Empty response"}
@@ -106,23 +110,23 @@ class POPE(EvalBase):
             if not response:
                 return {"accuracy": 0.0}, {"error": "Empty response"}
 
-            answer = data_item.get("answer", "")
+            answer = data_item.get("answer", data_item.get("gt_answer", ""))
             extracted = self.extract_yorn(response)
 
-            answer_norm = answer.strip().lower()
+            answer_norm = str(answer).strip().lower()
             if answer_norm in ["yes", "true", "1"]:
                 answer_norm = "Yes"
             elif answer_norm in ["no", "false", "0"]:
                 answer_norm = "No"
             else:
-                answer_norm = answer.strip()
+                answer_norm = str(answer).strip()
 
             correct = extracted == answer_norm
 
             sample = {
-                "id": data_item.get("index", data_item.get("question_id", "")),
+                "id": data_item.get("index", data_item.get("id", "")),
                 "question": data_item.get("question", "")[:200],
-                "category": data_item.get("category", ""),
+                "category": data_item.get("category", data_item.get("subcategory", "")),
                 "answer": answer_norm,
                 "prediction": extracted,
                 "raw_response": response[:200],
@@ -136,11 +140,4 @@ class POPE(EvalBase):
 
 
 if __name__ == "__main__":
-    asyncio.run(
-        eval_runner(
-            POPE,
-            split="test",
-            temperature=0.0,
-            max_tokens=64,
-        )
-    )
+    asyncio.run(eval_runner(HallusionBench(split="test", temperature=0.0, max_tokens=64)))

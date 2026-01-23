@@ -9,10 +9,10 @@ from typing import Dict, List, Optional, Tuple
 
 import openai
 from datasets import load_dataset
-from openai import AsyncOpenAI
 from PIL import Image
 
-from environments.eval_environments.eval_base import EvalBase, eval_runner
+from atroposlib.envs.server_handling.server_manager import ServerManager
+from environments.eval_environments.eval import EvalBase, eval_runner
 
 EXTRACTION_PROMPT_TEMPLATE = """You are a information extractor that extracts multiple choice letter answer choices \
 from a paragraph that contains the answer choice and sometimes explaination of why that \
@@ -195,17 +195,11 @@ Provide your answer as the letter(s) of the correct choice(s), e.g., A, B, C, D,
 
         return pred_normalized == answer_normalized
 
-    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 
-            gen_params = self.get_generation_params()
-            completion = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=gen_params["temperature"],
-                max_tokens=gen_params["max_tokens"],
-            )
+            completion = await self.chat_completion(server, messages)
 
             if not completion.choices:
                 return {"accuracy": 0.0, "hit": 0}, {"error": "Empty response"}
@@ -296,11 +290,12 @@ def compute_skill_metrics(samples: List[dict]) -> Dict:
 if __name__ == "__main__":
     asyncio.run(
         eval_runner(
-            LogicVista,
-            split="test",
-            use_gpt_extraction=True,
-            judge_model="gpt-4o-mini",
-            temperature=0.0,
-            max_tokens=512,
+            LogicVista(
+                split="test",
+                use_gpt_extraction=True,
+                judge_model="gpt-4o-mini",
+                temperature=0.0,
+                max_tokens=512,
+            )
         )
     )

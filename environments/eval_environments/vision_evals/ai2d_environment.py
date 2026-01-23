@@ -1,4 +1,4 @@
-"""MMBench evaluation environment."""
+"""AI2D (AI2 Diagrams) evaluation environment."""
 
 import asyncio
 import base64
@@ -7,36 +7,35 @@ from string import ascii_uppercase
 from typing import List, Optional, Tuple
 
 from datasets import load_dataset
-from openai import AsyncOpenAI
 from PIL import Image
 
-from environments.eval_environments.eval_base import EvalBase, eval_runner
+from atroposlib.envs.server_handling.server_manager import ServerManager
+from environments.eval_environments.eval import EvalBase, eval_runner
 from environments.eval_environments.eval_helpers import (
     extract_letter_from_answer_tag,
     extract_mcqa_answer_with_fallback,
 )
 
 
-class MMBench(EvalBase):
-    """MMBench evaluation - comprehensive multimodal benchmark."""
+class AI2D(EvalBase):
+    """AI2D evaluation - diagram understanding benchmark."""
 
     def setup_data(self) -> list:
-        split = getattr(self, "split", "dev")
-        lang = getattr(self, "lang", "en")  # en, cn, cc
-        version = getattr(self, "version", "v1.1")  # v1.0 or v1.1
+        split = getattr(self, "split", "test")
+        use_mask = getattr(self, "use_mask", True)
 
         try:
-            dataset = load_dataset("lmms-lab/MMBench", lang, split=split)
-            print(f"Loaded {len(dataset)} examples from MMBench ({split}, {lang})")
+            dataset = load_dataset("lmms-lab/ai2d", split=split)
+            print(f"Loaded {len(dataset)} examples from AI2D ({split})")
             return list(dataset)
         except Exception as e:
-            print(f"Warning: Could not load from lmms-lab: {e}")
+            print(f"Warning: Could not load AI2D: {e}")
             try:
-                dataset = load_dataset("lmms-lab/MMBench_EN", split=split)
-                print(f"Loaded {len(dataset)} examples from MMBench ({split})")
+                dataset = load_dataset("allenai/ai2_diagrams", split=split)
+                print(f"Loaded {len(dataset)} examples from AI2D ({split})")
                 return list(dataset)
             except Exception:
-                raise ValueError(f"Could not load MMBench dataset: {e}")
+                raise ValueError(f"Could not load AI2D dataset: {e}")
 
     def encode_image(self, pil_image: Image.Image) -> str:
         buffer = io.BytesIO()
@@ -53,22 +52,26 @@ class MMBench(EvalBase):
     def build_messages(self, item: dict) -> List[dict]:
         image_base64 = self.get_image_base64(item)
         question = item.get("question", "")
-        hint = item.get("hint", "")
+
+        choices = item.get("choices", [])
+        if isinstance(choices, str):
+            try:
+                choices = eval(choices)
+            except Exception:
+                choices = []
 
         options = {}
-        for letter in ascii_uppercase:
-            if letter in item and item[letter] is not None:
-                val = item[letter]
-                if isinstance(val, str) and val.strip():
-                    options[letter] = val
-                elif not isinstance(val, float):
-                    options[letter] = str(val)
+        if choices:
+            for i, choice in enumerate(choices):
+                options[ascii_uppercase[i]] = choice
+        else:
+            for letter in ascii_uppercase[:6]:
+                if letter in item and item[letter] is not None:
+                    val = item[letter]
+                    if isinstance(val, str) and val.strip():
+                        options[letter] = val
 
-        prompt = ""
-        if hint and str(hint).strip() and str(hint).lower() != "nan":
-            prompt += f"Hint: {hint}\n"
-        prompt += f"Question: {question}\n"
-
+        prompt = f"Question: {question}\n"
         if options:
             prompt += "Options:\n"
             for letter in sorted(options.keys()):
@@ -99,17 +102,10 @@ class MMBench(EvalBase):
         letter, method = extract_mcqa_answer_with_fallback(response, num_choices)
         return letter, method
 
-    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
-
-            gen_params = self.get_generation_params()
-            completion = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=gen_params["temperature"],
-                max_tokens=gen_params["max_tokens"],
-            )
+            completion = await self.chat_completion(server, messages)
 
             if not completion.choices:
                 return {"accuracy": 0.0}, {"error": "Empty response"}
@@ -122,26 +118,28 @@ class MMBench(EvalBase):
 
             answer = data_item.get("answer", "")
 
-            num_choices = 0
-            for letter in ascii_uppercase:
-                if letter in data_item and data_item[letter] is not None:
-                    val = data_item[letter]
-                    if isinstance(val, str) and val.strip():
-                        num_choices += 1
-                    elif not isinstance(val, float):
-                        num_choices += 1
-            num_choices = max(num_choices, 4)
+            choices = data_item.get("choices", [])
+            if isinstance(choices, str):
+                try:
+                    choices = eval(choices)
+                except Exception:
+                    choices = []
+
+            num_choices = len(choices) if choices else 4
 
             extracted, method = self.extract_answer(response, num_choices)
 
             correct = False
             if extracted and answer:
-                correct = extracted.upper() == str(answer).upper()
+                if str(answer).isdigit():
+                    answer_letter = ascii_uppercase[int(answer)]
+                else:
+                    answer_letter = str(answer).upper()
+                correct = extracted.upper() == answer_letter
 
             sample = {
                 "id": data_item.get("index", data_item.get("id", "")),
                 "question": data_item.get("question", "")[:200],
-                "category": data_item.get("category", data_item.get("l2-category", "")),
                 "answer": answer,
                 "prediction": extracted,
                 "raw_response": response[:500],
@@ -156,13 +154,4 @@ class MMBench(EvalBase):
 
 
 if __name__ == "__main__":
-    asyncio.run(
-        eval_runner(
-            MMBench,
-            split="dev",
-            lang="en",
-            version="v1.1",
-            temperature=0.0,
-            max_tokens=256,
-        )
-    )
+    asyncio.run(eval_runner(AI2D(split="test", temperature=0.0, max_tokens=256)))

@@ -1,4 +1,4 @@
-"""AI2D (AI2 Diagrams) evaluation environment."""
+"""SEED-Bench2-Plus evaluation environment."""
 
 import asyncio
 import base64
@@ -7,35 +7,52 @@ from string import ascii_uppercase
 from typing import List, Optional, Tuple
 
 from datasets import load_dataset
-from openai import AsyncOpenAI
 from PIL import Image
 
-from environments.eval_environments.eval_base import EvalBase, eval_runner
+from atroposlib.envs.server_handling.server_manager import ServerManager
+from environments.eval_environments.eval import EvalBase, eval_runner
 from environments.eval_environments.eval_helpers import (
     extract_letter_from_answer_tag,
     extract_mcqa_answer_with_fallback,
 )
 
 
-class AI2D(EvalBase):
-    """AI2D evaluation - diagram understanding benchmark."""
+class SEEDBench2Plus(EvalBase):
+    """SEED-Bench2-Plus evaluation - comprehensive visual understanding benchmark."""
 
     def setup_data(self) -> list:
         split = getattr(self, "split", "test")
-        use_mask = getattr(self, "use_mask", True)
+        max_samples = getattr(self, "max_samples", None)
 
         try:
-            dataset = load_dataset("lmms-lab/ai2d", split=split)
-            print(f"Loaded {len(dataset)} examples from AI2D ({split})")
-            return list(dataset)
+            # Use streaming to avoid memory issues with this large dataset
+            dataset = load_dataset("lmms-lab/SEED-Bench-2", split=split, streaming=True)
+
+            # Take samples from streaming dataset
+            if max_samples:
+                data = list(dataset.take(max_samples))
+            else:
+                # Default to 1000 samples to avoid loading entire 24k dataset
+                data = list(dataset.take(1000))
+
+            print(f"Loaded {len(data)} examples from SEED-Bench2 ({split}, streaming)")
+            return data
         except Exception as e:
-            print(f"Warning: Could not load AI2D: {e}")
+            print(f"Warning: Could not load SEED-Bench2: {e}")
             try:
-                dataset = load_dataset("allenai/ai2_diagrams", split=split)
-                print(f"Loaded {len(dataset)} examples from AI2D ({split})")
-                return list(dataset)
+                dataset = load_dataset(
+                    "lmms-lab/SEED-Bench", split=split, streaming=True
+                )
+                if max_samples:
+                    data = list(dataset.take(max_samples))
+                else:
+                    data = list(dataset.take(1000))
+                print(
+                    f"Loaded {len(data)} examples from SEED-Bench ({split}, streaming)"
+                )
+                return data
             except Exception:
-                raise ValueError(f"Could not load AI2D dataset: {e}")
+                raise ValueError(f"Could not load SEED-Bench2-Plus dataset: {e}")
 
     def encode_image(self, pil_image: Image.Image) -> str:
         buffer = io.BytesIO()
@@ -45,31 +62,41 @@ class AI2D(EvalBase):
     def get_image_base64(self, item: dict) -> Optional[str]:
         for key in ["image", "decoded_image"]:
             if key in item and item[key] is not None:
-                if isinstance(item[key], Image.Image):
-                    return self.encode_image(item[key])
+                val = item[key]
+                if isinstance(val, Image.Image):
+                    return self.encode_image(val)
+                elif isinstance(val, list) and len(val) > 0:
+                    # SEED-Bench-2 stores images as a list of PIL images
+                    if isinstance(val[0], Image.Image):
+                        return self.encode_image(val[0])
         return None
 
     def build_messages(self, item: dict) -> List[dict]:
         image_base64 = self.get_image_base64(item)
         question = item.get("question", "")
 
-        choices = item.get("choices", [])
-        if isinstance(choices, str):
-            try:
-                choices = eval(choices)
-            except Exception:
-                choices = []
-
         options = {}
-        if choices:
+        for letter in ascii_uppercase[:6]:
+            # Check for choice_a, choice_b format
+            choice_key = f"choice_{letter.lower()}"
+            if choice_key in item and item[choice_key] is not None:
+                val = item[choice_key]
+                if isinstance(val, str) and val.strip():
+                    options[letter] = val
+            elif letter in item and item[letter] is not None:
+                val = item[letter]
+                if isinstance(val, str) and val.strip():
+                    options[letter] = val
+
+        if not options:
+            choices = item.get("choices", [])
+            if isinstance(choices, str):
+                try:
+                    choices = eval(choices)
+                except Exception:
+                    choices = []
             for i, choice in enumerate(choices):
                 options[ascii_uppercase[i]] = choice
-        else:
-            for letter in ascii_uppercase[:6]:
-                if letter in item and item[letter] is not None:
-                    val = item[letter]
-                    if isinstance(val, str) and val.strip():
-                        options[letter] = val
 
         prompt = f"Question: {question}\n"
         if options:
@@ -102,17 +129,11 @@ class AI2D(EvalBase):
         letter, method = extract_mcqa_answer_with_fallback(response, num_choices)
         return letter, method
 
-    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 
-            gen_params = self.get_generation_params()
-            completion = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=gen_params["temperature"],
-                max_tokens=gen_params["max_tokens"],
-            )
+            completion = await self.chat_completion(server, messages)
 
             if not completion.choices:
                 return {"accuracy": 0.0}, {"error": "Empty response"}
@@ -133,20 +154,26 @@ class AI2D(EvalBase):
                     choices = []
 
             num_choices = len(choices) if choices else 4
+            if num_choices == 0:
+                num_choices = sum(
+                    1
+                    for letter in ascii_uppercase[:6]
+                    if letter in data_item and data_item[letter] is not None
+                )
+                num_choices = max(num_choices, 4)
 
             extracted, method = self.extract_answer(response, num_choices)
 
             correct = False
             if extracted and answer:
-                if str(answer).isdigit():
-                    answer_letter = ascii_uppercase[int(answer)]
-                else:
-                    answer_letter = str(answer).upper()
-                correct = extracted.upper() == answer_letter
+                correct = extracted.upper() == str(answer).upper()
 
             sample = {
-                "id": data_item.get("index", data_item.get("id", "")),
+                "id": data_item.get("index", data_item.get("question_id", "")),
                 "question": data_item.get("question", "")[:200],
+                "category": data_item.get(
+                    "question_type_id", data_item.get("category", "")
+                ),
                 "answer": answer,
                 "prediction": extracted,
                 "raw_response": response[:500],
@@ -162,10 +189,5 @@ class AI2D(EvalBase):
 
 if __name__ == "__main__":
     asyncio.run(
-        eval_runner(
-            AI2D,
-            split="test",
-            temperature=0.0,
-            max_tokens=256,
-        )
+        eval_runner(SEEDBench2Plus(split="test", temperature=0.0, max_tokens=256))
     )

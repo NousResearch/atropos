@@ -5,17 +5,30 @@ import re
 from typing import List, Tuple
 
 from datasets import load_dataset
-from openai import AsyncOpenAI
 from PIL import Image
 
-from environments.eval_environments.eval_base import EvalBase, eval_runner
+from atroposlib.envs.server_handling.server_manager import ServerManager
+from environments.eval_environments.eval import EvalBase, eval_runner
 
 
-class InfoVQA(EvalBase):
+class DocVQA(EvalBase):
+    QUESTION_TYPES = [
+        "figure/diagram",
+        "layout",
+        "table/list",
+        "Image/Photo",
+        "handwritten",
+        "form",
+        "free_text",
+        "others",
+    ]
+
     def setup_data(self) -> list:
+        # Note: test split has hidden answers (for server evaluation)
+        # Use validation for local evaluation
         split = getattr(self, "split", "validation")
-        dataset = load_dataset("lmms-lab/DocVQA", "InfographicVQA", split=split)
-        print(f"Loaded {len(dataset)} examples from InfoVQA ({split})")
+        dataset = load_dataset("lmms-lab/DocVQA", "DocVQA", split=split)
+        print(f"Loaded {len(dataset)} examples from DocVQA ({split})")
         return list(dataset)
 
     def encode_image(self, pil_image: Image.Image) -> str:
@@ -27,13 +40,15 @@ class InfoVQA(EvalBase):
         if "image" in item and item["image"] is not None:
             if isinstance(item["image"], Image.Image):
                 return self.encode_image(item["image"])
-        raise ValueError(f"Could not find image for item {item.get('id', 'unknown')}")
+        raise ValueError(
+            f"Could not find image for item {item.get('questionId', 'unknown')}"
+        )
 
     def build_messages(self, item: dict) -> List[dict]:
         image_base64 = self.get_image_base64(item)
         question = item.get("question", "")
 
-        prompt = f"""Look at the infographic and answer the question.
+        prompt = f"""Look at the document and answer the question.
 
 Question: {question}
 
@@ -82,7 +97,7 @@ Provide only the answer, as concisely as possible."""
     ) -> float:
         """
         Calculate Average Normalized Levenshtein Similarity (ANLS).
-        This is the standard metric for InfoVQA.
+        This is the standard metric for DocVQA.
         """
         pred_norm = self.normalize_text(prediction)
 
@@ -127,17 +142,10 @@ Provide only the answer, as concisely as possible."""
 
         return previous_row[-1]
 
-    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
-
-            gen_params = self.get_generation_params()
-            completion = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=gen_params["temperature"],
-                max_tokens=gen_params["max_tokens"],
-            )
+            completion = await self.chat_completion(server, messages)
 
             if not completion.choices:
                 return {"accuracy": 0.0, "anls": 0.0}, {"error": "Empty response"}
@@ -155,7 +163,7 @@ Provide only the answer, as concisely as possible."""
                 return {"accuracy": 0.0, "anls": 0.0}, {"error": "Empty response"}
 
             extracted = self.extract_answer(response)
-            answers = data_item.get("answer", [])
+            answers = data_item.get("answers", [])
             if isinstance(answers, str):
                 answers = [answers]
 
@@ -163,12 +171,13 @@ Provide only the answer, as concisely as possible."""
             correct = anls >= 0.5
 
             sample = {
-                "id": data_item.get("id", ""),
+                "questionId": data_item.get("questionId", ""),
                 "question": data_item.get("question", ""),
                 "answers": answers,
                 "prediction": extracted,
                 "anls": anls,
                 "correct": correct,
+                "question_types": data_item.get("question_types", []),
             }
 
             return {"accuracy": 1.0 if correct else 0.0, "anls": anls}, sample
@@ -178,11 +187,4 @@ Provide only the answer, as concisely as possible."""
 
 
 if __name__ == "__main__":
-    asyncio.run(
-        eval_runner(
-            InfoVQA,
-            split="test",
-            temperature=0.0,
-            max_tokens=256,
-        )
-    )
+    asyncio.run(eval_runner(DocVQA(split="test", temperature=0.0, max_tokens=256)))

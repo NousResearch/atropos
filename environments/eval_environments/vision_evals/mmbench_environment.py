@@ -1,4 +1,4 @@
-"""MMT-Bench evaluation environment."""
+"""MMBench evaluation environment."""
 
 import asyncio
 import base64
@@ -7,53 +7,36 @@ from string import ascii_uppercase
 from typing import List, Optional, Tuple
 
 from datasets import load_dataset
-from openai import AsyncOpenAI
 from PIL import Image
 
-from environments.eval_environments.eval_base import EvalBase, eval_runner
+from atroposlib.envs.server_handling.server_manager import ServerManager
+from environments.eval_environments.eval import EvalBase, eval_runner
 from environments.eval_environments.eval_helpers import (
     extract_letter_from_answer_tag,
     extract_mcqa_answer_with_fallback,
 )
 
 
-class MMTBench(EvalBase):
-    """MMT-Bench evaluation - multi-task multimodal benchmark."""
+class MMBench(EvalBase):
+    """MMBench evaluation - comprehensive multimodal benchmark."""
 
     def setup_data(self) -> list:
-        split = getattr(self, "split", "train")
-        max_samples = getattr(self, "max_samples", None)  # None = use all samples
+        split = getattr(self, "split", "dev")
+        lang = getattr(self, "lang", "en")  # en, cn, cc
+        version = getattr(self, "version", "v1.1")  # v1.0 or v1.1
 
         try:
-            # Try full dataset download first
-            dataset = load_dataset("OpenGVLab/MMT-Bench", split=split)
-            data = list(dataset)
-            if max_samples:
-                data = data[:max_samples]
-            print(f"Loaded {len(data)} examples from MMT-Bench ({split})")
-            return data
+            dataset = load_dataset("lmms-lab/MMBench", lang, split=split)
+            print(f"Loaded {len(dataset)} examples from MMBench ({split}, {lang})")
+            return list(dataset)
         except Exception as e:
-            print(f"Warning: Full download failed, using streaming: {e}")
-            # Fallback to streaming if full download fails (known column mismatch issue)
+            print(f"Warning: Could not load from lmms-lab: {e}")
             try:
-                dataset = load_dataset(
-                    "OpenGVLab/MMT-Bench", split=split, streaming=True
-                )
-                if max_samples:
-                    data = list(dataset.take(max_samples))
-                else:
-                    # Stream all available samples
-                    data = []
-                    for i, item in enumerate(dataset):
-                        data.append(item)
-                        if i % 5000 == 0 and i > 0:
-                            print(f"  Streamed {i} samples...")
-                print(
-                    f"Loaded {len(data)} examples from MMT-Bench ({split}, streaming)"
-                )
-                return data
+                dataset = load_dataset("lmms-lab/MMBench_EN", split=split)
+                print(f"Loaded {len(dataset)} examples from MMBench ({split})")
+                return list(dataset)
             except Exception:
-                raise ValueError(f"Could not load MMT-Bench dataset: {e}")
+                raise ValueError(f"Could not load MMBench dataset: {e}")
 
     def encode_image(self, pil_image: Image.Image) -> str:
         buffer = io.BytesIO()
@@ -63,12 +46,8 @@ class MMTBench(EvalBase):
     def get_image_base64(self, item: dict) -> Optional[str]:
         for key in ["image", "decoded_image"]:
             if key in item and item[key] is not None:
-                val = item[key]
-                if isinstance(val, Image.Image):
-                    return self.encode_image(val)
-                elif isinstance(val, str) and len(val) > 100:
-                    # Already base64-encoded string
-                    return val
+                if isinstance(item[key], Image.Image):
+                    return self.encode_image(item[key])
         return None
 
     def build_messages(self, item: dict) -> List[dict]:
@@ -77,11 +56,13 @@ class MMTBench(EvalBase):
         hint = item.get("hint", "")
 
         options = {}
-        for letter in ascii_uppercase[:8]:  # Support up to 8 options
+        for letter in ascii_uppercase:
             if letter in item and item[letter] is not None:
                 val = item[letter]
                 if isinstance(val, str) and val.strip():
                     options[letter] = val
+                elif not isinstance(val, float):
+                    options[letter] = str(val)
 
         prompt = ""
         if hint and str(hint).strip() and str(hint).lower() != "nan":
@@ -118,17 +99,10 @@ class MMTBench(EvalBase):
         letter, method = extract_mcqa_answer_with_fallback(response, num_choices)
         return letter, method
 
-    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
-
-            gen_params = self.get_generation_params()
-            completion = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=gen_params["temperature"],
-                max_tokens=gen_params["max_tokens"],
-            )
+            completion = await self.chat_completion(server, messages)
 
             if not completion.choices:
                 return {"accuracy": 0.0}, {"error": "Empty response"}
@@ -141,14 +115,14 @@ class MMTBench(EvalBase):
 
             answer = data_item.get("answer", "")
 
-            num_choices = sum(
-                1
-                for letter in ascii_uppercase[:8]
-                if letter in data_item
-                and data_item[letter] is not None
-                and isinstance(data_item[letter], str)
-                and data_item[letter].strip()
-            )
+            num_choices = 0
+            for letter in ascii_uppercase:
+                if letter in data_item and data_item[letter] is not None:
+                    val = data_item[letter]
+                    if isinstance(val, str) and val.strip():
+                        num_choices += 1
+                    elif not isinstance(val, float):
+                        num_choices += 1
             num_choices = max(num_choices, 4)
 
             extracted, method = self.extract_answer(response, num_choices)
@@ -160,7 +134,7 @@ class MMTBench(EvalBase):
             sample = {
                 "id": data_item.get("index", data_item.get("id", "")),
                 "question": data_item.get("question", "")[:200],
-                "task": data_item.get("task", ""),
+                "category": data_item.get("category", data_item.get("l2-category", "")),
                 "answer": answer,
                 "prediction": extracted,
                 "raw_response": response[:500],
@@ -175,11 +149,4 @@ class MMTBench(EvalBase):
 
 
 if __name__ == "__main__":
-    asyncio.run(
-        eval_runner(
-            MMTBench,
-            split="val",
-            temperature=0.0,
-            max_tokens=256,
-        )
-    )
+    asyncio.run(eval_runner(MMBench(split="dev", lang="en", version="v1.1", temperature=0.0, max_tokens=256)))

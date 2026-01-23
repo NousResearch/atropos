@@ -10,10 +10,10 @@ from typing import Dict, List, Tuple
 
 import pandas as pd
 from datasets import load_dataset
-from openai import AsyncOpenAI
 from PIL import Image
 
-from environments.eval_environments.eval_base import EvalBase, eval_runner
+from atroposlib.envs.server_handling.server_manager import ServerManager
+from environments.eval_environments.eval import EvalBase, eval_runner
 
 
 class WeMath(EvalBase):
@@ -135,17 +135,11 @@ class WeMath(EvalBase):
             return False
         return prediction.upper() == answer.upper()
 
-    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 
-            gen_params = self.get_generation_params()
-            completion = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=gen_params["temperature"],
-                max_tokens=gen_params["max_tokens"],
-            )
+            completion = await self.chat_completion(server, messages)
 
             if not completion.choices:
                 return {"accuracy": 0.0, "hit": 0}, {"error": "Empty response"}
@@ -371,11 +365,5 @@ def _compute_final_scores(total_counts: Dict, total_count: int = 525) -> Dict:
 
 if __name__ == "__main__":
     asyncio.run(
-        eval_runner(
-            WeMath,
-            split="testmini",
-            use_cot=False,
-            temperature=0.0,
-            max_tokens=512,
-        )
+        eval_runner(WeMath(split="testmini", use_cot=False, temperature=0.0, max_tokens=512))
     )

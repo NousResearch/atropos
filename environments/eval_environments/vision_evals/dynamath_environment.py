@@ -10,10 +10,10 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 from datasets import load_dataset
-from openai import AsyncOpenAI
 from PIL import Image
 
-from environments.eval_environments.eval_base import EvalBase, eval_runner
+from atroposlib.envs.server_handling.server_manager import ServerManager
+from environments.eval_environments.eval import EvalBase, eval_runner
 
 
 class DynaMath(EvalBase):
@@ -197,17 +197,11 @@ Example of expected JSON response format:
                 or answer.lower() in extracted.lower()
             )
 
-    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 
-            gen_params = self.get_generation_params()
-            completion = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=gen_params["temperature"],
-                max_tokens=gen_params["max_tokens"],
-            )
+            completion = await self.chat_completion(server, messages)
 
             if not completion.choices:
                 return {"accuracy": 0.0}, {"error": "Empty response"}
@@ -246,10 +240,6 @@ Example of expected JSON response format:
 if __name__ == "__main__":
     asyncio.run(
         eval_runner(
-            DynaMath,
-            split="test",
-            use_json_format=True,
-            temperature=0.0,
-            max_tokens=1024,
+            DynaMath(split="test", use_json_format=True, temperature=0.0, max_tokens=1024)
         )
     )

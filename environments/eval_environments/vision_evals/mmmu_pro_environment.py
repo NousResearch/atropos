@@ -8,10 +8,10 @@ from string import ascii_uppercase
 from typing import List, Optional, Tuple
 
 from datasets import load_dataset
-from openai import AsyncOpenAI
 from PIL import Image
 
-from environments.eval_environments.eval_base import EvalBase, eval_runner
+from atroposlib.envs.server_handling.server_manager import ServerManager
+from environments.eval_environments.eval import EvalBase, eval_runner
 from environments.eval_environments.eval_helpers import (
     extract_letter_from_answer_tag,
     extract_mcqa_answer_with_fallback,
@@ -154,17 +154,10 @@ class MMMUPro(EvalBase):
         letter, method = extract_mcqa_answer_with_fallback(response, num_choices)
         return letter, method
 
-    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
-
-            gen_params = self.get_generation_params()
-            completion = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=gen_params["temperature"],
-                max_tokens=gen_params["max_tokens"],
-            )
+            completion = await self.chat_completion(server, messages)
 
             if not completion.choices:
                 return {"accuracy": 0.0}, {"error": "Empty response"}
@@ -208,12 +201,4 @@ class MMMUPro(EvalBase):
 
 
 if __name__ == "__main__":
-    asyncio.run(
-        eval_runner(
-            MMMUPro,
-            split="test",
-            variant="standard",
-            temperature=0.0,
-            max_tokens=1024,
-        )
-    )
+    asyncio.run(eval_runner(MMMUPro(split="test", variant="standard", temperature=0.0, max_tokens=1024)))

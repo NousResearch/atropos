@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import List, Tuple
 
 from huggingface_hub import hf_hub_download
-from openai import AsyncOpenAI
 from PIL import Image
 
-from environments.eval_environments.eval_base import EvalBase, eval_runner
+from atroposlib.envs.server_handling.server_manager import ServerManager
+from environments.eval_environments.eval import EvalBase, eval_runner
 
 DEFAULT_DATA_DIR = Path.home() / ".cache" / "visulogic_hf"
 
@@ -139,17 +139,11 @@ Answer with only the letter (A, B, C, or D)."""
             return False
         return prediction.upper() == answer.upper()
 
-    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 
-            gen_params = self.get_generation_params()
-            completion = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=gen_params["temperature"],
-                max_tokens=gen_params["max_tokens"],
-            )
+            completion = await self.chat_completion(server, messages)
 
             if not completion.choices:
                 return {"accuracy": 0.0}, {"error": "Empty response"}
@@ -185,10 +179,4 @@ Answer with only the letter (A, B, C, or D)."""
 
 
 if __name__ == "__main__":
-    asyncio.run(
-        eval_runner(
-            VisuLogic,
-            temperature=0.0,
-            max_tokens=256,
-        )
-    )
+    asyncio.run(eval_runner(VisuLogic(temperature=0.0, max_tokens=256)))

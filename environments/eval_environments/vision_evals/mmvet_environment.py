@@ -8,10 +8,10 @@ from typing import List, Optional, Tuple
 
 import openai
 from datasets import load_dataset
-from openai import AsyncOpenAI
 from PIL import Image
 
-from environments.eval_environments.eval_base import EvalBase, eval_runner
+from atroposlib.envs.server_handling.server_manager import ServerManager
+from environments.eval_environments.eval import EvalBase, eval_runner
 
 
 class MMVet(EvalBase):
@@ -124,17 +124,11 @@ Output ONLY a single number between 0 and 1."""
                 return 0.5
             return 0.0
 
-    async def run_item(self, client: AsyncOpenAI, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 
-            gen_params = self.get_generation_params()
-            completion = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=gen_params["temperature"],
-                max_tokens=gen_params["max_tokens"],
-            )
+            completion = await self.chat_completion(server, messages)
 
             if not completion.choices:
                 return {"accuracy": 0.0}, {"error": "Empty response"}
@@ -179,11 +173,12 @@ Output ONLY a single number between 0 and 1."""
 if __name__ == "__main__":
     asyncio.run(
         eval_runner(
-            MMVet,
-            split="test",
-            use_gpt_scoring=True,
-            judge_model="gpt-4o-mini",
-            temperature=0.0,
-            max_tokens=512,
+            MMVet(
+                split="test",
+                use_gpt_scoring=True,
+                judge_model="gpt-4o-mini",
+                temperature=0.0,
+                max_tokens=512,
+            )
         )
     )
