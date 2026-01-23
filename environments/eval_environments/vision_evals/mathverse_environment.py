@@ -9,10 +9,10 @@ from typing import List, Optional, Tuple
 
 import openai
 from datasets import load_dataset
+from environments.eval_environments.eval import EvalBase, eval_runner
 from PIL import Image
 
 from atroposlib.envs.server_handling.server_manager import ServerManager
-from environments.eval_environments.eval import EvalBase, eval_runner
 
 EXTRACT_ICL_EXAMPLES = [
     "1.\nModel response: 'The perimeter of the sector is approximately (-2, 1)'\n"
@@ -245,7 +245,9 @@ Judgement:"""
 
         return False
 
-    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(
+        self, server: ServerManager, data_item: dict
+    ) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 

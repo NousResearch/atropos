@@ -7,10 +7,10 @@ import re
 from typing import List, Optional, Tuple
 
 from datasets import load_dataset
+from environments.eval_environments.eval import EvalBase, eval_runner
 from PIL import Image
 
 from atroposlib.envs.server_handling.server_manager import ServerManager
-from environments.eval_environments.eval import EvalBase, eval_runner
 
 
 class HallusionBench(EvalBase):
@@ -96,7 +96,9 @@ class HallusionBench(EvalBase):
 
         return "Unknown"
 
-    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(
+        self, server: ServerManager, data_item: dict
+    ) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
             completion = await self.chat_completion(server, messages)
@@ -140,4 +142,6 @@ class HallusionBench(EvalBase):
 
 
 if __name__ == "__main__":
-    asyncio.run(eval_runner(HallusionBench(split="test", temperature=0.0, max_tokens=64)))
+    asyncio.run(
+        eval_runner(HallusionBench(split="test", temperature=0.0, max_tokens=64))
+    )

@@ -6,11 +6,11 @@ import zipfile
 from pathlib import Path
 from typing import List, Tuple
 
+from environments.eval_environments.eval import EvalBase, eval_runner
 from huggingface_hub import hf_hub_download
 from PIL import Image
 
 from atroposlib.envs.server_handling.server_manager import ServerManager
-from environments.eval_environments.eval import EvalBase, eval_runner
 
 DEFAULT_DATA_DIR = Path.home() / ".cache" / "visulogic_hf"
 
@@ -139,7 +139,9 @@ Answer with only the letter (A, B, C, or D)."""
             return False
         return prediction.upper() == answer.upper()
 
-    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(
+        self, server: ServerManager, data_item: dict
+    ) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 

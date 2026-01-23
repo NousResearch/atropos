@@ -7,10 +7,10 @@ import re
 from typing import List, Optional, Tuple
 
 from datasets import load_dataset
+from environments.eval_environments.eval import EvalBase, eval_runner
 from PIL import Image
 
 from atroposlib.envs.server_handling.server_manager import ServerManager
-from environments.eval_environments.eval import EvalBase, eval_runner
 
 
 class VLMBlind(EvalBase):
@@ -120,7 +120,9 @@ class VLMBlind(EvalBase):
         else:
             return answer_lower in response_lower, response_lower[:50]
 
-    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(
+        self, server: ServerManager, data_item: dict
+    ) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 
@@ -160,6 +162,4 @@ class VLMBlind(EvalBase):
 
 
 if __name__ == "__main__":
-    asyncio.run(
-        eval_runner(VLMBlind(split="test", temperature=0.0, max_tokens=512))
-    )
+    asyncio.run(eval_runner(VLMBlind(split="test", temperature=0.0, max_tokens=512)))

@@ -10,10 +10,10 @@ from typing import Dict, List, Optional, Tuple
 
 import openai
 from datasets import load_dataset
+from environments.eval_environments.eval import EvalBase, eval_runner
 from PIL import Image
 
 from atroposlib.envs.server_handling.server_manager import ServerManager
-from environments.eval_environments.eval import EvalBase, eval_runner
 
 DESCRIPTIVE_CATEGORIES = {
     1: "Information Extraction",
@@ -270,7 +270,9 @@ class CharXiv(EvalBase):
             inst_category = item.get("inst_category", 1)
             return REASONING_CATEGORIES.get(inst_category, "Text-in-Chart")
 
-    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(
+        self, server: ServerManager, data_item: dict
+    ) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
             mode = getattr(self, "mode", "descriptive")

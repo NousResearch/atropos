@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from datasets import load_dataset
+from environments.eval_environments.eval import EvalBase, eval_runner
 from PIL import Image
 
 from atroposlib.envs.server_handling.server_manager import ServerManager
-from environments.eval_environments.eval import EvalBase, eval_runner
 
 
 class ChartQA(EvalBase):
@@ -142,7 +142,9 @@ Question: {query}"""
         # Non-numeric: exact match (case-insensitive)
         return pred.lower() == ans.lower()
 
-    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(
+        self, server: ServerManager, data_item: dict
+    ) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 
@@ -183,6 +185,8 @@ Question: {query}"""
 if __name__ == "__main__":
     asyncio.run(
         eval_runner(
-            ChartQA(subset="human", relaxed_tolerance=0.05, temperature=0.0, max_tokens=2048)
+            ChartQA(
+                subset="human", relaxed_tolerance=0.05, temperature=0.0, max_tokens=2048
+            )
         )
     )

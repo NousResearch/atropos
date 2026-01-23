@@ -10,10 +10,10 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 from datasets import load_dataset
+from environments.eval_environments.eval import EvalBase, eval_runner
 from PIL import Image
 
 from atroposlib.envs.server_handling.server_manager import ServerManager
-from environments.eval_environments.eval import EvalBase, eval_runner
 
 
 class DynaMath(EvalBase):
@@ -197,7 +197,9 @@ Example of expected JSON response format:
                 or answer.lower() in extracted.lower()
             )
 
-    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(
+        self, server: ServerManager, data_item: dict
+    ) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 
@@ -240,6 +242,8 @@ Example of expected JSON response format:
 if __name__ == "__main__":
     asyncio.run(
         eval_runner(
-            DynaMath(split="test", use_json_format=True, temperature=0.0, max_tokens=1024)
+            DynaMath(
+                split="test", use_json_format=True, temperature=0.0, max_tokens=1024
+            )
         )
     )

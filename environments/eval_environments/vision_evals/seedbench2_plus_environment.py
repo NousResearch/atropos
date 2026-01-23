@@ -7,10 +7,10 @@ from string import ascii_uppercase
 from typing import List, Optional, Tuple
 
 from datasets import load_dataset
+from environments.eval_environments.eval import EvalBase, eval_runner
 from PIL import Image
 
 from atroposlib.envs.server_handling.server_manager import ServerManager
-from environments.eval_environments.eval import EvalBase, eval_runner
 from environments.eval_environments.eval_helpers import (
     extract_letter_from_answer_tag,
     extract_mcqa_answer_with_fallback,
@@ -129,7 +129,9 @@ class SEEDBench2Plus(EvalBase):
         letter, method = extract_mcqa_answer_with_fallback(response, num_choices)
         return letter, method
 
-    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(
+        self, server: ServerManager, data_item: dict
+    ) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 

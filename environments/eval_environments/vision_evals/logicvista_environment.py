@@ -9,10 +9,10 @@ from typing import Dict, List, Optional, Tuple
 
 import openai
 from datasets import load_dataset
+from environments.eval_environments.eval import EvalBase, eval_runner
 from PIL import Image
 
 from atroposlib.envs.server_handling.server_manager import ServerManager
-from environments.eval_environments.eval import EvalBase, eval_runner
 
 EXTRACTION_PROMPT_TEMPLATE = """You are a information extractor that extracts multiple choice letter answer choices \
 from a paragraph that contains the answer choice and sometimes explaination of why that \
@@ -195,7 +195,9 @@ Provide your answer as the letter(s) of the correct choice(s), e.g., A, B, C, D,
 
         return pred_normalized == answer_normalized
 
-    async def run_item(self, server: ServerManager, data_item: dict) -> Tuple[dict, dict]:
+    async def run_item(
+        self, server: ServerManager, data_item: dict
+    ) -> Tuple[dict, dict]:
         try:
             messages = self.build_messages(data_item)
 
