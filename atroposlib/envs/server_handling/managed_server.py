@@ -509,3 +509,63 @@ class ManagedServer:
             self.sequences.clear()
         else:
             self.current_nodes.clear()
+
+
+class ManagedServerAdapter:
+    """
+    Adapter that makes ManagedServer look like AsyncOpenAI for external libraries.
+
+    Implements the subset of AsyncOpenAI interface commonly used:
+    - client.chat.completions.create()
+    - client.completions.create()
+    - client.base_url
+
+    This allows libraries like verifiers to use ManagedServer transparently
+    while still getting automatic token and logprob tracking.
+    """
+
+    def __init__(self, managed_server: ManagedServer, base_url: str):
+        """
+        Initialize the adapter.
+
+        Args:
+            managed_server: The ManagedServer instance to wrap
+            base_url: The base URL to expose (for compatibility checks)
+        """
+        self._managed = managed_server
+        self.base_url = base_url
+        self.chat = self._ChatNamespace(self._managed)
+        self.completions = self._CompletionsNamespace(self._managed)
+
+    class _ChatNamespace:
+        def __init__(self, managed: ManagedServer):
+            self._managed = managed
+            self.completions = ManagedServerAdapter._ChatCompletionsNamespace(managed)
+
+    class _ChatCompletionsNamespace:
+        def __init__(self, managed: ManagedServer):
+            self._managed = managed
+
+        async def create(self, **kwargs):
+            return await self._managed.chat_completion(**kwargs)
+
+    class _CompletionsNamespace:
+        def __init__(self, managed: ManagedServer):
+            self._managed = managed
+
+        async def create(self, **kwargs):
+            return await self._managed.completion(**kwargs)
+
+    async def post(self, path: str, body: dict, cast_to: type):
+        """Not supported - raises NotImplementedError."""
+        raise NotImplementedError(
+            f"ManagedServerAdapter does not support post() for path '{path}'. "
+            "This is used for vLLM interleaved rollouts. Use standard chat completions."
+        )
+
+    def copy(self, **kwargs):
+        """Not supported - raises NotImplementedError."""
+        raise NotImplementedError(
+            "ManagedServerAdapter does not support copy(). "
+            "This is used for vLLM tokenization endpoints."
+        )

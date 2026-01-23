@@ -66,9 +66,9 @@ A flexible environment that integrates with the [Verifiers](https://docs.primein
 
 **Output (Evaluation - `verifiers_eval.py`):**
 
-Uses `evaluate_log()` from `atroposlib.envs.eval` to output:
+Uses `evaluate_log()` from `BaseEnv` to output:
 - Console: Metrics table with accuracy, avg_score, time, and per-reward function breakdown
-- File: `metrics.json` and `samples.jsonl` (when `--eval-dir` is specified)
+- File: `metrics.json` and `samples.jsonl` (when `--env.data_dir_to_save_evals` is specified)
 
 **Configuration Options (`VfEnvConfig` for `verifiers_server.py`):**
 
@@ -79,17 +79,19 @@ Uses `evaluate_log()` from `atroposlib.envs.eval` to output:
 
 **CLI Options (`verifiers_eval.py`):**
 
+Uses the standard BaseEnv CLI pattern with `evaluate` subcommand. Key options:
+
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--server-url` | str | `http://localhost:8000/v1` | URL of the inference server |
-| `--model-name` | str | (required) | Model name to evaluate |
-| `--api-key` | str | `$OPENAI_API_KEY` | API key (defaults to env var) |
-| `--vf-env-name` | str | `primeintellect/gsm8k` | Prime environment identifier |
-| `--temperature` | float | `0.0` | Temperature for generation |
-| `--max-tokens` | int | `2048` | Maximum tokens per completion |
-| `--max-eval-items` | int | `-1` | Maximum items to evaluate (-1 for all) |
-| `--max-concurrent` | int | `64` | Maximum concurrent requests |
-| `--eval-dir` | str | `None` | Directory to save evaluation results |
+| `--openai.base_url` | str | `http://localhost:9001/v1` | URL of the inference server |
+| `--openai.model_name` | str | `Qwen/Qwen2.5-1.5B-Instruct` | Model name to evaluate |
+| `--openai.api_key` | str | `x` | API key |
+| `--env.vf_env_name` | str | `primeintellect/gsm8k` | Prime environment identifier |
+| `--env.eval_temperature` | float | `0.0` | Temperature for generation |
+| `--env.eval_max_tokens` | int | `2048` | Maximum tokens per completion |
+| `--env.max_eval_items` | int | `-1` | Maximum items to evaluate (-1 for all) |
+| `--env.max_concurrent` | int | `64` | Maximum concurrent requests |
+| `--env.data_dir_to_save_evals` | str | `None` | Directory to save evaluation results |
 
 **Usage Examples:**
 
@@ -121,31 +123,33 @@ python verifiers_server.py evaluate \
     --openai.base_url http://localhost:9001/v1
 
 # Standalone Evaluation with OpenAI (verifiers_eval.py)
-python eval_environments/verifiers_eval.py \
-    --server-url https://api.openai.com/v1 \
-    --model-name gpt-4o \
-    --vf-env-name primeintellect/gsm8k
+python eval_environments/verifiers_eval.py evaluate \
+    --openai.base_url https://api.openai.com/v1 \
+    --openai.api_key $OPENAI_API_KEY \
+    --openai.model_name gpt-4o \
+    --env.vf_env_name primeintellect/gsm8k
 
 # Quick test run with limited items
-python eval_environments/verifiers_eval.py \
-    --server-url https://api.openai.com/v1 \
-    --model-name gpt-4o-mini \
-    --vf-env-name primeintellect/alphabet-sort \
-    --max-eval-items 10
+python eval_environments/verifiers_eval.py evaluate \
+    --openai.base_url https://api.openai.com/v1 \
+    --openai.api_key $OPENAI_API_KEY \
+    --openai.model_name gpt-4o-mini \
+    --env.vf_env_name primeintellect/alphabet-sort \
+    --env.max_eval_items 10
 
 # Evaluation with local server and results saved
-python eval_environments/verifiers_eval.py \
-    --server-url http://localhost:9001/v1 \
-    --model-name Qwen/Qwen2.5-7B-Instruct \
-    --vf-env-name primeintellect/gsm8k \
-    --eval-dir ./eval_results
+python eval_environments/verifiers_eval.py evaluate \
+    --openai.base_url http://localhost:9001/v1 \
+    --openai.model_name Qwen/Qwen2.5-7B-Instruct \
+    --env.vf_env_name primeintellect/gsm8k \
+    --env.data_dir_to_save_evals ./eval_results
 ```
 
 **Key Implementation Details:**
 
 - **RL Training Mode (`serve`)**: Uses `ManagedServer` for proper token/logprob alignment required by policy gradient methods (GRPO, PPO, REINFORCE). Returns `ScoredDataGroup` with `tokens`, `masks`, `scores`, and `inference_logprobs`.
 - **SFT Datagen Mode (`process`)**: Uses `tokenize_for_trainer` to tokenize API responses with your target model's tokenizer (e.g., GPT-4o responses tokenized for Qwen/Llama). Does NOT require logprobs.
-- **Evaluation (`verifiers_eval.py`)**: Standalone evaluation script using `EvalBase` pattern. Uses verifiers' native batch evaluation for efficiency and outputs results via `evaluate_log()`. Works with any OpenAI-compatible API.
+- **Evaluation (`verifiers_eval.py`)**: Standalone evaluation script using `BaseEnv` pattern with `evaluate` subcommand. Uses verifiers' native batch evaluation for efficiency and outputs results via `evaluate_log()`. Works with any OpenAI-compatible API.
 
 **Prime Environment Installation:**
 ```bash
