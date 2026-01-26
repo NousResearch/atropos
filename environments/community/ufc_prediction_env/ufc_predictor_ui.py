@@ -53,7 +53,7 @@ def predict():
             "Let's break down this matchup that's got everyone talking!\n\n"
             "In the red corner, we have:(YOUR FIRST IMAGE):\n"
             "And in the blue corner: (YOUR SECOND IMAGE):\n\n"
-            "Now, as your favorite fight comentator, I want you to:\n"
+            "Now, as your favorite fight commentator, I want you to:\n"
             "create a fight commentary of whats happening in the fight live\n"
             "Give us your best fight commentary! Make it exciting, make it dramatic, "
             "make it sound like you're calling the fight live! "
