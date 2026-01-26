@@ -98,8 +98,7 @@ def main():
 
         if not os.path.exists(html_file):
             with open(html_file, "w") as f:
-                f.write(
-                    """
+                f.write("""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -181,13 +180,11 @@ def main():
     <script src="game.js"></script>
 </body>
 </html>
-                """
-                )
+                """)
 
         if not os.path.exists(css_file):
             with open(css_file, "w") as f:
-                f.write(
-                    """
+                f.write("""
 :root {
     --power-color: #e74c3c;
     --stability-color: #2ecc71;
@@ -363,13 +360,11 @@ footer {
     justify-content: center;
     margin-top: 20px;
 }
-                """
-                )
+                """)
 
         if not os.path.exists(js_file):
             with open(js_file, "w") as f:
-                f.write(
-                    """
+                f.write("""
 // Constants
 const API_URL = 'http://localhost:9001/api';
 let sessionId = null;
@@ -828,8 +823,7 @@ window.addEventListener('load', async () => {
         cardText.textContent = "Cannot connect to game server. Please ensure the server is running.";
     }
 });
-                """
-                )
+                """)
 
     # Start API server in a separate thread
     print(f"Starting API server on port {args.api_port}")
