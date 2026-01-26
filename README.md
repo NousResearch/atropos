@@ -197,6 +197,7 @@ If you're looking to get into developing the repo or using the environments:
 pip install -e .                # for using
 pip install -e .[dev]           # for development
 pip install -e .[examples]      # for running examples
+pip install -e .[verifiers]     # for verifiers integration
 pip install -e .[all]           # for everything
 ```
 
