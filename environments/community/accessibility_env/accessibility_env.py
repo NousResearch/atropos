@@ -141,10 +141,8 @@ class AccessibilityEnv(BaseEnv):
             raise
 
         self.iter = 0
-        print(
-            f"""[{self.name}] Setup complete. Loaded {len(self.dataset)}
-        items. Initialized {len(self.accessibility_rules)} accessibility rules."""
-        )
+        print(f"""[{self.name}] Setup complete. Loaded {len(self.dataset)}
+        items. Initialized {len(self.accessibility_rules)} accessibility rules.""")
 
     async def get_next_item(self) -> Optional[Item]:
         if self.iter >= len(self.dataset):
@@ -288,10 +286,8 @@ class AccessibilityEnv(BaseEnv):
                     self.tokenizer, full_exchange_messages_list_of_dicts
                 )
             except Exception as e:
-                print(
-                    f"""[{self.name}] Error during tokenization for item
-                    {original_info.get('id', 'N/A')}: {e}. Skipping this item."""
-                )
+                print(f"""[{self.name}] Error during tokenization for item
+                    {original_info.get('id', 'N/A')}: {e}. Skipping this item.""")
                 continue  # Skip to the next data_item in rollout_group_data
 
             if "tokens" not in tokenized_output or "masks" not in tokenized_output:
@@ -317,10 +313,8 @@ class AccessibilityEnv(BaseEnv):
         if (
             not final_scores_batch
         ):  # If all items were skipped (e.g., due to tokenization errors)
-            print(
-                f"""[{self.name}] No valid items to include in ScoredDataGroup
-                after processing all rollouts, returning None."""
-            )
+            print(f"""[{self.name}] No valid items to include in ScoredDataGroup
+                after processing all rollouts, returning None.""")
             return None
 
         data_to_return: ScoredDataGroup = {
