@@ -18,7 +18,7 @@ import json
 import math
 import os
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, List, Optional, Tuple, Union
 
@@ -71,12 +71,14 @@ class GameState:
     megaclipper_boost: float = 1.0
 
     # computational resources
+    comp_flag: bool = False
     processors: int = 1
     memory: int = 1
     operations: int = 0
     max_operations: int = 1000
     trust: int = 2
     creativity: int = 0
+    creativity_on: bool = False
     next_trust: str = "3000"
 
     # Investments
@@ -93,8 +95,6 @@ class GameState:
     use_auto_tournament: bool = False
     current_strategy: int = 10
 
-    available_projects: list = field(default_factory=list)
-
     def to_prompt_string(self) -> str:
         """Get state representation for prompts"""
         lines = [
@@ -109,6 +109,8 @@ class GameState:
 
         if self.has_wirebuyer:
             lines.append(f"Wire Buyer: {'ON' if self.use_wirebuyer else 'OFF'}")
+        else:
+            lines.append("Wire Buyer: Not available yet!")
         if self.has_autoclippers:
             lines.extend(
                 [
@@ -116,6 +118,8 @@ class GameState:
                     f"AutoClipper Boost: {self.autoclipper_boost:.2f}x",
                 ]
             )
+        else:
+            lines.append("AutoClippers: Not available yet!")
         if self.has_megaclippers:
             lines.extend(
                 [
@@ -123,6 +127,8 @@ class GameState:
                     f"MegaClipper Boost: {self.megaclipper_boost:.2f}x",
                 ]
             )
+        else:
+            lines.append("MegaClippers: Not available yet!")
 
         lines.extend(
             [
@@ -133,16 +139,28 @@ class GameState:
                 f"Public Demand: {self.demand_percent:.0f}%",
                 f"Unsold Inventory: {self.unsold_inventory:,.0f}",
                 f"Marketing Level: {self.marketing_level} (Next: ${self.marketing_cost:.2f})",
-                "",
-                "-- Computational Resources --",
-                f"Trust: {self.trust} | Next Trust at: {self.next_trust} clips",
-                f"Processors: {self.processors} | Memory: {self.memory}",
-                f"Operations: {self.operations:,} / {self.max_operations:,}",
             ]
         )
 
-        if self.creativity > 0:
-            lines.append(f"Creativity: {self.creativity}")
+        if self.comp_flag:
+            lines.extend(
+                [
+                    "",
+                    "-- Computational Resources --",
+                    f"Trust: {self.trust} |  Trust increases by 1 at: {self.next_trust} clips",
+                    f"Processors: {self.processors} | Memory: {self.memory}",
+                    f"Operations: {self.operations:,} / {self.max_operations:,}",
+                ]
+            )
+            if self.creativity_on:
+                lines.append(f"Creativity: {self.creativity}")
+            else:
+                lines.append("Creativity: Not available yet!")
+        else:
+            lines.append(
+                """Computational resources project (Trust-Constrained Self-Modification):
+                Not available yet! Become available when 2000 clips are made."""
+            )
 
         if self.has_investments:
             lines.extend(
@@ -154,23 +172,29 @@ class GameState:
                     f"Risk Level: {self.investment_risk}",
                 ]
             )
+        else:
+            lines.append(
+                "Algorithmic trading project (Investment engine): Not available yet!"
+            )
 
         if self.has_strategy_engine:
             lines.extend(
                 [
                     "",
-                    "-- Strategy Engine --",
+                    "-- Strategic Modeling (tournaments) --",
                     f"Yomi: {self.yomi:.0f}",
+                    f"Current strategy: {self.current_strategy}"
                     f"Tournament: {'In Progress' if self.tournament_in_progress else 'Ready'}",
                 ]
             )
-
-        if self.available_projects:
-            lines.extend(["", "-- Available Projects --"])
-            for proj in self.available_projects:
-                lines.append(f"  PROJECT:\n{proj}\n")
-
-        return "\n".join(lines)
+            if self.has_auto_tournament:
+                lines.append(
+                    f"Auto-tournament: {'ON' if self.use_auto_tournament else 'OFF'}"
+                )
+            else:
+                lines.append("Auto-tournament: Not available yet!")
+        else:
+            lines.append("Strategic modeling project (Tournaments): Not available yet!")
 
 
 class EpisodeContext:
@@ -178,13 +202,16 @@ class EpisodeContext:
     Manages a single episode's browser context.
 
     Each parallel episode gets its own isolated browser context to ensure
-    fresh game state and no localStorage interference between episodes.
+    fresh game state and no localStorage interference between any two episodes.
     """
 
-    def __init__(self, browser: Browser, game_url: str, headless: bool = True):
+    def __init__(
+        self, browser: Browser, game_url: str, episode_id: int, headless: bool = True
+    ):
         self.browser = browser
         self.game_url = game_url
         self.headless = headless
+        self.episode_id = episode_id
         self._context: Optional[BrowserContext] = None
         self._page: Optional[Page] = None
         self._initialized = False
@@ -194,18 +221,17 @@ class EpisodeContext:
         if self._initialized:
             return
 
-        print(" EpisodeContext: Creating new browser context...")
         self._context = await self.browser.new_context()
         self._page = await self._context.new_page()
 
         print(
-            f" EpisodeContext: Navigating to {self.game_url}...Clearing localStorage and reloading"
+            f" Episode {self.episode_id}: Navigating to {self.game_url}...Clearing localStorage and reloading"
         )
         await self._page.goto(self.game_url, wait_until="networkidle")
         await self._page.evaluate("localStorage.clear()")
         await self._page.reload(wait_until="networkidle")
         await self._page.wait_for_selector("#clips", timeout=10000)
-        print(" EpisodeContext: Game ready!")
+        print(f" Episode {self.episode_id}: Game ready!")
 
         self._initialized = True
 
@@ -218,9 +244,14 @@ class EpisodeContext:
         self._initialized = False
 
     async def get_state(self) -> dict:
-        """Extract current game state from the browser"""
+        """Extract current game state from the browser.
+        State consists of several game parameters useful
+        for the agent to make a next decision.
+        """
         if not self._initialized:
-            raise RuntimeError("Episode context not initialized")
+            raise RuntimeError(
+                f"Episode {self.episode_id}: Episode context not initialized"
+            )
 
         state = await self._page.evaluate("""
             () => {
@@ -259,6 +290,7 @@ class EpisodeContext:
 
 
                     // computational resources (useful for projects, strategic modeling etc.)
+                    compFlag: compFlag || 0,
                     processors: processors || 1,
                     memory: memory || 1,
                     operations: operations || 0,
@@ -286,35 +318,21 @@ class EpisodeContext:
 
                     // stage flags
                     humanFlag: humanFlag || 1,
-                    compFlag: compFlag || 0,
-                    // projectsFlag: projectsFlag || 0, (todo: figure out if needed)
-
 
                     // Stage 2 variables (post-human)
-                    factoryLevel: factoryLevel || 0,
-                    harvesterLevel: harvesterLevel || 0,
-                    wireDroneLevel: wireDroneLevel || 0,
-                    availableMatter: availableMatter || 0,
-                    acquiredMatter: acquiredMatter || 0,
+                    // factoryLevel: factoryLevel || 0,
+                    // harvesterLevel: harvesterLevel || 0,
+                    // wireDroneLevel: wireDroneLevel || 0,
+                    // availableMatter: availableMatter || 0,
+                    // acquiredMatter: acquiredMatter || 0,
 
                     // Stage 3 variables (space stage)
-                    probeCount: probeCount || 0,
-                    spaceFlag: spaceFlag || 0,
+                    // probeCount: probeCount || 0,
+                    // spaceFlag: spaceFlag || 0,
 
                     // Game ticks (for time tracking)
                     ticks: ticks || 0
                 };
-
-                state.availableProjects = [];
-                if (typeof activeProjects !== 'undefined' && activeProjects) {
-                    state.availableProjects = activeProjects.map(p => ({
-                        id: p.id,
-                        title: p.title.trim(),
-                        priceTag: p.priceTag,
-                        description: p.description,
-                        canAfford: p.cost ? p.cost() : false
-                    }));
-                }
 
                 // unlocked strategies for tournaments
                 state.availableStrategies = [];
@@ -391,7 +409,7 @@ class EpisodeContext:
                 if (megaClipperFlag === 1) {
                     actions.push({
                         name: 'buy_megaclipper',
-                        description: 'Buy a MegaClipper. 500 clips/sec/clipper ' +
+                        description: 'Buy a MegaClipper. A megaclipper can do 500 clips/sec/clipper ' +
                             '(500x a standard autoclipper!)',
                         available: funds >= megaClipperCost,
                         cost: '$' + megaClipperCost.toFixed(4)
@@ -400,7 +418,8 @@ class EpisodeContext:
                 if (wireBuyerFlag === 1) {
                     actions.push({
                         name: 'toggle_wirebuyer',
-                        description: 'Toggle automatic wire buying',
+                        description: 'Toggle automatic wire buying to turn it on or off.' +
+                        'If the wire buyer is on, this toggle turns it off and vice versa.',
                         available: true,
                         cost: 'none'
                     });
@@ -422,7 +441,7 @@ class EpisodeContext:
                     });
                     actions.push({
                         name: 'expand_marketing',
-                        description: 'Expand marketing reach',
+                        description: 'Expand marketing reach to sell more paperclips',
                         available: funds >= adCost,
                         cost: '$' + adCost.toFixed(2)
                     });
@@ -434,13 +453,13 @@ class EpisodeContext:
                     const canAllocate = trust >= 1 && (processors + memory) < (trust + swarmBonus);
                     actions.push({
                         name: 'add_processor',
-                        description: 'Add a processor (uses 1 trust)',
+                        description: 'Add a processor (uses 1 trust) to increase operations or capacity per second',
                         available: canAllocate,
                         cost: '1 trust allocation'
                     });
                     actions.push({
                         name: 'add_memory',
-                        description: 'Add memory (uses 1 trust)',
+                        description: 'Add memory (uses 1 trust) to increase max operations capacity',
                         available: canAllocate,
                         cost: '1 trust allocation'
                     });
@@ -450,7 +469,7 @@ class EpisodeContext:
                 if (investmentEngineFlag === 1) {
                     actions.push({
                         name: 'deposit_funds',
-                        description: 'Deposit funds into investments',
+                        description: 'Deposit all current funds into investments',
                         available: funds >= 1000,
                         cost: 'variable'
                     });
@@ -462,7 +481,7 @@ class EpisodeContext:
                     });
                     actions.push({
                         name: 'improve_investments',
-                        description: 'Upgrade investment engine',
+                        description: 'Upgrade investment engine for a better profit to loss ratio',
                         available: yomi >= investUpgradeCost,
                         cost: investUpgradeCost.toFixed() + ' yomi'
                     });
@@ -493,7 +512,7 @@ class EpisodeContext:
                 if (strategyEngineFlag === 1) {
                     actions.push({
                         name: 'new_tournament',
-                        description: 'Pick strategy, run tournament, gain yomi',
+                        description: 'Start a new tournament to pick your strategy.',
                         available: (operations >= tourneyCost) && (tourneyInProg == 0),
                         cost: tourneyCost.toFixed() + ' ops'
                     });
@@ -521,7 +540,8 @@ class EpisodeContext:
                 if (autoTourneyFlag === 1) {
                     actions.push({
                         name: 'toggle_autotourney',
-                        description: 'Toggle automatic strategy tournaments',
+                        description: 'Toggle automatic strategy tournaments to turn it on or off' +
+                        ' If the auto-tournament is on, this toggle turns it off and vice versa.',
                         available: true,
                         cost: 'none'
                     });
@@ -541,7 +561,7 @@ class EpisodeContext:
 
                 actions.push({
                     name: 'wait',
-                    description: 'Do nothing and let time pass',
+                    description: 'Do nothing for this step!',
                     available: true,
                     cost: 'none'
                 });
@@ -551,7 +571,7 @@ class EpisodeContext:
         """)
         return actions
 
-    async def execute_action(self, action_name: str) -> bool:
+    async def execute_action(self, action_name: str, state: GameState) -> bool:
         """
         Execute an action by calling the corresponding js function.
         Args:
@@ -592,10 +612,13 @@ class EpisodeContext:
         }
 
         # dropdowns (investment risk, strategy selection)
-        # todo: return False if the agent selects a strat or risk that's already selected
         if action_name.startswith("set_investment_risk_"):
             risk_level = action_name.replace("set_investment_risk_", "").lower()
             if risk_level not in ["low", "med", "high"]:
+                return False
+            if (
+                risk_level == state.investment_risk
+            ):  # agent selected the same risk level again
                 return False
             js_code = f"""
                 (() => {{
@@ -609,6 +632,10 @@ class EpisodeContext:
         elif action_name.startswith("select_strategy_"):
             strategy_index = int(action_name.replace("select_strategy_", ""))
             if strategy_index < 0 or strategy_index > 7:
+                return False
+            if (
+                strategy_index == state.current_strategy
+            ):  # agent selected the same strategy again
                 return False
             js_code = f"""
                 (() => {{
@@ -626,13 +653,13 @@ class EpisodeContext:
             project_number = int(project_id.replace("projectButton", ""))
             if project_number < 1 or project_number > 219:
                 return False
-            # todo: fetch both availableProjects and project.cost from the action
+            # todo: fetch both activeProjects and project.cost from the action
             # list sent to the llm rather than executing new code for it
             # why? bec by the time this action gets executed, values might change.
             js_code = f"""
                 (() => {{
-                    const project = availableProjects.find(p => p.id === '{project_id}');
-                    if (project && project.cost && project.cost()) {{
+                    const project = activeProjects.find(p => p.id === '{project_id}');
+                    if (project && project.cost && project.cost() && project.flag === 0) {{
                         project.effect();
                         return true;
                     }}
@@ -741,6 +768,7 @@ class PaperclipsAtroposEnv(BaseEnv):
             browser=self._browser,
             game_url=self.config.game_url,
             headless=self.config.headless,
+            episode_id=episode_id,
         )
 
         try:
@@ -801,8 +829,9 @@ class PaperclipsAtroposEnv(BaseEnv):
 
                 success = False
                 if is_affordable:
-                    success = await episode.execute_action(action_name)
+                    success = await episode.execute_action(action_name, state)
 
+                # wait for ticks_per_step to let the action show effect then fetch a new state
                 await episode.wait_ticks(self.config.ticks_per_step)
                 raw_state = await episode.get_state()
                 current_clips = raw_state.get("clips", 0)
@@ -927,12 +956,14 @@ class PaperclipsAtroposEnv(BaseEnv):
             megaclippers=int(raw_state.get("megaClipperLevel", 0)),
             autoclipper_boost=float(raw_state.get("clipperBoost", 1.0)),
             megaclipper_boost=float(raw_state.get("megaClipperBoost", 1.0)),
+            comp_flag=bool(raw_state.get("compFlag", 0)),
             processors=int(raw_state.get("processors", 1)),
             memory=int(raw_state.get("memory", 1)),
             operations=int(raw_state.get("operations", 0)),
             max_operations=int(raw_state.get("memory", 1)) * 1000,
             trust=int(raw_state.get("trust", 2)),
             creativity=int(raw_state.get("creativity", 0)),
+            creativity_on=bool(raw_state.get("creativityOn", False)),
             next_trust=str(raw_state.get("nextTrust", 3000)),
             has_investments=bool(raw_state.get("investmentEngineFlag", 0)),
             cash=str(int(raw_state.get("bankroll", 0))),
@@ -944,7 +975,6 @@ class PaperclipsAtroposEnv(BaseEnv):
             tournament_in_progress=bool(raw_state.get("tourneyInProg", 0)),
             has_auto_tournament=bool(raw_state.get("autoTourneyFlag", 0)),
             use_auto_tournament=bool(raw_state.get("autoTourneyStatus", 0)),
-            available_projects=raw_state.get("availableProjects", []),
         )
 
     def _parse_action(self, response_text: str, available_actions: List[dict]) -> str:
