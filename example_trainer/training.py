@@ -2,18 +2,26 @@
 Training utilities for GRPO trainer.
 
 Contains loss computation, training step logic, and metric logging.
+
+Includes logprob alignment tracking to verify that training logprobs match
+inference logprobs at initialization (validates shared_vllm mode is working).
 """
 
 import random
 import string
 import time
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 import wandb
 
 from .config import TrainingConfig
+
+
+# Global storage for logprob alignment stats
+_logprob_alignment_stats: Dict[str, float] = {}
 
 
 def setup_wandb(config: TrainingConfig) -> bool:
@@ -62,6 +70,7 @@ def compute_grpo_loss(
     advantages: torch.Tensor,
     temperatures: torch.Tensor,
     gradient_accumulation_steps: int,
+    inference_logprobs: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, dict]:
     """
     Compute GRPO (Group Relative Policy Optimization) loss for a single micro-batch.
@@ -77,6 +86,7 @@ def compute_grpo_loss(
         advantages: Advantage values [batch, 1]
         temperatures: Temperature values [batch, 1, 1]
         gradient_accumulation_steps: Number of accumulation steps (for scaling)
+        inference_logprobs: Optional logprobs from inference for alignment check
 
     Returns:
         Tuple of (loss tensor, metrics dict)
@@ -110,6 +120,9 @@ def compute_grpo_loss(
         avg_logp = (logp_per_token * mask_float).sum(dim=-1) / mask_sum
         pos_logp = (logp_per_token * pos).mean().item()
         neg_logp = (logp_per_token * neg).mean().item()
+        
+        # Collect training logprobs for masked positions (generated tokens only)
+        training_logprobs_flat = logp_per_token[mask.bool()].cpu().numpy()
 
     # GRPO loss: weighted log probabilities by advantages
     grpo_loss_term = torch.exp(logp_per_token - logp_per_token.detach())
@@ -124,9 +137,56 @@ def compute_grpo_loss(
         "avg_logp": avg_logp,
         "pos_count": pos.sum().item(),
         "neg_count": neg.sum().item(),
+        "training_logprobs": training_logprobs_flat,  # For alignment check
     }
 
     return grpo_loss, metrics
+
+
+def compute_logprob_alignment(
+    inference_logprobs: List[np.ndarray],
+    training_logprobs: List[np.ndarray],
+) -> Dict[str, float]:
+    """
+    Compute alignment stats between inference and training logprobs.
+    
+    At initialization (step 0), these should match closely if the model
+    weights are correctly shared between training and inference.
+    
+    Args:
+        inference_logprobs: Logprobs from vLLM inference
+        training_logprobs: Logprobs computed during training forward pass
+        
+    Returns:
+        Dict of alignment statistics
+    """
+    if not inference_logprobs or not training_logprobs:
+        return {}
+    
+    inf_flat = np.concatenate(inference_logprobs)
+    train_flat = np.concatenate(training_logprobs)
+    
+    # Filter out placeholder values (1.0 or 0.0 used for prompt tokens)
+    inf_mask = (inf_flat != 1.0) & (inf_flat != 0.0)
+    train_mask = np.ones_like(train_flat, dtype=bool)  # All training logprobs are valid
+    
+    inf_filtered = inf_flat[inf_mask]
+    
+    stats = {
+        "logprobs/inference_mean": float(np.mean(inf_filtered)) if len(inf_filtered) > 0 else 0.0,
+        "logprobs/inference_std": float(np.std(inf_filtered)) if len(inf_filtered) > 0 else 0.0,
+        "logprobs/training_mean": float(np.mean(train_flat)) if len(train_flat) > 0 else 0.0,
+        "logprobs/training_std": float(np.std(train_flat)) if len(train_flat) > 0 else 0.0,
+    }
+    
+    # Compute diff (key metric for alignment validation)
+    if len(inf_filtered) > 0 and len(train_flat) > 0:
+        stats["logprobs/diff"] = stats["logprobs/inference_mean"] - stats["logprobs/training_mean"]
+        
+        # At step 0, this diff should be very close to 0 if weights are shared correctly
+        # A large diff indicates the training model is using different weights than vLLM
+    
+    return stats
 
 
 def run_training_step(
@@ -137,6 +197,7 @@ def run_training_step(
     advantage_batches: List[torch.Tensor],
     temperature_batches: List[torch.Tensor],
     config: TrainingConfig,
+    inference_logprobs: Optional[List[np.ndarray]] = None,
 ) -> dict:
     """
     Run a single training step with gradient accumulation.
@@ -146,6 +207,7 @@ def run_training_step(
     2. Backward pass with gradient accumulation
     3. Gradient clipping
     4. Optimizer step
+    5. (Optional) Logprob alignment check
     
     Args:
         model: The model to train
@@ -155,16 +217,20 @@ def run_training_step(
         advantage_batches: List of advantage tensors
         temperature_batches: List of temperature tensors
         config: Training configuration
+        inference_logprobs: Optional logprobs from inference for alignment check
 
     Returns:
         Dict of training metrics for this step
     """
+    global _logprob_alignment_stats
+    
     total_loss = 0.0
     total_pos_logp = 0.0
     total_neg_logp = 0.0
     total_pos = 0.0
     total_neg = 0.0
     grad_norm = 0.0
+    all_training_logprobs: List[np.ndarray] = []
 
     # Accumulate gradients over micro-batches
     for tokens, labels, advantages, temperatures in zip(
@@ -189,6 +255,10 @@ def run_training_step(
         total_neg_logp += metrics["neg_logp"]
         total_pos += metrics["pos_count"]
         total_neg += metrics["neg_count"]
+        
+        # Collect training logprobs for alignment check
+        if "training_logprobs" in metrics:
+            all_training_logprobs.append(metrics["training_logprobs"])
 
     # Gradient clipping and optimizer step
     grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -202,7 +272,7 @@ def run_training_step(
     if total_neg > 0:
         total_neg_logp /= num_batches
 
-    return {
+    result = {
         "loss": total_loss,
         "grad_norm": grad_norm.item() if hasattr(grad_norm, 'item') else grad_norm,
         "pos_logp": total_pos_logp,
@@ -210,6 +280,14 @@ def run_training_step(
         "pos_count": total_pos,
         "neg_count": total_neg,
     }
+    
+    # Compute logprob alignment stats
+    if inference_logprobs is not None and all_training_logprobs:
+        alignment_stats = compute_logprob_alignment(inference_logprobs, all_training_logprobs)
+        _logprob_alignment_stats.update(alignment_stats)
+        result["logprob_alignment"] = alignment_stats
+    
+    return result
 
 
 def log_metrics(
@@ -229,6 +307,8 @@ def log_metrics(
         extra_metrics: Optional additional metrics to log
         benchmark: Whether to show timing/benchmark info
     """
+    global _logprob_alignment_stats
+    
     # Build timing string (only if benchmark enabled)
     timing_str = ""
     if benchmark:
@@ -259,6 +339,19 @@ def log_metrics(
             f"    Advantages: +{int(pos_count)} / -{int(neg_count)}, "
             f"LogP: pos={pos_logp:.3f}, neg={neg_logp:.3f}"
         )
+    
+    # Show logprob alignment stats (important for shared_vllm validation!)
+    if "logprob_alignment" in metrics:
+        alignment = metrics["logprob_alignment"]
+        if "logprobs/diff" in alignment:
+            diff = alignment["logprobs/diff"]
+            inf_mean = alignment.get("logprobs/inference_mean", 0)
+            train_mean = alignment.get("logprobs/training_mean", 0)
+            
+            # At step 0, diff should be ~0 if weights are shared correctly
+            status = "OK" if abs(diff) < 0.1 else "MISMATCH!"
+            print(f"    LogProb Alignment: inf={inf_mean:.4f}, train={train_mean:.4f}, "
+                  f"diff={diff:.4f} [{status}]")
 
     if use_wandb:
         log_dict = {
@@ -272,6 +365,11 @@ def log_metrics(
                     "gpu_memory_gb", "gpu_memory_reserved_gb"]:
             if key in metrics:
                 log_dict[f"train/{key}"] = metrics[key]
+        
+        # Add logprob alignment stats (key for shared_vllm validation!)
+        if _logprob_alignment_stats:
+            log_dict.update(_logprob_alignment_stats)
+        
         if extra_metrics:
             log_dict.update(extra_metrics)
         wandb.log(log_dict, step=step)
