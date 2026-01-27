@@ -186,90 +186,129 @@ def train_shared_vllm(config: TrainingConfig):
     optimizer = AdamW(model.parameters(), lr=config.lr)
 
     # === Real-time weight sharing verification ===
-    # This bypasses Atropos and directly tests if vLLM sees the same weights
-    print("\n[Weight Sharing Verification - Real-time Test]")
+    print("\n[Weight Sharing Verification]")
     
+    # First, check if we can modify a weight and see the change
+    probe_param = None
+    for name, param in model.named_parameters():
+        if "layers.0.self_attn.q_proj.weight" in name:
+            probe_param = param
+            probe_name = name
+            break
+    
+    if probe_param is not None:
+        original_val = probe_param.data[0, 0].clone()
+        print(f"  Testing tensor: {probe_name}")
+        print(f"  Original value [0,0]: {original_val.item():.6f}")
+        print(f"  Data pointer: {probe_param.data.data_ptr()}")
+        
+        # Modify the weight
+        probe_param.data[0, 0] = original_val + 0.001
+        new_val = probe_param.data[0, 0].item()
+        print(f"  After +0.001:  [0,0]: {new_val:.6f}")
+        
+        # Restore
+        probe_param.data[0, 0] = original_val
+        restored_val = probe_param.data[0, 0].item()
+        print(f"  Restored:      [0,0]: {restored_val:.6f}")
+        
+        if abs(new_val - original_val.item() - 0.001) < 0.0001:
+            print(f"  ✓ Trainer CAN modify the tensor")
+        else:
+            print(f"  ✗ Modification didn't stick - tensor may be a copy!")
+    
+    # Now test vLLM logprobs vs trainer logprobs
+    print(f"\n  Testing logprob alignment with vLLM...")
     try:
         import requests
         
-        # Test prompt
         test_prompt = "The capital of France is"
         test_tokens = tokenizer.encode(test_prompt, return_tensors="pt").to(model.device)
         
-        # 1. Get logprobs from vLLM directly
+        # Get completion from vLLM
         vllm_url = f"http://localhost:{config.vllm_port}"
         response = requests.post(
             f"{vllm_url}/generate",
             json={
                 "prompt": test_prompt,
-                "max_tokens": 5,
-                "temperature": 1.0,
-                "logprobs": 1,  # Return top-1 logprob
+                "max_tokens": 3,
+                "temperature": 0.0,  # Greedy for determinism
+                "logprobs": 1,
             },
             timeout=30,
         )
         
         if response.status_code == 200:
             result = response.json()
-            # Extract logprobs for generated tokens
+            
+            # Parse vLLM response - format is [[{token_id: logprob}, ...], ...]
             vllm_logprobs = []
             vllm_tokens = []
-            for item in result.get("logprobs", [[]])[0]:
-                if item:
-                    token_id = int(list(item.keys())[0])
-                    logprob = float(list(item.values())[0])
-                    vllm_logprobs.append(logprob)
-                    vllm_tokens.append(token_id)
+            
+            logprobs_data = result.get("logprobs", [])
+            if logprobs_data and len(logprobs_data) > 0:
+                for token_logprob_list in logprobs_data[0]:  # First completion
+                    if isinstance(token_logprob_list, dict):
+                        # Format: {token_id: logprob}
+                        for tid, lp in token_logprob_list.items():
+                            vllm_tokens.append(int(tid))
+                            vllm_logprobs.append(float(lp))
+                            break  # Only first (top) logprob
+                    elif isinstance(token_logprob_list, list) and len(token_logprob_list) > 0:
+                        # Format: [{token_id: logprob}]
+                        item = token_logprob_list[0]
+                        if isinstance(item, dict):
+                            for tid, lp in item.items():
+                                vllm_tokens.append(int(tid))
+                                vllm_logprobs.append(float(lp))
+                                break
+            
+            print(f"  vLLM generated: {tokenizer.decode(vllm_tokens) if vllm_tokens else 'N/A'}")
+            print(f"  vLLM tokens: {vllm_tokens}")
+            print(f"  vLLM logprobs: {vllm_logprobs}")
             
             if vllm_tokens:
-                # 2. Compute same logprobs with trainer's model
+                # Compute trainer logprobs for the same sequence
                 with torch.no_grad():
-                    # Prepare input: prompt + generated tokens (except last)
-                    full_input = torch.cat([
-                        test_tokens,
-                        torch.tensor([vllm_tokens[:-1]], device=model.device)
-                    ], dim=1) if len(vllm_tokens) > 1 else test_tokens
+                    # Build full sequence: prompt + generated tokens
+                    full_seq = list(test_tokens[0].cpu().numpy()) + vllm_tokens
+                    full_input = torch.tensor([full_seq[:-1]], device=model.device)  # Input is all but last
                     
                     outputs = model(full_input)
-                    logits = outputs.logits
+                    logits = outputs.logits[0]  # [seq_len, vocab]
                     
-                    # Get logprobs for the positions where vLLM generated tokens
+                    # Get logprobs at positions corresponding to generated tokens
                     trainer_logprobs = []
+                    prompt_len = test_tokens.shape[1]
                     for i, token_id in enumerate(vllm_tokens):
-                        pos = test_tokens.shape[1] - 1 + i  # Position in sequence
-                        if pos < logits.shape[1]:
-                            log_probs = torch.log_softmax(logits[0, pos], dim=-1)
+                        pos = prompt_len - 1 + i  # Position to predict this token
+                        if pos < logits.shape[0]:
+                            log_probs = torch.log_softmax(logits[pos].float(), dim=-1)
                             trainer_logprobs.append(log_probs[token_id].item())
-                
-                if trainer_logprobs and vllm_logprobs:
-                    # Compare
-                    vllm_mean = sum(vllm_logprobs[:len(trainer_logprobs)]) / len(trainer_logprobs)
-                    trainer_mean = sum(trainer_logprobs) / len(trainer_logprobs)
-                    diff = abs(vllm_mean - trainer_mean)
                     
-                    print(f"  Test prompt: '{test_prompt}'")
-                    print(f"  Generated tokens: {vllm_tokens}")
-                    print(f"  vLLM logprobs:    {[f'{lp:.4f}' for lp in vllm_logprobs[:len(trainer_logprobs)]]}")
                     print(f"  Trainer logprobs: {[f'{lp:.4f}' for lp in trainer_logprobs]}")
-                    print(f"  Mean diff: {diff:.4f}")
                     
-                    if diff < 0.05:
-                        print(f"  ✓ WEIGHTS ARE SHARED! Diff < 0.05")
-                    elif diff < 0.2:
-                        print(f"  ⚠ Small diff ({diff:.4f}) - likely numerical precision differences")
-                    else:
-                        print(f"  ✗ LARGE DIFF ({diff:.4f}) - weights may NOT be shared!")
-                        print(f"    Check: Is vLLM running with --enforce-eager?")
-                else:
-                    print(f"  Could not compute comparison (no overlapping tokens)")
-            else:
-                print(f"  Could not extract vLLM logprobs from response")
+                    if trainer_logprobs and vllm_logprobs:
+                        for i, (vlp, tlp) in enumerate(zip(vllm_logprobs, trainer_logprobs)):
+                            diff = abs(vlp - tlp)
+                            status = "✓" if diff < 0.1 else "✗"
+                            print(f"    Token {i}: vLLM={vlp:.4f}, Trainer={tlp:.4f}, diff={diff:.4f} {status}")
+                        
+                        mean_diff = sum(abs(v-t) for v,t in zip(vllm_logprobs, trainer_logprobs)) / len(trainer_logprobs)
+                        print(f"  Mean diff: {mean_diff:.4f}")
+                        
+                        if mean_diff < 0.1:
+                            print(f"  ✓ WEIGHTS ARE SHARED CORRECTLY!")
+                        else:
+                            print(f"  ✗ WEIGHTS ARE NOT SHARED - IPC attachment may have failed!")
+                            print(f"    The trainer may have copies of weights, not shared memory.")
         else:
-            print(f"  Could not reach vLLM at {vllm_url} (status {response.status_code})")
+            print(f"  vLLM request failed: {response.status_code}")
             
     except Exception as e:
-        print(f"  Real-time verification failed: {e}")
-        print(f"  (This is optional - training will continue)")
+        import traceback
+        print(f"  Verification error: {e}")
+        traceback.print_exc()
     
     print(f"\n[2/2] Starting training for {config.training_steps} steps")
     print("NOTE: vLLM sees weight updates immediately after each step!")
