@@ -65,18 +65,27 @@ def load_model_and_tokenizer(
     else:
         # Legacy mode: load full model
         print("[Setup] Loading model for legacy mode...")
+        flash_available = False
         try:
+            import flash_attn
+            flash_available = True
+        except ImportError:
+            pass
+        
+        if flash_available:
             model = AutoModelForCausalLM.from_pretrained(
                 config.model_name, 
                 torch_dtype=torch.bfloat16,
                 attn_implementation="flash_attention_2",
             )
             print("[Setup] Using Flash Attention 2")
-        except Exception as e:
-            print(f"[Setup] Flash Attention 2 not available: {e}")
+        else:
             model = AutoModelForCausalLM.from_pretrained(
-                config.model_name, torch_dtype=torch.bfloat16
+                config.model_name, 
+                torch_dtype=torch.bfloat16,
+                attn_implementation="sdpa",
             )
+            print("[Setup] Using SDPA attention")
         model.to(config.device)
 
     # Enable gradient checkpointing
@@ -130,18 +139,27 @@ def _load_model_with_lora(config: TrainingConfig) -> torch.nn.Module:
         raise RuntimeError("PEFT library not available. Install with: pip install peft")
 
     print("[Setup] Loading base model for LoRA mode...")
+    flash_available = False
     try:
+        import flash_attn
+        flash_available = True
+    except ImportError:
+        pass
+    
+    if flash_available:
         base_model = AutoModelForCausalLM.from_pretrained(
             config.model_name, 
             torch_dtype=torch.bfloat16,
             attn_implementation="flash_attention_2",
         )
         print("[Setup] Using Flash Attention 2")
-    except Exception as e:
-        print(f"[Setup] Flash Attention 2 not available: {e}")
+    else:
         base_model = AutoModelForCausalLM.from_pretrained(
-            config.model_name, torch_dtype=torch.bfloat16
+            config.model_name, 
+            torch_dtype=torch.bfloat16,
+            attn_implementation="sdpa",
         )
+        print("[Setup] Using SDPA attention")
     base_model.to(config.device)
 
     # Determine target modules
@@ -233,22 +251,38 @@ def _attach_to_vllm_shared_tensors(
     model_config = AutoConfig.from_pretrained(config.model_name)
 
     # Create empty model on meta device (no memory allocation)
-    # Use Flash Attention 2 to match vLLM's attention implementation more closely
-    # This reduces logprob differences from ~10-15% to ~1-2%
+    # Try Flash Attention 2 first (matches vLLM better), fall back to SDPA
     with torch.device("meta"):
+        # Check if flash_attn is available before trying to use it
+        flash_available = False
         try:
+            import flash_attn
+            flash_available = True
+        except ImportError:
+            pass
+        
+        if flash_available:
+            try:
+                model = AutoModelForCausalLM.from_config(
+                    model_config,
+                    torch_dtype=torch.bfloat16,
+                    attn_implementation="flash_attention_2",
+                )
+                print("[Setup] Using Flash Attention 2 (best vLLM alignment)")
+            except Exception as e:
+                print(f"[Setup] Flash Attention 2 failed ({e}), using SDPA")
+                model = AutoModelForCausalLM.from_config(
+                    model_config,
+                    torch_dtype=torch.bfloat16,
+                    attn_implementation="sdpa",
+                )
+        else:
+            print("[Setup] flash_attn not installed, using SDPA attention")
+            print("[Setup] NOTE: ~10-15% logprob diff with vLLM expected (different attention impl)")
             model = AutoModelForCausalLM.from_config(
                 model_config,
                 torch_dtype=torch.bfloat16,
-                attn_implementation="flash_attention_2",
-            )
-            print("[Setup] Using Flash Attention 2 (matches vLLM)")
-        except Exception as e:
-            print(f"[Setup] Flash Attention 2 not available ({e}), using default attention")
-            print("[Setup] WARNING: This may cause ~10-15% logprob difference with vLLM")
-            model = AutoModelForCausalLM.from_config(
-                model_config,
-                torch_dtype=torch.bfloat16,
+                attn_implementation="sdpa",
             )
 
     param_names = list(model.state_dict().keys())
