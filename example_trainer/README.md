@@ -136,11 +136,14 @@ Zero model duplication - trainer and vLLM share the exact same GPU memory!
 run-api --port 8000
 
 # Terminal 2: Start vLLM with shared weights enabled
+# IMPORTANT: --enforce-eager is REQUIRED to disable CUDA graphs
+# Without it, weight updates won't be visible to inference!
 VLLM_ENABLE_SHARED_WEIGHTS=1 LOGDIR=$LOGDIR \
 CUDA_VISIBLE_DEVICES=0 python example_trainer/vllm_api_server.py \
     --model $MODEL \
     --port 9001 \
-    --gpu-memory-utilization 0.45
+    --gpu-memory-utilization 0.45 \
+    --enforce-eager
 
 # Terminal 3: Start the environment server
 python -u environments/gsm8k_server.py serve \
@@ -428,6 +431,20 @@ python example_trainer/vllm_api_server.py \
 # Make sure vLLM was started with VLLM_ENABLE_SHARED_WEIGHTS=1 and LOGDIR set
 VLLM_ENABLE_SHARED_WEIGHTS=1 LOGDIR=/tmp/atropos python example_trainer/vllm_api_server.py ...
 ```
+
+### "LogProb Alignment: MISMATCH!" in shared_vllm mode
+If you see `[MISMATCH!]` in the logprob alignment output, inference and training are seeing different weights. This is usually caused by **CUDA graphs**.
+
+**Symptom:** `inference_mean` stays constant while `training_mean` changes. The `diff` increases over time.
+
+**Fix:** Add `--enforce-eager` when starting vLLM:
+```bash
+VLLM_ENABLE_SHARED_WEIGHTS=1 LOGDIR=$LOGDIR \
+python example_trainer/vllm_api_server.py \
+    --model $MODEL --port 9001 --enforce-eager  # <-- REQUIRED!
+```
+
+**Why:** CUDA graphs "bake" model weights into compiled graphs at startup. Updates to the underlying tensors are NOT reflected in inference. Using `--enforce-eager` disables CUDA graphs, so vLLM reads from the shared tensors on every forward pass.
 
 ### "Triton compilation error" on B200/Blackwell GPUs
 The patched vLLM server (`vllm_api_server.py`) automatically applies B200 fixes. If using standard vLLM, add `--enforce-eager`.

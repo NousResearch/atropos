@@ -53,6 +53,8 @@ cd "$REPO_DIR"
 
 echo ""
 echo "[1/4] Starting vLLM with shared memory enabled..."
+# NOTE: --enforce-eager is REQUIRED for single-copy mode!
+# Without it, CUDA graphs freeze weights and updates won't be visible to inference.
 VLLM_ENABLE_SHARED_WEIGHTS=1 \
 LOGDIR="$LOG_DIR" \
 python -u example_trainer/vllm_api_server.py \
@@ -61,6 +63,7 @@ python -u example_trainer/vllm_api_server.py \
     --port $VLLM_PORT \
     --dtype bfloat16 \
     --gpu-memory-utilization 0.5 \
+    --enforce-eager \
     > "${LOG_DIR}/vllm.log" 2>&1 &
 
 echo "Waiting for vLLM (45s)..."
