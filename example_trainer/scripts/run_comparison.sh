@@ -241,12 +241,15 @@ echo "  ✓ run-api started (PID: $SHARED_API_PID, port 8002)"
 wait_for_api 8002 "shared" || { echo "Failed to start shared API"; exit 1; }
 
 # Start vLLM with shared weights (use separate config path)
+# NOTE: --enforce-eager is REQUIRED for single-copy mode!
+# Without it, CUDA graphs freeze weights and updates won't be visible to inference.
 echo "  Starting vLLM with shared weights..."
 VLLM_ENABLE_SHARED_WEIGHTS=1 VLLM_BRIDGE_CONFIG_PATH=$LOGDIR/vllm_bridge_config_shared.json \
 CUDA_VISIBLE_DEVICES=2 python example_trainer/vllm_api_server.py \
     --model $MODEL \
     --port 9002 \
     --gpu-memory-utilization 0.35 \
+    --enforce-eager \
     > $LOGDIR/vllm_shared.log 2>&1 &
 SHARED_VLLM_PID=$!
 echo "  ✓ vLLM started (PID: $SHARED_VLLM_PID, port 9002)"
