@@ -510,26 +510,73 @@ def _create_vllm_to_hf_mapping(
     Handles fused layers:
     - qkv_proj (vLLM) = q_proj + k_proj + v_proj (HF)
     - gate_up_proj (vLLM) = gate_proj + up_proj (HF)
+    
+    Uses actual tensor shapes from HF model to determine slice sizes,
+    rather than calculating from config (which can be wrong for some models).
     """
-    hf_params = set(model.state_dict().keys())
+    hf_state_dict = model.state_dict()
+    hf_params = set(hf_state_dict.keys())
     vllm_params = set(ipc_handles.keys())
 
-    # Get model config for dimension calculations
+    # Get model config for fallback dimension calculations
     model_config = model.config
     hidden_size = getattr(model_config, "hidden_size", 4096)
     num_attention_heads = getattr(model_config, "num_attention_heads", 32)
     num_key_value_heads = getattr(model_config, "num_key_value_heads", num_attention_heads)
     intermediate_size = getattr(model_config, "intermediate_size", hidden_size * 4)
-    head_dim = hidden_size // num_attention_heads
+    
+    # Try to get head_dim from config (some models like Qwen3 have this)
+    head_dim = getattr(model_config, "head_dim", None)
+    if head_dim is None:
+        head_dim = hidden_size // num_attention_heads
 
-    # QKV sizes
-    q_size = hidden_size
-    k_size = num_key_value_heads * head_dim
-    v_size = num_key_value_heads * head_dim
+    # Determine QKV sizes from ACTUAL HF model tensor shapes (more reliable)
+    # Look for a q_proj weight in the model to get the actual size
+    q_size = None
+    k_size = None
+    v_size = None
+    
+    for name, param in hf_state_dict.items():
+        if "q_proj.weight" in name and q_size is None:
+            q_size = param.shape[0]  # Output dimension
+        elif "k_proj.weight" in name and k_size is None:
+            k_size = param.shape[0]
+        elif "v_proj.weight" in name and v_size is None:
+            v_size = param.shape[0]
+        if q_size and k_size and v_size:
+            break
+    
+    # Fallback to calculated values if not found
+    if q_size is None:
+        q_size = num_attention_heads * head_dim
+    if k_size is None:
+        k_size = num_key_value_heads * head_dim
+    if v_size is None:
+        v_size = num_key_value_heads * head_dim
 
-    if debug:
-        print(f"[Mapping] Model config: hidden={hidden_size}, heads={num_attention_heads}, "
-              f"kv_heads={num_key_value_heads}, intermediate={intermediate_size}")
+    # Also get gate/up sizes from actual HF model
+    gate_size = None
+    up_size = None
+    
+    for name, param in hf_state_dict.items():
+        if "gate_proj.weight" in name and gate_size is None:
+            gate_size = param.shape[0]
+        elif "up_proj.weight" in name and up_size is None:
+            up_size = param.shape[0]
+        if gate_size and up_size:
+            break
+    
+    # Fallback
+    if gate_size is None:
+        gate_size = intermediate_size
+    if up_size is None:
+        up_size = intermediate_size
+
+    # Always print sizes for debugging weight sharing issues
+    print(f"[Mapping] Model config: hidden={hidden_size}, heads={num_attention_heads}, "
+          f"kv_heads={num_key_value_heads}, head_dim={head_dim}")
+    print(f"[Mapping] QKV sizes from HF model: q={q_size}, k={k_size}, v={v_size}")
+    print(f"[Mapping] Gate/Up sizes from HF model: gate={gate_size}, up={up_size}")
 
     mapping = {}
 
@@ -586,9 +633,9 @@ def _create_vllm_to_hf_mapping(
             fused_name = find_fused_source(hf_name, "gate_up_proj")
             if fused_name:
                 if "gate_proj" in hf_name:
-                    start, end = 0, intermediate_size
+                    start, end = 0, gate_size
                 else:
-                    start, end = intermediate_size, intermediate_size * 2
+                    start, end = gate_size, gate_size + up_size
 
                 mapping[hf_name] = {
                     "source": fused_name,
