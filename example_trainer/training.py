@@ -122,7 +122,8 @@ def compute_grpo_loss(
         neg_logp = (logp_per_token * neg).mean().item()
         
         # Collect training logprobs for masked positions (generated tokens only)
-        training_logprobs_flat = logp_per_token[mask.bool()].cpu().numpy()
+        # Keep as PyTorch tensor (supports bfloat16 natively)
+        training_logprobs_flat = logp_per_token[mask.bool()].detach()
 
     # GRPO loss: weighted log probabilities by advantages
     grpo_loss_term = torch.exp(logp_per_token - logp_per_token.detach())
@@ -145,7 +146,7 @@ def compute_grpo_loss(
 
 def compute_logprob_alignment(
     inference_logprobs: List[np.ndarray],
-    training_logprobs: List[np.ndarray],
+    training_logprobs: List[torch.Tensor],
 ) -> Dict[str, float]:
     """
     Compute alignment stats between inference and training logprobs.
@@ -154,8 +155,8 @@ def compute_logprob_alignment(
     weights are correctly shared between training and inference.
     
     Args:
-        inference_logprobs: Logprobs from vLLM inference
-        training_logprobs: Logprobs computed during training forward pass
+        inference_logprobs: Logprobs from vLLM inference (numpy arrays)
+        training_logprobs: Logprobs computed during training forward pass (PyTorch tensors, bfloat16 supported)
         
     Returns:
         Dict of alignment statistics
@@ -163,24 +164,29 @@ def compute_logprob_alignment(
     if not inference_logprobs or not training_logprobs:
         return {}
     
+    # Process inference logprobs (numpy)
     inf_flat = np.concatenate(inference_logprobs)
-    train_flat = np.concatenate(training_logprobs)
-    
     # Filter out placeholder values (1.0 or 0.0 used for prompt tokens)
     inf_mask = (inf_flat != 1.0) & (inf_flat != 0.0)
-    train_mask = np.ones_like(train_flat, dtype=bool)  # All training logprobs are valid
-    
     inf_filtered = inf_flat[inf_mask]
     
-    stats = {
-        "logprobs/inference_mean": float(np.mean(inf_filtered)) if len(inf_filtered) > 0 else 0.0,
-        "logprobs/inference_std": float(np.std(inf_filtered)) if len(inf_filtered) > 0 else 0.0,
-        "logprobs/training_mean": float(np.mean(train_flat)) if len(train_flat) > 0 else 0.0,
-        "logprobs/training_std": float(np.std(train_flat)) if len(train_flat) > 0 else 0.0,
-    }
+    # Process training logprobs (PyTorch - supports bfloat16 natively)
+    train_flat = torch.cat(training_logprobs)
+    
+    # Compute stats using PyTorch for training (keeps bfloat16 precision)
+    stats = {}
+    
+    if len(inf_filtered) > 0:
+        stats["logprobs/inference_mean"] = float(np.mean(inf_filtered))
+        stats["logprobs/inference_std"] = float(np.std(inf_filtered))
+    
+    if train_flat.numel() > 0:
+        # PyTorch operations - fully support bfloat16
+        stats["logprobs/training_mean"] = train_flat.mean().item()
+        stats["logprobs/training_std"] = train_flat.std().item()
     
     # Compute diff (key metric for alignment validation)
-    if len(inf_filtered) > 0 and len(train_flat) > 0:
+    if "logprobs/inference_mean" in stats and "logprobs/training_mean" in stats:
         stats["logprobs/diff"] = stats["logprobs/inference_mean"] - stats["logprobs/training_mean"]
         
         # At step 0, this diff should be very close to 0 if weights are shared correctly
@@ -230,7 +236,7 @@ def run_training_step(
     total_pos = 0.0
     total_neg = 0.0
     grad_norm = 0.0
-    all_training_logprobs: List[np.ndarray] = []
+    all_training_logprobs: List[torch.Tensor] = []
 
     # Accumulate gradients over micro-batches
     for tokens, labels, advantages, temperatures in zip(
