@@ -397,7 +397,10 @@ def _validate_mapping_coverage(
     hf_param_count = len(list(model.named_parameters()))
     mapping_coverage = attached_count / hf_param_count if hf_param_count > 0 else 0
 
-    print(f"[Setup] Mapping coverage: {attached_count} tensors for {hf_param_count} parameters")
+    # Note: attached_count may be > param_count because state_dict includes buffers
+    # while named_parameters only counts trainable params
+    print(f"[Setup] Mapping coverage: {attached_count} tensors for {hf_param_count} parameters "
+          f"(>100% is OK - includes buffers)")
 
     if mapping_coverage < 0.90:
         unmapped_params = set(model.state_dict().keys()) - set(hf_state_dict.keys())
