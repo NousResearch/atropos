@@ -28,21 +28,20 @@ We follow the [GitHub Flow](https://docs.github.com) development workflow. All c
 3. **Set up the development environment:** This project uses standard Python `venv` for environment creation and `pip` for dependency management.
 
     ```bash
-    # Ensure you have Python 3.10+ installed
-    # Create and activate a virtual environment
+# Ensure you have Python 3.10+ installed
+# Create and activate a virtual environment
 
-    # On Linux / WSL
-    python3 -m venv .venv
-    source .venv/bin/activate
+# On Linux / WSL
+python3 -m venv .venv
+source .venv/bin/activate
 
-    # On Windows (PowerShell)
-    python -m venv .venv
-    .venv\Scripts\activate
-    ```
+# On Windows (PowerShell)
+python -m venv .venv
+.venv\Scripts\activate
 
-    # Install dependencies, including development dependencies
-    pip install -e ".[dev]"
-    ```
+# Install dependencies, including development dependencies
+pip install -e ".[dev]"
+```
 4.  **Install pre-commit hooks:** This project uses `pre-commit` for code quality checks. The hooks will run automatically when you commit changes.
     ```bash
     pre-commit install
