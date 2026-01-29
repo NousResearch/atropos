@@ -24,6 +24,7 @@ vllm_process = None
 
 from typing import Any
 
+
 def _validate_config(config: dict[str, Any]) -> None:
     required = {
         "learning_rate": float,
