@@ -528,9 +528,11 @@ def _initialize_meta_tensors(
         try:
             if "inv_freq" in name:
                 dim = buffer.shape[0] * 2
-                base = 10000.0
-                inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+                # Get rope_theta from model config (default 10000.0 for LLaMA, but Qwen3 uses 5000000!)
+                rope_theta = getattr(model.config, "rope_theta", 10000.0)
+                inv_freq = 1.0 / (rope_theta ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
                 new_buffer = inv_freq.to(dtype=buffer.dtype, device=device)
+                print(f"[Setup] Initialized {name} with rope_theta={rope_theta}")
             else:
                 new_buffer = torch.zeros(buffer.shape, dtype=buffer.dtype, device=device)
 
