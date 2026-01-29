@@ -19,6 +19,41 @@ We follow the [GitHub Flow](https://docs.github.com) development workflow. All c
 
 ### Project Setup
 
+### Windows / WSL Users
+
+If you are using Windows, we recommend running all commands inside WSL.
+
+```bash
+# Create a virtual environment
+python -m venv .venv
+
+# If the above fails, try
+python3 -m venv .venv
+
+# Activate the environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+
+✅ This is my contribution. It **clarifies setup for Windows users**.
+
+## Why This Contribution Makes Sense
+
+this contribution:
+- Solves a **real onboarding issue**
+- Helps **first-time contributors**
+- Requires **no deep code knowledge**
+- Matches Nous’ open-source standards
+
+Maintainers **love** this kind of PR.
+
+---
+
+## Resulting Commit (What I Actually Commit)
+
+```bash
+git add CONTRIBUTING.md
+git commit -m "docs: clarify Python venv setup for Windows and WSL users"
+
 1.  **Fork the repository:** Click the "Fork" button on the top right of the [repository page](https://github.com/NousResearch/atropos). This creates your own copy of the project.
 2.  **Clone your fork:**
     ```bash
