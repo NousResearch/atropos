@@ -53,7 +53,14 @@ def train_legacy(config: TrainingConfig):
     # === Setup ===
     use_wandb = setup_wandb(config)
     model, tokenizer = load_model_and_tokenizer(config)
-    optimizer = AdamW(model.parameters(), lr=config.lr)
+    
+    # Use 8-bit Adam to save ~16GB of optimizer state memory
+    try:
+        import bitsandbytes as bnb
+        optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=config.lr)
+        print("[Setup] Using 8-bit AdamW (saves ~16GB memory)")
+    except ImportError:
+        optimizer = AdamW(model.parameters(), lr=config.lr)
 
     print(f"\n{'='*60}")
     print("LEGACY MODE (checkpoint + vLLM restart)")
@@ -183,7 +190,15 @@ def train_shared_vllm(config: TrainingConfig):
             "3. vllm_bridge_config.json exists with IPC handles"
         )
 
-    optimizer = AdamW(model.parameters(), lr=config.lr)
+    # Use 8-bit Adam to save ~16GB of optimizer state memory
+    try:
+        import bitsandbytes as bnb
+        optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=config.lr)
+        print("[Setup] Using 8-bit AdamW (saves ~16GB memory)")
+    except ImportError:
+        print("[Setup] bitsandbytes not installed, using standard AdamW")
+        print("[Setup] TIP: Install with 'pip install bitsandbytes' to save ~16GB memory")
+        optimizer = AdamW(model.parameters(), lr=config.lr)
 
     # === Real-time weight sharing verification ===
     print("\n[Weight Sharing Verification]")
