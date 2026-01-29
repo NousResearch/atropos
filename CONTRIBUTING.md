@@ -1,156 +1,115 @@
-# Contributing to Atropos
+## Contributing using GitHub Codespaces (Beginner-friendly)
 
-First off, thank you for considering contributing to Atropos! It's people like you that make open source projects such great tools.
+If you are new to open source or do not want to set up a local development environment, you can contribute using **GitHub Codespaces**.
 
-We welcome any type of contribution, not just code. You can help with:
-*   **Reporting a bug**
-*   **Discussing the current state of the code**
-*   **Submitting a fix**
-*   **Proposing new features**
-*   **Becoming a maintainer**
+GitHub Codespaces provides a full cloud-based VSCode environment with terminal access, allowing you to edit files, run tests, and submit pull requests directly from your browser.
 
-## We Develop with GitHub
-We use GitHub to host the code, track issues and feature requests, and accept pull requests.
+### Requirements
+- A GitHub account
+- A modern web browser (Chrome, Firefox, Edge)
 
-## We Use GitHub Flow
-We follow the [GitHub Flow](https://docs.github.com) development workflow. All code changes happen through Pull Requests.
+No local installation is required.
 
-## Getting Started
+---
 
-### Project Setup
+### Step 1: Fork the repository
 
-1.  **Fork the repository:** Click the "Fork" button on the top right of the [repository page](https://github.com/NousResearch/atropos). This creates your own copy of the project.
-2.  **Clone your fork:**
-    ```bash
-    git clone https://github.com/your-username/atropos.git
-    cd atropos
-    ```
-3.  **Set up the development environment:** This project uses standard Python `venv` for environment creation and `pip` for dependency management.
-    ```bash
-    # Ensure you have Python 3.10+ installed
-    # Create and activate a virtual environment
-    python -m venv .venv
-    source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
+1. Visit the Atropos repository.
+2. Click the **Fork** button at the top right to create your own copy of the repository.
 
-    # Install dependencies, including development dependencies
-    pip install -e ".[dev]"
-    ```
-4.  **Install pre-commit hooks:** This project uses `pre-commit` for code quality checks. The hooks will run automatically when you commit changes.
-    ```bash
-    pre-commit install
-    ```
+---
 
-### Running Tests
+### Step 2: Create a Codespace
 
-We use `pytest` for running tests. To run the test suite:
+1. Go to your forked repository.
+2. Click the green **Code** button.
+3. Open the **Codespaces** tab.
+4. Click **Create codespace on main**.
+
+GitHub will automatically create a cloud Ubuntu VM and open VSCode in your browser.
+
+---
+
+### Step 3: Create a new branch
+
+Open the terminal in Codespaces and run:
 
 ```bash
-pytest
-```
+git checkout -b docs/your-branch-name
+Replace your-branch-name with a short description of your contribution.
 
-Ensure all tests pass before submitting a pull request.
+### Step 4: Set up the Python environment
 
-## How to Contribute
+Create and activate a virtual environment:
 
-### Reporting Bugs
+python -m venv .venv
+source .venv/bin/activate
 
-We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/NousResearch/atropos/issues) (replace with the actual link if different).
+Install dependencies:
 
-When opening a bug report, please use the **Bug Report** issue template. This template is designed to gather the information we need to efficiently understand and resolve the issue.
+pip install -e ".[dev]"
 
-**Great Bug Reports** tend to have:
 
-*   A quick summary and/or background.
-*   Steps to reproduce the bug:
-    *   Be specific!
-    *   Provide the exact commands run or a minimal code snippet if possible.
-*   What you expected to happen.
-*   What actually happened (including any error messages or logs).
-*   Your environment details (OS, Python version, relevant package versions).
-*   Notes (possibly including why you think this might be happening, or stuff you tried that didn't work).
+This step may take 15–30 minutes.
 
-Thorough bug reports help us address issues faster!
+Install pre-commit hooks:
 
-### Suggesting Enhancements
+pre-commit install
 
-If you have an idea for a new feature or an improvement to an existing one, please open an issue first to discuss it. This allows us to coordinate efforts and ensure the suggestion aligns with the project's goals.
+### Step 5: Make your contribution
 
-When suggesting an enhancement, please use the **Feature Request** issue template. This helps structure your request and provides context for maintainers and the community to better understand your suggestion.
+Most beginner-friendly contributions involve editing documentation files (.md).
 
-### Submitting Changes (Pull Requests)
+Open the file you want to edit in VSCode.
 
-Pull requests are the best way to propose changes to the codebase. We actively welcome your pull requests:
+Use Ctrl + Shift + V to preview Markdown changes.
 
-1.  **Fork the repo** and create your branch from `main`.
-    ```bash
-    git checkout -b your-feature-or-fix-branch main
-    ```
-2.  **Make your changes:** Write your code.
-3.  **Add tests:** If you've added code that should be tested, add tests.
-4.  **Update documentation:** If you've changed APIs or added features, update relevant documentation (README, docstrings, etc.).
-5.  **Ensure tests pass:** Run `pytest`.
-6.  **Ensure code lints and formats:** The pre-commit hooks will run automatically on commit. You can also run them manually: `pre-commit run --all-files`.
-7.  **Commit your changes:** Use clear and descriptive commit messages that explain the purpose of the changes.
-    ```bash
-    git add .
-    git commit -m "Clearly describe the changes made in this commit"
-    ```
-8.  **Push your branch:**
-    ```bash
-    git push origin your-feature-or-fix-branch
-    ```
-9.  **Open a Pull Request (PR):** Go to the original repository on GitHub and open a PR from your fork's branch to the `main` branch.
-    *   Provide a clear title and description for your PR.
-    *   Link any relevant issues (e.g., "Closes #123").
-    *   Explain the changes you've made and why.
-    *   **Follow the PR template**: We have two PR templates:
-        - For environment-related changes, use the `environment_pull_request_template.md`
-        - For all other changes, use the `non_environment_pull_request_template.md`
+Save your changes with Ctrl + S.
 
-        Please fill out the appropriate template thoroughly to help reviewers understand your changes.
+### Step 6: Commit your changes
 
-## Code Style
+Stage and commit your changes using a clear commit message:
 
-This project uses standard Python code style (PEP 8) enforced by `black`, `flake8`, and `isort` via `pre-commit`. Please ensure your code adheres to these standards. The pre-commit hooks should help automate formatting and linting.
+git add .
+git commit -m "docs: add contribution guide using GitHub Codespaces"
 
-You can manually run the checks on all files using:
+### Step 7: Push and open a Pull Request
+
+Push your branch to your fork:
+
+git push origin docs/your-branch-name
+
+
+Then:
+
+Open your forked repository in the browser.
+
+Click Compare & pull request.
+
+Provide a clear description of your changes.
+
+Submit the pull request.
+
+Notes
+
+GitHub Codespaces provides 60 free hours per month for public repositories.
+This is sufficient for documentation and beginner contributions.
+No local setup is required.
+
+
+---
+
+
+1. **Ctrl + S** (save)
+2. back to terminal
+3. continue
+
 ```bash
-pre-commit run --all-files
-```
-This command will automatically fix formatting issues found by `black` and `isort`. However, you may need to manually address any linting errors reported by `flake8`.
+git add .
+git commit -m "docs: add beginner guide for contributing with GitHub Codespaces"
+git push origin docs/my-first-contribution
 
-## License for Contributions
-Any contributions you make will be under the MIT License. In short, when you submit code changes, your submissions are understood to be under the same [MIT License](LICENSE) that covers the project. Feel free to contact the maintainers if that's a concern.
 
-## Environment Contribution Guidelines
-
-Since Atropos is focused on reinforcement learning environments, we encourage contributions of new training environments. However, please adhere to the following guidelines:
-
-*   **Directory Structure**: Please create your new environment within the `environments/community/` subdirectory. This helps us organize incoming contributions and allows for a streamlined initial review process before full testing and integration.
-*   **Import Style**: We prefer that you treat your environment's directory as the package root for imports. For example, if your environment resides in `environments/community/my_new_env/` and you need to import `SomeClass` (assuming it's in a `some_file_in_my_env.py` file at the root of your `my_new_env` directory or accessible via your Python path setup), you should be able to use a direct import like:
-    ```python
-    from some_file_in_my_env import SomeClass
-    ```
-    This convention applies to imports within your environment's own files and any helper modules you create alongside it.
-* **Legal compliance**: Do not submit environments that involve illegal activities or content.
-
-* **GitHub compliance**: All contributions must comply with [GitHub's Terms of Service and Community Guidelines](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service).
-
-* **Explicit content**: Explicit environments may be considered, but must be:
-  * Clearly labeled as such
-  * Comply with all legal requirements
-
-* **Game environments**: Game-based environments are welcome, but:
-  * Do not submit reverse-engineered commercial game environments that could lead to copyright or intellectual property issues
-  * Ensure you have the appropriate rights to any assets used
-  * Open-source games or games with permissive licenses are preferred
-
-* **Ethical considerations**: Consider the ethical implications of your environment. Environments that encourage harmful behaviors without educational context may be rejected.
-
-When in doubt about the appropriateness of an environment, please open an issue to discuss it before investing significant development effort.
-
-## Code of Conduct
-
-Please note that this project is released with a [Contributor Code of Conduct](CODE_OF_CONDUCT.md). By participating in this project you agree to abide by its terms.
-
-Thank you again for your contribution!
+creat  Pull Request
+<!-- test contribution via GitHub Codespaces -->
+<!-- save test -->
