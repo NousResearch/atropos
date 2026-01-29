@@ -25,12 +25,20 @@ We follow the [GitHub Flow](https://docs.github.com) development workflow. All c
     git clone https://github.com/your-username/atropos.git
     cd atropos
     ```
-3.  **Set up the development environment:** This project uses standard Python `venv` for environment creation and `pip` for dependency management.
+3. **Set up the development environment:** This project uses standard Python `venv` for environment creation and `pip` for dependency management.
+
     ```bash
     # Ensure you have Python 3.10+ installed
     # Create and activate a virtual environment
+
+    # On Linux / WSL
+    python3 -m venv .venv
+    source .venv/bin/activate
+
+    # On Windows (PowerShell)
     python -m venv .venv
-    source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
+    .venv\Scripts\activate
+    ```
 
     # Install dependencies, including development dependencies
     pip install -e ".[dev]"
