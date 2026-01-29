@@ -22,6 +22,38 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # Global variable to keep track of the vLLM process
 vllm_process = None
 
+from typing import Any
+
+def _validate_config(config: dict[str, Any]) -> None:
+    required = {
+        "learning_rate": float,
+        "batch_size": int,
+        "grpo_steps": int,
+        "gamma": float,
+        "reward_fn": object,
+    }
+
+    for key, expected_type in required.items():
+        if key not in config:
+            raise ValueError(f"Missing required config field: {key}")
+        if not isinstance(config[key], expected_type):
+            raise TypeError(f"{key} must be of type {expected_type.__name__}")
+
+    if config["learning_rate"] <= 0:
+        raise ValueError("learning_rate must be greater than zero")
+
+    if config["batch_size"] <= 0:
+        raise ValueError("batch_size must be greater than zero")
+
+    if config["grpo_steps"] <= 0:
+        raise ValueError("grpo_steps must be greater than zero")
+
+    if not 0 < config["gamma"] <= 1:
+        raise ValueError("gamma must be between 0 and 1")
+
+    if not callable(config["reward_fn"]):
+        raise TypeError("reward_fn must be callable")
+
 
 def cleanup_vllm():
     global vllm_process
