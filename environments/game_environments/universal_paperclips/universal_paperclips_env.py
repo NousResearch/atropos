@@ -225,14 +225,12 @@ class EpisodeContext:
         self._page = await self._context.new_page()
 
         print(
-            f" Episode {self.episode_id}: Navigating to {self.game_url}...Clearing localStorage and reloading"
+            f" Episode {self.episode_id}: Navigating to {self.game_url} ...Clearing localStorage and reloading"
         )
         await self._page.goto(self.game_url, wait_until="networkidle")
         await self._page.evaluate("localStorage.clear()")
         await self._page.reload(wait_until="networkidle")
         await self._page.wait_for_selector("#clips", timeout=10000)
-        print(f" Episode {self.episode_id}: Game ready!")
-
         self._initialized = True
 
     async def close(self) -> None:
@@ -1074,7 +1072,7 @@ class PaperclipsAtroposEnv(BaseEnv):
             f"Running {num_episodes} eval episodes with up to {max_parallel} in parallel"
         )
 
-        tasks = [self._run_single_eval_episode(i) for i in range(num_episodes)]
+        tasks = [self._run_single_eval_episode() for _ in range(num_episodes)]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         eval_results = []

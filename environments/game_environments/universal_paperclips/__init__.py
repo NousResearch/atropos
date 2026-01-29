@@ -8,13 +8,6 @@ Key components:
 - PaperclipsAtroposEnv: Main environment class compatible with Atropos BaseEnv
 - PaperclipsEnvConfig: Configuration for the environment
 - EpisodeContext: Manages isolated browser contexts for parallel episodes
-
-Usage:
-    # CLI usage (serve mode)
-    python -m environments.game_environments.universal_paperclips.atropos_env serve
-
-    # Testing
-    python -m environments.game_environments.universal_paperclips.test_atropos_env --all
 """
 
 from .config import (
