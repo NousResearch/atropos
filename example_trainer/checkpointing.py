@@ -98,6 +98,12 @@ def save_checkpoint(
         # Save state dict manually, then save config separately
         torch.save(state_dict, os.path.join(checkpoint_path, "pytorch_model.bin"))
         model.config.save_pretrained(checkpoint_path)
+        
+        # CRITICAL: Clean up the copied state_dict to free ~8GB GPU memory!
+        del state_dict
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
     else:
         # Standard save (may have issues with view tensors)
         model.save_pretrained(checkpoint_path)

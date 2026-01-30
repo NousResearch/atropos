@@ -61,6 +61,16 @@ def parse_args() -> argparse.Namespace:
         help="Number of gradient accumulation steps",
     )
     parser.add_argument(
+        "--optimizer",
+        type=str,
+        choices=["adamw", "adamw_8bit", "adamw_cpu", "adafactor"],
+        default="adamw_8bit",
+        help="Optimizer: 'adamw' (full precision, ~32GB GPU), "
+             "'adamw_8bit' (8-bit states, ~8GB GPU), "
+             "'adamw_cpu' (CPU offload, ~0GB GPU, slower), "
+             "'adafactor' (no momentum, ~8GB GPU)",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="cuda" if torch.cuda.is_available() else "cpu",
@@ -245,6 +255,7 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         batch_size=args.batch_size,
         seq_len=args.seq_len,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
+        optimizer=args.optimizer,
         device=args.device,
         save_path=args.save_path,
         vllm_restart_interval=args.vllm_restart_interval,

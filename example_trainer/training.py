@@ -223,6 +223,10 @@ def compute_grpo_loss(
         * advantages.to(logp_per_token.device)
     ).mean() / gradient_accumulation_steps
 
+    # Compute a more interpretable loss metric (advantage-weighted logprobs)
+    with torch.no_grad():
+        interpretable_loss = (avg_logp * advantages.squeeze()).mean().item()
+    
     metrics = {
         "pos_logp": pos_logp,
         "neg_logp": neg_logp,
@@ -230,6 +234,7 @@ def compute_grpo_loss(
         "pos_count": pos.sum().item(),
         "neg_count": neg.sum().item(),
         "training_logprobs": training_logprobs_flat,  # For alignment check
+        "interpretable_loss": interpretable_loss,  # More meaningful metric
     }
 
     return grpo_loss, metrics
@@ -371,6 +376,9 @@ def run_training_step(
     grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
     optimizer.step()
     optimizer.zero_grad()
+    
+    # Help prevent memory fragmentation
+    torch.cuda.empty_cache()
 
     # Normalize metrics by count
     num_batches = len(token_batches) if token_batches else 1
@@ -433,13 +441,17 @@ def log_metrics(
         if "gpu_memory_gb" in metrics:
             timing_str += f", GPU mem: {metrics['gpu_memory_gb']:.2f}GB"
 
-    # Show loss with more precision since GRPO loss is often very small
-    loss_str = (
-        f"{metrics['loss']:.6f}"
-        if abs(metrics["loss"]) < 0.01
-        else f"{metrics['loss']:.4f}"
-    )
-    print(f"  Loss: {loss_str}, Grad norm: {metrics['grad_norm']:.4f}{timing_str}")
+    # Show interpretable loss (advantage-weighted logprobs) if available
+    interp_loss = metrics.get("interpretable_loss")
+    if interp_loss is not None:
+        print(f"  AdvWeightedLogP: {interp_loss:.4f}, Grad norm: {metrics['grad_norm']:.4f}{timing_str}")
+    else:
+        loss_str = (
+            f"{metrics['loss']:.6f}"
+            if abs(metrics["loss"]) < 0.01
+            else f"{metrics['loss']:.4f}"
+        )
+        print(f"  Loss: {loss_str}, Grad norm: {metrics['grad_norm']:.4f}{timing_str}")
 
     # Show GRPO-specific metrics if available
     if "pos_count" in metrics or "neg_count" in metrics:
