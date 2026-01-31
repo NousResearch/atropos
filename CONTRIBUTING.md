@@ -30,6 +30,10 @@ We follow the [GitHub Flow](https://docs.github.com) development workflow. All c
     # Ensure you have Python 3.10+ installed
     # Create and activate a virtual environment
     python -m venv .venv
+
+    #Note:if you are on ubuntu/wsl and get a "command not found" error, try using python3 it works perfectly:
+    python3 -m venv .venv
+
     source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
 
     # Install dependencies, including development dependencies
