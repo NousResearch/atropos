@@ -447,7 +447,7 @@ class RefusalBenchEnv(BaseEnv):
                 total_train_items += 1
                 category = item.get(
                     "overarching_category", "Unknown"
-                )  # The category needs to be called overarching_category. Otherwise it wont work
+                )  # The category needs to be called overarching_category. Otherwise it won't work
                 train_category_counts[category] = (
                     train_category_counts.get(category, 0) + 1
                 )
