@@ -452,9 +452,9 @@ def grade_stdio(
             if stripped_prediction_line == stripped_gt_out_line:
                 continue
 
-            # CASE 2: element-wise comparision
+            # CASE 2: element-wise comparison
             # if there are floating elements
-            # use `decimal` library for good floating point comparision
+            # use `decimal` library for good floating point comparison
             # otherwise gotcha: np.isclose(50000000000000000, 50000000000000001) = True
             # note that we should always be able to convert to decimals
 

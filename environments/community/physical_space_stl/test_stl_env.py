@@ -2,6 +2,7 @@
 """
 Test script for the PhysicalEnv that loads and processes STL files
 """
+
 import asyncio
 
 from physical_env import APIServerConfig, BaseEnvConfig, EvalHandlingEnum, PhysicalEnv

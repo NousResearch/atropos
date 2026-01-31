@@ -291,7 +291,7 @@ class LogTrainingStats(Callback):
                                     and grad_data.size().numel() < 10000000
                                 ):
                                     for q_idx, _ in enumerate(q):
-                                        stats[f"param/{name}/quantile-{q[q_idx]}"] = -10
+                                        stats[f"grad/{name}/quantile-{q[q_idx]}"] = -10
 
                             stats[f"grad/{name}/mean"] = grad_data.mean().item()
                             if len(grad_data.shape) > 1 or grad_data.shape[0] > 1:
