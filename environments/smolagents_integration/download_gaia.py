@@ -64,8 +64,7 @@ def download_gaia_dataset(output_dir, use_raw=False):
 
         # Create a minimal GAIA.py that loads directly from metadata.jsonl using absolute paths
         with open(os.path.join(output_dir, "GAIA.py"), "w") as f:
-            f.write(
-                f'''
+            f.write(f'''
 """
 GAIA benchmark dataset loader.
 Loads data directly from metadata.jsonl files.
@@ -126,8 +125,7 @@ class GAIA(datasets.GeneratorBasedBuilder):
                     # Ensure file paths include the 2023 directory and absolute path
                     example["file_name"] = os.path.join("2023", split, example["file_name"])
                 yield i, example
-'''
-            )
+''')
 
         # Verify the download worked by checking for key files
         validation_path = os.path.join(

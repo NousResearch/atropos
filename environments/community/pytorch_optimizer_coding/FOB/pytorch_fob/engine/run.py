@@ -220,7 +220,7 @@ class Run:
             gradient_clip_algorithm=self.engine.gradient_clip_alg,
             precision=precision_with_fallback(self.engine.precision),  # type: ignore
             accelerator=self.engine.accelerator,
-            log_every_n_steps=self.engine.logging_inteval,
+            log_every_n_steps=self.engine.logging_interval,
         )
 
     def get_tester(self) -> Trainer:
@@ -292,7 +292,7 @@ class Run:
             self._generate_configs()
         else:
             raise TypeError(
-                f"Unsupportet type for 'resume', got {type(self.engine.resume)=}."
+                f"Unsupported type for 'resume', got {type(self.engine.resume)=}."
             )
 
     def _calc_max_steps(self) -> int:
@@ -333,7 +333,7 @@ class Run:
         )
         if self.engine.log_extra:
             self._callbacks["extra"] = LogTrainingStats(
-                log_every_n_steps=self.engine.logging_inteval,
+                log_every_n_steps=self.engine.logging_interval,
                 **(
                     self.engine.log_extra
                     if isinstance(self.engine.log_extra, dict)

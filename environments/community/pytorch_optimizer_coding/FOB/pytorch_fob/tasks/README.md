@@ -47,7 +47,7 @@ def __init__(self, optimizer: Optimizer, config: TaskConfig):
 ```
 In the `__init__` method you need to create your model, and pass it to the `super().__init__` call. There the model is wrapped into a `GroupedModel` which splits the model parameters into weight_decay and non-weight_decay groups. If you want to specify your own parameter groups (e.g. for different learning rates) you need to wrap your model in a `GroupedModel` yourself, before passing it to the `super().__init__` call.
 
-The other methods you neet to implement are [training_step](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#training-step), [validation_step](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#validation-step) and [test_step](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#test-step). Here you need to implement the training and evaluation logic.
+The other methods you need to implement are [training_step](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#training-step), [validation_step](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#validation-step) and [test_step](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#test-step). Here you need to implement the training and evaluation logic.
 
 ### task.py
 Here you only need to provide two simple functions:

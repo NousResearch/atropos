@@ -60,13 +60,34 @@ def create_html_for_group(group_data, index):
 
     items_html = ""
     for i, (msg, score) in enumerate(zip(messages, scores)):
+        # Handle both string and nested message formats
+        if isinstance(msg, str):
+            # Simple string format (original behavior)
+            content = msg
+        elif isinstance(msg, list):
+            # Nested conversation format: List[Message] where Message is a dict
+            # Format each message with its role
+            parts = []
+            for m in msg:
+                if isinstance(m, dict):
+                    role = m.get("role", "unknown")
+                    content_text = m.get("content", "")
+                    parts.append(f"**{role.capitalize()}**: {content_text}")
+                else:
+                    # Fallback for unexpected format
+                    parts.append(str(m))
+            content = "\n\n".join(parts)
+        else:
+            # Fallback for any other type
+            content = str(msg)
+
         rendered_markdown = markdown.markdown(
-            msg, extensions=["fenced_code", "tables", "nl2br"]
+            content, extensions=["fenced_code", "tables", "nl2br"]
         )
+
         score_class = get_score_class(score)
         item_id = f"group-{index}-item-{i}"
-        items_html += textwrap.dedent(
-            f"""\
+        items_html += textwrap.dedent(f"""\
             <div class="item {score_class}" id="{item_id}">
                 <h4>Content {i}</h4>
                 <div class="content-block">
@@ -74,8 +95,7 @@ def create_html_for_group(group_data, index):
                 </div>
                 <p><strong>Reward:</strong> {html.escape(str(score))}</p>
             </div>
-        """
-        )
+        """)
 
     if not items_html:
         # Handle case where after length correction, there are no items
@@ -86,16 +106,14 @@ def create_html_for_group(group_data, index):
         return ""  # Skip this group entirely in the output
 
     # Use <details> and <summary> for native collapsibility
-    group_html = textwrap.dedent(
-        f"""\
+    group_html = textwrap.dedent(f"""\
         <details>
             <summary>Group {index}</summary>
             <div class="group-content">
                 {items_html}
             </div>
         </details>
-    """
-    )
+    """)
     return group_html
 
 

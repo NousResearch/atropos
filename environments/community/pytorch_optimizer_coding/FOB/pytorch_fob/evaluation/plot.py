@@ -175,7 +175,7 @@ def create_matrix_plot(
     colormap_name = config.plotstyle.color_palette
     low_is_better = dataframe["evaluation.plot.test_metric_mode"].iloc[0] == "min"
     if low_is_better:
-        colormap_name += "_r"  # this will "inver" / "flip" the colorbar
+        colormap_name += "_r"  # this will "invert" / "flip" the colorbar
     colormap = sns.color_palette(colormap_name, as_cmap=True)
     metric_legend = pretty_name(metric_name)
 
@@ -375,7 +375,7 @@ def create_figure(dataframe_list: list[pd.DataFrame], config: AttributeDict):
     if num_cols == 1 and n_rows_max > 1:
         figsize = (2**3 * scale, 2 * 3 * n_rows_max * scale)
     elif num_cols == 2:
-        # TODO: after removing cbar from left subifgure, it is squished
+        # TODO: after removing cbar from left subfigure, it is squished
         #       there is an argument to share the legend, we should use that
         figsize = (12 * scale, 5.4 * n_rows_max * scale)
     elif num_cols > 2:
