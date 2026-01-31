@@ -14,8 +14,19 @@ def get_std_min_max_avg(name: str, data: list, metrics_dict: dict) -> dict:
     Returns:
         The updated metrics dictionary with added statistics (mean, std, max, min).
     """
-    metrics_dict[f"{name}_mean"] = np.mean(data)
-    metrics_dict[f"{name}_std"] = np.std(data)
-    metrics_dict[f"{name}_max"] = np.max(data)
-    metrics_dict[f"{name}_min"] = np.min(data)
+    arr = np.asarray(data, dtype=float)
+    arr = arr[np.isfinite(arr)]  # drop NaN/Inf values
+
+    if arr.size == 0:
+        # Avoid crashes and keep metric keys stable
+        metrics_dict[f"{name}_mean"] = float("nan")
+        metrics_dict[f"{name}_std"] = float("nan")
+        metrics_dict[f"{name}_max"] = float("nan")
+        metrics_dict[f"{name}_min"] = float("nan")
+        return metrics_dict
+
+    metrics_dict[f"{name}_mean"] = float(np.mean(arr))
+    metrics_dict[f"{name}_std"] = float(np.std(arr))
+    metrics_dict[f"{name}_max"] = float(np.max(arr))
+    metrics_dict[f"{name}_min"] = float(np.min(arr))
     return metrics_dict
