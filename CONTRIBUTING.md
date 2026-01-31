@@ -22,7 +22,7 @@ We follow the [GitHub Flow](https://docs.github.com) development workflow. All c
 1.  **Fork the repository:** Click the "Fork" button on the top right of the [repository page](https://github.com/NousResearch/atropos). This creates your own copy of the project.
 2.  **Clone your fork:**
     ```bash
-    git clone https://github.com/your-username/atropos.git
+    git clone https://github.com/rektxyz/atropos.git
     cd atropos
     ```
 3.  **Set up the development environment:** This project uses standard Python `venv` for environment creation and `pip` for dependency management.
