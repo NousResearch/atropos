@@ -17,7 +17,7 @@ dependencies = [
     "numpy",
     "wandb",
     "gymnasium",
-    "math-verify==0.7.0",
+    "math-verify>=0.8.0",
     "jinja2",
     "nltk",
     "rich",
@@ -57,6 +57,9 @@ examples = [
     "gradio",
     "atroposlib[rewardfns]",
     "langdetect"
+]
+verifiers = [
+    "verifiers==0.1.9.post2"
 ]
 
 [build-system]

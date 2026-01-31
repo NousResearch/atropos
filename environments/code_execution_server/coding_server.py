@@ -606,7 +606,7 @@ class CodingEnv(BaseEnv):
                                 old_completion_idx:new_completion_idx
                             ]
                         )
-                        > (0.95 * self.max_token_len)
+                        > (0.95 * self.max_token_length)
                     ).mean()
 
                     if self.wandb_prepend is not None:

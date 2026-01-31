@@ -52,7 +52,7 @@ Found words:
   - 4-letter words: 400 points
   - 5-letter words: 800 points
   - 6+ letter words: 1400 + (400 × (length - 6)) points
-  - These scoring rules are based on the version of Word Hunt in GamePidgeon, the iOS app
+  - These scoring rules are based on the version of Word Hunt in GamePigeon, the iOS app
 
   The default maximum output tokens a response will produce is 100 tokens, which simulates the time pressure and encourages strategic resource allocation.
 

@@ -292,7 +292,7 @@ class Run:
             self._generate_configs()
         else:
             raise TypeError(
-                f"Unsupportet type for 'resume', got {type(self.engine.resume)=}."
+                f"Unsupported type for 'resume', got {type(self.engine.resume)=}."
             )
 
     def _calc_max_steps(self) -> int:

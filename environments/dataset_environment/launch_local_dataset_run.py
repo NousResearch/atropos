@@ -14,6 +14,7 @@ Requirements:
   - Run from project root so example_trainer is on PYTHONPATH
   - example_trainer/ is a valid Python package (with __init__.py)
 """
+
 import atexit
 import os
 import signal

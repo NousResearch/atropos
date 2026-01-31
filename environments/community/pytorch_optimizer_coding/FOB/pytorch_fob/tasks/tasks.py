@@ -84,10 +84,8 @@ class TaskDataModule(LightningDataModule):
         if not data:
             raise NotImplementedError("Each task has its own data set")
         if not self.batch_size or self.batch_size < 1:
-            raise NotImplementedError(
-                "Each task configures its own batch_size. \
-                                      Please set it explicitly, to avoid confusion."
-            )
+            raise NotImplementedError("Each task configures its own batch_size. \
+                                      Please set it explicitly, to avoid confusion.")
 
     def train_dataloader(self):
         self.check_dataset(self.data_train)
