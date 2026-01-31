@@ -1646,8 +1646,6 @@ def split_into_sentences(text):
     # Handle Unicode right double quotation mark (U+201D)
     if '"' in text:
         text = text.replace('."', '".')
-    if '"' in text:
-        text = text.replace('."', '".')
     if "!" in text:
         text = text.replace('!"', '"!')
     if "?" in text:
