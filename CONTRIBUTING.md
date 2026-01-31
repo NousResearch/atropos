@@ -152,5 +152,5 @@ When in doubt about the appropriateness of an environment, please open an issue 
 ## Code of Conduct
 
 Please note that this project is released with a [Contributor Code of Conduct](CODE_OF_CONDUCT.md). By participating in this project you agree to abide by its terms.
-
+fix guide without vscode using codespace
 Thank you again for your contribution!
