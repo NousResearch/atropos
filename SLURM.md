@@ -166,7 +166,7 @@ done
 
 *   `--api_addr`: This is the address of the main Atropos API server (usually started with `run-api`). The script needs this to fetch W&B project/group info and the current training step. In the example, we construct it assuming the API runs on the `training_node` (first node in the allocation) at port `8000` (the default for `run-api`). **Ensure this port is correct and accessible from the inference nodes.**
 *   `--tp`: This should be the same tensor parallelism size (`TP_SIZE`) used when launching the inference servers. It tells the watcher how many server instances (ports 9000 to 9000 + `8 // TP_SIZE` - 1) to monitor on the local node.
-*   `--node_num`: A unique integer identifying this specific inference node within the Slurm job. This helps distinguish the metrics from different nodes in W&B (e.g., `server/server_heath_0_0`, `server/server_heath_1_0`). The example script assigns sequential indices starting from 0.
+*   `--node_num`: A unique integer identifying this specific inference node within the Slurm job. This helps distinguish the metrics from different nodes in W&B (e.g., `server/server_health_0_0`, `server/server_health_1_0`). The example script assigns sequential indices starting from 0.
 
 **Important Notes:**
 
