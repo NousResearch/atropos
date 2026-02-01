@@ -14,7 +14,7 @@ The `vllm_api_server.py` file in this directory provides a customized vLLM API s
 
 ## Prerequisites
 
-1.  **Python:** Python 3.8 or higher is recommended.
+1.  **Python:** Python 3.10 or higher is recommended.
 2.  **Atropos API Server:** The Atropos API server must be running and accessible (defaults to `http://localhost:8000` in the script).
 3.  **Python Packages:** You need to install the required Python libraries:
     *   `torch` (with CUDA support recommended)
@@ -76,3 +76,4 @@ pip install -r example_trainer/requirements.txt
 
 # Run the trainer directly (basic test)
 python example_trainer/grpo.py
+```

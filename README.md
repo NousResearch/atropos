@@ -15,7 +15,7 @@
     <img src="https://img.shields.io/badge/NousResearch-orange?style=for-the-badge&logo=huggingface&logoColor=white" alt="HuggingFace"/>
   </a>
   <a href="https://nousresearch.com">
-    <img src="https://img.shields.io/badge/NousResearch.com-white?style=for-the-badge&logo=data:image/png;base64,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" alt="Website"/>
+    <img src="https://img.shields.io/badge/NousResearch.com-white?style=for-the-badge&logo=data:image/png;base64,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" alt="Website"/>
   </a>
   <a href="https://x.com/NousResearch">
     <img src="https://img.shields.io/badge/@NousResearch-black?style=for-the-badge&logo=X&logoColor=white" alt="@NousResearch"/>
@@ -133,6 +133,22 @@ Key Documents:
 - [Frequently Asked Questions (FAQ)](atroposlib/FAQ.md) - Answers to common questions for new users
 - [Contributing Guide](CONTRIBUTING.md) - Guidelines for contributors
 - [License](LICENSE) - MIT license details
+
+---
+
+## Prerequisites
+
+Before installing Atropos, ensure you have the following:
+
+- **Python 3.10+** — Required. Check with `python --version`
+- **Git** — For cloning the repository
+- **An OpenAI-compatible API endpoint** — Atropos environments need an inference server. Options include:
+  - A local [vLLM](https://github.com/vllm-project/vllm) or [SGLang](https://github.com/sgl-project/sglang) instance
+  - An [OpenAI API key](https://platform.openai.com/api-keys) (set as `OPENAI_API_KEY` environment variable)
+  - Any provider with an OpenAI-compatible endpoint (e.g., [Together AI](https://together.ai), [OpenRouter](https://openrouter.ai))
+- **Weights & Biases account** *(optional)* — For experiment tracking. Set `use_wandb=False` in your environment config to skip
+
+> **Note:** You do not need a GPU to develop or test environments locally. A GPU is only required for running inference servers locally or for training.
 
 ---
 
@@ -315,13 +331,19 @@ python gsm8k_server.py evaluate \
 
 ### Offline Data Generation Quick Start
 
-Run the below in separate terminals:
+Run the following commands in **separate terminals**, in this order:
+
+**Terminal 1** — Start the API server first (must be running before environments connect):
 ```sh
 run-api
 ```
+
+**Terminal 2** — Start an environment:
 ```sh
 python gsm8k_server.py serve --slurm False # or an env of your choice
 ```
+
+**Terminal 3** — Generate data:
 ```sh
 atropos-sft-gen path/to/output.jsonl --tokenizer Qwen/Qwen2.5-1.5B-Instruct # or whichever tokenizer you have in your env config
 ```
@@ -355,6 +377,48 @@ If you would like to use OpenAI models, please edit your `config_init` to someth
 ```
 
 For DPO, replace `atropos-sft-gen` with `atropos-dpo-gen` and check `atropos-dpo-gen -h` for data filtering and saving options.
+
+---
+
+## Troubleshooting
+
+**`Address already in use` when running `run-api`**
+
+Port 8000 is already occupied. Either stop the existing process or specify a different port:
+
+```bash
+# Find and stop the process using port 8000
+lsof -ti:8000 | xargs kill -9
+
+# Or use a different port
+run-api --port 8001
+```
+
+**`ModuleNotFoundError` or dependency conflicts**
+
+Ensure you're using a clean virtual environment with the correct Python version:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+```
+
+**`OPENAI_API_KEY` not set errors**
+
+Set your API key as an environment variable, or configure it in the environment's `config_init`:
+
+```bash
+export OPENAI_API_KEY="your-key-here"
+```
+
+**Out of memory (OOM) when running environments locally**
+
+Use a smaller model for local development and testing. For example, configure `model_name` to a lightweight model like `gpt-4.1-nano` with an OpenAI API key, or use a quantized local model with vLLM.
+
+**Environment not connecting to the API server**
+
+Ensure `run-api` is running before starting any environments. By default, environments connect to `http://localhost:8000`. If your API is on a different host or port, update `rollout_server_url` in your environment's config.
 
 ---
 
