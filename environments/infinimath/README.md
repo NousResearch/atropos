@@ -28,7 +28,7 @@ This environment provides procedurally generated math problems with curriculum-b
 Before running the environment, ensure you have installed the necessary dependencies. Navigate to the `environments/infinimath/` directory and run:
 
 ```bash
-pip install -r requirements.txt
+pip install -e ".[env-infinimath]"
 ```
 
 To run the InfiniteMath environment for local testing of the curriculum advancement:

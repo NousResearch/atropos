@@ -27,7 +27,10 @@ Game Execution
 
 1. Install dependencies:
 ```bash
-pip install -r requirements.txt
+# From the repo root
+pip install -e ".[env-diplomacy]"
+
+# Install the AI_Diplomacy package (if you plan to run this environment)
 cd AI_Diplomacy
 pip install -e .
 ```

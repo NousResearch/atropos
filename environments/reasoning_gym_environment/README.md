@@ -150,7 +150,7 @@ env_config = ReasoningGymEnvConfig(
 
 2. **Dependencies**: Install requirements:
    ```bash
-   pip install -r requirements.txt
+   pip install -e ".[env-reasoning-gym]"
    ```
 
 ### Directory Structure
@@ -159,7 +159,7 @@ reasoning_gym_environment/
 ├── reasoning_gym_environment.py  # Main environment code
 ├── reasoning-gym/                # Git submodule
 ├── data_dumps/                   # Generated rollout data (created automatically)
-├── requirements.txt              # Dependencies
+├── requirements.txt              # Legacy deps list (prefer atroposlib[env-reasoning-gym])
 └── README.md                     # This file
 ```
 
@@ -347,7 +347,7 @@ Enable with `debug_logging=True` for detailed information:
 ### Common Issues
 
 1. **No tasks discovered**: Ensure reasoning-gym submodule is properly initialized
-2. **Import errors**: Check that requirements.txt dependencies are installed
+2. **Import errors**: Check that the env extra (env-reasoning-gym) is installed
 3. **No rollouts saved**: Verify `dump_rollouts=True` and scores exceed threshold
 4. **Format violations**: Models not using `<answer>` tags receive 0 scores
 5. **Curriculum not adjusting**: Ensure tasks get enough groups (≥3) for adjustments

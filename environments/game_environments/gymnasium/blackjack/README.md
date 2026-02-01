@@ -7,7 +7,7 @@ This document explains the design philosophy behind the `blackjack_env_thinking.
 Before running or using this environment, ensure you have installed the necessary dependencies. Navigate to the `environments/game_environments/gymnasium/blackjack/` directory and run:
 
 ```bash
-pip install -r requirements.txt
+pip install -e ".[env-gymnasium-blackjack]"
 ```
 
 ## TL;DR
