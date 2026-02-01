@@ -37,6 +37,29 @@ atropos-sft-gen = "atroposlib.cli.sft:main"
 atropos-dpo-gen = "atroposlib.cli.dpo:main"
 
 [project.optional-dependencies]
+env-diplomacy = [
+    "tornado>=6.0",
+    "ujson>=5.0",
+    "websockets>=10.0",
+    "coloredlogs>=15.0.1",
+]
+
+env-gymnasium-blackjack = [
+    "textarena",
+]
+
+env-infinimath = [
+    "mathgenerator",
+]
+
+env-reasoning-gym = [
+    "sympy>=1.9.0",
+    "matplotlib>=3.5.0",
+    "pillow>=8.3.0",
+    "asyncio-throttle>=1.0.0",
+    "colorlog>=6.0.0",
+]
+
 all = [
     "atroposlib[dev,examples]"
 ]
