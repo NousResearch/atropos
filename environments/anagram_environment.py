@@ -31,41 +31,221 @@ from atroposlib.envs.base import (
 )
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
-
 # Built-in word list for training (common English words of various lengths)
 DEFAULT_WORD_LIST = [
     # 3-4 letter words
-    "cat", "dog", "run", "sun", "hat", "bat", "map", "cup", "pen", "bed",
-    "red", "big", "hot", "top", "box", "fox", "mix", "six", "day", "way",
-    "say", "may", "pay", "lay", "bay", "ray", "hay", "key", "boy", "toy",
-    "joy", "cow", "how", "now", "row", "low", "new", "few", "dew", "sew",
-    "air", "ear", "far", "car", "bar", "jar", "tar", "war", "arm", "art",
-    "ant", "act", "add", "age", "ago", "aid", "aim", "all", "and", "any",
+    "cat",
+    "dog",
+    "run",
+    "sun",
+    "hat",
+    "bat",
+    "map",
+    "cup",
+    "pen",
+    "bed",
+    "red",
+    "big",
+    "hot",
+    "top",
+    "box",
+    "fox",
+    "mix",
+    "six",
+    "day",
+    "way",
+    "say",
+    "may",
+    "pay",
+    "lay",
+    "bay",
+    "ray",
+    "hay",
+    "key",
+    "boy",
+    "toy",
+    "joy",
+    "cow",
+    "how",
+    "now",
+    "row",
+    "low",
+    "new",
+    "few",
+    "dew",
+    "sew",
+    "air",
+    "ear",
+    "far",
+    "car",
+    "bar",
+    "jar",
+    "tar",
+    "war",
+    "arm",
+    "art",
+    "ant",
+    "act",
+    "add",
+    "age",
+    "ago",
+    "aid",
+    "aim",
+    "all",
+    "and",
+    "any",
     # 5 letter words
-    "apple", "beach", "chair", "dance", "eagle", "flame", "grape", "house",
-    "inner", "joker", "knife", "lemon", "mango", "nurse", "ocean", "piano",
-    "queen", "river", "snake", "table", "uncle", "video", "water", "xenon",
-    "yacht", "zebra", "brain", "climb", "dream", "earth", "fresh", "giant",
-    "happy", "image", "judge", "knock", "laugh", "magic", "night", "olive",
-    "peace", "quick", "robot", "stone", "tiger", "unity", "voice", "world",
+    "apple",
+    "beach",
+    "chair",
+    "dance",
+    "eagle",
+    "flame",
+    "grape",
+    "house",
+    "inner",
+    "joker",
+    "knife",
+    "lemon",
+    "mango",
+    "nurse",
+    "ocean",
+    "piano",
+    "queen",
+    "river",
+    "snake",
+    "table",
+    "uncle",
+    "video",
+    "water",
+    "xenon",
+    "yacht",
+    "zebra",
+    "brain",
+    "climb",
+    "dream",
+    "earth",
+    "fresh",
+    "giant",
+    "happy",
+    "image",
+    "judge",
+    "knock",
+    "laugh",
+    "magic",
+    "night",
+    "olive",
+    "peace",
+    "quick",
+    "robot",
+    "stone",
+    "tiger",
+    "unity",
+    "voice",
+    "world",
     # 6 letter words
-    "basket", "candle", "desert", "engine", "flower", "garden", "helmet",
-    "insect", "jacket", "kettle", "laptop", "marble", "needle", "orange",
-    "pepper", "quartz", "rabbit", "silver", "temple", "unique", "velvet",
-    "wallet", "yellow", "zipper", "anchor", "bridge", "castle", "donkey",
-    "escape", "frozen", "ginger", "honest", "island", "jingle", "kitten",
+    "basket",
+    "candle",
+    "desert",
+    "engine",
+    "flower",
+    "garden",
+    "helmet",
+    "insect",
+    "jacket",
+    "kettle",
+    "laptop",
+    "marble",
+    "needle",
+    "orange",
+    "pepper",
+    "quartz",
+    "rabbit",
+    "silver",
+    "temple",
+    "unique",
+    "velvet",
+    "wallet",
+    "yellow",
+    "zipper",
+    "anchor",
+    "bridge",
+    "castle",
+    "donkey",
+    "escape",
+    "frozen",
+    "ginger",
+    "honest",
+    "island",
+    "jingle",
+    "kitten",
     # 7 letter words
-    "amazing", "balance", "captain", "diamond", "elegant", "fantasy", "general",
-    "healthy", "imagine", "jealous", "kingdom", "library", "machine", "natural",
-    "obvious", "perfect", "quality", "rainbow", "science", "teacher", "unusual",
-    "village", "weather", "example", "younger", "zealous", "ancient", "brother",
-    "chicken", "dolphin", "emperor", "fiction", "glacier", "harvest", "iceberg",
+    "amazing",
+    "balance",
+    "captain",
+    "diamond",
+    "elegant",
+    "fantasy",
+    "general",
+    "healthy",
+    "imagine",
+    "jealous",
+    "kingdom",
+    "library",
+    "machine",
+    "natural",
+    "obvious",
+    "perfect",
+    "quality",
+    "rainbow",
+    "science",
+    "teacher",
+    "unusual",
+    "village",
+    "weather",
+    "example",
+    "younger",
+    "zealous",
+    "ancient",
+    "brother",
+    "chicken",
+    "dolphin",
+    "emperor",
+    "fiction",
+    "glacier",
+    "harvest",
+    "iceberg",
     # 8+ letter words
-    "absolute", "baseball", "children", "daughter", "elephant", "familiar",
-    "generous", "handsome", "innocent", "kangaroo", "language", "minister",
-    "notebook", "opposite", "pleasure", "question", "romantic", "shoulder",
-    "thousand", "universe", "valuable", "wonderful", "airplane", "birthday",
-    "computer", "dinosaur", "exercise", "function", "grateful", "hospital",
+    "absolute",
+    "baseball",
+    "children",
+    "daughter",
+    "elephant",
+    "familiar",
+    "generous",
+    "handsome",
+    "innocent",
+    "kangaroo",
+    "language",
+    "minister",
+    "notebook",
+    "opposite",
+    "pleasure",
+    "question",
+    "romantic",
+    "shoulder",
+    "thousand",
+    "universe",
+    "valuable",
+    "wonderful",
+    "airplane",
+    "birthday",
+    "computer",
+    "dinosaur",
+    "exercise",
+    "function",
+    "grateful",
+    "hospital",
 ]
 
 
@@ -261,7 +441,8 @@ class AnagramEnv(BaseEnv):
         """Set up the environment by preparing word lists."""
         # Filter words by length configuration
         self.word_list = [
-            word for word in DEFAULT_WORD_LIST
+            word
+            for word in DEFAULT_WORD_LIST
             if self.config.min_word_length <= len(word) <= self.config.max_word_length
         ]
 
@@ -275,7 +456,9 @@ class AnagramEnv(BaseEnv):
         random.shuffle(self.train_words)
 
         print(f"\nAnagram Environment Configuration:")
-        print(f"  - Word length range: {self.config.min_word_length}-{self.config.max_word_length}")
+        print(
+            f"  - Word length range: {self.config.min_word_length}-{self.config.max_word_length}"
+        )
         print(f"  - Training words: {len(self.train_words)}")
         print(f"  - Evaluation words: {len(self.eval_words)}")
         print(f"  - Thinking mode: {self.config.thinking_mode}")
@@ -549,7 +732,10 @@ class AnagramEnv(BaseEnv):
 
                     model_response = completion.choices[0].message.content
 
-                    if model_response is None or len(model_response.strip()) < self.config.min_response_length:
+                    if (
+                        model_response is None
+                        or len(model_response.strip()) < self.config.min_response_length
+                    ):
                         if attempt < self.config.max_retries - 1:
                             await asyncio.sleep(self.config.retry_delay)
                             continue
@@ -566,7 +752,9 @@ class AnagramEnv(BaseEnv):
             extracted_answer = self._extract_answer(model_response)
             score = 1.0 if extracted_answer == expected_answer else 0.0
 
-            full_messages = messages + [{"role": "assistant", "content": model_response}]
+            full_messages = messages + [
+                {"role": "assistant", "content": model_response}
+            ]
 
             sample = {
                 "messages": full_messages,
@@ -590,9 +778,7 @@ class AnagramEnv(BaseEnv):
         start_time = time.time()
 
         try:
-            eval_tasks = [
-                self.rollout_and_score_eval(word) for word in self.eval_words
-            ]
+            eval_tasks = [self.rollout_and_score_eval(word) for word in self.eval_words]
             results = await tqdm_asyncio.gather(*eval_tasks)
 
             valid_results = [
@@ -671,7 +857,9 @@ class AnagramEnv(BaseEnv):
                 if role_dict_converted.get("role") == "user":
                     user_content = role_dict_converted.get("content", "")
                     if "Scrambled letters:" in user_content:
-                        start = user_content.find("Scrambled letters:") + len("Scrambled letters:")
+                        start = user_content.find("Scrambled letters:") + len(
+                            "Scrambled letters:"
+                        )
                         end = user_content.find("\n", start)
                         scrambled_word = user_content[start:end].strip()
                     break
