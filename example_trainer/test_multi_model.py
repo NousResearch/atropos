@@ -157,10 +157,12 @@ def start_gsm8k_env(
     vllm_port: int,
     run_api_port: int,
     log_path: Path,
+    atropos_root: Path,
 ) -> subprocess.Popen:
     """Start a gsm8k environment process for a specific model."""
+    gsm8k_script = atropos_root / "environments" / "gsm8k_server.py"
     cmd = [
-        sys.executable, "-m", "atropos.environments.gsm8k_server", "serve",
+        sys.executable, "-u", str(gsm8k_script), "serve",
         "--env.rollout_server_url", f"http://localhost:{run_api_port}",
         "--env.tokenizer_name", model_id,
         "--env.use_wandb", "false",
@@ -173,12 +175,13 @@ def start_gsm8k_env(
         "--openai.server_type", "openai",
     ]
     
-    with open(log_path, "w") as log_file:
-        process = subprocess.Popen(
-            cmd,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-        )
+    log_file = open(log_path, "w")
+    process = subprocess.Popen(
+        cmd,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        cwd=str(atropos_root),  # Run from atropos root
+    )
     return process
 
 
@@ -199,10 +202,10 @@ def run_model_test(
     Returns dict with test results.
     """
     model_name = model_config.name
-    test_dir = get_test_dir(base_dir, model_name, timestamp)
+    test_dir = get_test_dir(base_dir, model_name, timestamp).resolve()  # Make absolute
     test_dir.mkdir(parents=True, exist_ok=True)
     
-    # Unique paths for this model
+    # Unique paths for this model (all absolute)
     vllm_port = 9001 + vllm_port_offset
     bridge_config_path = test_dir / "vllm_bridge_config.json"
     checkpoint_dir = test_dir / "checkpoints"
@@ -245,6 +248,10 @@ def run_model_test(
     env_process = None
     run_api_process = None
     
+    # Get atropos root directory (used for vLLM and gsm8k scripts)
+    script_dir = Path(__file__).parent
+    atropos_root = script_dir.parent.resolve()
+    
     try:
         # === Start run-api (if auto_env) ===
         if auto_env:
@@ -271,13 +278,12 @@ def run_model_test(
             env_log = log_dir / "env.log"
             print(f"[{model_name}] Starting gsm8k environment (tokenizer: {model_config.model_id})...")
             env_process = start_gsm8k_env(
-                model_config.model_id, vllm_port, run_api_port, env_log
+                model_config.model_id, vllm_port, run_api_port, env_log, atropos_root
             )
             time.sleep(10)  # Give it time to initialize and connect
             print(f"[{model_name}] ✓ gsm8k environment started")
         
         # === Start vLLM Server ===
-        script_dir = Path(__file__).parent
         vllm_server_script = script_dir / "vllm_api_server.py"
         
         vllm_env = os.environ.copy()
@@ -359,7 +365,7 @@ def run_model_test(
                 env=trainer_env,
                 stdout=tlog,
                 stderr=subprocess.STDOUT,
-                cwd=str(script_dir.parent.parent),  # Run from atropos root
+                cwd=str(atropos_root),  # Run from atropos root
             )
             trainer_process.wait()
         
