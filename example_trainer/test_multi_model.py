@@ -12,23 +12,24 @@ With --auto-env, each model gets its own isolated stack:
     - trainer
 
 Usage:
-    # RECOMMENDED: Fully automated parallel test (each model gets isolated stack)
+    # RECOMMENDED: Fully automated parallel test with W&B logging
     python -m example_trainer.test_multi_model \
         --models qwen3-4b hermes-8b nemotron-14b devstral-24b \
         --parallel \
         --gpus 0 1 2 3 \
-        --auto-env
+        --auto-env \
+        --use-wandb \
+        --wandb-project multi-model-test
     
     # Sequential test on one GPU
     python -m example_trainer.test_multi_model \
         --models qwen3-4b hermes-8b \
         --sequential \
         --gpu 0 \
-        --auto-env
+        --auto-env \
+        --use-wandb
     
     # Manual mode (you must start run-api and gsm8k_server yourself)
-    # First start: run-api --port 8002 &
-    # Then start gsm8k for your model
     python -m example_trainer.test_multi_model \
         --models qwen3-4b \
         --sequential \
@@ -36,9 +37,9 @@ Usage:
         --atropos-url http://localhost:8002
 
 Port allocation with --auto-env:
-    Model 0: run-api:8002, vLLM:9001
-    Model 1: run-api:8003, vLLM:9002
-    Model 2: run-api:8004, vLLM:9003
+    Model 0: run-api:8002, vLLM:9001, GPU from --gpus[0]
+    Model 1: run-api:8003, vLLM:9002, GPU from --gpus[1]
+    Model 2: run-api:8004, vLLM:9003, GPU from --gpus[2]
     ...
 """
 
@@ -195,6 +196,8 @@ def run_model_test(
     training_steps: int,
     vllm_port_offset: int = 0,
     auto_env: bool = False,
+    use_wandb: bool = False,
+    wandb_project: str = "multi-model-test",
 ) -> Dict:
     """
     Run a complete training test for a single model.
@@ -288,13 +291,15 @@ def run_model_test(
         # which is required for CUDA IPC with ptrace_scope=1
         run_script = script_dir / "run.py"
         
+        # Don't use CUDA_VISIBLE_DEVICES - use --device instead
+        # run.py sets CUDA_VISIBLE_DEVICES internally based on --device
         run_env = os.environ.copy()
-        run_env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
         run_env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
         
         run_cmd = [
             sys.executable, "-u", str(run_script),
             "--model", model_config.model_id,
+            "--device", f"cuda:{gpu_id}",  # This controls GPU selection
             "--vllm-port", str(vllm_port),
             "--gpu-memory-utilization", str(model_config.gpu_memory_utilization),
             "--max-model-len", str(model_config.max_model_len),
@@ -306,6 +311,10 @@ def run_model_test(
             "--checkpoint-interval", "5",
             "--log-dir", str(log_dir),
         ]
+        
+        # Add wandb flags if enabled
+        if use_wandb:
+            run_cmd.extend(["--use-wandb", "--wandb-project", wandb_project])
         
         print(f"[{model_name}] Starting unified trainer (vLLM + GRPO) for {training_steps} steps...")
         with open(trainer_log, "w") as tlog:
@@ -386,6 +395,8 @@ def run_parallel_tests(
     base_dir: str,
     training_steps: int,
     auto_env: bool = False,
+    use_wandb: bool = False,
+    wandb_project: str = "multi-model-test",
 ) -> List[Dict]:
     """Run tests for multiple models in parallel."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -396,7 +407,7 @@ def run_parallel_tests(
     def run_and_store(model, gpu, port_offset):
         result = run_model_test(
             model, gpu, atropos_url, atropos_port, base_dir, timestamp,
-            training_steps, port_offset, auto_env
+            training_steps, port_offset, auto_env, use_wandb, wandb_project
         )
         with result_lock:
             results.append(result)
@@ -423,6 +434,8 @@ def run_sequential_tests(
     base_dir: str,
     training_steps: int,
     auto_env: bool = False,
+    use_wandb: bool = False,
+    wandb_project: str = "multi-model-test",
 ) -> List[Dict]:
     """Run tests for multiple models sequentially on one GPU."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -431,7 +444,8 @@ def run_sequential_tests(
     for i, model in enumerate(models):
         result = run_model_test(
             model, gpu_id, atropos_url, atropos_port, base_dir, timestamp,
-            training_steps, port_offset=0, auto_env=auto_env
+            training_steps, port_offset=0, auto_env=auto_env,
+            use_wandb=use_wandb, wandb_project=wandb_project
         )
         results.append(result)
         
@@ -548,7 +562,18 @@ Available models: """ + ", ".join(TEST_MODELS.keys())
     parser.add_argument(
         "--auto-env",
         action="store_true",
-        help="Automatically start gsm8k environment for each model (requires run-api to be running)",
+        help="Automatically start run-api and gsm8k environment for each model",
+    )
+    parser.add_argument(
+        "--use-wandb",
+        action="store_true",
+        help="Enable Weights & Biases logging for training runs",
+    )
+    parser.add_argument(
+        "--wandb-project",
+        type=str,
+        default="multi-model-test",
+        help="W&B project name for logging",
     )
     
     args = parser.parse_args()
@@ -580,19 +605,27 @@ Available models: """ + ", ".join(TEST_MODELS.keys())
             gpus = gpus * (len(models) // len(gpus) + 1)
         
         print(f"Using GPUs: {gpus[:len(models)]}")
+        if args.use_wandb:
+            print(f"W&B logging enabled (project: {args.wandb_project})")
         results = run_parallel_tests(
             models, gpus[:len(models)],
             args.atropos_url, args.atropos_port,
             args.output_dir, args.training_steps,
-            auto_env=args.auto_env
+            auto_env=args.auto_env,
+            use_wandb=args.use_wandb,
+            wandb_project=args.wandb_project,
         )
     else:
         print(f"Using GPU: {args.gpu}")
+        if args.use_wandb:
+            print(f"W&B logging enabled (project: {args.wandb_project})")
         results = run_sequential_tests(
             models, args.gpu,
             args.atropos_url, args.atropos_port,
             args.output_dir, args.training_steps,
-            auto_env=args.auto_env
+            auto_env=args.auto_env,
+            use_wandb=args.use_wandb,
+            wandb_project=args.wandb_project,
         )
     
     # Print summary
