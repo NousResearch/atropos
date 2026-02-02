@@ -116,14 +116,16 @@ def start_run_api(
     log_path: Path,
 ) -> subprocess.Popen:
     """Start a run-api instance on a specific port."""
-    cmd = ["run-api", "--port", str(port)]
+    cmd = [sys.executable, "-m", "atroposlib.cli.run_api", "--port", str(port)]
     
-    with open(log_path, "w") as log_file:
-        process = subprocess.Popen(
-            cmd,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-        )
+    log_file = open(log_path, "w")
+    process = subprocess.Popen(
+        cmd,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        # Don't buffer output
+        bufsize=1,
+    )
     return process
 
 
@@ -133,12 +135,20 @@ def wait_for_run_api(port: int, timeout: int = 60) -> bool:
     start = time.time()
     while time.time() - start < timeout:
         try:
-            resp = requests.get(f"http://localhost:{port}/health", timeout=5)
+            # run-api uses /status or / endpoint, not /health
+            resp = requests.get(f"http://localhost:{port}/status", timeout=5)
             if resp.status_code == 200:
                 return True
         except:
             pass
-        time.sleep(1)
+        try:
+            # Fallback to root endpoint
+            resp = requests.get(f"http://localhost:{port}/", timeout=5)
+            if resp.status_code == 200:
+                return True
+        except:
+            pass
+        time.sleep(2)
     return False
 
 
@@ -242,7 +252,14 @@ def run_model_test(
             print(f"[{model_name}] Starting run-api on port {run_api_port}...")
             run_api_process = start_run_api(run_api_port, run_api_log)
             
-            if not wait_for_run_api(run_api_port, timeout=30):
+            if not wait_for_run_api(run_api_port, timeout=60):
+                # Check if process died
+                if run_api_process.poll() is not None:
+                    print(f"[{model_name}] run-api process exited with code {run_api_process.returncode}")
+                # Print log contents for debugging
+                if run_api_log.exists():
+                    print(f"[{model_name}] run-api log contents:")
+                    print(run_api_log.read_text()[-2000:])  # Last 2000 chars
                 raise RuntimeError(f"run-api failed to start on port {run_api_port}")
             print(f"[{model_name}] ✓ run-api ready on port {run_api_port}")
             
