@@ -677,7 +677,7 @@ class PostscriptChecker(Instruction):
 
 
 class RephraseChecker(Instruction):
-    """Checks the repharse."""
+    """Checks the rephrase."""
 
     def build_description(self, *, original_message):
         """Build the instruction description.

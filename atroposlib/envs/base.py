@@ -177,7 +177,7 @@ class BaseEnvConfig(BaseModel):
     )
     worker_timeout: float = Field(
         default=600,
-        description="Timeout for a a task, in seconds, if -1, no timeout",
+        description="Timeout for a task, in seconds, if -1, no timeout",
     )
     thinking_mode: bool = Field(
         default=False,
