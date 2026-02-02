@@ -212,9 +212,9 @@ def main():
     print(f"\n[Run] Starting GRPO trainer...")
     
     # Import and run trainer directly (same process)
-    from .cli import build_config
-    from .trainers import train_shared_vllm
-    from .config import TrainingConfig
+    # Use absolute imports since this script may be run directly
+    from example_trainer.trainers import train_shared_vllm
+    from example_trainer.config import TrainingConfig
     
     config = TrainingConfig(
         model_name=args.model_name,
