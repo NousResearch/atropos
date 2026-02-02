@@ -82,6 +82,12 @@ def parse_args() -> argparse.Namespace:
         default="trained_model_checkpoints",
         help="Directory to save model checkpoints",
     )
+    parser.add_argument(
+        "--checkpoint-interval",
+        type=int,
+        default=3,
+        help="Save checkpoint every N training steps (0 = only save final)",
+    )
 
     # === vLLM Arguments ===
     parser.add_argument(
@@ -258,6 +264,7 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         optimizer=args.optimizer,
         device=args.device,
         save_path=args.save_path,
+        checkpoint_interval=getattr(args, "checkpoint_interval", 3),
         vllm_restart_interval=args.vllm_restart_interval,
         vllm_port=args.vllm_port,
         vllm_gpu_memory_utilization=args.vllm_gpu_memory_utilization,
