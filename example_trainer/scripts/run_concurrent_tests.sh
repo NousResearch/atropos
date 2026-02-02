@@ -97,6 +97,8 @@ echo "  PID: $LORA_VLLM_PID"
 
 echo ""
 echo "[2/6] Starting Single-Copy vLLM server (GPU 4)..."
+# NOTE: --enforce-eager is REQUIRED for single-copy mode!
+# Without it, CUDA graphs freeze weights and updates won't be visible to inference.
 CUDA_VISIBLE_DEVICES=4 \
 VLLM_ENABLE_SHARED_WEIGHTS=1 \
 LOGDIR="$SINGLE_COPY_CHECKPOINT_DIR" \
@@ -106,6 +108,7 @@ python -u example_trainer/vllm_api_server.py \
     --port $SINGLE_COPY_VLLM_PORT \
     --dtype bfloat16 \
     --gpu-memory-utilization 0.5 \
+    --enforce-eager \
     > "${LOG_DIR}/single_copy_vllm.log" 2>&1 &
 SINGLE_COPY_VLLM_PID=$!
 echo "  PID: $SINGLE_COPY_VLLM_PID"

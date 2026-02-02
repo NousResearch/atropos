@@ -49,6 +49,13 @@ class TrainingConfig(BaseModel):
         "trained_model_checkpoints", 
         description="Base path to save model checkpoints"
     )
+    checkpoint_interval: int = Field(
+        3,
+        description=(
+            "Save checkpoint every N training steps. "
+            "Set to 0 to only save final checkpoint."
+        ),
+    )
     
     # === vLLM Server Configuration ===
     vllm_restart_interval: int = Field(

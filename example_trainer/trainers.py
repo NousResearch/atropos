@@ -569,7 +569,7 @@ def train_shared_vllm(config: TrainingConfig):
         log_metrics(metrics, step + 1, use_wandb, benchmark=config.benchmark)
 
         # Periodic checkpoint (for recovery, not for vLLM sync)
-        if (step + 1) % config.vllm_restart_interval == 0:
+        if config.checkpoint_interval > 0 and (step + 1) % config.checkpoint_interval == 0:
             save_checkpoint(model, tokenizer, config.save_path, step + 1)
 
     # === Cleanup ===
