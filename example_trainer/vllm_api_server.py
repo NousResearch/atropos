@@ -47,10 +47,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List, Optional
 
-# =============================================================================
-# CRITICAL: Set up multiprocessing and vLLM engine BEFORE any CUDA imports
-# =============================================================================
-
 # Default to v0 engine to avoid CUDA fork issues with v1 engine
 # Users can override with VLLM_USE_V1=1 if needed
 os.environ.setdefault("VLLM_USE_V1", "0")
@@ -167,11 +163,6 @@ except ImportError:
     LoRARequest = None  # type: ignore
 
 logger = init_logger("vllm.entrypoints.api_server")
-
-
-# =============================================================================
-# Global State
-# =============================================================================
 
 app = FastAPI()
 engine: Optional[AsyncLLM] = None
