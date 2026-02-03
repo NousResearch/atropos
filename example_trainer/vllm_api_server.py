@@ -69,14 +69,9 @@ def _apply_patches_early() -> bool:
 
     try:
         # Try relative import first (when run as module)
-        try:
-            from .vllm_patching import apply_patches
-        except ImportError:
-            # Fall back to absolute import (when run as script)
-            script_dir = Path(__file__).parent
-            if str(script_dir) not in sys.path:
-                sys.path.insert(0, str(script_dir))
-            from vllm_patching import apply_patches
+        
+        from .vllm_patching import apply_patches
+
 
         success = apply_patches()
         if success:
@@ -119,11 +114,8 @@ from vllm.usage.usage_lib import UsageContext  # noqa: E402
 from vllm.utils import random_uuid  # noqa: E402
 from vllm.v1.engine.async_llm import AsyncLLM  # noqa: E402
 
-try:
-    from vllm.utils.argparse_utils import FlexibleArgumentParser  # noqa: E402
-    from vllm.utils.system_utils import set_ulimit  # noqa: E402
-except ImportError:
-    from vllm.utils import FlexibleArgumentParser, set_ulimit  # noqa: E402
+
+from vllm.utils import FlexibleArgumentParser, set_ulimit  # noqa: E402
 
 from vllm.outputs import RequestOutput  # noqa: F401, E402
 from vllm.version import __version__ as VLLM_VERSION  # noqa: E402

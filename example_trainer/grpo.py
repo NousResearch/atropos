@@ -1,29 +1,30 @@
 #!/usr/bin/env python3
 """
-GRPO Trainer - Main Entry Point
+GRPO Trainer - Multi-Mode Entry Point
 
-This is the command-line entry point for the GRPO trainer.
-For the actual implementation, see the modular files:
+Supports three training modes:
+- none (legacy): Periodic checkpoint saves + vLLM restarts
+- shared_vllm: Single-copy mode with CUDA IPC weight sharing
+- lora_only: LoRA adapter training
 
-- config.py      - TrainingConfig class
-- api.py         - Atropos API communication
-- data.py        - Data processing and batching
-- model.py       - Model loading and shared memory
-- training.py    - Loss computation and training step
-- checkpointing.py - Checkpoint saving
-- vllm_manager.py  - vLLM process management
-- trainers.py    - Training mode implementations
-- cli.py         - CLI argument parsing
+For the unified single-command experience (shared_vllm + auto vLLM launch),
+use run.py instead:
+    python example_trainer/run.py --model Qwen/Qwen3-4B --training-steps 20
+
+This script requires vLLM to be running separately (except for legacy mode
+which manages vLLM internally).
 
 Usage:
-    # Legacy mode (checkpoint + restart)
-    python grpo.py --model-name Qwen/Qwen2.5-3B-Instruct --training-steps 100
+    # Legacy mode (manages vLLM internally)
+    python -m example_trainer.grpo --model-name Qwen/Qwen2.5-3B-Instruct
+    
+    # Shared vLLM mode (requires external vLLM with VLLM_ENABLE_SHARED_WEIGHTS=1)
+    python -m example_trainer.grpo --model-name Qwen/Qwen2.5-3B-Instruct \\
+        --weight-bridge-mode shared_vllm
 
-    # Single-copy mode (shared memory)
-    python grpo.py --model-name Qwen/Qwen2.5-3B-Instruct --weight-bridge-mode shared_vllm
-
-    # LoRA mode (adapter training)
-    python grpo.py --model-name Qwen/Qwen2.5-3B-Instruct --weight-bridge-mode lora_only
+    # LoRA mode (requires external vLLM with --enable-lora)
+    python -m example_trainer.grpo --model-name Qwen/Qwen2.5-3B-Instruct \\
+        --weight-bridge-mode lora_only --lora-r 16 --lora-alpha 32
 """
 
 from .cli import parse_args, config_from_args
@@ -35,10 +36,18 @@ def main():
     args = parse_args()
     config = config_from_args(args)
 
-    print(f"Weight bridge mode: {config.weight_bridge_mode}")
+    print(f"\n{'='*60}")
+    print(f"GRPO TRAINER")
+    print(f"{'='*60}")
+    print(f"Model: {config.model_name}")
+    print(f"Mode: {config.weight_bridge_mode}")
+    print(f"Training steps: {config.training_steps}")
+    print(f"GRPO: kl_coef={config.kl_coef}, clip_eps={config.clip_eps}")
+    print(f"{'='*60}\n")
 
     if config.weight_bridge_mode == "shared_vllm":
         # Single-copy mode: attach to vLLM's weights, update in-place
+        # Note: For easier usage, consider using run.py which starts vLLM for you
         train_shared_vllm(config)
 
     elif config.weight_bridge_mode == "lora_only":
@@ -52,4 +61,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
