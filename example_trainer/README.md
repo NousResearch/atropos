@@ -265,6 +265,43 @@ Without these, training will collapse (reward hacking):
 --batch-size 2 --gradient-accumulation-steps 8  # Effective batch = 16
 ```
 
+### 6. Optimizer Selection
+
+The trainer supports multiple optimizer options to trade off between speed, memory, and precision:
+
+| Optimizer | GPU Memory for States | Speed | Precision | Dependencies |
+|-----------|----------------------|-------|-----------|--------------|
+| `adamw` (default) | ~32GB (for 8B model) | Fastest | Full FP32 | None |
+| `adamw_8bit` | ~8GB | Fast | 8-bit quantized | `bitsandbytes` |
+| `adafactor` | ~8GB | Fast | Full (no momentum) | `transformers` |
+| `adamw_cpu` | ~0GB (on CPU) | ~2x slower | Full FP32 | None |
+
+**Usage:**
+```bash
+# Standard AdamW (default)
+--optimizer adamw
+
+# 8-bit AdamW - recommended for memory-constrained setups
+--optimizer adamw_8bit
+
+# Adafactor - no momentum states, good for large models
+--optimizer adafactor
+
+# CPU offload - experimental, use when nothing else fits
+--optimizer adamw_cpu
+```
+
+**Recommendations:**
+- **8B models on 80GB:** Use `adamw` (fastest)
+- **14B+ models on 80GB:** Use `adamw_8bit` or `adafactor`
+- **24B models:** Use `adafactor` with reduced batch size
+- **adamw_cpu:** Experimental - not well tested, ~2x slower due to CPU↔GPU transfers
+
+**Potential Risks:**
+- `adamw_8bit`: Quantization may slightly affect convergence in edge cases; generally safe
+- `adafactor`: No momentum can make training slightly less stable; use with larger batch sizes
+- `adamw_cpu`: Significantly slower; only use when you have no other option
+
 ---
 
 ## Tensor Mapping (vLLM ↔ HuggingFace)

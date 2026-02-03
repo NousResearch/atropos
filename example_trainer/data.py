@@ -249,9 +249,9 @@ def get_data(
                         sample_lp = sample_item["inference_logprobs"][0] if sample_item["inference_logprobs"] else []
                         print(f"    [Data] ✓ inference_logprobs found in batch (sample len: {len(sample_lp)})")
                     else:
-                        print(f"    [Data] ⚠ inference_logprobs key exists but is empty!")
+                        print("    [Data] ⚠ inference_logprobs key exists but is empty!")
                 else:
-                    print(f"    [Data] ⚠ NO inference_logprobs in batch data!")
+                    print("    [Data] ⚠ NO inference_logprobs in batch data!")
                     print(f"    [Data] Keys in first item: {list(data['batch'][0].keys())}")
                 _logged_logprob_warning = True
             
