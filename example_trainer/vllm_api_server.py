@@ -118,8 +118,17 @@ from vllm.v1.engine.async_llm import AsyncLLM  # noqa: E402
 try:
     from vllm.utils import FlexibleArgumentParser
 except ImportError:
-    # Use standard argparse for newer vLLM versions
-    from argparse import ArgumentParser as FlexibleArgumentParser
+    # Create a compatible ArgumentParser that handles 'deprecated' kwarg
+    # (Python 3.10 doesn't support 'deprecated' in BooleanOptionalAction)
+    import argparse
+    
+    class FlexibleArgumentParser(argparse.ArgumentParser):
+        """ArgumentParser that strips unsupported kwargs for Python < 3.13."""
+        
+        def add_argument(self, *args, **kwargs):
+            # Remove 'deprecated' kwarg if present (not supported before Python 3.13)
+            kwargs.pop('deprecated', None)
+            return super().add_argument(*args, **kwargs)
 
 # set_ulimit might not exist in all vLLM versions
 try:
