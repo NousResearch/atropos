@@ -88,7 +88,7 @@ def main():
     # Clean up old bridge config
     if os.path.exists(bridge_config_path):
         os.remove(bridge_config_path)
-        print(f"[Run] Removed old bridge config")
+        print("[Run] Removed old bridge config")
     
     # === Print Configuration ===
     print("\n" + "="*60)
@@ -172,7 +172,7 @@ def main():
         sys.exit(1)
     
     # === Start Trainer ===
-    print(f"\n[Run] Starting GRPO trainer...")
+    print("\n[Run] Starting GRPO trainer...")
     
     # Build config - override some fields for shared_vllm mode
     config = TrainingConfig(
