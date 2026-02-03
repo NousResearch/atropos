@@ -100,7 +100,7 @@ def create_optimizer(model: torch.nn.Module, config) -> torch.optim.Optimizer:
         try:
             import bitsandbytes as bnb
             optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=config.lr)
-            print(f"[Setup] Using 8-bit AdamW (saves ~24GB optimizer memory)")
+            print("[Setup] Using 8-bit AdamW (saves ~24GB optimizer memory)")
             return optimizer
         except ImportError:
             print("[Setup] WARNING: bitsandbytes not installed, falling back to AdamW")
@@ -108,8 +108,8 @@ def create_optimizer(model: torch.nn.Module, config) -> torch.optim.Optimizer:
     
     if config.optimizer == "adamw_cpu":
         optimizer = CPUOffloadAdamW(model.parameters(), lr=config.lr)
-        print(f"[Setup] Using AdamW with CPU offload (full precision, ~0GB GPU for states)")
-        print(f"[Setup] NOTE: ~2x slower due to CPU<->GPU transfers, but no quantization")
+        print("[Setup] Using AdamW with CPU offload (full precision, ~0GB GPU for states)")
+        print("[Setup] NOTE: ~2x slower due to CPU<->GPU transfers, but no quantization")
         return optimizer
     
     if config.optimizer == "adafactor":
@@ -121,28 +121,28 @@ def create_optimizer(model: torch.nn.Module, config) -> torch.optim.Optimizer:
                 scale_parameter=False,
                 relative_step=False,
             )
-            print(f"[Setup] Using Adafactor (no momentum, saves ~24GB)")
+            print("[Setup] Using Adafactor (no momentum, saves ~24GB)")
             return optimizer
         except ImportError:
             print("[Setup] WARNING: transformers Adafactor not available, using AdamW")
     
     # Default: standard AdamW
     optimizer = AdamW(model.parameters(), lr=config.lr)
-    print(f"[Setup] Using standard AdamW (requires ~32GB for optimizer states)")
+    print("[Setup] Using standard AdamW (requires ~32GB for optimizer states)")
     return optimizer
 
 
-from .checkpointing import save_checkpoint, save_lora_checkpoint
-from .config import TrainingConfig
-from .data import get_data
-from .model import load_model_and_tokenizer, PEFT_AVAILABLE
-from .training import (
+from .checkpointing import save_checkpoint, save_lora_checkpoint  # noqa: E402
+from .config import TrainingConfig  # noqa: E402
+from .data import get_data  # noqa: E402
+from .model import load_model_and_tokenizer, PEFT_AVAILABLE  # noqa: E402
+from .training import (  # noqa: E402
     finalize_training,
     log_metrics,
     run_training_step,
     setup_wandb,
 )
-from .vllm_manager import (
+from .vllm_manager import (  # noqa: E402
     check_vllm_health,
     check_vllm_process_health,
     launch_vllm_server,
@@ -171,13 +171,13 @@ def train_legacy(config: TrainingConfig):
     model, tokenizer = load_model_and_tokenizer(config)
     optimizer = create_optimizer(model, config)
 
-    print(f"\n{'='*60}")
+    print("\n" + "="*60)
     print("LEGACY MODE (checkpoint + vLLM restart)")
-    print(f"{'='*60}")
+    print("="*60)
     print(f"Training for {config.training_steps} steps on {config.device}")
     print(f"vLLM restart interval: every {config.vllm_restart_interval} steps")
     print(f"Save path: {config.save_path}")
-    print(f"{'='*60}\n")
+    print("="*60 + "\n")
 
     os.makedirs(config.save_path, exist_ok=True)
 
@@ -281,13 +281,13 @@ def train_shared_vllm(config: TrainingConfig):
     # === Setup ===
     use_wandb = setup_wandb(config)
 
-    print(f"\n{'='*60}")
+    print("\n" + "="*60)
     print("SINGLE-COPY MODE (CUDA IPC)")
     print(">>> Trainer uses vLLM's tensors directly!")
-    print(f"{'='*60}")
+    print("="*60)
     print(f"Model: {config.model_name}")
     print(f"Save path: {config.save_path}")
-    print(f"{'='*60}\n")
+    print("="*60 + "\n")
 
     # Attach to vLLM's shared tensors
     print("[1/2] Attaching to vLLM's shared tensors...")
@@ -406,14 +406,14 @@ def train_lora(config: TrainingConfig):
     # === Setup ===
     use_wandb = setup_wandb(config)
 
-    print(f"\n{'='*60}")
+    print("\n" + "="*60)
     print("LORA MODE (adapter-only training)")
-    print(f"{'='*60}")
+    print("="*60)
     print(f"Base model: {config.model_name}")
     print(f"LoRA config: r={config.lora_r}, alpha={config.lora_alpha}")
     print(f"Save path: {config.save_path}")
     print(f"vLLM port: {config.vllm_port}")
-    print(f"{'='*60}\n")
+    print("="*60 + "\n")
 
     # Check external vLLM server
     print("[1/3] Checking external vLLM server...")
