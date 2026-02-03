@@ -85,7 +85,7 @@ def _load_model_with_attention(
     
     # Should never reach here, but just in case
     raise RuntimeError("Failed to load model with any attention implementation")
-    
+
 def load_model_and_tokenizer(
     config: TrainingConfig,
     single_copy: bool = False,
@@ -258,7 +258,7 @@ def _attach_to_vllm_shared_tensors(
         print("[Setup] Single-copy mode not available (single_copy_enabled=False)")
         print("[Setup] Make sure vLLM was started with VLLM_ENABLE_SHARED_WEIGHTS=1")
         return None
-    # Get the IPC handles. from the bridge config. these are memory pointers to the space in memory that shared weights exist in
+    # Get IPC handles from bridge config - memory pointers to shared weight tensors
     ipc_handles_raw = bridge_config.get("ipc_handles", {})
     print(f"[Setup] IPC handles count: {len(ipc_handles_raw)}")
     if not ipc_handles_raw:
