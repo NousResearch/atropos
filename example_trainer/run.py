@@ -121,6 +121,8 @@ def main():
     vllm_env["VLLM_BRIDGE_CONFIG_PATH"] = bridge_config_path
     vllm_env["CUDA_VISIBLE_DEVICES"] = device_index
     vllm_env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    vllm_env["VLLM_USE_V1"] = "0"  # v0 engine required for shared weights patches
+    vllm_env["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"  # Required for CUDA
     
     # Build vLLM command
     vllm_cmd = [
