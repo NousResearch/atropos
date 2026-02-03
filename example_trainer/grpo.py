@@ -1,18 +1,10 @@
 #!/usr/bin/env python3
 """
-GRPO Trainer - Multi-Mode Entry Point
 
 Supports three training modes:
 - none (legacy): Periodic checkpoint saves + vLLM restarts
 - shared_vllm: Single-copy mode with CUDA IPC weight sharing
 - lora_only: LoRA adapter training
-
-For the unified single-command experience (shared_vllm + auto vLLM launch),
-use run.py instead:
-    python example_trainer/run.py --model Qwen/Qwen3-4B --training-steps 20
-
-This script requires vLLM to be running separately (except for legacy mode
-which manages vLLM internally).
 
 Usage:
     # Legacy mode (manages vLLM internally)

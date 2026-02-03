@@ -123,7 +123,7 @@ def pad_data_to_good_offset(
             # IMPORTANT: inference_logprobs is ALREADY ALIGNED with tokens/masks:
             # - 1.0 for prompt tokens (masked positions)
             # - actual negative logprobs for generated tokens
-            # We just need to pad to match the sequence length, no realignment needed!
+            # We just need to pad to match the sequence length
             if extract_inference_logprobs and "inference_logprobs" in item:
                 if i < len(item["inference_logprobs"]):
                     raw_logprobs = np.array(item["inference_logprobs"][i], dtype=np.float32)
@@ -140,10 +140,10 @@ def pad_data_to_good_offset(
                     # Shift by 1 to match causal label shift
                     inference_logprobs_padded.append(padded_logprobs[1:])
                 else:
-                    # No logprobs for this sample, use 1.0 (masked placeholder)
+                    # No logprobs for this sample, use 1.0 
                     inference_logprobs_padded.append(np.full(token_setup_len - 1, 1.0, dtype=np.float32))
             elif extract_inference_logprobs:
-                # No inference_logprobs in item, use 1.0 (masked placeholder)
+                # No inference_logprobs in item, use 1.0
                 inference_logprobs_padded.append(np.full(token_setup_len - 1, 1.0, dtype=np.float32))
             
             # Extract temperature (priority: override > generation_params > group_overrides > 1.0)
