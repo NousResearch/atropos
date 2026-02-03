@@ -118,9 +118,9 @@ def launch_vllm_server(
     Launch a vLLM server process using our custom vllm_api_server.py.
 
     Uses the custom server instead of standard vLLM because:
-    - Standard vLLM only has /v1/completions (OpenAI-compatible)
-    - Our custom server has /generate endpoint needed by VLLMServer class
-    - This allows proper tokens_and_logprobs_completion support
+    - Streamlined API: Only /generate endpoint (provides logprobs)
+    - Weight bridge support: /bridge/* endpoints for shared memory mode
+    - LoRA hot-swap: /lora/* endpoints for adapter loading/unloading
 
     Args:
         config: Training configuration

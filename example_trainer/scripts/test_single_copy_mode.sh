@@ -97,14 +97,13 @@ sleep 10
 
 echo ""
 echo "[3/4] Baseline test (before training)..."
-curl -s -X POST "http://localhost:${VLLM_PORT}/v1/chat/completions" \
+curl -s -X POST "http://localhost:${VLLM_PORT}/generate" \
     -H "Content-Type: application/json" \
     -d '{
-        "model": "'"$MODEL"'",
-        "messages": [{"role": "user", "content": "What is 123 + 456?"}],
+        "prompt": "<|im_start|>user\nWhat is 123 + 456?<|im_end|>\n<|im_start|>assistant\n",
         "max_tokens": 100,
         "temperature": 0.1
-    }' | jq '.choices[0].message.content' | tee "${LOG_DIR}/baseline_response.txt"
+    }' | jq '.text[0]' | tee "${LOG_DIR}/baseline_response.txt"
 
 echo ""
 echo "[4/4] Starting Single-Copy trainer..."
@@ -137,12 +136,11 @@ echo "============================================================"
 # Post-training test
 echo ""
 echo "Post-training test (weights are already updated in vLLM):"
-curl -s -X POST "http://localhost:${VLLM_PORT}/v1/chat/completions" \
+curl -s -X POST "http://localhost:${VLLM_PORT}/generate" \
     -H "Content-Type: application/json" \
     -d '{
-        "model": "'"$MODEL"'",
-        "messages": [{"role": "user", "content": "What is 123 + 456?"}],
+        "prompt": "<|im_start|>user\nWhat is 123 + 456?<|im_end|>\n<|im_start|>assistant\n",
         "max_tokens": 100,
         "temperature": 0.1
-    }' | jq '.choices[0].message.content' | tee "${LOG_DIR}/trained_response.txt"
+    }' | jq '.text[0]' | tee "${LOG_DIR}/trained_response.txt"
 
