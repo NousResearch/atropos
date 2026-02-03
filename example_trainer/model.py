@@ -36,7 +36,7 @@ def _get_attention_implementation() -> str:
         Tuple of (attn_implementation string, human-readable name)
     """
     try:
-        import flash_attn
+        import flash_attn  # noqa: F401
         return "flash_attention_2"
     except ImportError:
         return "sdpa"

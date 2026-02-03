@@ -39,7 +39,6 @@ import json
 import multiprocessing
 import os
 import ssl
-import sys
 import threading
 from argparse import Namespace
 from collections.abc import AsyncGenerator

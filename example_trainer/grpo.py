@@ -28,9 +28,9 @@ def main():
     args = parse_args()
     config = config_from_args(args)
 
-    print(f"\n{'='*60}")
-    print(f"GRPO TRAINER")
-    print(f"{'='*60}")
+    print("\n" + "="*60)
+    print("GRPO TRAINER")
+    print("="*60)
     print(f"Model: {config.model_name}")
     print(f"Mode: {config.weight_bridge_mode}")
     print(f"Training steps: {config.training_steps}")

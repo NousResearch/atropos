@@ -24,7 +24,7 @@ from pathlib import Path
 
 import requests
 
-from .cli import create_unified_parser, config_from_args
+from .cli import create_unified_parser
 from .config import TrainingConfig
 from .trainers import train_shared_vllm
 
@@ -91,16 +91,16 @@ def main():
         print(f"[Run] Removed old bridge config")
     
     # === Print Configuration ===
-    print(f"\n{'='*60}")
+    print("\n" + "="*60)
     print("STARTING UNIFIED GRPO TRAINER (shared_vllm mode)")
-    print(f"{'='*60}")
+    print("="*60)
     print(f"Model: {args.model_name}")
     print(f"vLLM port: {args.vllm_port}")
     print(f"GPU memory utilization: {args.gpu_memory_utilization}")
     print(f"Training steps: {args.training_steps}")
     print(f"Optimizer: {args.optimizer}")
     print(f"GRPO: kl_coef={args.kl_coef}, clip_eps={args.clip_eps}")
-    print(f"{'='*60}\n")
+    print("="*60 + "\n")
     
     # Get the path to vllm_api_server.py
     script_dir = Path(__file__).parent

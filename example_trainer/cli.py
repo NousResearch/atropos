@@ -6,7 +6,6 @@ This is the SINGLE SOURCE OF TRUTH for all CLI arguments.
 """
 
 import argparse
-from typing import Optional
 
 import torch
 
