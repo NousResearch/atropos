@@ -9,7 +9,7 @@ NousWhiteHouse is a reinforcement learning (RL) project focused on improving age
 
 After replicating RESTGPT, we noticed that LLMs struggled to find the right tools to call, such as finding Gims songs on Spotify. Instead of manually matching multiple APIs, the recent advent of MCP inspires us to double down on tool-calling efforts.
 
-Our Dataset uses a format like-
+Our Dataset uses a format like:
 {
   "user_prompt_text": "What is the current stock price of AAPL?",
   "expected_mcp_call": {
@@ -20,18 +20,18 @@ Our Dataset uses a format like-
   }
 }
 
-the return prompts are compared with the expected_mcp_call
+The return prompts are compared with the expected_mcp_call
 
-Our main task or challenge that our environment presented-
+Our main task or challenge that our environment presented:
 Help LLMs use MCPs
 
-Why is this environment interesting or useful for RL research-
-this environment will result in super fast tool calling with more accurate results and allow for more seamless integrations of tools with LLMs
+Why is this environment interesting or useful for RL research:
+This environment will result in super fast tool calling with more accurate results and allow for more seamless integrations of tools with LLMs
 
-Framework-
-we used the Single Tool Environment as a framework for the MCP env
+Framework:
+We used the Single Tool Environment as a framework for the MCP env
 
-Challenge-
+Challenge:
 Finding existing large datasets with MCP calls was extremely difficult.
 
 ## Estimate
