@@ -92,6 +92,12 @@ class TrainingConfig(BaseModel):
     vllm_gpu_memory_utilization: float = Field(
         0.45, description="GPU memory utilization for vLLM server (0.0-1.0)"
     )
+    max_model_len: int = Field(
+        4096, description="Maximum context length for vLLM server"
+    )
+    dtype: str = Field(
+        "bfloat16", description="Data type for model weights (bfloat16, float16, auto)"
+    )
 
     # === Weights & Biases Configuration ===
     use_wandb: bool = Field(
