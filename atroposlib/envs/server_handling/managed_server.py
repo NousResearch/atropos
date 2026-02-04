@@ -519,9 +519,9 @@ class DummyManagedServer:
     """
 
     # Fixed dummy values
-    DUMMY_TOKENS = [1, 2, 3]
-    DUMMY_MASKED_TOKENS = [-100, 2, 3]
-    DUMMY_LOGPROBS = [-0.5, -0.5, -0.5]
+    DUMMY_TOKENS = [i for i in range(128)]
+    DUMMY_MASKED_TOKENS = [-100] + DUMMY_TOKENS[1:]
+    DUMMY_LOGPROBS = [-0.5 for _ in range(128)]
 
     def __init__(
         self,
