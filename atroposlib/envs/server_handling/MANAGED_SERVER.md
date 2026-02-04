@@ -4,7 +4,9 @@
 
 `ManagedServer` is a wrapper around `APIServer` that automatically tracks text sequences with aligned tokens and logprobs. It eliminates the need for manual token extraction, alignment, and masking in your environment code, making it **the recommended approach** for handling inference in Atropos environments.
 
-**Server Compatibility:** ManagedServer works with all Atropos server types - `OpenAIServer`, `VLLMServer`, `SGLangServer`, and `TrlVllmServer`. Simply set the `server_type` field in your `APIServerConfig` to `"openai"` (default), `"vllm"`, `"sglang"`, or `"trl"` to use the appropriate backend with automatic server class selection.
+**Server Compatibility:** ManagedServer works with `VLLMServer`, `SGLangServer`, and `TrlVllmServer`. Simply set the `server_type` field in your `APIServerConfig` to `"vllm"`, `"sglang"`, or `"trl"` to use the appropriate backend with automatic server class selection.
+
+> **⚠️ OpenAI Endpoints:** OpenAI's API does not expose token IDs or detailed logprobs required for full ManagedServer functionality. See [OpenAI Endpoint Limitations](#openai-endpoint-limitations) for details and workarounds.
 
 ### Why Use ManagedServer?
 
@@ -683,6 +685,74 @@ The context manager:
 # Turn 1 produces: "Hello World"
 # Turn 2 prompt must be: "Hello World..." (exact prefix match)
 ```
+
+## OpenAI Endpoint Limitations
+
+OpenAI's API does not expose token IDs or detailed logprobs in the same way that vLLM, SGLang, and other self-hosted inference servers do. This means **ManagedServer cannot provide accurate token-level training data** when using OpenAI endpoints.
+
+### Default Behavior
+
+By default, attempting to use `managed_server()` with an `OpenAIServer` will raise a `NotImplementedError`:
+
+```python
+async with self.server.managed_server() as managed:
+    # Raises NotImplementedError if server is OpenAIServer
+    ...
+```
+
+The error message will explain the limitation and how to opt-in if you don't need real token data.
+
+### DummyManagedServer (Opt-in)
+
+If you're using OpenAI endpoints for **evaluation or testing** (not training) and don't need actual token IDs or logprobs, you can opt-in to use `DummyManagedServer` by setting an environment variable:
+
+```bash
+export ATROPOS_ALLOW_DUMMY_MANAGED_SERVER=1
+```
+
+With this flag set, `managed_server()` will return a `DummyManagedServer` that:
+- Provides the same interface as `ManagedServer`
+- Returns **fixed placeholder values** for tokens and logprobs:
+  - `tokens`: `[1, 2, 3]`
+  - `masked_tokens`: `[-100, 2, 3]`
+  - `logprobs`: `[-0.5, -0.5, -0.5]`
+- Uses simple text formatting for `full_text`: `role:content` joined by `\n\n`
+
+### When to Use DummyManagedServer
+
+✅ **Appropriate uses:**
+- Testing environment logic without needing real token data
+- Evaluation workflows where you only need completion text
+- Prototyping before switching to a self-hosted inference server
+
+❌ **Not appropriate for:**
+- Training (tokens and logprobs are meaningless placeholders)
+- Any workflow that depends on accurate token-level information
+
+### Example
+
+```python
+import os
+
+# Opt-in to dummy managed server for OpenAI
+os.environ["ATROPOS_ALLOW_DUMMY_MANAGED_SERVER"] = "1"
+
+# Now this works with OpenAI endpoints
+async with self.server.managed_server() as managed:
+    response = await managed.chat_completion(messages=messages, n=4)
+    state = managed.get_state()
+    nodes = state["nodes"]
+
+    # nodes contain placeholder token data - DO NOT use for training
+    for node in nodes:
+        print(node.full_text)  # Real completion text
+        print(node.tokens)     # [1, 2, 3] - placeholder!
+        print(node.logprobs)   # [-0.5, -0.5, -0.5] - placeholder!
+```
+
+### Recommendation
+
+For training workloads, use a self-hosted inference server (`VLLMServer`, `SGLangServer`, or `TrlVllmServer`) that provides full token and logprob access. OpenAI endpoints are best suited for evaluation, testing, or workflows that only need completion text.
 
 ## Additional Resources
 
