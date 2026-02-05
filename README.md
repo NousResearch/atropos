@@ -372,6 +372,21 @@ If you have found the library helpful in your work, you can cite this repository
   note         = {Version 0.3.0},
 }
 ```
+### Windows Setup Notes
+
+If you are using Windows, follow these extra steps to avoid common setup issues:
+
+1. **Install Python 3.10+**
+   - Download from [python.org](https://www.python.org/downloads/).
+   - During installation, **check "Add Python to PATH"**.
+
+2. **Disable the Microsoft Store Python alias**
+   - Open **Start → App execution aliases**
+   - Turn **OFF** `python.exe` and `python3.exe`
+
+3. **Allow local scripts in PowerShell** (needed to activate virtual environments)
+   ```powershell
+   Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 
 ---
 
