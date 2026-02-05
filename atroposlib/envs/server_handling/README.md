@@ -2,6 +2,12 @@
 
 This module provides server abstraction layers for different LLM inference backends.
 
+## ManagedServer
+
+For automatic token and logprob tracking, see the [ManagedServer Guide](MANAGED_SERVER.md).
+
+> **Note:** OpenAI endpoints do not support token IDs/logprobs required for ManagedServer. Set `ATROPOS_ALLOW_DUMMY_MANAGED_SERVER=1` to use a placeholder implementation for testing/evaluation. See [OpenAI Endpoint Limitations](MANAGED_SERVER.md#openai-endpoint-limitations) for details.
+
 ## Reasoning Model Support
 
 The `ReasoningConfig` class enables support for reasoning/thinking models across different providers.
