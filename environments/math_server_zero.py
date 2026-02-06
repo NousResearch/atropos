@@ -284,6 +284,7 @@ class MathEnv(BaseEnv):
         if not self.config.run_evaluation:
             return
         import time
+
         start_time = time.time()
 
         eval_tasks = []
@@ -305,9 +306,7 @@ class MathEnv(BaseEnv):
             metrics[f"{subset}_accuracy"] = accuracy
             metrics[f"{subset}_total"] = len(scores)
             metrics[f"{subset}_correct"] = sum(scores)
-            self.eval_metrics.append(
-                (f"eval/{subset}_percent_correct", accuracy)
-            )
+            self.eval_metrics.append((f"eval/{subset}_percent_correct", accuracy))
 
         # overall score
         all_scores = []
@@ -317,9 +316,7 @@ class MathEnv(BaseEnv):
         metrics["overall_accuracy"] = overall_accuracy
         metrics["overall_total"] = len(all_scores)
         metrics["overall_correct"] = sum(all_scores)
-        self.eval_metrics.append(
-            ("eval/overall_percent_correct", overall_accuracy)
-        )
+        self.eval_metrics.append(("eval/overall_percent_correct", overall_accuracy))
 
         end_time = time.time()
 
@@ -327,7 +324,9 @@ class MathEnv(BaseEnv):
         print("\n" + "=" * 60)
         print("Math Zero Evaluation Results")
         print("=" * 60)
-        print(f"Overall Accuracy: {overall_accuracy:.2%} ({sum(all_scores)}/{len(all_scores)})")
+        print(
+            f"Overall Accuracy: {overall_accuracy:.2%} ({sum(all_scores)}/{len(all_scores)})"
+        )
         print("\nPer-subset breakdown:")
         for subset, scores in sorted(task_lists.items()):
             acc = sum(scores) / len(scores)
