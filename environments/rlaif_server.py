@@ -184,7 +184,7 @@ class RLAIFEnv(BaseEnv):
         for msg in item[0]:
             to_score_prompt.append(dict(msg))
             if added_sys:
-                if chat[-1]["role"] == "system":
+                if to_score_prompt[-1]["role"] == "system":
                     to_score_prompt.pop()
         to_score_prompt.pop()
         for i, chat_completion in enumerate(chat_completions.choices):
