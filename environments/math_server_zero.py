@@ -259,7 +259,7 @@ class MathEnv(BaseEnv):
             completion = await managed.completion(
                 prompt=question,
                 n=1,
-                max_tokens=32765,
+                max_tokens=self.config.max_token_length,
                 temperature=0.0,
                 split="eval",
                 stop=stop_list,
@@ -283,6 +283,9 @@ class MathEnv(BaseEnv):
     async def evaluate(self, *args, **kwargs):
         if not self.config.run_evaluation:
             return
+        import time
+        start_time = time.time()
+
         eval_tasks = []
         for item in self.test:
             eval_tasks.append(self.rollout_and_score_eval(item[0], item[1], item[2]))
@@ -292,17 +295,55 @@ class MathEnv(BaseEnv):
             if subset not in task_lists:
                 task_lists[subset] = list()
             task_lists[subset].append(score)
-        # Now get the average
+
+        # Build metrics dictionary for saving
+        metrics = {}
+
+        # Now get the average per subset
         for subset, scores in task_lists.items():
+            accuracy = sum(scores) / len(scores)
+            metrics[f"{subset}_accuracy"] = accuracy
+            metrics[f"{subset}_total"] = len(scores)
+            metrics[f"{subset}_correct"] = sum(scores)
             self.eval_metrics.append(
-                (f"eval/{subset}_percent_correct", sum(scores) / len(scores))
+                (f"eval/{subset}_percent_correct", accuracy)
             )
+
         # overall score
-        scores = []
+        all_scores = []
         for subset, score in task_lists.items():
-            scores.extend(score)
+            all_scores.extend(score)
+        overall_accuracy = sum(all_scores) / len(all_scores)
+        metrics["overall_accuracy"] = overall_accuracy
+        metrics["overall_total"] = len(all_scores)
+        metrics["overall_correct"] = sum(all_scores)
         self.eval_metrics.append(
-            ("eval/overall_percent_correct", sum(scores) / len(scores))
+            ("eval/overall_percent_correct", overall_accuracy)
+        )
+
+        end_time = time.time()
+
+        # Print results to console
+        print("\n" + "=" * 60)
+        print("Math Zero Evaluation Results")
+        print("=" * 60)
+        print(f"Overall Accuracy: {overall_accuracy:.2%} ({sum(all_scores)}/{len(all_scores)})")
+        print("\nPer-subset breakdown:")
+        for subset, scores in sorted(task_lists.items()):
+            acc = sum(scores) / len(scores)
+            print(f"  {subset}: {acc:.2%} ({sum(scores)}/{len(scores)})")
+        print("=" * 60 + "\n")
+
+        # Save results to disk
+        await self.evaluate_log(
+            metrics=metrics,
+            task_name="math_zero",
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "max_tokens": self.config.max_token_length,
+                "temperature": 0.0,
+            },
         )
 
     async def collect_trajectories(self, item) -> Tuple[List, List]:
