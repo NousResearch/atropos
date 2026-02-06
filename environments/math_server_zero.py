@@ -145,8 +145,9 @@ class MathEnv(BaseEnv):
         rollout_url = os.environ.get("MATH_ENV_ROLLOUT_URL", "http://localhost:8000")
         vllm_url = os.environ.get("MATH_ENV_VLLM_URL", "http://localhost:9001/v1")
         wandb_name = os.environ.get("MATH_ENV_WANDB_NAME", "math-zero-env")
-        max_token_length = int(os.environ.get("MATH_ENV_MAX_TOKENS", "8192"))
-
+        max_token_length = int(os.environ.get("MATH_ENV_MAX_TOKENS", "32000"))
+        worker_timeout = float(os.environ.get("MATH_ENV_WORKER_TIMEOUT", "1500"))
+        
         env_config = RSConfig(
             tokenizer_name=model_name,
             group_size=8,
@@ -161,6 +162,7 @@ class MathEnv(BaseEnv):
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
             max_num_workers_per_node=24,
+            worker_timeout=worker_timeout,
         )
         server_configs = [
             APIServerConfig(
