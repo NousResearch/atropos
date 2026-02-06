@@ -20,9 +20,9 @@ Usage:
     train_legacy(config)
 """
 
+from .cli import config_from_args, parse_args
 from .config import TrainingConfig
-from .trainers import train_legacy, train_shared_vllm, train_lora
-from .cli import parse_args, config_from_args
+from .trainers import train_legacy, train_lora, train_shared_vllm
 
 __all__ = [
     "TrainingConfig",
