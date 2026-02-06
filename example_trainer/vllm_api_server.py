@@ -53,7 +53,7 @@ os.environ.setdefault("VLLM_USE_V1", "0")
 # Set spawn method for multiprocessing (required for CUDA)
 os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
 try:
-    multiprocessing.set_start_method('spawn', force=True)
+    multiprocessing.set_start_method("spawn", force=True)
 except RuntimeError:
     pass  # Already set
 
@@ -86,6 +86,7 @@ def _apply_patches_early() -> bool:
         try:
             import sys
             from pathlib import Path
+
             # Add parent directory to path so we can import vllm_patching
             script_dir = Path(__file__).parent
             if str(script_dir) not in sys.path:
@@ -106,6 +107,7 @@ def _apply_patches_early() -> bool:
     except Exception as e:
         print(f"[vLLM Server] Error applying patches: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -139,22 +141,25 @@ except ImportError:
     # Create a compatible ArgumentParser that handles 'deprecated' kwarg
     # (Python 3.10 doesn't support 'deprecated' in BooleanOptionalAction)
     import argparse
-    
+
     class FlexibleArgumentParser(argparse.ArgumentParser):
         """ArgumentParser that strips unsupported kwargs for Python < 3.13."""
-        
+
         def add_argument(self, *args, **kwargs):
             # Remove 'deprecated' kwarg if present (not supported before Python 3.13)
-            kwargs.pop('deprecated', None)
+            kwargs.pop("deprecated", None)
             return super().add_argument(*args, **kwargs)
+
 
 # set_ulimit might not exist in all vLLM versions
 try:
     from vllm.utils import set_ulimit
 except ImportError:
+
     def set_ulimit() -> None:
         """No-op fallback for set_ulimit."""
         pass
+
 
 from vllm.outputs import RequestOutput  # noqa: F401, E402
 from vllm.version import __version__ as VLLM_VERSION  # noqa: E402
@@ -602,7 +607,9 @@ async def lora_load(request: LoraLoadRequest) -> JSONResponse:
         )  # vLLM needs unique int ID
         bridge_state.lora_load_count += 1
 
-    logger.info(f"LoRA adapter loaded: {request.adapter_path} (id={bridge_state.active_lora_id})")
+    logger.info(
+        f"LoRA adapter loaded: {request.adapter_path} (id={bridge_state.active_lora_id})"
+    )
 
     return JSONResponse(
         {

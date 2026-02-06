@@ -143,4 +143,3 @@ curl -s -X POST "http://localhost:${VLLM_PORT}/generate" \
         "max_tokens": 100,
         "temperature": 0.1
     }' | jq '.text[0]' | tee "${LOG_DIR}/trained_response.txt"
-
