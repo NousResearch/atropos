@@ -145,10 +145,9 @@ class SmolagentsEnv(BaseEnv):
         if config.data_path_to_save_groups is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             config.data_path_to_save_groups = f"smolagents_output_{timestamp}.jsonl"
-            print(
+            logger.info(
                 f"Using auto-generated output path: {config.data_path_to_save_groups}"
             )
-
         # Initialize the base class
         super().__init__(config, server_configs, slurm, testing)
 
