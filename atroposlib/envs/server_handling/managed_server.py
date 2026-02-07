@@ -112,7 +112,9 @@ class ManagedServer:
     # Models like Kimi-K2, Qwen3 use these for tool formatting, reasoning block handling, etc.
     CHAT_TEMPLATE_KWARGS = {"tools", "thinking", "enable_thinking", "documents"}
 
-    def _convert_messages_to_prompt(self, messages: List[Dict[str, str]], **template_kwargs) -> str:
+    def _convert_messages_to_prompt(
+        self, messages: List[Dict[str, str]], **template_kwargs
+    ) -> str:
         """
         Convert chat messages to prompt text using tokenizer's chat template.
 
@@ -353,14 +355,19 @@ class ManagedServer:
             # Use skip_special_tokens=False if we have a tool call parser,
             # so we can see the tool call special tokens for parsing
             if self.tokenizer is not None:
-                skip_special = not hasattr(self, "tool_call_parser") or self.tool_call_parser is None
+                skip_special = (
+                    not hasattr(self, "tool_call_parser")
+                    or self.tool_call_parser is None
+                )
                 completion_text = self.tokenizer.decode(
                     output_tokens, skip_special_tokens=skip_special
                 )
                 # Also decode a clean version for the content field
-                clean_text = self.tokenizer.decode(
-                    output_tokens, skip_special_tokens=True
-                ) if not skip_special else completion_text
+                clean_text = (
+                    self.tokenizer.decode(output_tokens, skip_special_tokens=True)
+                    if not skip_special
+                    else completion_text
+                )
             else:
                 completion_text = "".join([chr(t) for t in output_tokens if t > 31])
                 clean_text = completion_text
@@ -399,9 +406,15 @@ class ManagedServer:
             parsed_tool_calls = None
             parsed_finish_reason = finish_reason
 
-            if hasattr(self, "tool_call_parser") and self.tool_call_parser is not None and template_kwargs.get("tools"):
+            if (
+                hasattr(self, "tool_call_parser")
+                and self.tool_call_parser is not None
+                and template_kwargs.get("tools")
+            ):
                 try:
-                    parsed_content, parsed_tool_calls = self.tool_call_parser.parse(completion_text)
+                    parsed_content, parsed_tool_calls = self.tool_call_parser.parse(
+                        completion_text
+                    )
                     if parsed_tool_calls:
                         parsed_finish_reason = "tool_calls"
                         if parsed_content is None:
@@ -413,11 +426,16 @@ class ManagedServer:
             reasoning_content = None
             final_content = parsed_content
             import re as _re
-            think_match = _re.search(r"<think>(.*?)</think>", final_content or "", _re.DOTALL)
+
+            think_match = _re.search(
+                r"<think>(.*?)</think>", final_content or "", _re.DOTALL
+            )
             if think_match:
                 reasoning_content = think_match.group(1).strip()
                 # Strip <think> blocks from content
-                final_content = _re.sub(r"<think>.*?</think>", "", final_content, flags=_re.DOTALL).strip()
+                final_content = _re.sub(
+                    r"<think>.*?</think>", "", final_content, flags=_re.DOTALL
+                ).strip()
 
             # Build choice with tool_calls and reasoning if found
             message_kwargs = {"content": final_content or "", "role": "assistant"}
