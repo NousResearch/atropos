@@ -241,7 +241,7 @@ class DatasetEnv(BaseEnv):
             top_p=self.config.top_p,
         )
 
-        print(f"Completions: {completions}")
+        logger.debug(f"Completions: {completions}")
         # Process completions
         trajectories = []
         for completion in completions.choices:

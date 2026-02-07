@@ -539,7 +539,7 @@ class InfiniteMathEnv(BaseEnv):
                 if hasattr(completion, "text")
                 else completion.message.content
             )
-            print("model_answer", model_answer)
+            logger.debug(f"model_answer: {model_answer}")
 
             full_messages = [
                 {"role": "system", "content": self.system_prompt},
