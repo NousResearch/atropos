@@ -23,7 +23,11 @@ class SGLangServer(APIServer):
             base_url=config.base_url,
             timeout=config.timeout,
         )
-        self.tokenizer = AutoTokenizer.from_pretrained(config.model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            config.model_name
+            if config.tokenizer_name == "none"
+            else config.tokenizer_name
+        )
         super().__init__(config)
 
     async def check_server_status_task(self, chat_completion: bool = True):

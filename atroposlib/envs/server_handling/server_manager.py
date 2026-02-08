@@ -115,6 +115,7 @@ class ServerManager:
                         model_name=configs.model_name,
                         rolling_buffer_length=configs.rolling_buffer_length,
                         api_key="x",
+                        tokenizer_name=configs.tokenizer_name,
                     )
                 )
             self.servers = [server_class(config) for config in openai_configs]
