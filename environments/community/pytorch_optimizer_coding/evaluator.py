@@ -34,8 +34,7 @@ class OptimizerEvaluator:
                 categories=DiscreteScale(["yes", "no"]),
                 explanation=False,
             )
-            .prompt(
-                """
+            .prompt("""
                     You are an expert code validator specializing in PyTorch optimizers.
                     Your task is to determine if the provided optimizer code is completely valid and error-free.
 
@@ -57,8 +56,7 @@ class OptimizerEvaluator:
                     - "no" if ANY criterion fails or there are ANY potential issues
 
                     Be extremely strict in your evaluation.
-                """
-            )
+                """)
             .via("xai/grok-3-latest", retries=2)
         )
 

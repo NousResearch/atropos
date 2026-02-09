@@ -9,11 +9,11 @@ We currently have the following tasks:
 
 | Name | Dataset | Model | Task | Target Metric | Baseline Score | Baseline Runtime | Hardware |
 | ------- | ---- | ----- | ---- | ------------- | -------------- | ---------------- | -------- |
-| [mnist](mnist) | MNIST | MLP | Image Classification | Top-1 Accuracy | 0.97 | 1 min | 1 gpu |
-| [classification](classification) | [Imagenet-64x64](https://patrykchrabaszcz.github.io/Imagenet32/) | [Wide ResNet](https://arxiv.org/pdf/1605.07146.pdf) | Image Classification | Top-1 Accuracy | 0.69 | 4h | 4 gpu |
-| [classification_small](classification_small) | [CIFAR100](https://www.cs.toronto.edu/~kriz/cifar.html) | [Resnet18](https://arxiv.org/pdf/1512.03385.pdf) | Image Classification | Top-1 Accuracy | 0.77 | 10 min | 1 gpu |
-| [segmentation](segmentation) | [MIT Scene Parse](http://sceneparsing.csail.mit.edu/) | [SegFormer](https://arxiv.org/abs/2105.15203) | Semantic Segmentation | Intersection over Union (IoU) | 0.35 | 5h | 4 gpu |
-| [graph](graph) | [ogbg-molhiv](https://ogb.stanford.edu/docs/graphprop/#ogbg-mol) | [Graph Isomorphism Network (GIN)](https://arxiv.org/pdf/1810.00826.pdf) | Graph Property Prediction | ROC-AUC | 0.77 | 20min | 1 gpu |
+| [mnist](../../baselines/mnist.yaml) | MNIST | MLP | Image Classification | Top-1 Accuracy | 0.97 | 1 min | 1 gpu |
+| [classification](../../baselines/classification.yaml) | [Imagenet-64x64](https://patrykchrabaszcz.github.io/Imagenet32/) | [Wide ResNet](https://arxiv.org/pdf/1605.07146.pdf) | Image Classification | Top-1 Accuracy | 0.69 | 4h | 4 gpu |
+| [classification_small](../../baselines/classification_small.yaml) | [CIFAR100](https://www.cs.toronto.edu/~kriz/cifar.html) | [Resnet18](https://arxiv.org/pdf/1512.03385.pdf) | Image Classification | Top-1 Accuracy | 0.77 | 10 min | 1 gpu |
+| [segmentation](../../baselines/segmentation.yaml) | [MIT Scene Parse](http://sceneparsing.csail.mit.edu/) | [SegFormer](https://arxiv.org/abs/2105.15203) | Semantic Segmentation | Intersection over Union (IoU) | 0.35 | 5h | 4 gpu |
+| [graph](../../baselines/graph.yaml) | [ogbg-molhiv](https://ogb.stanford.edu/docs/graphprop/#ogbg-mol) | [Graph Isomorphism Network (GIN)](https://arxiv.org/pdf/1810.00826.pdf) | Graph Property Prediction | ROC-AUC | 0.77 | 20min | 1 gpu |
 | [graph_tiny](graph_tiny) | [Cora](https://paperswithcode.com/sota/node-classification-on-cora) | [GCN](https://arxiv.org/abs/1609.02907) | Node Classification | Accuracy | 0.82 | 1min | 1 gpu |
 | [tabular](tabular) | [California Housing](https://www.dcc.fc.up.pt/~ltorgo/Regression/cal_housing.html) | [FT Transformer](https://arxiv.org/pdf/2106.11959.pdf) | Tabular Regression | Test RMSE | 0.40 | 2 min | 1 gpu |
 | [translation](translation) | [WMT17(en-de)](https://machinetranslate.org/wmt17) | [T5 small](https://jmlr.org/papers/volume21/20-074/20-074.pdf) | Machine Translation | BLEU (sacrebleu) | 26.3 | 6h | 4 gpus |
@@ -47,7 +47,7 @@ def __init__(self, optimizer: Optimizer, config: TaskConfig):
 ```
 In the `__init__` method you need to create your model, and pass it to the `super().__init__` call. There the model is wrapped into a `GroupedModel` which splits the model parameters into weight_decay and non-weight_decay groups. If you want to specify your own parameter groups (e.g. for different learning rates) you need to wrap your model in a `GroupedModel` yourself, before passing it to the `super().__init__` call.
 
-The other methods you neet to implement are [training_step](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#training-step), [validation_step](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#validation-step) and [test_step](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#test-step). Here you need to implement the training and evaluation logic.
+The other methods you need to implement are [training_step](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#training-step), [validation_step](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#validation-step) and [test_step](https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#test-step). Here you need to implement the training and evaluation logic.
 
 ### task.py
 Here you only need to provide two simple functions:

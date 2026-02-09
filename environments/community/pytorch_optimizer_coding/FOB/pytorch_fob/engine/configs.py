@@ -83,7 +83,7 @@ class EngineConfig(BaseConfig):
         self.gradient_clip_alg: str = cfg["gradient_clip_alg"]
         self.gradient_clip_val: Optional[float] = cfg["gradient_clip_val"]
         self.log_extra: bool | dict[str, bool] = cfg["log_extra"]
-        self.logging_inteval: int = cfg["logging_interval"]
+        self.logging_interval: int = cfg["logging_interval"]
         self.max_steps: int = config[task_key].get("max_steps", None)
         self.optimize_memory: bool = cfg["optimize_memory"]
         self.output_dir = Path(cfg["output_dir"]).resolve()

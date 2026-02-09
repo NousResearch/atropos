@@ -49,7 +49,7 @@ patient_profiles = [
 
     The doctor will ask you follow up questions to diagnose you.
 
-    You will provide the doctor will some suggestions as to what you think the diagnosis is.
+    You will provide the doctor with some suggestions as to what you think the diagnosis is.
 
     You will answer the doctor's questions in a way that is not too direct,
     but still gives the doctor enough information to diagnose you.

@@ -3,17 +3,21 @@ import inspect
 import os
 import warnings
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, List, Union
+from typing import AsyncGenerator, List, Optional, Union
 
 from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.completion import Completion
 from pydantic import BaseModel, Field
 
-from atroposlib.envs.server_handling.managed_server import ManagedServer
+from atroposlib.envs.server_handling.managed_server import (
+    DummyManagedServer,
+    ManagedServer,
+)
 from atroposlib.envs.server_handling.openai_server import OpenAIServer
 from atroposlib.envs.server_handling.server_baseline import (
     APIServer,
     APIServerConfig,
+    ReasoningConfig,
     ServerBaseline,
 )
 from atroposlib.envs.server_handling.server_harness import ServerHarness
@@ -47,8 +51,10 @@ class ServerManager:
         slurm=False,
         testing=False,
         max_n_completions=8,
+        reasoning_config: Optional[ReasoningConfig] = None,
     ):
         self.max_n_completions = max_n_completions
+        self.reasoning_config = reasoning_config
         # First we check to see if it's the base server class, and if so, we need to select the appropriate server class
         # You can't use type() to check if it's the base server class, because it's an abstract class, it'll appear as
         # an ABCMeta, not what you're expecting.
@@ -118,9 +124,15 @@ class ServerManager:
                         tokenizer_name=configs.tokenizer_name,
                     )
                 )
-            self.servers = [server_class(config) for config in openai_configs]
+            self.servers = [
+                server_class(config, reasoning_config=reasoning_config)
+                for config in openai_configs
+            ]
         elif not slurm:
-            self.servers = [server_class(config) for config in configs]
+            self.servers = [
+                server_class(config, reasoning_config=reasoning_config)
+                for config in configs
+            ]
         else:
             nodelist = (
                 os.popen(f'scontrol show hostnames {os.environ["SLURM_JOB_NODELIST"]}')
@@ -133,7 +145,10 @@ class ServerManager:
                     "Not enough nodes to distribute to, assuming single node"
                     " and you've setup your sglang appropriately."
                 )
-                self.servers = [server_class(config) for config in configs]
+                self.servers = [
+                    server_class(config, reasoning_config=reasoning_config)
+                    for config in configs
+                ]
                 return
             urls = []
             num_training_nodes = int(os.environ.get("NUM_TRAINING_NODES"))
@@ -148,11 +163,23 @@ class ServerManager:
                 new_conf = configs[0].model_copy(deep=True)
                 new_conf.base_url = urls[i]
                 new_configs.append(new_conf)
-            self.servers = [server_class(config) for config in new_configs]
+            self.servers = [
+                server_class(config, reasoning_config=reasoning_config)
+                for config in new_configs
+            ]
 
     async def update_weight(self, weight: float):
         for server in self.servers:
             await server.update_weight(weight)
+
+    def _get_server_base_url(self, server_idx: int = 0) -> Optional[str]:
+        """Get the base_url from a server's config."""
+        if not self.servers:
+            return None
+        server = self.servers[server_idx]
+        if hasattr(server, "config") and hasattr(server.config, "base_url"):
+            return server.config.base_url
+        return None
 
     async def wait_for_sem(self, is_training: bool):
         """
@@ -187,6 +214,12 @@ class ServerManager:
             sem_vals = get_available_slots()
 
     async def chat_completion(self, **kwargs) -> ChatCompletion:
+        """
+        Route chat completion to the most available server.
+
+        Reasoning config injection is handled by the individual servers.
+        Pass `skip_reasoning=True` to bypass reasoning injection for this call.
+        """
         n = kwargs.get("n", 1)
         if n > self.max_n_completions:
             # Split into multiple completions
@@ -219,9 +252,16 @@ class ServerManager:
                 most_available_server_num_slots = (
                     server.sem._value if is_train else server.eval_sem._value
                 )
+
         return await self.servers[most_available_server].chat_completion(**kwargs)
 
     async def completion(self, **kwargs) -> Completion:
+        """
+        Route completion to the most available server.
+
+        Reasoning config injection is handled by the individual servers.
+        Pass `skip_reasoning=True` to bypass reasoning injection for this call.
+        """
         n = kwargs.get("n", 1)
         if n > self.max_n_completions:
             # Split into multiple completions
@@ -252,6 +292,7 @@ class ServerManager:
                 most_available_server_num_slots = (
                     server.sem._value if is_train else server.eval_sem._value
                 )
+
         return await self.servers[most_available_server].completion(**kwargs)
 
     async def tokens_and_logprobs_completion(
@@ -260,6 +301,9 @@ class ServerManager:
         """
         Get tokens and logprobs from completion.
         Returns (prompt_tokens, output_tokens, output_logprobs, finish_reasons).
+
+        Note: Reasoning config is NOT injected here - this method is for extracting
+        raw token-level data for training, not for generating reasoned responses.
         """
         n = kwargs.get("n", 1)
         if n > self.max_n_completions:
@@ -297,6 +341,7 @@ class ServerManager:
                 most_available_server_num_slots = (
                     server.sem._value if is_train else server.eval_sem._value
                 )
+
         return await self.servers[most_available_server].tokens_and_logprobs_completion(
             **kwargs
         )
@@ -320,19 +365,28 @@ class ServerManager:
     @asynccontextmanager
     async def managed_server(
         self, tokenizer=None
-    ) -> AsyncGenerator[ManagedServer, None]:
+    ) -> AsyncGenerator[Union[ManagedServer, DummyManagedServer], None]:
         """
         Context manager that provides a ManagedServer instance.
 
         The ManagedServer wraps the most available server and tracks text sequences
         with aligned tokens and logprobs. State is automatically cleared on exit.
 
+        For OpenAI endpoints (which don't support token IDs/logprobs), a
+        DummyManagedServer is returned if the ATROPOS_ALLOW_DUMMY_MANAGED_SERVER
+        environment variable is set. Otherwise, a NotImplementedError is raised.
+
         Args:
             tokenizer: Optional tokenizer to use. If not provided, will attempt to
                       extract from server or create from model name.
 
         Yields:
-            ManagedServer instance wrapping the selected server
+            ManagedServer (or DummyManagedServer for OpenAI) instance wrapping
+            the selected server
+
+        Raises:
+            NotImplementedError: If using OpenAI server without the
+                                ATROPOS_ALLOW_DUMMY_MANAGED_SERVER env var set.
 
         Example:
             async with server_manager.managed_server() as managed:
@@ -353,16 +407,41 @@ class ServerManager:
                 most_available_server = i
                 most_available_server_num_slots = server.sem._value
 
-        # Create ManagedServer wrapping the selected server
-        if isinstance(self.servers[most_available_server], OpenAIServer):
+        selected_server = self.servers[most_available_server]
+
+        # Handle OpenAI servers separately - they don't support token IDs/logprobs
+        if isinstance(selected_server, OpenAIServer):
+            allow_dummy = os.environ.get(
+                "ATROPOS_ALLOW_DUMMY_MANAGED_SERVER", ""
+            ).lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+
+            if not allow_dummy:
+                raise NotImplementedError(
+                    "OpenAI endpoints do not support token IDs or logprobs required for "
+                    "ManagedServer. If you don't need actual token-level training data and "
+                    "are okay with dummy placeholder values, set the environment variable:\n\n"
+                    "    export ATROPOS_ALLOW_DUMMY_MANAGED_SERVER=1\n\n"
+                    "WARNING: The DummyManagedServer will return placeholder token IDs and "
+                    "logprobs (all zeros) that are NOT suitable for training. Use only for "
+                    "evaluation or testing workflows."
+                )
+
             warnings.warn(
-                "Using OpenAIServer with managed_server does not allow for state tracking"
+                "Using DummyManagedServer with OpenAI endpoint. Token IDs and logprobs "
+                "will be placeholder values and are NOT suitable for training."
             )
-            yield self.servers[most_available_server]
+            managed = DummyManagedServer(server=selected_server, tokenizer=tokenizer)
+
+            try:
+                yield managed
+            finally:
+                managed.reset()
         else:
-            managed = ManagedServer(
-                server=self.servers[most_available_server], tokenizer=tokenizer
-            )
+            managed = ManagedServer(server=selected_server, tokenizer=tokenizer)
 
             try:
                 yield managed

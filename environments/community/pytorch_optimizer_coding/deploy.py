@@ -92,8 +92,7 @@ def send_code(code: str):
 def main():
     """Entrypoint for local execution. Accepts code as input."""
     # Example usage: pass code as a string argument
-    return_obj = send_code.remote(
-        """
+    return_obj = send_code.remote("""
 import torch
 import math
 
@@ -144,8 +143,7 @@ for step in range(20):
     print(f"Step {step + 1}: x = {x.item():.4f}, loss = {loss.item():.4f}")
 
 print(f"\\nOptimal x: {x.item():.4f}")
-"""
-    )
+""")
 
     print("\n===== Optimizer Execution Result =====")
     print(f"Filename: {return_obj['filename']}")

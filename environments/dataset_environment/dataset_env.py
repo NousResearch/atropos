@@ -78,6 +78,7 @@ class DatasetEnv(BaseEnv):
         self.metric_buffer = {}
 
         self.reward_function = self._initialize_reward_function()
+        self.current_item = None
 
     def _initialize_reward_function(self):
         if hasattr(self.config, "reward_functions") and self.config.reward_functions:
