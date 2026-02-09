@@ -43,6 +43,7 @@ class MCQAThinkingEnv(BaseEnv):
         super().__init__(config, server_configs, slurm, testing)
         self.percent_correct_buffer = list()
         self.eval_metrics = list()
+        self.rollouts_for_wandb = []
 
     @classmethod
     def config_init(self) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
