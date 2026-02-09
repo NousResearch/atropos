@@ -105,7 +105,7 @@ class ManagedServer:
 
     def _convert_messages_to_prompt(self, messages: List[Dict[str, str]]) -> str:
         """
-        Convert chat messages to prompt text using tokenizer's chat template.
+        Convert chat messages to prompt text using the tokenizer's chat template.
 
         Args:
             messages: List of message dicts with 'role' and 'content'
