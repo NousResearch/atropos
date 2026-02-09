@@ -142,7 +142,7 @@ class ServerManager:
             if len(nodelist) < 2:
                 print(
                     "Not enough nodes to distribute to, assuming single node"
-                    " and you've setup your sglang appropriately."
+                    " and you've set up your sglang appropriately."
                 )
                 self.servers = [
                     server_class(config, reasoning_config=reasoning_config)
