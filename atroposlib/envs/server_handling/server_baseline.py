@@ -250,6 +250,10 @@ class ServerBaseline(BaseModel):
     server_type: Literal["openai", "trl", "sglang", "vllm"] = Field(
         default="openai", description="Type of server to use"
     )
+    tokenizer_name: str = Field(
+        default="none",
+        description="The tokenizer name to use. If none, will use the model_name as the tokenizer.",
+    )
 
 
 class APIServerConfig(ServerBaseline):
