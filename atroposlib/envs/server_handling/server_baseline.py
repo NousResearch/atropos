@@ -52,7 +52,7 @@ class ReasoningConfig:
         # (e.g., Anthropic's latest models support up to 128k extended thinking)
 
         # Auto-enable if effort or max_tokens are specified
-        # Because if either of these are enabled, reasoning in
+        # Because if either of these is enabled, reasoning in
         # OpenRouter must also be set to Enabled
         if self.effort is not None or self.max_tokens is not None:
             self.enabled = True
