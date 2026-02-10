@@ -136,6 +136,22 @@ Key Documents:
 
 ---
 
+## Prerequisites
+
+Before installing Atropos, ensure you have the following:
+
+- **Python 3.10+** — Required. Check with `python --version`
+- **Git** — For cloning the repository
+- **An OpenAI-compatible API endpoint** — Atropos environments need an inference server. Options include:
+  - A local [vLLM](https://github.com/vllm-project/vllm) or [SGLang](https://github.com/sgl-project/sglang) instance
+  - An [OpenAI API key](https://platform.openai.com/api-keys) (set as `OPENAI_API_KEY` environment variable)
+  - Any provider with an OpenAI-compatible endpoint (e.g., [Together AI](https://together.ai), [OpenRouter](https://openrouter.ai))
+- **Weights & Biases account** *(optional)* — For experiment tracking. Set `use_wandb=False` in your environment config to skip
+
+> **Note:** You do not need a GPU to develop or test environments locally. A GPU is only required for running inference servers locally or for training.
+
+---
+
 ## Installation
 
 Get your Python 3.10 (or later) environment ready, then simply pip install:
@@ -315,13 +331,19 @@ python gsm8k_server.py evaluate \
 
 ### Offline Data Generation Quick Start
 
-Run the below in separate terminals:
+Run the following commands in **separate terminals**, in this order:
+
+**Terminal 1** — Start the API server first (must be running before environments connect):
 ```sh
 run-api
 ```
+
+**Terminal 2** — Start an environment:
 ```sh
 python gsm8k_server.py serve --slurm False # or an env of your choice
 ```
+
+**Terminal 3** — Generate data:
 ```sh
 atropos-sft-gen path/to/output.jsonl --tokenizer Qwen/Qwen2.5-1.5B-Instruct # or whichever tokenizer you have in your env config
 ```
@@ -355,6 +377,48 @@ If you would like to use OpenAI models, please edit your `config_init` to someth
 ```
 
 For DPO, replace `atropos-sft-gen` with `atropos-dpo-gen` and check `atropos-dpo-gen -h` for data filtering and saving options.
+
+---
+
+## Troubleshooting
+
+**`Address already in use` when running `run-api`**
+
+Port 8000 is already occupied. Either stop the existing process or specify a different port:
+
+```bash
+# Find and stop the process using port 8000
+lsof -ti:8000 | xargs kill -9
+
+# Or use a different port
+run-api --port 8001
+```
+
+**`ModuleNotFoundError` or dependency conflicts**
+
+Ensure you're using a clean virtual environment with the correct Python version:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+```
+
+**`OPENAI_API_KEY` not set errors**
+
+Set your API key as an environment variable, or configure it in the environment's `config_init`:
+
+```bash
+export OPENAI_API_KEY="your-key-here"
+```
+
+**Out of memory (OOM) when running environments locally**
+
+Use a smaller model for local development and testing. For example, configure `model_name` to a lightweight model like `gpt-4.1-nano` with an OpenAI API key, or use a quantized local model with vLLM.
+
+**Environment not connecting to the API server**
+
+Ensure `run-api` is running before starting any environments. By default, environments connect to `http://localhost:8000`. If your API is on a different host or port, update `rollout_server_url` in your environment's config.
 
 ---
 
