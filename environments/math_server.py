@@ -552,7 +552,10 @@ class MathEnv(BaseEnv):
                     i
                     for i, score in enumerate(to_postprocess["scores"])
                     if score == 1.0
-                ][0]
+                ]
+                if len(pos_idx) == 0:
+                    return None, to_backlog
+                pos_idx = pos_idx[0]
                 neg_idx = [
                     i
                     for i, score in enumerate(to_postprocess["scores"])
