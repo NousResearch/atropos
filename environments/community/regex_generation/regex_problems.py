@@ -15,9 +15,7 @@ PROBLEMS = [
         "difficulty": "easy",
     },
     {
-        "description": (
-            "Match a string that starts with 'hello' (case-sensitive)."
-        ),
+        "description": ("Match a string that starts with 'hello' (case-sensitive)."),
         "positive": ["hello", "hello world", "hellooo", "hello123"],
         "negative": ["Hello", "hi hello", "HELLO", "hell"],
         "difficulty": "easy",
@@ -46,9 +44,7 @@ PROBLEMS = [
         "difficulty": "easy",
     },
     {
-        "description": (
-            "Match a string that contains at least one uppercase letter."
-        ),
+        "description": ("Match a string that contains at least one uppercase letter."),
         "positive": ["Hello", "ABC", "aB", "123A456"],
         "negative": ["hello", "123", "abc!", ""],
         "difficulty": "easy",
@@ -189,7 +185,7 @@ PROBLEMS = [
         "description": (
             "Match a string enclosed in double quotes. Inside the"
             " quotes, any characters are allowed except unescaped"
-            ' double quotes. Escaped quotes (\\\") are allowed.'
+            ' double quotes. Escaped quotes (\\") are allowed.'
         ),
         "positive": [
             '"hello"',
@@ -207,8 +203,7 @@ PROBLEMS = [
     },
     {
         "description": (
-            "Match a phone number in the format (XXX) XXX-XXXX"
-            " where X is a digit."
+            "Match a phone number in the format (XXX) XXX-XXXX" " where X is a digit."
         ),
         "positive": [
             "(123) 456-7890",

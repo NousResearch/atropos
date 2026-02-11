@@ -244,7 +244,9 @@ class RegexEnv(BaseEnv):
             return None
 
         for s in scores["scores"]:
-            self.percent_correct_buffer.append(1.0 if s >= self.config.score_threshold else 0.0)
+            self.percent_correct_buffer.append(
+                1.0 if s >= self.config.score_threshold else 0.0
+            )
 
         # If all scores identical, no learning signal
         if len(set(scores["scores"])) == 1:
