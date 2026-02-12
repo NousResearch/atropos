@@ -719,7 +719,7 @@ def train_lora_restart(config: TrainingConfig):
 
     # Launch vLLM with the initial adapter
     print("[3/4] Launching vLLM with CUDA graphs (no --enforce-eager)...")
-    vllm_proc = _launch_vllm_with_lora(config, current_adapter_path)
+    vllm_proc = _launch_vllm_with_lora(config, current_adapter_path, step=0)
     if vllm_proc is None:
         raise RuntimeError("Failed to launch vLLM")
 
@@ -799,7 +799,7 @@ def train_lora_restart(config: TrainingConfig):
             # Restart vLLM with new adapter
             print(f"  [RESTART] Restarting vLLM with new adapter...")
             _terminate_vllm(vllm_proc)
-            vllm_proc = _launch_vllm_with_lora(config, current_adapter_path)
+            vllm_proc = _launch_vllm_with_lora(config, current_adapter_path, step=step + 1)
             if vllm_proc is None:
                 raise RuntimeError("Failed to restart vLLM")
             
@@ -849,23 +849,30 @@ def train_lora_restart(config: TrainingConfig):
     print(f"Final adapter saved to {final_adapter_path}")
 
 
-def _launch_vllm_with_lora(config: TrainingConfig, adapter_path: str) -> Optional[subprocess.Popen]:
+def _launch_vllm_with_lora(config: TrainingConfig, adapter_path: str, step: int = 0) -> Optional[subprocess.Popen]:
     """
-    Launch vLLM with a LoRA adapter pre-loaded (CUDA graphs enabled).
+    Launch vLLM with a LoRA adapter PRE-LOADED at startup (CUDA graphs enabled).
     
-    Unlike lora_only mode, this does NOT use --enforce-eager, so we get
-    full CUDA graph speed (~170 TPS instead of ~13 TPS).
+    Key insight: To get CUDA graphs with LoRA, we must load the adapter AT STARTUP
+    via --lora-modules, not dynamically via HTTP. Dynamic loading requires
+    --enforce-eager which disables CUDA graphs.
+    
+    This gives us full CUDA graph speed (~170 TPS instead of ~13 TPS).
     """
     from .vllm_manager import kill_process_on_port, wait_for_vllm_ready
     
     # Kill any existing process on the port
     kill_process_on_port(config.vllm_port)
     
+    # Resolve adapter path to absolute path
+    adapter_abs_path = os.path.abspath(adapter_path)
+    
     # Find the vllm_api_server.py script
     script_dir = os.path.dirname(os.path.abspath(__file__))
     server_script = os.path.join(script_dir, "vllm_api_server.py")
     
-    # Build command - NO --enforce-eager for full speed
+    # Build command with adapter loaded at startup via --lora-modules
+    # Format: --lora-modules name=path
     cmd = [
         "python", server_script,
         "--model", config.model_name,
@@ -873,8 +880,9 @@ def _launch_vllm_with_lora(config: TrainingConfig, adapter_path: str) -> Optiona
         "--gpu-memory-utilization", str(config.vllm_gpu_memory_utilization),
         "--enable-lora",
         "--max-lora-rank", str(max(config.lora_r * 2, 32)),
-        # Note: NOT adding --enforce-eager - this is the key difference!
-        # LoRA adapter will be loaded at startup, CUDA graphs compiled with it
+        # PRE-LOAD adapter at startup so CUDA graphs include it!
+        "--lora-modules", f"training_adapter={adapter_abs_path}",
+        # Note: NOT adding --enforce-eager - CUDA graphs will be compiled WITH the adapter
     ]
     
     # Set environment for GPU selection
@@ -885,39 +893,34 @@ def _launch_vllm_with_lora(config: TrainingConfig, adapter_path: str) -> Optiona
     else:
         print(f"  GPU: Same as trainer (inherited CUDA_VISIBLE_DEVICES)")
     
-    print(f"  Launching: {' '.join(cmd)}")
-    print(f"  Adapter: {adapter_path}")
+    print(f"  Launching vLLM with adapter pre-loaded:")
+    print(f"    Command: {' '.join(cmd)}")
+    print(f"    Adapter: {adapter_abs_path}")
+    
+    # Create log file for vLLM output
+    vllm_log_path = os.path.join(config.save_path, f"vllm_step_{step}.log")
+    print(f"    Log: {vllm_log_path}")
     
     try:
-        proc = subprocess.Popen(cmd, env=env)
-        print(f"  vLLM PID: {proc.pid}")
+        vllm_log_file = open(vllm_log_path, "w")
+        proc = subprocess.Popen(cmd, env=env, stdout=vllm_log_file, stderr=subprocess.STDOUT)
+        print(f"    PID: {proc.pid}")
         
-        # Wait for server to be ready
-        if not wait_for_vllm_ready(config.vllm_port, timeout=180):
-            print("  ERROR: vLLM failed to start")
+        # Wait for server to be ready (may take longer as it compiles CUDA graphs with LoRA)
+        print(f"  Waiting for vLLM to be ready (compiling CUDA graphs with LoRA)...")
+        if not wait_for_vllm_ready(config.vllm_port, timeout=300):
+            print("  ERROR: vLLM failed to start. Check log:")
+            print(f"    cat {vllm_log_path}")
             proc.terminate()
             return None
         
-        # Load the LoRA adapter
-        print(f"  Loading LoRA adapter...")
-        try:
-            resp = requests.post(
-                f"http://localhost:{config.vllm_port}/lora/load",
-                json={"adapter_path": adapter_path, "adapter_name": "training_adapter"},
-                timeout=60,
-            )
-            if resp.status_code == 200:
-                print(f"  ✓ Adapter loaded successfully")
-            else:
-                print(f"  WARNING: Adapter load returned {resp.status_code}: {resp.text}")
-        except Exception as e:
-            print(f"  WARNING: Could not load adapter: {e}")
-            # Continue anyway - base model inference still works
-        
+        print(f"  ✓ vLLM ready with adapter pre-loaded!")
         return proc
         
     except Exception as e:
         print(f"  ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
