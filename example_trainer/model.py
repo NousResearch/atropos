@@ -132,7 +132,8 @@ def load_model_and_tokenizer(
                 "  3. Trainer is on SAME GPUs as vLLM"
             )
 
-    elif config.weight_bridge_mode == "lora_only":
+    elif config.weight_bridge_mode in ("lora_only", "lora_restart"):
+        # Both lora_only and lora_restart use PEFT LoRA adapters
         model = _load_model_with_lora(config)
 
     else:
