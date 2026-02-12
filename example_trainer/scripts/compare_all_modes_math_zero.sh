@@ -300,11 +300,12 @@ LORA_ONLY_TRAINER_PID=$!
 # -----------------------------------------------------------------------------
 echo ""
 echo "[LORA_RESTART] Starting trainer (manages vLLM internally)..."
+# NOTE: lora_restart shares GPU with trainer's model (~8GB), so use lower vLLM memory
 CUDA_VISIBLE_DEVICES=$LORA_RESTART_GPU python -m example_trainer.grpo \
     --model-name "$MODEL" \
     --weight-bridge-mode lora_restart \
     --vllm-port $LORA_RESTART_VLLM_PORT \
-    --vllm-gpu-memory-utilization 0.70 \
+    --vllm-gpu-memory-utilization 0.20 \
     --atropos-url "http://localhost:${LORA_RESTART_API_PORT}" \
     --batch-size $BATCH_SIZE \
     --training-steps $TRAINING_STEPS \
