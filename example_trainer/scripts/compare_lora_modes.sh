@@ -140,7 +140,7 @@ echo "[LORA_ONLY] Starting vLLM with --enable-lora --enforce-eager..."
 CUDA_VISIBLE_DEVICES=$LORA_ONLY_GPU python -u example_trainer/vllm_api_server.py \
     --model "$MODEL" \
     --port $LORA_ONLY_VLLM_PORT \
-    --gpu-memory-utilization 0.4 \
+    --gpu-memory-utilization 0.3 \
     --enable-lora \
     --max-lora-rank 64 \
     --enforce-eager \
@@ -236,7 +236,7 @@ CUDA_VISIBLE_DEVICES=$LORA_RESTART_GPU python -m example_trainer.grpo \
     --model-name "$MODEL" \
     --weight-bridge-mode lora_restart \
     --vllm-port $LORA_RESTART_VLLM_PORT \
-    --vllm-gpu-memory-utilization 0.4 \
+    --vllm-gpu-memory-utilization 0.3 \
     --atropos-url "http://localhost:${LORA_RESTART_API_PORT}" \
     --batch-size $BATCH_SIZE \
     --training-steps $TRAINING_STEPS \
