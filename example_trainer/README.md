@@ -17,10 +17,12 @@ example_trainer/
 ├── checkpointing.py     # Save models & LoRA adapters
 ├── vllm_manager.py      # vLLM process management
 ├── trainers.py          # Training mode implementations
+├── nccl_weight_bridge.py # NCCL direct weight transfer (torchtitan-style)
 ├── vllm_api_server.py   # Custom vLLM server (streamlined for training)
-├── vllm_patching/       # CUDA IPC patches for weight sharing basically overriding standard vllm for this
+├── vllm_patching/       # CUDA IPC patches for weight sharing
 │   └── patched_gpu_runner.py
-└── scripts/        # Helper scripts
+└── scripts/             # Helper scripts
+    ├── run_lora_nccl.sh     # LoRA NCCL mode launcher
     ├── test_lora_mode.sh
     └── test_single_copy_mode.sh
 ```
@@ -58,17 +60,25 @@ Data Flow:
 
 ---
 
-## Three Training Modes
+## Four Training Modes
 
 | Mode | Description | Memory | Best For |
 |------|-------------|--------|----------|
 | **shared_vllm** | Single-copy via CUDA IPC | 1x model | Same GPU, maximum efficiency |
-| **lora_only** | Train adapters, hot-swap | 1x + small adapter | Fast iteration, small checkpoints |
+| **lora_only** | Train adapters, HTTP hot-swap | 1x + small adapter | Simple setup, debugging |
+| **lora_nccl** | Train adapters, NCCL transfer | 1x + small adapter | Multi-GPU, fastest sync |
 | **legacy** | Full model, restart vLLM | 2x model | Different GPUs, simple setup |
 
 ### Recommendation
 
-**Start with `lora_only`** - it's the easiest to set up and debug. Move to `shared_vllm` for production training when you need maximum efficiency for SINGLE GPU TRAINING RUNS. MULTIPLE GPU TRAINING NOT SUPPORTED .
+**Start with `lora_only`** - it's the easiest to set up and debug.
+
+**Use `lora_nccl`** (torchtitan-style) for production multi-GPU training when you need:
+- Fastest weight synchronization (NCCL broadcast vs HTTP + disk I/O)
+- True on-policy training (sync after every step)
+- Distributed training across nodes
+
+**Use `shared_vllm`** for single-GPU training when you need maximum efficiency.
 
 ---
 
@@ -136,6 +146,89 @@ python -m example_trainer.grpo \
 # 4. Start environment
 # 5. Start trainer
 ```
+
+---
+
+## LoRA NCCL Mode (Torchtitan-Style)
+
+This mode implements torchtitan-style direct NCCL weight transfer for LoRA training. Instead of HTTP hot-swap (disk I/O), weights are broadcast directly via NCCL from the trainer to vLLM.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    NCCL Process Group                                │
+│  ┌─────────────────────┐                ┌─────────────────────────┐ │
+│  │   Trainer (rank 0)  │ ──NCCL send──> │   vLLM (rank 1)         │ │
+│  │   - Trains LoRA     │                │   - Receives weights    │ │
+│  │   - broadcast()     │                │   - Updates in-place    │ │
+│  └─────────────────────┘                └─────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Benefits over `lora_only`
+
+| Aspect | lora_only (HTTP) | lora_nccl (NCCL) |
+|--------|------------------|------------------|
+| **Sync time** | 100-500ms (disk I/O) | 5-50ms (direct GPU) |
+| **Disk usage** | Writes checkpoints | No disk I/O during training |
+| **Scalability** | Single vLLM instance | Multiple inference nodes |
+| **On-policy** | Periodic sync | True per-step sync |
+
+### Quick Start
+
+**Option 1: Use the launch script**
+```bash
+./example_trainer/scripts/run_lora_nccl.sh
+```
+
+**Option 2: Manual launch**
+
+```bash
+# Terminal 1: API
+run-api --port 8000
+
+# Terminal 2: vLLM with LoRA support
+CUDA_VISIBLE_DEVICES=1 python example_trainer/vllm_api_server.py \
+    --model Qwen/Qwen2.5-3B-Instruct \
+    --port 9001 \
+    --gpu-memory-utilization 0.45 \
+    --enable-lora \
+    --max-lora-rank 32 \
+    --enforce-eager
+
+# Terminal 3: Environment
+python environments/gsm8k_server.py serve \
+    --env.tokenizer_name "Qwen/Qwen2.5-3B-Instruct" \
+    --env.rollout_server_url "http://localhost:8000" \
+    --openai.base_url "http://localhost:9001/v1" \
+    --openai.model_name "Qwen/Qwen2.5-3B-Instruct" \
+    --openai.server_type vllm \
+    --slurm false
+
+# Terminal 4: Trainer with NCCL weight bridge
+CUDA_VISIBLE_DEVICES=0 python -m example_trainer.grpo \
+    --model-name Qwen/Qwen2.5-3B-Instruct \
+    --weight-bridge-mode lora_nccl \
+    --vllm-port 9001 \
+    --atropos-url http://localhost:8000 \
+    --lora-r 16 \
+    --lora-alpha 32 \
+    --training-steps 50 \
+    --nccl-init-method "tcp://localhost:29500" \
+    --nccl-world-size 2 \
+    --nccl-sync-every-step \
+    --benchmark
+```
+
+### NCCL Configuration Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--nccl-init-method` | `tcp://localhost:29500` | NCCL rendezvous URL |
+| `--nccl-world-size` | `2` | Total processes (trainer + vLLM instances) |
+| `--nccl-sync-every-step` | `True` | Sync after every step (true on-policy) |
+| `--no-nccl-sync-every-step` | - | Sync only at `vllm-restart-interval` |
 
 ---
 

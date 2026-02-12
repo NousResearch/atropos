@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
+GRPO (Group Relative Policy Optimization) Trainer.
 
-Supports three training modes:
+Supports four training modes:
 - none (legacy): Periodic checkpoint saves + vLLM restarts
 - shared_vllm: Single-copy mode with CUDA IPC weight sharing
-- lora_only: LoRA adapter training
+- lora_only: LoRA adapter training with HTTP hot-swap
+- lora_nccl: LoRA adapter training with NCCL direct weight transfer (torchtitan-style)
 
 Usage:
     # Legacy mode (manages vLLM internally)
@@ -14,13 +16,18 @@ Usage:
     python -m example_trainer.grpo --model-name Qwen/Qwen2.5-3B-Instruct \\
         --weight-bridge-mode shared_vllm
 
-    # LoRA mode (requires external vLLM with --enable-lora)
+    # LoRA mode with HTTP hot-swap (requires external vLLM with --enable-lora)
     python -m example_trainer.grpo --model-name Qwen/Qwen2.5-3B-Instruct \\
         --weight-bridge-mode lora_only --lora-r 16 --lora-alpha 32
+    
+    # LoRA mode with NCCL direct transfer (torchtitan-style, fastest)
+    python -m example_trainer.grpo --model-name Qwen/Qwen2.5-3B-Instruct \\
+        --weight-bridge-mode lora_nccl --lora-r 16 --lora-alpha 32 \\
+        --nccl-init-method tcp://localhost:29500
 """
 
 from .cli import config_from_args, parse_args
-from .trainers import train_legacy, train_lora, train_shared_vllm
+from .trainers import train_legacy, train_lora, train_lora_nccl, train_shared_vllm
 
 
 def main():
@@ -43,8 +50,12 @@ def main():
         train_shared_vllm(config)
 
     elif config.weight_bridge_mode == "lora_only":
-        # LoRA mode: freeze base model, train adapters only
+        # LoRA mode: freeze base model, train adapters only (HTTP hot-swap)
         train_lora(config)
+    
+    elif config.weight_bridge_mode == "lora_nccl":
+        # LoRA NCCL mode: torchtitan-style direct weight transfer
+        train_lora_nccl(config)
 
     else:
         # Legacy mode: periodic checkpoint saves + vLLM restarts
