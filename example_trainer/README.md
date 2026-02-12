@@ -58,21 +58,35 @@ Data Flow:
 
 ---
 
-## Three Training Modes
+## Four Training Modes
 
-| Mode | Description | Memory | Best For |
-|------|-------------|--------|----------|
-| **shared_vllm** | Single-copy via CUDA IPC | 1x model | Same GPU, maximum efficiency |
-| **lora_only** | Train adapters, HTTP hot-swap | 1x + small adapter | Simple setup, debugging |
-| **legacy** | Full model, restart vLLM | 2x model | Different GPUs, simple setup |
+| Mode | Description | Memory | Inference Speed | Best For |
+|------|-------------|--------|-----------------|----------|
+| **shared_vllm** | Single-copy via CUDA IPC | 1x model | ~170 TPS | Same GPU, maximum efficiency |
+| **lora_restart** | LoRA + vLLM restarts | 1x + adapter | ~170 TPS | LoRA training with speed |
+| **lora_only** | LoRA + HTTP hot-swap | 1x + adapter | ~13 TPS ⚠️ | Debugging only |
+| **legacy** | Full model, restart vLLM | 2x model | ~170 TPS | Different GPUs, simple setup |
+
+### ⚠️ IMPORTANT: `lora_only` Performance Warning
+
+The `lora_only` mode requires `--enforce-eager` which **disables CUDA graphs**, resulting in:
+- **12x slower inference** (~13 TPS vs ~170 TPS)
+- Training that takes **4x longer** (401 min vs 132 min for 120 steps)
+
+**Use `lora_restart` instead** - it restarts vLLM to keep CUDA graphs enabled.
 
 ### Recommendation
 
-**Start with `lora_only`** - it's the easiest to set up and debug.
+**Use `shared_vllm`** for production training when:
+- You have enough GPU memory for the full model
+- You want fastest training (no overhead)
 
-**Use `shared_vllm`** for production training when you need:
-- Fastest weight synchronization (CUDA IPC, zero-copy updates)
-- True on-policy training (vLLM sees updates immediately)
+**Use `lora_restart`** when:
+- You want LoRA's memory efficiency
+- You want fast inference (~170 TPS with CUDA graphs)
+- You can tolerate ~45s restart overhead every N steps
+
+**Avoid `lora_only`** unless you're debugging - the 12x inference penalty is severe.
 
 **Use `shared_vllm`** for single-GPU training when you need maximum efficiency.
 

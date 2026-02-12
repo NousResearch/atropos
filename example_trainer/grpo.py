@@ -2,10 +2,11 @@
 """
 GRPO (Group Relative Policy Optimization) Trainer.
 
-Supports three training modes:
+Supports four training modes:
 - none (legacy): Periodic checkpoint saves + vLLM restarts
 - shared_vllm: Single-copy mode with CUDA IPC weight sharing
-- lora_only: LoRA adapter training with HTTP hot-swap
+- lora_only: LoRA adapter training with HTTP hot-swap (SLOW - needs --enforce-eager)
+- lora_restart: LoRA training with vLLM restarts (FAST - CUDA graphs enabled)
 
 Usage:
     # Legacy mode (manages vLLM internally)
@@ -15,13 +16,18 @@ Usage:
     python -m example_trainer.grpo --model-name Qwen/Qwen2.5-3B-Instruct \\
         --weight-bridge-mode shared_vllm
 
-    # LoRA mode (requires external vLLM with --enable-lora --enforce-eager)
+    # LoRA mode with HTTP hot-swap (SLOW - 13 TPS due to --enforce-eager)
     python -m example_trainer.grpo --model-name Qwen/Qwen2.5-3B-Instruct \\
         --weight-bridge-mode lora_only --lora-r 16 --lora-alpha 32
+
+    # LoRA mode with vLLM restarts (FAST - 170 TPS with CUDA graphs)
+    python -m example_trainer.grpo --model-name Qwen/Qwen2.5-3B-Instruct \\
+        --weight-bridge-mode lora_restart --lora-r 16 --lora-alpha 32 \\
+        --vllm-restart-interval 3
 """
 
 from .cli import config_from_args, parse_args
-from .trainers import train_legacy, train_lora, train_shared_vllm
+from .trainers import train_legacy, train_lora, train_lora_restart, train_shared_vllm
 
 
 def main():
@@ -44,7 +50,13 @@ def main():
 
     elif config.weight_bridge_mode == "lora_only":
         # LoRA mode: freeze base model, train adapters only (HTTP hot-swap)
+        # WARNING: This is SLOW (~13 TPS) because it requires --enforce-eager
         train_lora(config)
+
+    elif config.weight_bridge_mode == "lora_restart":
+        # LoRA mode with vLLM restarts (FAST - uses CUDA graphs)
+        # Restarts vLLM every vllm_restart_interval steps with new adapter
+        train_lora_restart(config)
 
     else:
         # Legacy mode: periodic checkpoint saves + vLLM restarts
