@@ -2,29 +2,140 @@
 """
 Minimal test for vLLM restart cycle - no training, just launch/terminate/relaunch.
 Tests whether GPU memory is properly released between restarts.
+
+Run from atropos directory:
+    python example_trainer/scripts/test_vllm_restart_only.py --restarts 3 --gpu 0
 """
 import os
 import sys
 import time
 import argparse
+import subprocess
+import signal
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+def kill_process_on_port(port: int) -> None:
+    """Kill any process using the specified port."""
+    try:
+        subprocess.run(f"fuser -k {port}/tcp", shell=True, capture_output=True, timeout=10)
+    except Exception:
+        pass
+
+
+def wait_for_vllm_ready(port: int, timeout: int = 300) -> bool:
+    """Wait for vLLM to be ready on the specified port."""
+    import urllib.request
+    import urllib.error
+    
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            req = urllib.request.urlopen(f"http://localhost:{port}/health", timeout=5)
+            if req.status == 200:
+                return True
+        except (urllib.error.URLError, Exception):
+            pass
+        time.sleep(5)
+        elapsed = int(time.time() - start)
+        print(f"    Waiting... ({elapsed}s / {timeout}s)")
+    return False
+
+
+def terminate_vllm(proc, port: int) -> None:
+    """Terminate vLLM process and release GPU memory."""
+    print(f"  Terminating vLLM on port {port}...")
+    
+    # Get current GPU device
+    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+    
+    # Phase 1: Kill by port
+    kill_process_on_port(port)
+    time.sleep(2)
+    
+    # Phase 2: Kill the main process
+    if proc is not None:
+        print(f"  Killing main process (PID: {proc.pid})...")
+        try:
+            proc.kill()
+            proc.wait(timeout=5)
+        except Exception as e:
+            print(f"  Warning: {e}")
+    
+    # Phase 3: Kill ALL vLLM-related processes
+    print("  Killing all vLLM-related processes...")
+    kill_commands = [
+        f"fuser -k {port}/tcp",
+        "pkill -9 -f 'vllm.*EngineCore'",
+        "pkill -9 -f 'vllm_api_server'",
+        "pkill -9 -f 'from vllm'",
+        "pkill -9 -f 'multiprocessing.spawn'",
+    ]
+    for cmd in kill_commands:
+        try:
+            subprocess.run(cmd, shell=True, capture_output=True, timeout=5)
+        except Exception:
+            pass
+    
+    # Phase 4: Check for zombie GPU processes
+    print(f"  Checking for zombie GPU processes on GPU {gpu_id}...")
+    try:
+        result = subprocess.run(
+            f"nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits -i {gpu_id}",
+            shell=True, capture_output=True, text=True, timeout=10
+        )
+        if result.stdout.strip():
+            print(f"  Found GPU processes:\n{result.stdout}")
+            for line in result.stdout.strip().split('\n'):
+                if line.strip():
+                    parts = line.split(',')
+                    if len(parts) >= 1:
+                        pid = parts[0].strip()
+                        if pid and pid != str(os.getpid()):
+                            print(f"    Killing zombie GPU process: {pid}")
+                            try:
+                                subprocess.run(f"kill -9 {pid}", shell=True, timeout=5)
+                            except Exception:
+                                pass
+    except Exception as e:
+        print(f"  Warning: nvidia-smi check failed: {e}")
+    
+    # Phase 5: Wait for GPU memory release
+    print("  Waiting for GPU memory release...")
+    import torch
+    for i in range(12):  # 60 seconds total
+        time.sleep(5)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            free_mem = torch.cuda.mem_get_info()[0] / 1e9
+            total_mem = torch.cuda.mem_get_info()[1] / 1e9
+            print(f"    [{(i+1)*5}s] GPU memory: {free_mem:.1f}/{total_mem:.1f} GB free ({100*free_mem/total_mem:.0f}%)")
+            if free_mem > total_mem * 0.5:
+                print(f"  ✓ Sufficient memory available ({free_mem:.1f} GB)")
+                break
+    
+    # Final cleanup
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+        free_mem = torch.cuda.mem_get_info()[0] / 1e9
+        total_mem = torch.cuda.mem_get_info()[1] / 1e9
+        print(f"  ✓ Final GPU memory: {free_mem:.1f}/{total_mem:.1f} GB free ({100*free_mem/total_mem:.0f}%)")
+    
+    print("  ✓ vLLM terminated")
+
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Test vLLM restart cycle")
     parser.add_argument("--model", default="Qwen/Qwen3-4B-Instruct-2507")
     parser.add_argument("--port", type=int, default=9099)
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--memory-util", type=float, default=0.3)
-    parser.add_argument("--restarts", type=int, default=3, help="Number of restart cycles to test")
+    parser.add_argument("--restarts", type=int, default=3, help="Number of restart cycles")
     args = parser.parse_args()
     
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     
     import torch
-    from trainers import _launch_vllm_with_lora, _terminate_vllm
-    from config import TrainingConfig
     
     print("=" * 60)
     print("vLLM RESTART CYCLE TEST")
@@ -42,33 +153,16 @@ def main():
         total_mem = torch.cuda.mem_get_info()[1] / 1e9
         print(f"\nInitial GPU memory: {free_mem:.1f}/{total_mem:.1f} GB free")
     
-    # Create a minimal config
-    config = TrainingConfig(
-        model_name=args.model,
-        vllm_port=args.port,
-        vllm_gpu_memory_utilization=args.memory_util,
-        max_model_len=4096,  # Small for quick test
-        lora_r=16,
-        lora_alpha=32,
-        weight_bridge_mode="lora_restart",
-        save_path="/tmp/vllm_restart_test",
-    )
-    
-    # Create dummy adapter directory
-    os.makedirs(config.save_path, exist_ok=True)
-    adapter_path = os.path.join(config.save_path, "dummy_adapter")
-    
-    # We need to create a real adapter for vLLM to load
-    # Let's skip the adapter for this test and just test launch/terminate
-    print("\n" + "=" * 60)
-    print("Testing vLLM launch/terminate cycle (no adapter)")
-    print("=" * 60)
-    
-    from vllm_manager import kill_process_on_port, wait_for_vllm_ready
-    import subprocess
-    
+    # Find server script (relative to this script's location)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     server_script = os.path.join(os.path.dirname(script_dir), "vllm_api_server.py")
+    
+    if not os.path.exists(server_script):
+        print(f"ERROR: Cannot find vllm_api_server.py at {server_script}")
+        return 1
+    
+    log_dir = "/tmp/vllm_restart_test"
+    os.makedirs(log_dir, exist_ok=True)
     
     for cycle in range(args.restarts):
         print(f"\n{'='*60}")
@@ -82,7 +176,7 @@ def main():
             total_mem = torch.cuda.mem_get_info()[1] / 1e9
             print(f"[Before launch] GPU memory: {free_mem:.1f}/{total_mem:.1f} GB free ({100*free_mem/total_mem:.0f}%)")
         
-        # Launch vLLM (without LoRA for simplicity)
+        # Launch vLLM
         print(f"\n[{cycle+1}] Launching vLLM...")
         cmd = [
             "python", server_script,
@@ -93,7 +187,7 @@ def main():
         ]
         print(f"  Command: {' '.join(cmd)}")
         
-        log_file = f"/tmp/vllm_restart_test/vllm_cycle_{cycle}.log"
+        log_file = f"{log_dir}/vllm_cycle_{cycle}.log"
         with open(log_file, "w") as f:
             proc = subprocess.Popen(
                 cmd,
@@ -112,9 +206,7 @@ def main():
             print(f"  ✓ vLLM ready in {elapsed:.1f}s")
         else:
             print(f"  ✗ vLLM failed to start!")
-            print(f"  Check log: {log_file}")
-            with open(log_file, "r") as f:
-                print(f"  Last 20 lines:\n{''.join(f.readlines()[-20:])}")
+            print(f"  Check log: tail -50 {log_file}")
             proc.kill()
             return 1
         
@@ -130,14 +222,7 @@ def main():
         
         # Terminate vLLM
         print(f"\n[{cycle+1}] Terminating vLLM...")
-        _terminate_vllm(proc, args.port)
-        
-        # Check memory after terminate
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            free_mem = torch.cuda.mem_get_info()[0] / 1e9
-            total_mem = torch.cuda.mem_get_info()[1] / 1e9
-            print(f"[After terminate] GPU memory: {free_mem:.1f}/{total_mem:.1f} GB free ({100*free_mem/total_mem:.0f}%)")
+        terminate_vllm(proc, args.port)
     
     print("\n" + "=" * 60)
     print("TEST COMPLETE!")
@@ -149,6 +234,7 @@ def main():
         print(f"Final GPU memory: {free_mem:.1f}/{total_mem:.1f} GB free ({100*free_mem/total_mem:.0f}%)")
     
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
