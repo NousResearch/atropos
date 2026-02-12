@@ -21,8 +21,17 @@ import subprocess
 import sys
 import time
 from typing import Optional
+from pathlib import Path
 
 import requests
+
+# Force unbuffered output for log files
+sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
+sys.stderr.reconfigure(line_buffering=True) if hasattr(sys.stderr, 'reconfigure') else None
+
+def log(msg: str):
+    """Print with immediate flush."""
+    print(msg, flush=True)
 
 # Complex math prompt that requires extended reasoning
 BENCHMARK_PROMPT = """You are a mathematics expert. Solve this problem step by step, showing all your work:
@@ -73,8 +82,16 @@ def start_vllm_server(
     log_file: str = "vllm.log",
 ) -> subprocess.Popen:
     """Start a vLLM server."""
+    # Find the vllm_api_server.py script relative to this script
+    script_dir = Path(__file__).parent.parent  # example_trainer/
+    vllm_server_path = script_dir / "vllm_api_server.py"
+    
+    if not vllm_server_path.exists():
+        log(f"ERROR: vllm_api_server.py not found at {vllm_server_path}")
+        raise FileNotFoundError(f"vllm_api_server.py not found at {vllm_server_path}")
+    
     cmd = [
-        "python", "example_trainer/vllm_api_server.py",
+        sys.executable, str(vllm_server_path),
         "--model", model,
         "--port", str(port),
         "--gpu-memory-utilization", "0.45",
@@ -92,6 +109,9 @@ def start_vllm_server(
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     
+    log(f"Starting vLLM: CUDA_VISIBLE_DEVICES={gpu_id}")
+    log(f"Command: {' '.join(cmd)}")
+    
     log_f = open(log_file, "w")
     proc = subprocess.Popen(
         cmd,
@@ -99,6 +119,7 @@ def start_vllm_server(
         stdout=log_f,
         stderr=subprocess.STDOUT,
     )
+    log(f"Started vLLM process PID={proc.pid}, logging to {log_file}")
     return proc
 
 
@@ -112,7 +133,7 @@ def load_lora_adapter(port: int, adapter_path: str) -> bool:
         )
         return resp.status_code == 200
     except Exception as e:
-        print(f"Failed to load LoRA adapter: {e}")
+        log(f"Failed to load LoRA adapter: {e}")
         return False
 
 
@@ -153,11 +174,11 @@ def benchmark_inference(
                 results["tokens"].append(output_tokens)
                 results["tps"].append(output_tokens / elapsed if elapsed > 0 else 0)
                 
-                print(f"  Run {i+1}: {elapsed:.2f}s, ~{output_tokens:.0f} tokens, {output_tokens/elapsed:.1f} TPS")
+                log(f"  Run {i+1}: {elapsed:.2f}s, ~{output_tokens:.0f} tokens, {output_tokens/elapsed:.1f} TPS")
             else:
-                print(f"  Run {i+1}: FAILED ({resp.status_code})")
+                log(f"  Run {i+1}: FAILED ({resp.status_code})")
         except Exception as e:
-            print(f"  Run {i+1}: ERROR - {e}")
+            log(f"  Run {i+1}: ERROR - {e}")
     
     if results["times"]:
         results["avg_time"] = sum(results["times"]) / len(results["times"])
@@ -198,7 +219,7 @@ def main():
     procs = []
     
     def cleanup():
-        print("\nCleaning up...")
+        log("\nCleaning up...")
         for p in procs:
             try:
                 p.terminate()
@@ -210,20 +231,20 @@ def main():
     signal.signal(signal.SIGTERM, lambda s, f: (cleanup(), sys.exit(0)))
     
     try:
-        print("=" * 70)
-        print("vLLM Inference Benchmark: LoRA vs Base Model")
-        print("=" * 70)
-        print(f"Model: {args.model}")
-        print(f"LoRA adapter: {args.lora_path or 'None (base model only)'}")
-        print(f"Max tokens: {args.max_tokens}")
-        print(f"Num runs: {args.num_runs}")
-        print(f"Prompt type: {args.prompt}")
-        print("=" * 70)
+        log("=" * 70)
+        log("vLLM Inference Benchmark: LoRA vs Base Model")
+        log("=" * 70)
+        log(f"Model: {args.model}")
+        log(f"LoRA adapter: {args.lora_path or 'None (base model only)'}")
+        log(f"Max tokens: {args.max_tokens}")
+        log(f"Num runs: {args.num_runs}")
+        log(f"Prompt type: {args.prompt}")
+        log("=" * 70)
         
         # Start LoRA server
         if not args.skip_lora:
-            print(f"\n[1/4] Starting LoRA-enabled vLLM on GPU {args.lora_gpu}, port {args.lora_port}...")
-            print("      Flags: --enable-lora --enforce-eager (no CUDA graphs)")
+            log(f"\n[1/4] Starting LoRA-enabled vLLM on GPU {args.lora_gpu}, port {args.lora_port}...")
+            log("      Flags: --enable-lora --enforce-eager (no CUDA graphs)")
             lora_proc = start_vllm_server(
                 args.model, args.lora_port, args.lora_gpu,
                 enable_lora=True, log_file="benchmark_lora.log"
@@ -232,8 +253,8 @@ def main():
         
         # Start base/shared server
         if not args.skip_shared:
-            print(f"\n[2/4] Starting base vLLM on GPU {args.shared_gpu}, port {args.shared_port}...")
-            print("      Flags: (none) - uses CUDA graphs for faster inference")
+            log(f"\n[2/4] Starting base vLLM on GPU {args.shared_gpu}, port {args.shared_port}...")
+            log("      Flags: (none) - uses CUDA graphs for faster inference")
             shared_proc = start_vllm_server(
                 args.model, args.shared_port, args.shared_gpu,
                 enable_lora=False, log_file="benchmark_shared.log"
@@ -241,83 +262,83 @@ def main():
             procs.append(shared_proc)
         
         # Wait for servers
-        print("\n[3/4] Waiting for servers to be ready...")
+        log("\n[3/4] Waiting for servers to be ready...")
         
         lora_ready = False
         shared_ready = False
         
         if not args.skip_lora:
-            print(f"  Waiting for LoRA server (port {args.lora_port})...")
+            log(f"  Waiting for LoRA server (port {args.lora_port})...")
             lora_ready = wait_for_server(args.lora_port, timeout=300)
             if lora_ready:
-                print(f"  ✓ LoRA server ready")
+                log(f"  ✓ LoRA server ready")
                 
                 # Load LoRA adapter if provided
                 if args.lora_path:
-                    print(f"  Loading LoRA adapter from {args.lora_path}...")
+                    log(f"  Loading LoRA adapter from {args.lora_path}...")
                     if load_lora_adapter(args.lora_port, args.lora_path):
-                        print(f"  ✓ LoRA adapter loaded")
+                        log(f"  ✓ LoRA adapter loaded")
                     else:
-                        print(f"  ✗ Failed to load LoRA adapter")
+                        log(f"  ✗ Failed to load LoRA adapter")
             else:
-                print(f"  ✗ LoRA server failed to start")
+                log(f"  ✗ LoRA server failed to start")
         
         if not args.skip_shared:
-            print(f"  Waiting for base server (port {args.shared_port})...")
+            log(f"  Waiting for base server (port {args.shared_port})...")
             shared_ready = wait_for_server(args.shared_port, timeout=300)
             if shared_ready:
-                print(f"  ✓ Base server ready")
+                log(f"  ✓ Base server ready")
             else:
-                print(f"  ✗ Base server failed to start")
+                log(f"  ✗ Base server failed to start")
         
         # Run benchmarks
-        print("\n[4/4] Running benchmarks...")
-        print("-" * 70)
+        log("\n[4/4] Running benchmarks...")
+        log("-" * 70)
         
         lora_results = None
         shared_results = None
         
         if lora_ready and not args.skip_lora:
-            print(f"\nLoRA Server (--enable-lora --enforce-eager):")
+            log(f"\nLoRA Server (--enable-lora --enforce-eager):")
             lora_results = benchmark_inference(
                 args.lora_port, prompt, args.max_tokens, args.num_runs
             )
         
         if shared_ready and not args.skip_shared:
-            print(f"\nBase Server (CUDA graphs enabled):")
+            log(f"\nBase Server (CUDA graphs enabled):")
             shared_results = benchmark_inference(
                 args.shared_port, prompt, args.max_tokens, args.num_runs
             )
         
         # Print comparison
-        print("\n" + "=" * 70)
-        print("RESULTS SUMMARY")
-        print("=" * 70)
+        log("\n" + "=" * 70)
+        log("RESULTS SUMMARY")
+        log("=" * 70)
         
         if lora_results and "avg_tps" in lora_results:
-            print(f"\nLoRA Mode (--enable-lora --enforce-eager):")
-            print(f"  Avg time:   {lora_results['avg_time']:.2f}s")
-            print(f"  Avg tokens: {lora_results['avg_tokens']:.0f}")
-            print(f"  Avg TPS:    {lora_results['avg_tps']:.1f}")
+            log(f"\nLoRA Mode (--enable-lora --enforce-eager):")
+            log(f"  Avg time:   {lora_results['avg_time']:.2f}s")
+            log(f"  Avg tokens: {lora_results['avg_tokens']:.0f}")
+            log(f"  Avg TPS:    {lora_results['avg_tps']:.1f}")
         
         if shared_results and "avg_tps" in shared_results:
-            print(f"\nBase Mode (CUDA graphs):")
-            print(f"  Avg time:   {shared_results['avg_time']:.2f}s")
-            print(f"  Avg tokens: {shared_results['avg_tokens']:.0f}")
-            print(f"  Avg TPS:    {shared_results['avg_tps']:.1f}")
+            log(f"\nBase Mode (CUDA graphs):")
+            log(f"  Avg time:   {shared_results['avg_time']:.2f}s")
+            log(f"  Avg tokens: {shared_results['avg_tokens']:.0f}")
+            log(f"  Avg TPS:    {shared_results['avg_tps']:.1f}")
         
         if lora_results and shared_results and "avg_tps" in lora_results and "avg_tps" in shared_results:
             speedup = shared_results["avg_tps"] / lora_results["avg_tps"] if lora_results["avg_tps"] > 0 else 0
             time_diff = lora_results["avg_time"] - shared_results["avg_time"]
-            print(f"\nComparison:")
-            print(f"  Base is {speedup:.2f}x faster in TPS")
-            print(f"  Base saves {time_diff:.2f}s per request")
-            print(f"  --enforce-eager overhead: ~{(1 - 1/speedup) * 100:.1f}%")
+            log(f"\nComparison:")
+            log(f"  Base is {speedup:.2f}x faster in TPS")
+            log(f"  Base saves {time_diff:.2f}s per request")
+            log(f"  --enforce-eager overhead: ~{(1 - 1/speedup) * 100:.1f}%")
         
-        print("\n" + "=" * 70)
-        print("Note: The main difference is --enforce-eager which disables CUDA graphs.")
-        print("This is REQUIRED for LoRA hot-swapping but costs ~10-30% performance.")
-        print("=" * 70)
+        log("\n" + "=" * 70)
+        log("Note: The main difference is --enforce-eager which disables CUDA graphs.")
+        log("This is REQUIRED for LoRA hot-swapping but costs ~10-30% performance.")
+        log("=" * 70)
         
     finally:
         cleanup()
