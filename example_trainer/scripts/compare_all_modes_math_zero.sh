@@ -156,12 +156,14 @@ echo "[SHARED_VLLM] Starting on GPU $SHARED_GPU..."
 run-api --port $SHARED_API_PORT > "$LOG_DIR/api_shared.log" 2>&1 &
 
 # Start vLLM with shared weights
+# NOTE: shared_vllm needs more headroom for optimizer states (~8GB) and gradients
+# Using 0.5 leaves ~90GB for training operations on a 180GB GPU
 echo "[SHARED_VLLM] Starting vLLM with shared weights..."
 VLLM_ENABLE_SHARED_WEIGHTS=1 VLLM_BRIDGE_CONFIG_PATH=$LOG_DIR/vllm_bridge_config_shared.json \
 CUDA_VISIBLE_DEVICES=$SHARED_GPU python -u example_trainer/vllm_api_server.py \
     --model "$MODEL" \
     --port $SHARED_VLLM_PORT \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.50 \
     --max-model-len $MAX_MODEL_LEN \
     > "$LOG_DIR/vllm_shared.log" 2>&1 &
 
@@ -175,11 +177,12 @@ echo "[LORA_ONLY] Starting on GPU $LORA_ONLY_GPU..."
 run-api --port $LORA_ONLY_API_PORT > "$LOG_DIR/api_lora_only.log" 2>&1 &
 
 # Start vLLM with --enforce-eager for lora_only
+# LoRA modes need less training memory, but still need headroom at 32k
 echo "[LORA_ONLY] Starting vLLM with --enable-lora --enforce-eager..."
 CUDA_VISIBLE_DEVICES=$LORA_ONLY_GPU python -u example_trainer/vllm_api_server.py \
     --model "$MODEL" \
     --port $LORA_ONLY_VLLM_PORT \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.70 \
     --max-model-len $MAX_MODEL_LEN \
     --enable-lora \
     --max-lora-rank 64 \
@@ -301,7 +304,7 @@ CUDA_VISIBLE_DEVICES=$LORA_RESTART_GPU python -m example_trainer.grpo \
     --model-name "$MODEL" \
     --weight-bridge-mode lora_restart \
     --vllm-port $LORA_RESTART_VLLM_PORT \
-    --vllm-gpu-memory-utilization 0.85 \
+    --vllm-gpu-memory-utilization 0.70 \
     --atropos-url "http://localhost:${LORA_RESTART_API_PORT}" \
     --batch-size $BATCH_SIZE \
     --training-steps $TRAINING_STEPS \
