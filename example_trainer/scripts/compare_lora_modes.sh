@@ -150,6 +150,9 @@ LORA_ONLY_VLLM_PID=$!
 echo ""
 echo "[LORA_RESTART] Starting on GPU $LORA_RESTART_GPU..."
 
+# Pre-create checkpoint directory so vLLM can write its log there
+mkdir -p "$LOG_DIR/checkpoints_lora_restart"
+
 # Start run-api for lora_restart
 run-api --port $LORA_RESTART_API_PORT > "$LOG_DIR/api_lora_restart.log" 2>&1 &
 LORA_RESTART_API_PID=$!
@@ -190,7 +193,7 @@ python -u environments/gsm8k_server.py serve \
 LORA_ONLY_ENV_PID=$!
 
 echo "[LORA_ONLY] Starting trainer..."
-CUDA_VISIBLE_DEVICES=$LORA_ONLY_GPU python -u example_trainer/grpo.py \
+CUDA_VISIBLE_DEVICES=$LORA_ONLY_GPU python -m example_trainer.grpo \
     --model-name "$MODEL" \
     --weight-bridge-mode lora_only \
     --vllm-port $LORA_ONLY_VLLM_PORT \
@@ -210,7 +213,7 @@ LORA_ONLY_TRAINER_PID=$!
 # -----------------------------------------------------------------------------
 echo ""
 echo "[LORA_RESTART] Starting trainer (manages vLLM internally)..."
-CUDA_VISIBLE_DEVICES=$LORA_RESTART_GPU python -u example_trainer/grpo.py \
+CUDA_VISIBLE_DEVICES=$LORA_RESTART_GPU python -m example_trainer.grpo \
     --model-name "$MODEL" \
     --weight-bridge-mode lora_restart \
     --vllm-port $LORA_RESTART_VLLM_PORT \
@@ -227,11 +230,18 @@ CUDA_VISIBLE_DEVICES=$LORA_RESTART_GPU python -u example_trainer/grpo.py \
 LORA_RESTART_TRAINER_PID=$!
 
 # Wait for lora_restart's internal vLLM to start
+# NOTE: Without --enforce-eager, vLLM compiles CUDA graphs which takes 1-3 minutes!
 echo "[LORA_RESTART] Waiting for internal vLLM to start..."
-sleep 15
-wait_for_health $LORA_RESTART_VLLM_PORT "lora_restart internal vLLM" 120 || {
-    echo "  Failed - check log:"
+echo "  NOTE: vLLM without --enforce-eager compiles CUDA graphs on startup (1-3 min)"
+echo "  Check progress: tail -f $LOG_DIR/checkpoints_lora_restart/vllm_internal.log"
+sleep 30  # Give more time for model loading before checking health
+wait_for_health $LORA_RESTART_VLLM_PORT "lora_restart internal vLLM" 180 || {
+    echo "  Failed - check logs:"
+    echo "  Trainer log:"
     tail -30 "$LOG_DIR/trainer_lora_restart.log"
+    echo ""
+    echo "  vLLM internal log (if exists):"
+    tail -50 "$LOG_DIR/checkpoints_lora_restart/vllm_internal.log" 2>/dev/null || echo "  (not found)"
     exit 1
 }
 

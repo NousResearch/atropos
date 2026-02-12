@@ -891,9 +891,15 @@ def _launch_vllm_with_lora(config: TrainingConfig, adapter_path: str) -> Optiona
     print(f"  Launching: {' '.join(cmd)}")
     print(f"  Adapter: {adapter_path}")
     
+    # Log vLLM output to file for debugging
+    vllm_log_path = os.path.join(config.save_path, "vllm_internal.log")
+    print(f"  vLLM log: {vllm_log_path}")
+    
     try:
-        proc = subprocess.Popen(cmd, env=env)
+        vllm_log_file = open(vllm_log_path, "w")
+        proc = subprocess.Popen(cmd, env=env, stdout=vllm_log_file, stderr=subprocess.STDOUT)
         print(f"  vLLM PID: {proc.pid}")
+        print(f"  NOTE: vLLM without --enforce-eager compiles CUDA graphs on startup (takes 1-3 min)...")
         
         # Wait for server to be ready
         if not wait_for_vllm_ready(config.vllm_port, timeout=180):
