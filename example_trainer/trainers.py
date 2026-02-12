@@ -666,14 +666,15 @@ def train_lora_restart(config: TrainingConfig):
 
     This mode:
     1. Freezes base model, trains only LoRA adapter weights
-    2. Runs vLLM WITH CUDA graphs enabled (no --enforce-eager)
+    2. Runs vLLM WITHOUT --enforce-eager (keeps some CUDA optimizations)
     3. Restarts vLLM every N steps with the new adapter pre-loaded
 
-    Performance comparison:
-    - lora_only (--enforce-eager): ~13 TPS (SLOW)
-    - lora_restart (CUDA graphs):  ~170 TPS (FAST)
+    Performance comparison (Qwen3-4B @ 8k context):
+    - lora_only (--enforce-eager): ~13 TPS (SLOW - CUDA graphs disabled)
+    - lora_restart (no --enforce-eager): ~108 TPS (8x FASTER)
+    - base model (no LoRA): ~172 TPS (baseline)
 
-    The restart overhead (~45s) is much less than the 12x inference slowdown.
+    The restart overhead (~45s) is much less than the 8x inference slowdown.
 
     Requirements:
     - No external vLLM needed - this mode manages vLLM internally
@@ -698,8 +699,8 @@ def train_lora_restart(config: TrainingConfig):
     print(f"vLLM port: {config.vllm_port}")
     print(f"Restart interval: every {config.vllm_restart_interval} steps")
     print("=" * 60)
-    print("NOTE: This mode restarts vLLM to keep CUDA graphs enabled.")
-    print("      Expected inference speed: ~170 TPS (vs ~13 TPS with --enforce-eager)")
+    print("NOTE: This mode restarts vLLM without --enforce-eager for faster inference.")
+    print("      Expected: ~108 TPS (vs ~13 TPS with --enforce-eager = 8x speedup)")
     print("=" * 60 + "\n")
 
     # Load model with LoRA adapters for training
@@ -851,30 +852,32 @@ def train_lora_restart(config: TrainingConfig):
 
 def _launch_vllm_with_lora(config: TrainingConfig, adapter_path: str) -> Optional[subprocess.Popen]:
     """
-    Launch vLLM with a LoRA adapter pre-loaded (CUDA graphs enabled).
+    Launch vLLM with a LoRA adapter (no --enforce-eager for faster inference).
     
     Unlike lora_only mode, this does NOT use --enforce-eager, so we get
-    full CUDA graph speed (~170 TPS instead of ~13 TPS).
+    ~108 TPS instead of ~13 TPS (8x faster).
     """
     from .vllm_manager import kill_process_on_port, wait_for_vllm_ready
     
     # Kill any existing process on the port
     kill_process_on_port(config.vllm_port)
+    time.sleep(2)  # Wait for port to be fully released
     
     # Find the vllm_api_server.py script
     script_dir = os.path.dirname(os.path.abspath(__file__))
     server_script = os.path.join(script_dir, "vllm_api_server.py")
     
-    # Build command - NO --enforce-eager for full speed
+    # Build command - NO --enforce-eager for faster inference (~108 TPS vs ~13 TPS)
     cmd = [
         "python", server_script,
         "--model", config.model_name,
         "--port", str(config.vllm_port),
         "--gpu-memory-utilization", str(config.vllm_gpu_memory_utilization),
+        "--max-model-len", str(config.max_model_len),
         "--enable-lora",
         "--max-lora-rank", str(max(config.lora_r * 2, 32)),
-        # Note: NOT adding --enforce-eager - this is the key difference!
-        # LoRA adapter will be loaded at startup, CUDA graphs compiled with it
+        # Note: NOT adding --enforce-eager - this gives us ~8x faster inference!
+        # Without --enforce-eager, vLLM can use more optimizations.
     ]
     
     # Set environment for GPU selection
