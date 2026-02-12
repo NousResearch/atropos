@@ -698,34 +698,91 @@ def train_lora_nccl(config: TrainingConfig):
     print("=" * 60 + "\n")
     
     # Check external vLLM server
-    print("[1/4] Checking external vLLM server...")
+    print("[1/5] Checking external vLLM server...")
     if not check_vllm_health(config.vllm_port):
         print(f"\nERROR: vLLM server not running on port {config.vllm_port}")
         print("\nLoRA NCCL mode requires an external vLLM server. Start it first:")
         print(
-            f"  NCCL_LORA_ENABLED=1 python example_trainer/vllm_api_server.py "
+            f"  python example_trainer/vllm_api_server.py "
             f"--model {config.model_name} --port {config.vllm_port} --enable-lora --enforce-eager"
         )
         raise RuntimeError(f"External vLLM server required on port {config.vllm_port}")
     print(f"vLLM server healthy on port {config.vllm_port}")
     
     # Load model with LoRA adapters
-    print("[2/4] Loading model with LoRA adapters...")
+    print("[2/5] Loading model with LoRA adapters...")
     model, tokenizer = load_model_and_tokenizer(config)
     
     # Only optimize LoRA parameters
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     optimizer = AdamW(trainable_params, lr=config.lr)
     
-    # Setup NCCL bridge
-    print("[3/4] Setting up NCCL weight bridge...")
+    # Import NCCL bridge components
     from .nccl_weight_bridge import (
         NCCLBridgeConfig,
         NCCLWeightBridge,
         create_trainer_param_to_vllm_mapping,
         export_bridge_config,
+        get_lora_params,
     )
     
+    # Pre-register params to get metadata for vLLM
+    lora_params = get_lora_params(model)
+    param_names = sorted(lora_params.keys())
+    param_shapes = {name: list(p.shape) for name, p in lora_params.items()}
+    param_dtypes = {name: str(p.dtype) for name, p in lora_params.items()}
+    
+    param_metadata = {
+        "param_names": param_names,
+        "param_shapes": param_shapes,
+        "param_dtypes": param_dtypes,
+        "num_params": len(param_names),
+    }
+    
+    param_mappings = create_trainer_param_to_vllm_mapping(
+        param_names,
+        model_name=config.model_name
+    )
+    
+    # Tell vLLM to start its NCCL receiver FIRST (it will join as rank 1)
+    print("[3/5] Starting NCCL receiver on vLLM server...")
+    vllm_base_url = f"http://localhost:{config.vllm_port}"
+    try:
+        response = requests.post(
+            f"{vllm_base_url}/nccl/start_receiver",
+            json={
+                "init_method": config.nccl_init_method,
+                "world_size": config.nccl_world_size,
+                "param_metadata": param_metadata,
+                "param_mappings": param_mappings,
+            },
+            timeout=30,
+        )
+        resp_data = response.json()
+        if response.status_code != 200 or resp_data.get("status") == "error":
+            raise RuntimeError(f"Failed to start NCCL receiver on vLLM: {resp_data}")
+        print(f"  vLLM NCCL receiver started: {resp_data}")
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Failed to contact vLLM server: {e}")
+    
+    # Wait for vLLM to be in "connecting" state
+    import time as time_module
+    print("  Waiting for vLLM NCCL receiver to initialize...")
+    for i in range(10):
+        time_module.sleep(1)
+        try:
+            status_resp = requests.get(f"{vllm_base_url}/nccl/status", timeout=5)
+            status = status_resp.json()
+            print(f"    vLLM NCCL status: {status.get('status', 'unknown')}")
+            if status.get("status") == "error":
+                raise RuntimeError(f"vLLM NCCL setup failed: {status.get('error')}")
+            if status.get("status") in ["connecting", "connected"]:
+                break
+        except Exception as e:
+            print(f"    Status check error: {e}")
+    
+    # Now setup trainer's NCCL bridge (joins as rank 0)
+    print("[4/5] Setting up trainer NCCL weight bridge...")
     nccl_config = NCCLBridgeConfig(
         rank=0,  # Trainer is always rank 0
         world_size=config.nccl_world_size,
@@ -734,16 +791,19 @@ def train_lora_nccl(config: TrainingConfig):
     
     bridge = NCCLWeightBridge(nccl_config)
     if not bridge.setup():
+        # Try to stop vLLM receiver on failure
+        try:
+            requests.post(f"{vllm_base_url}/nccl/stop_receiver", timeout=5)
+        except Exception:
+            pass
         raise RuntimeError("Failed to setup NCCL bridge")
     
-    # Register parameters and create mappings
-    param_metadata = bridge.register_params(model)
-    param_mappings = create_trainer_param_to_vllm_mapping(
-        bridge.param_names, 
-        model_name=config.model_name
-    )
+    # Register parameters with the bridge (we already have the metadata)
+    bridge.param_names = param_names
+    bridge.param_shapes = {name: tuple(shape) for name, shape in param_shapes.items()}
+    bridge.param_dtypes = param_dtypes
     
-    # Export config for vLLM
+    # Export config for debugging/recovery
     bridge_config_path = os.path.join(config.save_path, "nccl_bridge_config.json")
     os.makedirs(config.save_path, exist_ok=True)
     export_bridge_config(
@@ -754,7 +814,7 @@ def train_lora_nccl(config: TrainingConfig):
         config.nccl_world_size,
     )
     
-    print(f"[4/4] Starting training for {config.training_steps} steps")
+    print(f"[5/5] Starting training for {config.training_steps} steps")
     print("-" * 60)
     
     # Check Atropos API

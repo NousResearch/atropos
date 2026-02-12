@@ -318,6 +318,69 @@ class NCCLWeightBridge:
         
         return elapsed
     
+    def receive_lora_weights(
+        self,
+        on_receive: Optional[Callable[[int, Dict[str, torch.Tensor]], None]] = None,
+    ) -> Tuple[int, Dict[str, torch.Tensor]]:
+        """
+        Receive LoRA weights from trainer via NCCL broadcast.
+        
+        This is a BLOCKING call that waits for the trainer to send weights.
+        For non-blocking continuous receive, use start_receiver().
+        
+        Args:
+            on_receive: Optional callback with (step, weights_dict)
+            
+        Returns:
+            Tuple of (step_number, dict of param_name -> tensor)
+        """
+        if not self.is_initialized:
+            raise RuntimeError("NCCLBridge not initialized. Call setup() first.")
+        
+        if self.rank == 0:
+            raise RuntimeError("receive_lora_weights() should only be called from rank > 0 (vLLM)")
+        
+        device = "cuda"
+        
+        # Receive step index
+        step_tensor = torch.zeros(1, dtype=torch.long, device=device)
+        dist.broadcast(step_tensor, src=0, group=self.nccl_group)
+        step = step_tensor.item()
+        
+        if step < 0:
+            # Negative step means shutdown signal
+            return step, {}
+        
+        # Receive each parameter
+        received_weights = {}
+        for name in self.param_names:
+            shape = self.param_shapes[name]
+            dtype_str = self.param_dtypes[name]
+            # Handle dtype string conversion
+            if isinstance(dtype_str, str):
+                dtype = getattr(torch, dtype_str.replace("torch.", ""))
+            else:
+                dtype = dtype_str
+            
+            # Create buffer and receive
+            buffer = torch.zeros(shape, dtype=dtype, device=device)
+            dist.broadcast(buffer, src=0, group=self.nccl_group)
+            received_weights[name] = buffer
+        
+        # Receive completion signal
+        done_tensor = torch.zeros(1, dtype=torch.long, device=device)
+        dist.broadcast(done_tensor, src=0, group=self.nccl_group)
+        
+        self.update_count += 1
+        self.last_update_time = time.time()
+        
+        print(f"[NCCLBridge] Received LoRA weights (step {step})")
+        
+        if on_receive:
+            on_receive(step, received_weights)
+        
+        return step, received_weights
+    
     def start_receiver(
         self,
         state_dict: Dict[str, torch.Tensor],
