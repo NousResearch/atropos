@@ -957,47 +957,95 @@ def _launch_vllm_with_lora(config: TrainingConfig, adapter_path: str) -> Optiona
 def _terminate_vllm(proc: Optional[subprocess.Popen], port: int = 9001) -> None:
     """Terminate a vLLM process and release GPU resources."""
     import signal
+    import subprocess as sp
     
-    print(f"  Terminating vLLM...")
+    print(f"  Terminating vLLM on port {port}...")
     
-    # Kill by port first (catches all child processes)
+    # Get current GPU device
+    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+    
+    # Phase 1: Kill by port (catches main process and some children)
     from .vllm_manager import kill_process_on_port
     kill_process_on_port(port)
+    time.sleep(2)
     
+    # Phase 2: Kill the main process if we have a handle
+    main_pid = None
     if proc is not None:
-        print(f"  Killing main process (PID: {proc.pid})...")
+        main_pid = proc.pid
+        print(f"  Killing main process (PID: {main_pid})...")
         try:
-            # Send SIGKILL immediately - vLLM doesn't gracefully shutdown well
             proc.kill()
-            proc.wait(timeout=10)
+            proc.wait(timeout=5)
         except Exception as e:
             print(f"  Warning: {e}")
     
-    # Kill any remaining vLLM-related processes on this port
-    # Use pkill to catch any orphaned child processes
+    # Phase 3: Aggressively kill ALL vLLM-related processes
+    print("  Killing all vLLM-related processes...")
+    kill_commands = [
+        f"fuser -k {port}/tcp",
+        "pkill -9 -f 'vllm.*EngineCore'",
+        "pkill -9 -f 'vllm_api_server'",
+        "pkill -9 -f 'from vllm'",
+        "pkill -9 -f 'multiprocessing.spawn'",
+        "pkill -9 -f 'ray::IDLE'",  # Ray workers if any
+    ]
+    for cmd in kill_commands:
+        try:
+            sp.run(cmd, shell=True, capture_output=True, timeout=5)
+        except Exception:
+            pass
+    
+    # Phase 4: Use nvidia-smi to find and kill GPU processes (nuclear option)
+    print(f"  Checking for zombie GPU processes on GPU {gpu_id}...")
     try:
-        import subprocess as sp
-        # Kill by port using fuser
-        sp.run(f"fuser -k {port}/tcp", shell=True, capture_output=True, timeout=5)
-        # Also kill any vllm processes that might be orphaned
-        sp.run("pkill -9 -f 'vllm.*EngineCore'", shell=True, capture_output=True, timeout=5)
-    except Exception:
-        pass
+        result = sp.run(
+            f"nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits -i {gpu_id}",
+            shell=True, capture_output=True, text=True, timeout=10
+        )
+        if result.stdout.strip():
+            print(f"  Found GPU processes:\n{result.stdout}")
+            for line in result.stdout.strip().split('\n'):
+                if line.strip():
+                    parts = line.split(',')
+                    if len(parts) >= 1:
+                        pid = parts[0].strip()
+                        # Don't kill the current Python process (trainer)
+                        if pid and pid != str(os.getpid()) and pid != str(main_pid):
+                            print(f"    Killing zombie GPU process: {pid}")
+                            try:
+                                sp.run(f"kill -9 {pid}", shell=True, timeout=5)
+                            except Exception:
+                                pass
+    except Exception as e:
+        print(f"  Warning: nvidia-smi check failed: {e}")
     
-    # Wait for GPU memory to be released by the OS
-    print("  Waiting for GPU memory release (10s)...")
-    time.sleep(10)
+    # Phase 5: Wait for GPU memory release - CRITICAL
+    # The CUDA driver needs time to actually free memory after process death
+    print("  Waiting for GPU memory release...")
+    for i in range(12):  # 60 seconds total (longer wait)
+        time.sleep(5)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            free_mem = torch.cuda.mem_get_info()[0] / 1e9
+            total_mem = torch.cuda.mem_get_info()[1] / 1e9
+            print(f"    [{(i+1)*5}s] GPU memory: {free_mem:.1f}/{total_mem:.1f} GB free ({100*free_mem/total_mem:.0f}%)")
+            # If we have enough memory (>50% free), break early
+            if free_mem > total_mem * 0.5:
+                print(f"  ✓ Sufficient memory available ({free_mem:.1f} GB)")
+                break
     
-    # Clear CUDA cache in this process (won't affect other processes but good hygiene)
+    # Final cleanup
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
-    
-    # Verify GPU memory is free
-    if torch.cuda.is_available():
         free_mem = torch.cuda.mem_get_info()[0] / 1e9
         total_mem = torch.cuda.mem_get_info()[1] / 1e9
-        print(f"  ✓ GPU memory: {free_mem:.1f}/{total_mem:.1f} GB free")
+        print(f"  ✓ Final GPU memory: {free_mem:.1f}/{total_mem:.1f} GB free ({100*free_mem/total_mem:.0f}%)")
+        
+        if free_mem < total_mem * 0.3:
+            print(f"  ⚠ WARNING: Low GPU memory! May fail to restart vLLM.")
+            print(f"  Consider reducing --vllm-gpu-memory-utilization")
     
     print("  ✓ vLLM terminated")
 
