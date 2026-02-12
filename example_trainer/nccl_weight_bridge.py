@@ -57,10 +57,7 @@ class NCCLBridgeConfig:
     rank: int = 0
     world_size: int = 2
     init_method: str = "tcp://localhost:29500"
-    timeout_seconds: int = 300
-    
-    # Weight transfer settings
-    use_gloo_for_metadata: bool = True  # Gloo for small metadata, NCCL for tensors
+    timeout_seconds: int = 120  # Reduced from 300 for faster failure
     
     # LoRA settings
     lora_param_patterns: List[str] = field(default_factory=lambda: [
@@ -117,7 +114,7 @@ class NCCLWeightBridge:
         
     def setup(self) -> bool:
         """
-        Initialize NCCL and Gloo process groups.
+        Initialize NCCL process group.
         
         Returns:
             True if setup successful, False otherwise.
@@ -133,6 +130,7 @@ class NCCLWeightBridge:
             
             # Initialize NCCL group for tensor transfers
             print(f"[NCCLBridge] Initializing NCCL group (rank={self.rank}, world={self.world_size})")
+            print(f"[NCCLBridge] Init method: {self.config.init_method}")
             self.nccl_group = self._init_process_group(
                 backend="nccl",
                 init_method=self.config.init_method,
@@ -142,20 +140,8 @@ class NCCLWeightBridge:
                 timeout=timeout,
             )
             
-            if self.config.use_gloo_for_metadata:
-                # Initialize Gloo group for metadata (param names, shapes, etc.)
-                gloo_port = int(self.config.init_method.split(":")[-1]) + 1
-                gloo_init = self.config.init_method.rsplit(":", 1)[0] + f":{gloo_port}"
-                
-                print(f"[NCCLBridge] Initializing Gloo group at {gloo_init}")
-                self.gloo_group = self._init_process_group(
-                    backend="gloo",
-                    init_method=gloo_init,
-                    world_size=self.world_size,
-                    rank=self.rank,
-                    group_name="lora_weight_gloo",
-                    timeout=timeout,
-                )
+            # Note: We skip Gloo group - metadata is passed via HTTP before NCCL setup
+            self.gloo_group = None
             
             self.is_initialized = True
             print(f"[NCCLBridge] ✓ Initialized successfully (rank {self.rank})")
