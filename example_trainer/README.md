@@ -62,18 +62,18 @@ Data Flow:
 
 | Mode | Description | Memory | Inference Speed | Best For |
 |------|-------------|--------|-----------------|----------|
-| **shared_vllm** | Single-copy via CUDA IPC | 1x model | ~170 TPS | Same GPU, maximum efficiency |
-| **lora_restart** | LoRA + vLLM restarts | 1x + adapter | ~170 TPS | LoRA training with speed |
+| **shared_vllm** | Single-copy via CUDA IPC | 1x model | ~172 TPS | Same GPU, maximum efficiency |
+| **lora_restart** | LoRA + vLLM restarts | 1x + adapter | ~108 TPS | LoRA training with speed |
 | **lora_only** | LoRA + HTTP hot-swap | 1x + adapter | ~13 TPS ⚠️ | Debugging only |
-| **legacy** | Full model, restart vLLM | 2x model | ~170 TPS | Different GPUs, simple setup |
+| **legacy** | Full model, restart vLLM | 2x model | ~172 TPS | Different GPUs, simple setup |
 
 ### ⚠️ IMPORTANT: `lora_only` Performance Warning
 
 The `lora_only` mode requires `--enforce-eager` which **disables CUDA graphs**, resulting in:
-- **12x slower inference** (~13 TPS vs ~170 TPS)
+- **8x slower inference** (~13 TPS vs ~108 TPS)
 - Training that takes **4x longer** (401 min vs 132 min for 120 steps)
 
-**Use `lora_restart` instead** - it restarts vLLM to keep CUDA graphs enabled.
+**Use `lora_restart` instead** - it runs vLLM without `--enforce-eager` for 8x faster inference.
 
 ### Recommendation
 
@@ -83,10 +83,10 @@ The `lora_only` mode requires `--enforce-eager` which **disables CUDA graphs**, 
 
 **Use `lora_restart`** when:
 - You want LoRA's memory efficiency
-- You want fast inference (~170 TPS with CUDA graphs)
+- You want fast inference (~108 TPS vs ~13 TPS = 8x speedup)
 - You can tolerate ~45s restart overhead every N steps
 
-**Avoid `lora_only`** unless you're debugging - the 12x inference penalty is severe.
+**Avoid `lora_only`** unless you're debugging - the 8x inference penalty is severe.
 
 **Use `shared_vllm`** for single-GPU training when you need maximum efficiency.
 
