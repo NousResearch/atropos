@@ -911,8 +911,12 @@ def _launch_vllm_with_lora(config: TrainingConfig, adapter_path: str) -> Optiona
     
     try:
         vllm_log_file = open(vllm_log_path, "w")
-        proc = subprocess.Popen(cmd, env=env, stdout=vllm_log_file, stderr=subprocess.STDOUT)
-        print(f"  vLLM PID: {proc.pid}")
+        # Start in new session so we can kill entire process group later
+        proc = subprocess.Popen(
+            cmd, env=env, stdout=vllm_log_file, stderr=subprocess.STDOUT,
+            start_new_session=True  # Creates new process group for easy cleanup
+        )
+        print(f"  vLLM PID: {proc.pid} (process group: {os.getpgid(proc.pid)})")
         print(f"  NOTE: vLLM without --enforce-eager compiles CUDA graphs on startup (takes 1-3 min)...")
         
         # Wait for server to be ready (longer timeout for CUDA graph compilation)
@@ -964,21 +968,26 @@ def _terminate_vllm(proc: Optional[subprocess.Popen], port: int = 9001) -> None:
     # Get current GPU device
     gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
     
-    # Phase 1: Kill by port (catches main process and some children)
-    from .vllm_manager import kill_process_on_port
-    kill_process_on_port(port)
-    time.sleep(2)
-    
-    # Phase 2: Kill the main process if we have a handle
+    # Phase 1: Kill the process group if we have a handle (kills all children too)
     main_pid = None
     if proc is not None:
         main_pid = proc.pid
-        print(f"  Killing main process (PID: {main_pid})...")
+        print(f"  Killing process group (PID: {main_pid})...")
+        try:
+            # Kill entire process group - this gets all child processes
+            os.killpg(os.getpgid(main_pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
         try:
             proc.kill()
             proc.wait(timeout=5)
         except Exception as e:
             print(f"  Warning: {e}")
+    
+    # Phase 2: Kill by port (catches anything still running)
+    from .vllm_manager import kill_process_on_port
+    kill_process_on_port(port)
+    time.sleep(2)
     
     # Phase 3: Aggressively kill ALL vLLM-related processes
     print("  Killing all vLLM-related processes...")

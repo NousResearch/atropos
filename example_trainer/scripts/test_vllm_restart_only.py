@@ -48,18 +48,23 @@ def terminate_vllm(proc, port: int) -> None:
     # Get current GPU device
     gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
     
-    # Phase 1: Kill by port
-    kill_process_on_port(port)
-    time.sleep(2)
-    
-    # Phase 2: Kill the main process
+    # Phase 1: Kill the process group (kills all children too)
     if proc is not None:
-        print(f"  Killing main process (PID: {proc.pid})...")
+        print(f"  Killing process group (PID: {proc.pid})...")
+        try:
+            # Kill entire process group - this gets all child processes
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
         try:
             proc.kill()
             proc.wait(timeout=5)
         except Exception as e:
             print(f"  Warning: {e}")
+    
+    # Phase 2: Kill by port (catches anything still running)
+    kill_process_on_port(port)
+    time.sleep(2)
     
     # Phase 3: Kill ALL vLLM-related processes
     print("  Killing all vLLM-related processes...")
@@ -194,8 +199,9 @@ def main():
                 stdout=f,
                 stderr=subprocess.STDOUT,
                 env=os.environ.copy(),
+                start_new_session=True,  # Creates new process group for easy cleanup
             )
-        print(f"  PID: {proc.pid}")
+        print(f"  PID: {proc.pid} (process group: {os.getpgid(proc.pid)})")
         print(f"  Log: {log_file}")
         
         # Wait for vLLM to be ready
