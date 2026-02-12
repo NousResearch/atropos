@@ -250,6 +250,7 @@ CUDA_VISIBLE_DEVICES=$SHARED_GPU python -m example_trainer.grpo \
     --batch-size $BATCH_SIZE \
     --training-steps $TRAINING_STEPS \
     --max-model-len $MAX_MODEL_LEN \
+    --seq-len $MAX_MODEL_LEN \
     --save-path "$LOG_DIR/checkpoints_shared" \
     $WANDB_ARGS --wandb-group "shared-vllm" \
     --benchmark \
@@ -281,6 +282,7 @@ CUDA_VISIBLE_DEVICES=$LORA_ONLY_GPU python -m example_trainer.grpo \
     --batch-size $BATCH_SIZE \
     --training-steps $TRAINING_STEPS \
     --max-model-len $MAX_MODEL_LEN \
+    --seq-len $MAX_MODEL_LEN \
     --lora-r 16 \
     --lora-alpha 32 \
     --vllm-restart-interval 5 \
@@ -304,6 +306,7 @@ CUDA_VISIBLE_DEVICES=$LORA_RESTART_GPU python -m example_trainer.grpo \
     --batch-size $BATCH_SIZE \
     --training-steps $TRAINING_STEPS \
     --max-model-len $MAX_MODEL_LEN \
+    --seq-len $MAX_MODEL_LEN \
     --lora-r 16 \
     --lora-alpha 32 \
     --vllm-restart-interval 5 \
