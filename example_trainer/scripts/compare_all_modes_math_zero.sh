@@ -244,7 +244,7 @@ python -u environments/math_server_zero.py serve \
 SHARED_ENV_PID=$!
 
 echo "[SHARED_VLLM] Starting trainer..."
-CUDA_VISIBLE_DEVICES=$SHARED_GPU python -m example_trainer.grpo \
+CUDA_VISIBLE_DEVICES=$SHARED_GPU PYTHONUNBUFFERED=1 stdbuf -oL -eL python -u -m example_trainer.grpo \
     --model-name "$MODEL" \
     --weight-bridge-mode shared_vllm \
     --vllm-port $SHARED_VLLM_PORT \
@@ -277,7 +277,7 @@ python -u environments/math_server_zero.py serve \
 LORA_ONLY_ENV_PID=$!
 
 echo "[LORA_ONLY] Starting trainer..."
-CUDA_VISIBLE_DEVICES=$LORA_ONLY_GPU python -m example_trainer.grpo \
+CUDA_VISIBLE_DEVICES=$LORA_ONLY_GPU PYTHONUNBUFFERED=1 stdbuf -oL -eL python -u -m example_trainer.grpo \
     --model-name "$MODEL" \
     --weight-bridge-mode lora_only \
     --vllm-port $LORA_ONLY_VLLM_PORT \
@@ -301,7 +301,8 @@ LORA_ONLY_TRAINER_PID=$!
 echo ""
 echo "[LORA_RESTART] Starting trainer (manages vLLM internally)..."
 # NOTE: lora_restart shares GPU with trainer's model (~8GB), so use lower vLLM memory
-CUDA_VISIBLE_DEVICES=$LORA_RESTART_GPU python -m example_trainer.grpo \
+# Use unbuffered output (-u) and stdbuf to capture crashes
+CUDA_VISIBLE_DEVICES=$LORA_RESTART_GPU PYTHONUNBUFFERED=1 stdbuf -oL -eL python -u -m example_trainer.grpo \
     --model-name "$MODEL" \
     --weight-bridge-mode lora_restart \
     --vllm-port $LORA_RESTART_VLLM_PORT \
