@@ -798,7 +798,7 @@ def train_lora_restart(config: TrainingConfig):
             current_adapter_path = save_lora_checkpoint(model, config.save_path, step + 1)
             
             # Restart vLLM with new adapter
-            print(f"  [RESTART] Restarting vLLM with new adapter...")
+            print("  [RESTART] Restarting vLLM with new adapter...")
             _terminate_vllm(vllm_proc, config.vllm_port)
             vllm_proc = _launch_vllm_with_lora(config, current_adapter_path)
             if vllm_proc is None:
@@ -899,7 +899,7 @@ def _launch_vllm_with_lora(config: TrainingConfig, adapter_path: str) -> Optiona
         env["CUDA_VISIBLE_DEVICES"] = str(config.vllm_gpu)
         print(f"  GPU: {config.vllm_gpu} (via CUDA_VISIBLE_DEVICES)")
     else:
-        print(f"  GPU: Same as trainer (inherited CUDA_VISIBLE_DEVICES)")
+        print("  GPU: Same as trainer (inherited CUDA_VISIBLE_DEVICES)")
     
     print(f"  Launching: {' '.join(cmd)}")
     print(f"  Adapter: {adapter_path}")
@@ -917,7 +917,7 @@ def _launch_vllm_with_lora(config: TrainingConfig, adapter_path: str) -> Optiona
             start_new_session=True  # Creates new process group for easy cleanup
         )
         print(f"  vLLM PID: {proc.pid} (process group: {os.getpgid(proc.pid)})")
-        print(f"  NOTE: vLLM without --enforce-eager compiles CUDA graphs on startup (takes 1-3 min)...")
+        print("  NOTE: vLLM without --enforce-eager compiles CUDA graphs on startup (takes 1-3 min)...")
         
         # Wait for server to be ready (longer timeout for CUDA graph compilation)
         if not wait_for_vllm_ready(config.vllm_port, timeout=300):
@@ -936,7 +936,7 @@ def _launch_vllm_with_lora(config: TrainingConfig, adapter_path: str) -> Optiona
             return None
         
         # Load the LoRA adapter
-        print(f"  Loading LoRA adapter...")
+        print("  Loading LoRA adapter...")
         try:
             resp = requests.post(
                 f"http://localhost:{config.vllm_port}/lora/load",
@@ -944,7 +944,7 @@ def _launch_vllm_with_lora(config: TrainingConfig, adapter_path: str) -> Optiona
                 timeout=60,
             )
             if resp.status_code == 200:
-                print(f"  ✓ Adapter loaded successfully")
+                print("  ✓ Adapter loaded successfully")
             else:
                 print(f"  WARNING: Adapter load returned {resp.status_code}: {resp.text}")
         except Exception as e:
@@ -1050,12 +1050,12 @@ def _terminate_vllm(proc: Optional[subprocess.Popen], port: int = 9001) -> None:
         torch.cuda.synchronize()
         free_mem = torch.cuda.mem_get_info()[0] / 1e9
         total_mem = torch.cuda.mem_get_info()[1] / 1e9
-        print(f"  ✓ Final GPU memory: {free_mem:.1f}/{total_mem:.1f} GB free ({100*free_mem/total_mem:.0f}%)")
+        print(f" Final GPU memory: {free_mem:.1f}/{total_mem:.1f} GB free ({100*free_mem/total_mem:.0f}%)")
         
         if free_mem < total_mem * 0.3:
-            print(f"  ⚠ WARNING: Low GPU memory! May fail to restart vLLM.")
-            print(f"  Consider reducing --vllm-gpu-memory-utilization")
+            print("  WARNING: Low GPU memory! May fail to restart vLLM.")
+            print("  Consider reducing --vllm-gpu-memory-utilization")
     
-    print("  ✓ vLLM terminated")
+    print("  vLLM terminated")
 
 
