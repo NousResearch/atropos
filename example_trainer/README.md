@@ -6,28 +6,30 @@ A modular training framework for fine-tuning language models with **Group Relati
 
 ```
 example_trainer/
-├── grpo.py              # CLI entry point (dispatches to trainers)
-├── run.py               # Unified launcher for shared_vllm mode
-├── config.py            # TrainingConfig dataclass
-├── cli.py               # CLI argument parsing (single source of truth)
-├── api.py               # Atropos API communication
-├── data.py              # Data fetching & preprocessing
-├── model.py             # Model loading & CUDA IPC shared memory
-├── training.py          # GRPO loss computation & training step
-├── checkpointing.py     # Save models & LoRA adapters
-├── vllm_manager.py      # vLLM process management
-├── trainers.py          # Training mode implementations
-├── vllm_api_server.py   # Custom vLLM server (streamlined for training)
-├── vllm_patching/       # CUDA IPC patches for weight sharing
+├── grpo.py              # CLI entry point (dispatches to 4 training modes)
+├── run.py               # Unified launcher for shared_vllm mode (starts vLLM+trainer)
+├── config.py            # TrainingConfig Pydantic model (all hyperparameters)
+├── cli.py               # CLI argument parsing (modular, single source of truth)
+├── api.py               # Atropos API communication (registration, batch fetching)
+├── data.py              # Data fetching, preprocessing, logprob alignment
+├── model.py             # Model loading, CUDA IPC, tensor mapping (QKV/Gate fusion)
+├── training.py          # GRPO loss (importance sampling, KL penalty, clipping)
+├── checkpointing.py     # Save models & LoRA adapters (handles fused tensor unfusing)
+├── vllm_manager.py      # vLLM process lifecycle (launch, health, termination)
+├── trainers.py          # 4 training mode implementations + optimizer selection
+├── vllm_api_server.py   # Custom vLLM server with /generate endpoint + LoRA
+├── vllm_patching/       # CUDA IPC patches for weight sharing 
 │   └── patched_gpu_runner.py
-└── scripts/             # Helper scripts
+└── scripts/             # Helper scripts and benchmarks
     ├── test_lora_mode.sh
-    └── test_single_copy_mode.sh
+    ├── test_single_copy_mode.sh
+    └── compare_all_modes_math_zero.sh
 ```
 
 
-GRPO Training Loop
+## GRPO Training Loop
 
+```
 1. Generate multiple responses to the same prompt
 2. Score each response (reward)
 3. Compute ADVANTAGE = reward - mean(rewards)
@@ -47,13 +49,17 @@ GRPO Training Loop
 
 ## System Architecture
 
+```
 Data Flow:
 1. Environment generates prompts → calls vLLM → scores responses
 2. Environment sends trajectories to run-api
 3. Trainer fetches batches from run-api
 4. Trainer updates model weights
-5. (shared_vllm) vLLM sees updates immediately via CUDA IPC
-   (lora_only) Trainer pushes adapter to vLLM periodically
+5. Weight synchronization:
+   - shared_vllm: vLLM sees updates immediately via CUDA IPC (zero-copy)
+   - lora_only: Trainer pushes adapter to vLLM via HTTP (slow)
+   - lora_restart: Trainer restarts vLLM with new adapter (fast)
+   - none (legacy): Trainer saves checkpoint and restarts vLLM
 ```
 
 ---
@@ -65,7 +71,7 @@ Data Flow:
 | **shared_vllm** | Single-copy via CUDA IPC | 1x model | ~172 TPS | Same GPU, maximum efficiency |
 | **lora_restart** | LoRA + vLLM restarts | 1x + adapter | ~108 TPS | LoRA training with speed |
 | **lora_only** | LoRA + HTTP hot-swap | 1x + adapter | ~13 TPS ⚠️ | Debugging only |
-| **legacy** | Full model, restart vLLM | 2x model | ~172 TPS | Different GPUs, simple setup |
+| **none** (legacy) | Full model, restart vLLM | 2x model | ~172 TPS | simple setup |
 
 ### ⚠️ IMPORTANT: `lora_only` Performance Warning
 
@@ -80,15 +86,16 @@ The `lora_only` mode requires `--enforce-eager` which **disables CUDA graphs**, 
 **Use `shared_vllm`** for production training when:
 - You have enough GPU memory for the full model
 - You want fastest training (no overhead)
+- Trainer and vLLM are on the same GPU(s)
 
 **Use `lora_restart`** when:
 - You want LoRA's memory efficiency
-- You want fast inference (~108 TPS vs ~13 TPS = 8x speedup)
 - You can tolerate ~45s restart overhead every N steps
 
 **Avoid `lora_only`** unless you're debugging - the 8x inference penalty is severe.
 
-**Use `shared_vllm`** for single-GPU training when you need maximum efficiency.
+**Use `none` (legacy)** mode when:
+- You want the simplest setup without CUDA IPC or LoRA
 
 ---
 
@@ -118,13 +125,14 @@ python -m example_trainer.vllm_api_server \
 
 **Terminal 3: Environment**
 ```bash
+# Important: Use server_type=vllm to get logprobs (required for GRPO)
 python environments/gsm8k_server.py serve \
     --env.group_size 4 \
     --env.max_num 200 \
     --slurm.num_requests_per_time_interval 16 \
     --slurm.time_interval 10 \
     --openai.api_key "dummy" \
-    --openai.base_url "http://localhost:9001" \
+    --openai.base_url "http://localhost:9001/v1" \
     --openai.model_name "NousResearch/Hermes-3-Llama-3.1-8B" \
     --openai.server_type vllm
 ```
@@ -138,7 +146,7 @@ python -m example_trainer.grpo \
     --atropos-url "http://localhost:8002" \
     --batch-size 4 \
     --gradient-accumulation-steps 4 \
-    --learning-rate 1e-5 \
+    --lr 1e-5 \
     --training-steps 30 \
     --kl-coef 0.1 \
     --clip-eps 0.2 \
@@ -150,16 +158,27 @@ python -m example_trainer.grpo \
 ### Startup Order
 
 ```bash
-# 1. Start API
-# 2. Wait 5s, start vLLM
-# 3. Wait for vLLM to load (check: curl http://localhost:9001/health)
-# 4. Start environment
-# 5. Start trainer
+# CRITICAL: Follow this exact order!
+# 1. Start API first
+run-api --port 8002
+
+# 2. Wait 5s, then start vLLM
+# Check health: curl http://localhost:9001/health
+python -m example_trainer.vllm_api_server --model ... --enable-lora --enforce-eager
+
+# 3. Wait for vLLM health endpoint to return 200
+while ! curl -s http://localhost:9001/health > /dev/null; do sleep 1; done
+
+# 4. Start environment (MUST use --openai.server_type vllm for logprobs)
+python environments/gsm8k_server.py serve ...
+
+# 5. Start trainer (will register with API and begin training)
+python -m example_trainer.grpo --weight-bridge-mode lora_only ...
 ```
 
 ---
 
-##  Shared vLLM Mode (Advanced)
+##  Shared vLLM Mode 
 
 Single-copy mode shares GPU memory between vLLM and the trainer - zero model duplication!
 
@@ -200,10 +219,14 @@ python -m example_trainer.vllm_api_server \
 
 **Terminal 3: Environment**
 ```bash
+# Important: Use server_type=vllm to get logprobs (required for GRPO)
 python environments/gsm8k_server.py serve \
-    --openai.base_url "http://localhost:9001" \
+    --openai.base_url "http://localhost:9001/v1" \
     --openai.model_name "NousResearch/Hermes-3-Llama-3.1-8B" \
-    --openai.server_type vllm
+    --openai.server_type vllm \
+    --env.group_size 4 \
+    --slurm.num_requests_per_time_interval 16 \
+    --slurm.time_interval 10
 ```
 
 **Terminal 4: Trainer**
@@ -232,45 +255,64 @@ VLLM_ENABLE_SHARED_WEIGHTS=1 python -m example_trainer.run \
 
 ## Best Practices & Lessons Learned
 
-### 1. Always Use `--enforce-eager` with Shared Weights
 
-**Why:** CUDA graphs "bake" weights at compile time. Without eager mode, vLLM won't see weight updates!
+### 1. Use `--openai.server_type vllm` for Training
 
-```bash
-# WRONG - weight updates won't be visible to inference
-python vllm_api_server.py --model $MODEL
+**CRITICAL:** The atropos environment MUST use `server_type=vllm` to get logprobs for proper GRPO training.
 
-# CORRECT - disables CUDA graphs
-python vllm_api_server.py --model $MODEL --enforce-eager
-```
-
-### 2. Use `--openai.server_type vllm` for Training
-
-The gsm8k environment needs logprobs for GRPO. Only `server_type=vllm` uses the `/generate` endpoint which returns logprobs.
+Only `server_type=vllm` calls the `/generate` endpoint which returns token-level logprobs. These logprobs serve as the reference policy (π_old) for importance sampling in GRPO.
 
 ```bash
-# CORRECT - gets logprobs for training
+# CORRECT - gets logprobs for training (REQUIRED!)
 --openai.server_type vllm
 
-# WRONG for training - no logprobs
+# WRONG for training - no logprobs, training will FAIL
 --openai.server_type openai
 ```
 
-### 3. KL Coefficient and Clipping Are Essential
+**What happens without logprobs:**
+- The trainer will raise an error: "GRPO requires inference_logprobs for importance sampling!"
+- Without the reference policy, GRPO degenerates to vanilla REINFORCE (leads to reward hacking)
 
-Without these, training will collapse (reward hacking):
+**How logprobs flow through the system:**
+1. Environment calls vLLM `/generate` with `logprobs=true`
+2. vLLM returns token-level logprobs for each generated token
+3. Environment embeds these in trajectory data sent to API
+4. Trainer extracts and aligns logprobs with training labels
+5. GRPO loss uses logprobs as π_old for importance sampling ratio
+
+### 2. KL Coefficient and Clipping Are Essential
+
+**CRITICAL:** Without these hyperparameters, training WILL collapse (reward hacking):
 
 ```bash
---kl-coef 0.1      # Prevents policy from drifting too far
---clip-eps 0.2     # Limits update magnitude
+--kl-coef 0.1      # Prevents policy from drifting too far from reference
+--clip-eps 0.2     # Limits importance sampling ratio to [0.8, 1.2]
 ```
 
-**Symptoms of missing KL/clipping:**
-- Accuracy drops dramatically (e.g., 59% → 7%)
-- Loss goes to very negative values
-- Model outputs become repetitive/degenerate
+**Why these matter:**
+- **KL Penalty** (β): Penalizes the policy for deviating from the reference policy (inference-time policy)
+  - Uses Schulman's unbiased estimator: `exp(-log_ratio) + log_ratio - 1`
+  - Higher β = more conservative updates
+  - Set to 0 to disable (NOT recommended - leads to instability)
 
-### 4. Memory Budgeting for Large Models
+- **PPO Clipping** (ε): Clips the importance sampling ratio to `[1-ε, 1+ε]`
+  - Prevents catastrophically large policy updates
+  - Takes pessimistic bound (conservative update)
+
+**Symptoms of missing/misconfigured KL/clipping:**
+- Accuracy drops dramatically (e.g., 59% → 7%)
+- Loss goes to very negative values (< -10)
+- Model outputs become repetitive/degenerate
+- `mean_ratio` diverges far from 1.0
+- `mean_kl` explodes (> 1.0)
+
+**Healthy training metrics:**
+- `mean_ratio`: 0.8 - 1.2 (close to 1.0)
+- `mean_kl`: 0.01 - 0.1
+- `clipped_fraction`: < 0.3 (< 30% of tokens clipped)
+
+### 3. Memory Budgeting for Large Models
 
 | Model Size | GPU Memory | Recommended Settings |
 |------------|------------|----------------------|
@@ -278,31 +320,25 @@ Without these, training will collapse (reward hacking):
 | 14B | 80GB | `--gpu-memory-utilization 0.45`, `--batch-size 2` |
 | 24B | 192GB (B200) | `--gpu-memory-utilization 0.30`, `--optimizer adafactor` |
 
-### 5. Start with Small Batch Sizes
 
-```bash
-# Start conservative, increase if no OOM
---batch-size 2 --gradient-accumulation-steps 8  # Effective batch = 16
-```
-
-### 6. Optimizer Selection
+### 4. Optimizer Selection
 
 The trainer supports multiple optimizer options to trade off between speed, memory, and precision:
 
 | Optimizer | GPU Memory for States | Speed | Precision | Dependencies |
 |-----------|----------------------|-------|-----------|--------------|
-| `adamw` (default) | ~32GB (for 8B model) | Fastest | Full FP32 | None |
-| `adamw_8bit` | ~8GB | Fast | 8-bit quantized | `bitsandbytes` |
+| `adamw` | ~32GB (for 8B model) | Fastest | Full FP32 | None |
+| `adamw_8bit` (default) | ~8GB | Fast | 8-bit quantized | `bitsandbytes` |
 | `adafactor` | ~8GB | Fast | Full (no momentum) | `transformers` |
 | `adamw_cpu` | ~0GB (on CPU) | ~2x slower | Full FP32 | None |
 
 **Usage:**
 ```bash
-# Standard AdamW (default)
---optimizer adamw
-
-# 8-bit AdamW - recommended for memory-constrained setups
+# 8-bit AdamW (default) - recommended for memory-constrained setups
 --optimizer adamw_8bit
+
+# Standard AdamW - full precision
+--optimizer adamw
 
 # Adafactor - no momentum states, good for large models
 --optimizer adafactor
@@ -392,36 +428,39 @@ vLLM exports tensor mappings to `vllm_bridge_config.json`:
 
 ## ❓ FAQ
 
-
-### Q: Why isn't vLLM seeing my weight updates?
-
-**A:** CUDA graphs are caching the old weights. Add `--enforce-eager`:
-
-```bash
-python vllm_api_server.py --model $MODEL --enforce-eager
-```
-
-
-
 ### Q: How do I debug logprob alignment issues?
 
-**A:** Look for these log messages:
+**A:** Look for these log messages during training:
 ```
 [WARNING] ref_logprobs at generated positions avg 0.85 (should be negative!)
+[WARNING] This suggests inference_logprobs alignment is wrong
 ```
 
-This means inference logprobs aren't being passed correctly. Check that:
-1. Environment uses `--openai.server_type vllm`
-2. vLLM returns logprobs (check `/generate` response)
+This means inference logprobs aren't being passed correctly. Debug steps:
 
-### Q: Why does vLLM v1 engine fail with CUDA fork errors?
+1. **Check environment server type:**
+   ```bash
+   # Must be 'vllm', NOT 'openai'
+   --openai.server_type vllm
+   ```
 
-**A:** vLLM v1 uses multiprocessing that conflicts with CUDA initialization. We default to v0 engine:
+2. **Verify vLLM returns logprobs:**
+   ```bash
+   curl -X POST http://localhost:9001/generate \
+     -H "Content-Type: application/json" \
+     -d '{"prompt": "Hello", "max_tokens": 5}'
+   # Response should include "logprobs": [...]
+   ```
 
-```python
-# vllm_api_server.py automatically sets:
-os.environ.setdefault("VLLM_USE_V1", "0")
-```
+3. **Check data.py logs:**
+   ```
+   [Data] ✓ inference_logprobs found in batch (sample len: 128)
+   ```
+
+4. **Monitor alignment metrics in training logs:**
+   - `alignment/diff_mean` should be close to 0 at step start
+   - `alignment/diff_abs_mean` < 0.1 = good alignment
+   - Large values = weights not properly shared or logprobs misaligned
 
 
 ##  Troubleshooting
@@ -479,24 +518,8 @@ vLLM version incompatibility. Our server handles this automatically, but make su
 python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 ```
 
-### Training is slow / no batches
-
-1. Check vLLM is running: `curl http://localhost:9001/health`
-2. Check API is running: `curl http://localhost:8002/info`
-3. Check environment is connected and generating rollouts
-
----
 
 ## 📊 Monitoring Training
-
-### Key Metrics to Watch
-
-| Metric | Healthy Range | Problem If... |
-|--------|---------------|---------------|
-| `mean_ratio` | 0.8 - 1.2 | Far from 1.0 = policy changed too much |
-| `mean_kl` | 0.01 - 0.1 | > 0.5 = policy drifting |
-| `clipped_fraction` | < 0.3 | > 0.5 = learning rate too high |
-| `loss` | Gradually decreasing | Exploding or very negative |
 
 ### WandB Logging
 
@@ -514,11 +537,12 @@ python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--model-name` | (required) | HuggingFace model ID |
-| `--weight-bridge-mode` | `none` | `shared_vllm`, `lora_only`, or `none` |
+| `--model-name` or `--model` | (required) | HuggingFace model ID |
+| `--weight-bridge-mode` | `none` | `shared_vllm`, `lora_only`, `lora_restart`, or `none` |
 | `--training-steps` | 10 | Number of training steps |
 | `--batch-size` | 2 | Micro-batch size |
-| `--gradient-accumulation-steps` | 1 | Effective batch = batch × accum |
+| `--gradient-accumulation-steps` | 32 | Effective batch = batch × accum |
+| `--seq-len` | 2048 | Maximum sequence length |
 
 ### GRPO Hyperparameters
 
@@ -526,15 +550,16 @@ python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 |----------|---------|-------------|
 | `--kl-coef` | 0.1 | KL penalty strength (higher = more conservative) |
 | `--clip-eps` | 0.2 | PPO clipping range [1-ε, 1+ε] |
-| `--learning-rate` | 1e-6 | Learning rate |
+| `--lr` | 1e-5 | Learning rate (NOT --learning-rate) |
 
 ### LoRA Arguments
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--lora-r` | 16 | LoRA rank |
-| `--lora-alpha` | 32 | LoRA scaling factor |
-| `--lora-dropout` | 0.05 | LoRA dropout |
+| `--lora-r` | 16 | LoRA rank (dimension of low-rank matrices) |
+| `--lora-alpha` | 32 | LoRA alpha scaling factor |
+| `--lora-dropout` | 0.05 | LoRA dropout probability |
+| `--lora-target-modules` | None | Module names to apply LoRA (default: `q_proj v_proj`) |
 
 ### vLLM Arguments
 
@@ -542,7 +567,11 @@ python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 |----------|---------|-------------|
 | `--vllm-port` | 9001 | vLLM server port |
 | `--vllm-config-path` | auto | Path to bridge config (shared mode) |
-| `--gpu-memory-utilization` | 0.9 | vLLM GPU memory fraction |
+| `--gpu-memory-utilization` | 0.45 | vLLM GPU memory fraction |
+| `--vllm-gpu` | None | GPU ID for vLLM (None = same as trainer) |
+| `--max-model-len` | 4096 | Maximum context length |
+| `--dtype` | `bfloat16` | Model dtype: `bfloat16`, `float16`, or `auto` |
+| `--vllm-restart-interval` | 3 | Restart vLLM every N steps (legacy/lora_restart) |
 
 ---
 
@@ -550,15 +579,248 @@ python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 
 | Module | Purpose |
 |--------|---------|
-| `grpo.py` | CLI entry point, dispatches to training modes |
-| `run.py` | Unified launcher for shared_vllm mode |
-| `cli.py` | Single source of truth for all CLI arguments |
-| `config.py` | `TrainingConfig` Pydantic model |
-| `api.py` | Communication with Atropos API |
-| `data.py` | Batch preprocessing, logprob extraction |
-| `model.py` | Model loading, CUDA IPC attachment, tensor mapping |
-| `training.py` | GRPO loss computation |
-| `trainers.py` | Mode-specific training loops |
-| `vllm_api_server.py` | Streamlined vLLM server for training |
-| `vllm_manager.py` | vLLM process lifecycle management |
-| `checkpointing.py` | Save/load checkpoints and adapters |
+| `grpo.py` | CLI entry point, dispatches to training modes (4 modes) |
+| `run.py` | Unified launcher for shared_vllm mode (starts vLLM + trainer) |
+| `cli.py` | Single source of truth for all CLI arguments (modular builders) |
+| `config.py` | `TrainingConfig` Pydantic model with all hyperparameters |
+| `api.py` | Communication with Atropos API (registration, batch fetching) |
+| `data.py` | Batch preprocessing, padding, logprob extraction and alignment |
+| `model.py` | Model loading, CUDA IPC attachment, tensor mapping (QKV/Gate fusion) |
+| `training.py` | GRPO loss computation (importance sampling, KL penalty, clipping) |
+| `trainers.py` | Mode-specific training loops (4 implementations + optimizer selection) |
+| `vllm_api_server.py` | Custom vLLM server with `/generate` endpoint and LoRA support |
+| `vllm_manager.py` | vLLM process lifecycle management (launch, health checks, termination) |
+| `checkpointing.py` | Save/load checkpoints and adapters (handles fused tensor unfusing) |
+
+---
+
+## Code Execution Flow
+
+### High-Level Flow (All Modes)
+
+```
+1. CLI Parsing (cli.py)
+   ↓
+2. Config Creation (config.py)
+   ↓
+3. Mode Dispatcher (grpo.py or run.py)
+   ↓
+4. Trainer Function (trainers.py)
+   ├─ Setup Phase
+   │  ├─ Initialize W&B (training.py)
+   │  ├─ Load Model (model.py)
+   │  ├─ Create Optimizer (trainers.py)
+   │  ├─ Check Atropos API (api.py)
+   │  ├─ Register Trainer (api.py)
+   │  └─ Launch/Connect vLLM (vllm_manager.py or external)
+   │
+   └─ Training Loop
+      ├─ Fetch Batch (api.py → data.py)
+      │  ├─ Poll /batch endpoint
+      │  ├─ Pad sequences (data.py)
+      │  ├─ Extract inference logprobs (data.py)
+      │  └─ Normalize advantages (data.py)
+      │
+      ├─ Training Step (training.py)
+      │  ├─ For each micro-batch:
+      │  │  ├─ Forward pass (model)
+      │  │  ├─ Compute GRPO loss (training.py)
+      │  │  │  ├─ Temperature scaling
+      │  │  │  ├─ Compute log probabilities
+      │  │  │  ├─ Importance sampling ratio (using inference logprobs)
+      │  │  │  ├─ PPO clipping
+      │  │  │  ├─ Schulman KL penalty
+      │  │  │  └─ Return loss + metrics
+      │  │  └─ Backward pass (accumulate gradients)
+      │  ├─ Clip gradients (norm=1.0)
+      │  ├─ Optimizer step
+      │  └─ Zero gradients
+      │
+      ├─ Weight Sync (mode-dependent)
+      │  ├─ shared_vllm: No sync needed (weights shared via CUDA IPC)
+      │  ├─ lora_only: HTTP POST to /lora/load
+      │  ├─ lora_restart: Save adapter + terminate + relaunch vLLM
+      │  └─ none: Save checkpoint + terminate + relaunch vLLM
+      │
+      ├─ Log Metrics (training.py)
+      │  ├─ Console output
+      │  └─ W&B logging (if enabled)
+      │
+      └─ Periodic Checkpoint (checkpointing.py)
+         ├─ Ensure tensors are contiguous (unfuse views)
+         ├─ Save state dict
+         └─ Free GPU memory
+```
+
+### Mode-Specific Details
+
+#### shared_vllm Mode
+
+```python
+# Entry: grpo.py → trainers.train_shared_vllm()
+
+1. Model Loading (model.py):
+   - Find vllm_bridge_config.json
+   - Load IPC handles (CUDA memory pointers)
+   - Create empty model on meta device
+   - Reconstruct tensors from IPC handles
+   - Map vLLM fused tensors → HF unfused parameters
+     * qkv_proj → q_proj, k_proj, v_proj (views)
+     * gate_up_proj → gate_proj, up_proj (views)
+   - Initialize remaining meta tensors (buffers, etc.)
+
+2. Training Loop:
+   - optimizer.step() directly modifies vLLM's tensors
+   - No weight synchronization needed!
+   - Checkpoints: Unfuse views before saving (checkpointing.py)
+
+3. Tensor Mapping (model.py:_create_vllm_to_hf_mapping):
+   - Reads actual HF tensor shapes from model.state_dict()
+   - Creates slice mappings for fused layers
+   - Example: q_proj = qkv_proj[0:4096, :]
+```
+
+#### lora_restart Mode
+
+```python
+# Entry: grpo.py → trainers.train_lora_restart()
+
+1. Model Loading (model.py):
+   - Load base model with PEFT
+   - Apply LoRA config to target modules
+   - Freeze base weights, only LoRA trainable
+
+2. vLLM Management:
+   - Launch: _launch_vllm_with_lora()
+     * NO --enforce-eager flag (CUDA graphs enabled)
+     * Pre-load initial adapter
+   - Periodic Restart:
+     * Save new adapter (checkpointing.py)
+     * Terminate vLLM aggressively (_terminate_vllm)
+       - Kill process group
+       - Kill by port (fuser)
+       - Kill by process name patterns
+       - Wait for GPU memory release (critical!)
+     * Relaunch with new adapter
+
+3. Performance:
+   - ~108 TPS (CUDA graphs enabled)
+   - ~45s restart overhead
+   - Much faster than lora_only (~8x speedup)
+```
+
+#### lora_only Mode
+
+```python
+# Entry: grpo.py → trainers.train_lora()
+
+1. Model Loading: Same as lora_restart
+
+2. vLLM: External server (must be pre-started)
+   - MUST use --enforce-eager (disables CUDA graphs)
+   - MUST use --enable-lora
+
+3. Weight Sync: _hotswap_lora_adapter()
+   - Tries /v1/load_lora_adapter (native vLLM)
+   - Falls back to /lora/load (custom endpoint)
+
+4. Performance:
+   - ~13 TPS (CUDA graphs disabled)
+   - No restart overhead
+   - 8x slower than lora_restart!
+```
+
+#### none (legacy) Mode
+
+```python
+# Entry: grpo.py → trainers.train_legacy()
+
+1. Model Loading: Full model (model.py)
+
+2. vLLM Management:
+   - Launch: vllm_manager.launch_vllm_server()
+   - Periodic Restart:
+     * Save full checkpoint (checkpointing.py)
+     * Terminate vLLM (vllm_manager.terminate_vllm_process)
+     * Relaunch with new checkpoint
+
+3. Use Case:
+   - Different GPUs for trainer and vLLM
+   - Simple setup without CUDA IPC or LoRA
+```
+
+### Data Flow Detail (data.py)
+
+```python
+# api.get_batch() → data.get_data() → data.pad_data_to_good_offset()
+
+1. Batch Structure from API:
+   {
+     "batch": [
+       {
+         "tokens": [[tok1, tok2, ...], ...],  # group_size sequences
+         "masks": [[mask1, mask2, ...], ...],  # -100 for prompt, token_id for generated
+         "scores": [score1, score2, ...],      # rewards
+         "inference_logprobs": [[lp1, lp2, ...], ...],  # CRITICAL for GRPO!
+         "generation_params": {"temperature": 1.0},
+         ...
+       }
+     ]
+   }
+
+2. Preprocessing (pad_data_to_good_offset):
+   - Normalize advantages (mean=0, std=1 per group)
+   - Pad sequences to multiple of 64
+   - Align inference_logprobs with labels:
+     * 1.0 for prompt tokens (masked)
+     * Actual negative logprobs for generated tokens
+     * Shift by 1 for causal alignment
+   - Extract temperatures (priority: override > generation_params > 1.0)
+   - Batch into micro-batches
+
+3. Output:
+   - token_batches: [B, seq_len]
+   - label_batches: [B, seq_len]  # -100 for masked
+   - advantage_batches: [B, 1]
+   - temperature_batches: [B, 1, 1]
+   - inference_logprob_batches: [B, seq_len]  # aligned with labels!
+```
+
+### GRPO Loss Computation (training.py)
+
+```python
+# training.compute_grpo_loss()
+
+1. Forward Pass:
+   - Get logits from model
+   - Apply temperature scaling (from data)
+   - Compute log probabilities per token
+
+2. Reference Policy (π_old):
+   - Extract from inference_logprobs (from vLLM at generation time)
+   - Already aligned with labels by data.py
+
+3. Importance Sampling:
+   - log_ratio = log π_new(a|s) - log π_old(a|s)
+   - ratio = exp(log_ratio)
+   - Clipped ratio = clip(ratio, 1-ε, 1+ε)
+
+4. Policy Loss:
+   - surr1 = ratio * advantage
+   - surr2 = clipped_ratio * advantage
+   - policy_loss = -min(surr1, surr2)  # pessimistic bound
+
+5. KL Penalty (Schulman's estimator):
+   - kl = exp(-log_ratio) + log_ratio - 1
+   - Guaranteed non-negative, unbiased
+
+6. Total Loss:
+   - loss = policy_loss + β * kl_penalty
+   - Scaled by 1/gradient_accumulation_steps
+
+7. Metrics:
+   - mean_ratio: Average importance sampling ratio
+   - mean_kl: Average KL divergence
+   - clipped_fraction: % of tokens clipped
+   - alignment/* : Token-level logprob alignment (verifies weight sharing)
+```
