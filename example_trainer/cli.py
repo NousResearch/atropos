@@ -65,10 +65,10 @@ def add_training_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--optimizer",
         type=str,
-        choices=["adamw", "adamw_8bit", "adamw_cpu", "adafactor"],
+        choices=["adamw", "adamw_8bit", "adafactor"],
         default="adamw_8bit",
         help="Optimizer: 'adamw' (full precision), 'adamw_8bit' (8-bit states), "
-        "'adamw_cpu' (CPU offload), 'adafactor' (no momentum)",
+        "'adafactor' (no momentum)",
     )
     group.add_argument(
         "--device",
