@@ -32,11 +32,10 @@ class TrainingConfig(BaseModel):
     gradient_accumulation_steps: int = Field(
         32, description="Number of gradient accumulation steps"
     )
-    optimizer: Literal["adamw", "adamw_8bit", "adamw_cpu", "adafactor"] = Field(
+    optimizer: Literal["adamw", "adamw_8bit", "adafactor"] = Field(
         "adamw_8bit",
         description="Optimizer to use: 'adamw' (full precision, ~32GB GPU), "
         "'adamw_8bit' (8-bit states, ~8GB GPU, requires bitsandbytes), "
-        "'adamw_cpu' (CPU offload, ~0GB GPU, slower), "
         "'adafactor' (no momentum, ~8GB GPU)",
     )
 
