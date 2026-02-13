@@ -45,10 +45,10 @@ def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
         )
         if result.stdout.strip():
             pids = result.stdout.strip().split("\n")
+            print(f"  Killing {len(pids)} processes on port {port}...")
             for pid in pids:
                 try:
                     os.kill(int(pid), signal.SIGTERM)
-                    print(f"  Sent SIGTERM to PID {pid}")
                 except (ProcessLookupError, ValueError):
                     pass
 
@@ -61,12 +61,15 @@ def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
                 time.sleep(0.5)
 
             # Force kill if still running
+            killed_count = 0
             for pid in pids:
                 try:
                     os.kill(int(pid), signal.SIGKILL)
-                    print(f"  Sent SIGKILL to PID {pid}")
+                    killed_count += 1
                 except (ProcessLookupError, ValueError):
                     pass
+            if killed_count > 0:
+                print(f"  Force killed {killed_count} stubborn processes")
 
             time.sleep(1)
             return not is_port_in_use(port)
