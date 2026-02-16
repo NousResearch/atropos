@@ -145,6 +145,9 @@ class ScoredData(BaseModel):
     group_overrides: Optional[dict] = None
     images: Optional[Any] = None
     env_id: Optional[int] = None  # ID of the environment that generated this data
+    # On-policy distillation: top-K logprobs from teacher model
+    # Structure: [sequence][position][top_k] = [token_id, logprob]
+    onpolicydistill_logprobs: Optional[List[List[List[List]]]] = None
 
     @field_validator("messages", mode="before")
     @classmethod
@@ -182,6 +185,7 @@ def _scored_data_to_dict(scored_data: ScoredData) -> Dict[str, Any]:
         "group_overrides": scored_data.group_overrides,
         "images": scored_data.images,
         "env_id": scored_data.env_id,
+        "onpolicydistill_logprobs": scored_data.onpolicydistill_logprobs,
     }
 
 
