@@ -18,7 +18,6 @@ from pydantic import Field
 from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
-    APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
     EvalHandlingEnum,
@@ -120,7 +119,7 @@ class MathEnv(BaseEnv):
     def __init__(
         self,
         config: RSConfig,
-        server_configs: APIServerConfig | ServerBaseline,
+        server_configs: ServerBaseline,
         slurm=True,
         testing=False,
     ):
@@ -138,7 +137,7 @@ class MathEnv(BaseEnv):
         self.iter = 0
 
     @classmethod
-    def config_init(cls) -> Tuple[RSConfig, APIServerConfig]:
+    def config_init(cls) -> Tuple[RSConfig, ServerBaseline]:
         env_config = RSConfig(
             tokenizer_name="Qwen/Qwen2.5-7B",
             group_size=16,
@@ -153,11 +152,10 @@ class MathEnv(BaseEnv):
             eval_limit_ratio=0.1,
             max_num_workers_per_node=24,
         )
-        server_configs = APIServerConfig(
+        server_configs = ServerBaseline(
             model_name="Qwen/Qwen2.5-7B",
             num_requests_for_eval=256,  # since evaling only on one...
             server_type="vllm",
-            base_url="",  # Override via CLI: --openai.base_url
         )
 
         return env_config, server_configs
