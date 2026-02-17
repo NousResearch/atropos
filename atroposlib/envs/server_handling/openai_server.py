@@ -165,11 +165,16 @@ def resolve_openai_configs(
     """
     from atroposlib.envs.server_handling.server_manager import ServerBaseline
 
+    print(f"[RESOLVE DEBUG] default_server_configs type = {type(default_server_configs)}")
+    print(f"[RESOLVE DEBUG] openai_config_dict = {openai_config_dict}")
+
     openai_full_prefix = f"{OPENAI_NAMESPACE}{NAMESPACE_SEP}"
     openai_yaml_config = yaml_config.get(OPENAI_NAMESPACE, None)
     openai_cli_config = {
         k: v for k, v in cli_passed_flags.items() if k.startswith(openai_full_prefix)
     }
+
+    print(f"[RESOLVE DEBUG] openai_cli_config = {openai_cli_config}")
 
     is_multi_server_yaml = (
         isinstance(openai_yaml_config, list) and len(openai_yaml_config) >= 2
@@ -180,6 +185,9 @@ def resolve_openai_configs(
         and len(default_server_configs) >= 2
     )
 
+    print(f"[RESOLVE DEBUG] is_multi_server_yaml={is_multi_server_yaml}, is_multi_server_default={is_multi_server_default}")
+    print(f"[RESOLVE DEBUG] isinstance(default_server_configs, ServerBaseline) = {isinstance(default_server_configs, ServerBaseline)}")
+
     if (is_multi_server_yaml or is_multi_server_default) and openai_cli_config:
         raise FailedExecutionException(
             message=f"CLI overrides for OpenAI settings (--{openai_full_prefix}*) are not supported "
@@ -189,6 +197,7 @@ def resolve_openai_configs(
         )
 
     if is_multi_server_yaml:
+        print("[RESOLVE DEBUG] Taking multi-server YAML path")
         logger.info(
             f"Using multi-server configuration defined in YAML under '{OPENAI_NAMESPACE}'."
         )
@@ -199,12 +208,15 @@ def resolve_openai_configs(
                 f"Error parsing multi-server OpenAI configuration from YAML under '{OPENAI_NAMESPACE}': {e}"
             ) from e
     elif isinstance(default_server_configs, ServerBaseline):
+        print("[RESOLVE DEBUG] Taking ServerBaseline path")
         logger.info("Using ServerBaseline configuration.")
         server_configs = default_server_configs
     elif is_multi_server_default:
+        print("[RESOLVE DEBUG] Taking multi-server default path")
         logger.info("Using default multi-server configuration (length >= 2).")
         server_configs = default_server_configs
     else:
+        print("[RESOLVE DEBUG] Taking single server merged path")
         logger.info(
             "Using single OpenAI server configuration based on merged settings (default/YAML/CLI)."
         )
@@ -216,9 +228,12 @@ def resolve_openai_configs(
                 f"Merged Dict: {openai_config_dict}"
             ) from e
 
+        print(f"[RESOLVE DEBUG] final_openai_config = {final_openai_config}")
         if isinstance(default_server_configs, APIServerConfig):
+            print("[RESOLVE DEBUG] Returning final_openai_config directly")
             server_configs = final_openai_config
         elif isinstance(default_server_configs, list):
+            print("[RESOLVE DEBUG] Returning [final_openai_config]")
             server_configs = [final_openai_config]
         else:
             logger.warning(
@@ -227,4 +242,5 @@ def resolve_openai_configs(
             )
             server_configs = [final_openai_config]
 
+    print(f"[RESOLVE DEBUG] Returning server_configs = {server_configs}")
     return server_configs
