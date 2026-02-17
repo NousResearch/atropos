@@ -4,6 +4,8 @@ A modular training framework for fine-tuning language models with **Group Relati
 
 ## Module Structure
 
+**Note:** The `configs/` directory contains YAML configuration files for the **environment server** (e.g., `math_server_zero.py`), not for the trainer itself. The trainer is configured via CLI arguments documented in the [CLI Reference](#-cli-reference) section.
+
 ```
 example_trainer/
 ├── grpo.py              # CLI entry point (dispatches to 4 training modes)
@@ -18,12 +20,11 @@ example_trainer/
 ├── vllm_manager.py      # vLLM process lifecycle (launch, health, termination)
 ├── trainers.py          # 4 training mode implementations + optimizer selection
 ├── vllm_api_server.py   # Custom vLLM server with /generate endpoint + LoRA
-├── vllm_patching/       # CUDA IPC patches for weight sharing 
+├── vllm_patching/       # CUDA IPC patches for weight sharing + B200 GPU compatibility
 │   └── patched_gpu_runner.py
-└── scripts/             # Helper scripts and benchmarks
-    ├── test_lora_mode.sh
-    ├── test_single_copy_mode.sh
-    └── compare_all_modes_math_zero.sh
+└── configs/             # Environment server configuration examples
+    ├── math_zero_shared.yaml  # Config for math_server_zero.py (shared_vllm mode)
+    └── math_zero_lora.yaml    # Config for math_server_zero.py (lora mode)
 ```
 
 
@@ -320,6 +321,13 @@ Only `server_type=vllm` calls the `/generate` endpoint which returns token-level
 | 14B | 80GB | `--gpu-memory-utilization 0.45`, `--batch-size 2` |
 | 24B | 192GB (B200) | `--gpu-memory-utilization 0.30`, `--optimizer adafactor` |
 
+**🔧 B200/Blackwell GPU Support:**
+
+The trainer includes automatic patches for NVIDIA B200 (Blackwell architecture) GPUs when using LoRA mode. These patches disable Grid Dependency Control (GDC) in vLLM's Triton kernels, which causes compilation failures on Blackwell GPUs. The patches are applied automatically when:
+- `VLLM_ENABLE_SHARED_WEIGHTS=1` is set, or
+- LoRA mode is used
+
+The patching clears the Triton cache and disables GDC to ensure compatibility. No manual intervention required.
 
 ### 4. Optimizer Selection
 
@@ -483,13 +491,19 @@ vLLM v1 engine issue. We disable it by default, but if you see this:
 VLLM_USE_V1=0 python -m example_trainer.vllm_api_server ...
 ```
 
-### "LogProb Alignment: MISMATCH!"
+### "WARNING: ref_logprobs avg X.XXX (should be negative!)"
 
-Weight updates aren't visible to inference. Fix:
+This warning appears during training when inference logprobs alignment is incorrect. Weight updates may not be visible to inference. Fix:
 
 ```bash
 # Add --enforce-eager to vLLM
 python vllm_api_server.py --model $MODEL --enforce-eager
+```
+
+You may also see related alignment warnings:
+```
+[WARNING] This suggests inference_logprobs alignment is wrong
+[DEBUG] Logprob gap: ref=X.XXX, train=X.XXX
 ```
 
 ### OOM (Out of Memory)
