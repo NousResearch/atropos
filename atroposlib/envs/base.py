@@ -1671,6 +1671,12 @@ class BaseEnv(ABC):
                 )  # CLI args
                 yaml_oai_config = yaml_config.get(OPENAI_NAMESPACE, {})
                 
+                # Debug logging for CLI args
+                print(f"[CLI DEBUG] cli_passed_flags = {cli_passed_flags}")
+                print(f"[CLI DEBUG] openai_full_prefix = {openai_full_prefix}")
+                print(f"[CLI DEBUG] oai_cli_passed_args = {oai_cli_passed_args}")
+                print(f"[CLI DEBUG] yaml_oai_config = {yaml_oai_config}")
+                
                 # Auto-convert ServerBaseline to APIServerConfig when CLI/YAML overrides are provided
                 # This allows any environment to use --openai.* CLI args without modifying config_init
                 # Use a new variable to avoid UnboundLocalError from closure scoping
@@ -1698,12 +1704,15 @@ class BaseEnv(ABC):
                 if isinstance(default_openai_config_, APIServerConfig) and isinstance(
                     yaml_oai_config, dict
                 ):
+                    print(f"[CLI DEBUG] default_openai_config_.model_dump() = {default_openai_config_.model_dump()}")
                     openai_config_dict = merge_dicts(
                         default_openai_config_.model_dump(),  # Default APIServerConfig (or from class init)
                         yaml_oai_config,
                         oai_cli_passed_args,
                     )
+                    print(f"[CLI DEBUG] openai_config_dict after merge = {openai_config_dict}")
                 else:
+                    print(f"[CLI DEBUG] Not merging: default_openai_config_ type={type(default_openai_config_)}, yaml_oai_config type={type(yaml_oai_config)}")
                     openai_config_dict = {}
 
                 # 3. Server Manager Configuration (slurm, testing - not namespaced)
