@@ -325,7 +325,7 @@ Only `server_type=vllm` calls the `/generate` endpoint which returns token-level
 
 The trainer includes automatic patches for NVIDIA B200 (Blackwell architecture) GPUs when using LoRA mode. These patches disable Grid Dependency Control (GDC) in vLLM's Triton kernels, which causes compilation failures on Blackwell GPUs. The patches are applied automatically when:
 - `VLLM_ENABLE_SHARED_WEIGHTS=1` is set, or
-- LoRA mode is used
+- `NUM_INFERENCE_NODES` is set (distributed inference path)
 
 The patching clears the Triton cache and disables GDC to ensure compatibility. No manual intervention required.
 
@@ -534,7 +534,7 @@ python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 ```bash
 --use-wandb \
 --wandb-project "my-grpo-training" \
---wandb-run-name "hermes-8b-gsm8k"
+--wandb-group "hermes-8b-gsm8k"
 ```
 
 ---
@@ -548,6 +548,7 @@ python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 | `--model-name` or `--model` | (required) | HuggingFace model ID |
 | `--weight-bridge-mode` | `none` | `shared_vllm`, `lora_only`, `lora_restart`, or `none` |
 | `--training-steps` | 10 | Number of training steps |
+| `--checkpoint-interval` | 3 | Save checkpoint every N steps (0 = final only) |
 | `--batch-size` | 2 | Micro-batch size |
 | `--gradient-accumulation-steps` | 32 | Effective batch = batch × accum |
 | `--seq-len` | 2048 | Maximum sequence length |
@@ -559,6 +560,7 @@ python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 | `--kl-coef` | 0.1 | KL penalty strength (higher = more conservative) |
 | `--clip-eps` | 0.2 | PPO clipping range [1-ε, 1+ε] |
 | `--lr` | 1e-5 | Learning rate (NOT --learning-rate) |
+| `--no-reference-logprobs` | False | Disable GRPO reference logprobs (falls back to REINFORCE-style updates) |
 
 ### LoRA Arguments
 
@@ -567,7 +569,7 @@ python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 | `--lora-r` | 16 | LoRA rank (dimension of low-rank matrices) |
 | `--lora-alpha` | 32 | LoRA alpha scaling factor |
 | `--lora-dropout` | 0.05 | LoRA dropout probability |
-| `--lora-target-modules` | None | Module names to apply LoRA (default: `q_proj v_proj`) |
+| `--lora-target-modules` | None | Module names to apply LoRA (`None` falls back to `q_proj v_proj`) |
 
 ### vLLM Arguments
 
@@ -580,6 +582,39 @@ python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 | `--max-model-len` | 4096 | Maximum context length |
 | `--dtype` | `bfloat16` | Model dtype: `bfloat16`, `float16`, or `auto` |
 | `--vllm-restart-interval` | 3 | Restart vLLM every N steps (legacy/lora_restart) |
+
+### Atropos API Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--atropos-url` | `http://localhost:8000` | URL of the Atropos API server |
+
+**Note:** Many examples in this README use `http://localhost:8002` because they start `run-api --port 8002`.
+
+### Weights & Biases Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--use-wandb` | False | Enable W&B logging |
+| `--wandb-project` | None | W&B project name |
+| `--wandb-group` | None | W&B group name (auto-generated if omitted) |
+
+### Distributed Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--trainer-rank` | 0 | Trainer rank |
+| `--world-size` | 1 | World size |
+| `--init-method` | `env://` | Distributed init method |
+| `--num-inference-nodes` | 0 | Number of inference nodes |
+
+### Debug & Benchmark Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--debug-loading` | False | Verbose model loading diagnostics |
+| `--benchmark` | False | Print benchmark/timing metrics |
+| `--log-dir` | `./logs` | Directory for unified launcher logs |
 
 ---
 
