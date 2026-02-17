@@ -53,6 +53,11 @@ def register_trainer(config: TrainingConfig):
     Verifies registration succeeded before returning.
     """
     url = config.atropos_url
+    save_checkpoint_interval = (
+        config.training_steps
+        if config.checkpoint_interval <= 0
+        else config.checkpoint_interval
+    )
     response = requests.post(
         f"{url}/register",
         json={
@@ -63,7 +68,7 @@ def register_trainer(config: TrainingConfig):
             "max_token_len": config.seq_len,
             "starting_step": 0,
             "checkpoint_dir": config.save_path,
-            "save_checkpoint_interval": config.training_steps,
+            "save_checkpoint_interval": save_checkpoint_interval,
             "num_steps": config.training_steps,
         },
         timeout=10,
