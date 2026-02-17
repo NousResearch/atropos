@@ -207,7 +207,20 @@ def resolve_openai_configs(
             raise FailedExecutionException(
                 f"Error parsing multi-server OpenAI configuration from YAML under '{OPENAI_NAMESPACE}': {e}"
             ) from e
+    elif isinstance(default_server_configs, APIServerConfig):
+        # Check APIServerConfig BEFORE ServerBaseline since APIServerConfig inherits from ServerBaseline
+        print("[RESOLVE DEBUG] Taking APIServerConfig merged path")
+        logger.info("Using single OpenAI server configuration based on merged settings (default/YAML/CLI).")
+        try:
+            final_openai_config = APIServerConfig(**openai_config_dict)
+        except Exception as e:
+            raise FailedExecutionException(
+                f"Error creating final OpenAI configuration from merged settings: {e}\n"
+                f"Merged Dict: {openai_config_dict}"
+            ) from e
+        server_configs = final_openai_config
     elif isinstance(default_server_configs, ServerBaseline):
+        # Pure ServerBaseline (not APIServerConfig) - no CLI overrides possible
         print("[RESOLVE DEBUG] Taking ServerBaseline path")
         logger.info("Using ServerBaseline configuration.")
         server_configs = default_server_configs
@@ -216,7 +229,7 @@ def resolve_openai_configs(
         logger.info("Using default multi-server configuration (length >= 2).")
         server_configs = default_server_configs
     else:
-        print("[RESOLVE DEBUG] Taking single server merged path")
+        print("[RESOLVE DEBUG] Taking single server merged path (fallback)")
         logger.info(
             "Using single OpenAI server configuration based on merged settings (default/YAML/CLI)."
         )
