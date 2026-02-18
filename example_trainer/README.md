@@ -570,6 +570,48 @@ python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 | `--lora-alpha` | 32 | LoRA alpha scaling factor |
 | `--lora-dropout` | 0.05 | LoRA dropout probability |
 | `--lora-target-modules` | None | Module names to apply LoRA (`None` falls back to `q_proj v_proj`) |
+| `--lora-layer-indices` | None | Optional layer filter (examples: `20-31`, `0-3,28-31`) |
+
+### LoRA Layer Index Guide (by Architecture)
+
+`--lora-layer-indices` is model-dependent. Different models expose different numbers of transformer blocks, so a valid range for one model may be invalid for another.
+
+| Architecture family | Common config fields | Typical layer list path | Notes |
+|---------------------|----------------------|-------------------------|-------|
+| LLaMA / Llama-2 / Llama-3 / Mistral | `num_hidden_layers` | `model.layers` | Most common causal-LM layout |
+| Qwen / Qwen2 / Qwen2.5 / Qwen3 | `num_hidden_layers` | `model.layers` | Similar layer indexing to LLaMA |
+| GPT-2 / GPT-J style | `n_layer` or mapped to `num_hidden_layers` | `transformer.h` | PEFT may use `h` pattern internally |
+| Falcon | `num_hidden_layers` | `transformer.h` | Uses `h` block list in model module tree |
+
+#### Reliable way to check for any model
+
+Always query the model config before choosing indices:
+
+```bash
+python - <<'PY'
+from transformers import AutoConfig
+
+model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
+cfg = AutoConfig.from_pretrained(model_id)
+num_layers = getattr(cfg, "num_hidden_layers", None)
+if num_layers is None:
+    num_layers = getattr(cfg, "n_layer", None)
+
+print(f"model={model_id}")
+print(f"num_hidden_layers={num_layers}")
+if num_layers is not None:
+    print(f"valid index range: 0-{num_layers-1}")
+PY
+```
+
+#### Practical presets
+
+If your model has `N` layers:
+
+- Full layers: omit `--lora-layer-indices`
+- Top 25%: `--lora-layer-indices {int(0.75*N)}-{N-1}`
+- Top 50%: `--lora-layer-indices {int(0.5*N)}-{N-1}`
+- Last 12 layers: `--lora-layer-indices {N-12}-{N-1}` (if `N >= 12`)
 
 ### vLLM Arguments
 

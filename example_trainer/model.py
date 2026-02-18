@@ -200,11 +200,31 @@ def _load_model_with_lora(config: TrainingConfig) -> torch.nn.Module:
     target_modules = config.lora_target_modules
     if target_modules is None:
         target_modules = ["q_proj", "v_proj"]
+    layer_indices = config.lora_layer_indices
+
+    if layer_indices is not None:
+        num_hidden_layers = getattr(base_model.config, "num_hidden_layers", None)
+        if num_hidden_layers is None:
+            raise RuntimeError(
+                "Model config does not expose num_hidden_layers; cannot validate "
+                "--lora-layer-indices for this architecture."
+            )
+        invalid = [idx for idx in layer_indices if idx >= num_hidden_layers]
+        if invalid:
+            raise ValueError(
+                f"Invalid --lora-layer-indices {invalid} for model with "
+                f"{num_hidden_layers} layers (valid range: 0-{num_hidden_layers - 1})"
+            )
 
     print(f"Applying LoRA: r={config.lora_r}, alpha={config.lora_alpha}")
     print(f"Target modules: {target_modules}")
+    if layer_indices is not None:
+        print(
+            f"Applying LoRA only to layers: {layer_indices} "
+            f"(total {len(layer_indices)})"
+        )
 
-    lora_config = LoraConfig(
+    lora_kwargs = dict(
         task_type=TaskType.CAUSAL_LM,
         r=config.lora_r,
         lora_alpha=config.lora_alpha,
@@ -212,6 +232,9 @@ def _load_model_with_lora(config: TrainingConfig) -> torch.nn.Module:
         target_modules=target_modules,
         bias="none",
     )
+    if layer_indices is not None:
+        lora_kwargs["layers_to_transform"] = layer_indices
+    lora_config = LoraConfig(**lora_kwargs)
 
     model = get_peft_model(base_model, lora_config)
     model.print_trainable_parameters()
