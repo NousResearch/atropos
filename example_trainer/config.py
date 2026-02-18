@@ -154,6 +154,13 @@ class TrainingConfig(BaseModel):
             "If None, defaults to ['q_proj', 'v_proj'] for most models."
         ),
     )
+    lora_layer_indices: Optional[List[int]] = Field(
+        None,
+        description=(
+            "Optional list of transformer layer indices to apply LoRA to. "
+            "If None, applies LoRA to all matching layers."
+        ),
+    )
 
     # === Single-Copy Mode Configuration ===
     single_copy: bool = Field(
