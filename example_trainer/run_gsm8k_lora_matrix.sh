@@ -30,6 +30,8 @@ set -euo pipefail
 #   MODE=all                 # one of: all, shared_vllm, lora_only, lora_restart
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
 LAUNCH_DIR="$PWD"
 cd "$ROOT_DIR"
 
@@ -453,7 +455,7 @@ if [[ "$PARALLEL" == "1" ]]; then
     for m in shared_vllm lora_only lora_restart; do
       local_log="${OUTPUT_BASE_DIR}/logs/gsm8k_${m}/orchestrator.log"
       printf '  '
-      printf '%q ' env MODE="$m" PARALLEL=0 "$0"
+      printf '%q ' env MODE="$m" PARALLEL=0 "$SCRIPT_PATH"
       printf '> %q 2>&1 &\n' "$local_log"
     done
     log "[DRY RUN] parent waits for all child mode runners."
@@ -466,7 +468,7 @@ if [[ "$PARALLEL" == "1" ]]; then
       mkdir -p "$mode_log_dir"
       mode_orch_log="${mode_log_dir}/orchestrator.log"
       log "Starting mode runner: ${m} (log: ${mode_orch_log})"
-      env MODE="$m" PARALLEL=0 "$0" >"$mode_orch_log" 2>&1 &
+      env MODE="$m" PARALLEL=0 "$SCRIPT_PATH" >"$mode_orch_log" 2>&1 &
       parallel_pids+=("$!")
     done
 
