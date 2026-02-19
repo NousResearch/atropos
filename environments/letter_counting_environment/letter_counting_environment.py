@@ -31,6 +31,8 @@ from atroposlib.envs.base import (
 )
 
 # Default path to the YAML configuration file
+logger = logging.getLogger(__name__)
+
 DEFAULT_CONFIG_PATH = "config.yaml"
 
 
@@ -61,14 +63,14 @@ try:
     except LookupError:
         nltk.download("words")
 except ImportError:
-    print("Warning: NLTK not available. Please install with: pip install nltk")
+    logger.warning("NLTK not available. Please install with: pip install nltk")
     words = None
 
 # Import datasets for loading external eval dataset
 try:
     from datasets import load_dataset
 except ImportError:
-    print("Warning: datasets library not available. Install with: pip install datasets")
+    logger.warning("datasets library not available. Install with: pip install datasets")
     load_dataset = None
 
 
@@ -364,12 +366,12 @@ class LetterCountingEnv(BaseEnv):
         try:
             with open(config_path, "r") as f:
                 config = yaml.safe_load(f) or {}
-            print(f"Loaded config from {config_path}")
+            logger.info(f"Loaded config from {config_path}")
         except FileNotFoundError:
-            print(f"Config file not found at {config_path}, using defaults")
+            logger.warning(f"Config file not found at {config_path}, using defaults")
             config = {}
         except Exception as e:
-            print(f"Error loading config from {config_path}: {e}, using defaults")
+            logger.error(f"Error loading config from {config_path}: {e}, using defaults")
             config = {}
 
         env = config.get("env", {})
