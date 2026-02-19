@@ -371,7 +371,9 @@ class LetterCountingEnv(BaseEnv):
             logger.warning(f"Config file not found at {config_path}, using defaults")
             config = {}
         except Exception as e:
-            logger.error(f"Error loading config from {config_path}: {e}, using defaults")
+            logger.error(
+                f"Error loading config from {config_path}: {e}, using defaults"
+            )
             config = {}
 
         env = config.get("env", {})
