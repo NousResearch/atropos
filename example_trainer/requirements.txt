@@ -3,3 +3,6 @@ torch
 transformers
 datasets
 accelerate
+peft
+requests
+wandb

@@ -348,6 +348,14 @@ async def info():
 
 @app.get("/batch")
 async def get_batch():
+    # Check if trainer has registered first
+    if not hasattr(app.state, "started"):
+        return {
+            "status": "error",
+            "message": "Trainer not registered. Call /register first.",
+            "batch": [],
+        }
+
     if not app.state.started:
         app.state.started = True
 

@@ -1,0 +1,13 @@
+env:
+  tokenizer_name: "Qwen/Qwen3-4B-Instruct-2507"
+  rollout_server_url: "http://localhost:8001"
+  max_token_length: 8192
+  start_tok_length: 8192
+  group_size: 8
+  batch_size: 64
+  total_steps: 120
+  steps_per_eval: 20
+  use_wandb: true
+  wandb_name: "math-zero-shared-env"
+  eval_limit_ratio: 0.1
+  max_num_workers_per_node: 24
