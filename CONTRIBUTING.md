@@ -35,6 +35,28 @@ We follow the [GitHub Flow](https://docs.github.com) development workflow. All c
     # Install dependencies, including development dependencies
     pip install -e ".[dev]"
     ```
+    #### Troubleshooting Virtual Environment
+
+If you hit issues while setting up the virtual environment, here’s what helped me:
+
+- **Creating the environment fails:** Make sure `python3-venv` is installed. On Ubuntu/WSL:
+
+sudo apt update
+sudo apt install python3-venv
+
+- **Activation fails:** `.venv/bin/activate` only works after the virtual environment exists. If `.venv` is missing, run:
+
+python3 -m venv .venv
+
+- **Editable build messages:** When running `pip install -e .[dev]`, you’ll see a lot of packages downloading or building. That’s normal, especially for `polars`, `mypy`, or `hf-transfer`. "Building editable" just means your changes in the repo will apply immediately, so don’t worry about the messages.
+- **Slow installs:** Some packages are big, so installs can take a few minutes. Don’t interrupt unless there’s an actual error.
+- **Check that it worked:** After activation, your prompt should show `(.venv)`. You can also confirm with:
+
+python --version
+pip list
+
+Following this should make your environment ready for contributions without surprises.
+
 4.  **Install pre-commit hooks:** This project uses `pre-commit` for code quality checks. The hooks will run automatically when you commit changes.
     ```bash
     pre-commit install
