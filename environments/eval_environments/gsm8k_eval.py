@@ -20,7 +20,7 @@ Supports thinking mode with <think></think> tags for extended reasoning.
 import asyncio
 import random
 from concurrent.futures import ProcessPoolExecutor
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import wandb
 from datasets import load_dataset
@@ -128,15 +128,16 @@ class GSM8KEvalEnv(BaseEnv):
     """
 
     name = "gsm8k_eval"
+    env_config_cls = GSM8KEvalConfig
 
     def __init__(
         self,
         config: GSM8KEvalConfig,
         server_configs: List[APIServerConfig],
-        slurm_job_id: Optional[str] = None,
+        slurm=False,
         testing: bool = False,
     ):
-        super().__init__(config, server_configs, slurm_job_id, testing)
+        super().__init__(config, server_configs, slurm, testing)
         self.config: GSM8KEvalConfig = config
         self.eval_items: List[Dict] = []
         self._dataset_loaded = False
@@ -146,10 +147,28 @@ class GSM8KEvalEnv(BaseEnv):
     def config_cls(cls) -> type:
         return GSM8KEvalConfig
 
+    @classmethod
+    def config_init(cls) -> Tuple[GSM8KEvalConfig, List[APIServerConfig]]:
+        """Initialize default configuration for the environment."""
+        env_config = GSM8KEvalConfig(
+            tokenizer_name="Qwen/Qwen2.5-3B-Instruct",
+            group_size=1,
+            use_wandb=False,
+            max_num_workers_per_node=128,
+            rollout_server_url="http://localhost:8000",
+            total_steps=1,
+            wandb_name="gsm8k_eval",
+        )
+        server_configs = [
+            APIServerConfig(
+                model_name="Qwen/Qwen2.5-3B-Instruct",
+                base_url="http://localhost:9001/v1",
+            )
+        ]
+        return env_config, server_configs
+
     async def setup(self) -> None:
         """Initialize the environment and load the dataset."""
-        await super().setup()
-
         # Initialize math executor
         self._math_executor = get_math_executor(self.config.max_math_workers)
 
@@ -165,7 +184,10 @@ class GSM8KEvalEnv(BaseEnv):
             thinking_prompt = get_default_thinking_prompt(
                 self.config.custom_thinking_prompt
             )
-            print(f"  Thinking prompt: {thinking_prompt[:80]}...")
+            if thinking_prompt:
+                print(f"  Thinking prompt: {thinking_prompt[:80]}...")
+            else:
+                print("  Thinking prompt: (using model's native reasoning)")
         print(f"  Loaded {len(self.eval_items)} evaluation items")
 
     async def _load_dataset(self) -> None:
@@ -351,7 +373,9 @@ class GSM8KEvalEnv(BaseEnv):
 
         # Create evaluation tasks
         async def eval_task(item):
-            return await self.rollout_and_score_eval(item, self.server_configs[0])
+            return await self.rollout_and_score_eval(
+                item, self.server.servers[0].config
+            )
 
         tasks = [eval_task(item) for item in self.eval_items]
 
