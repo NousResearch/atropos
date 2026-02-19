@@ -147,7 +147,7 @@ class MathEnv(BaseEnv):
         wandb_name = os.environ.get("MATH_ENV_WANDB_NAME", "math-zero-env")
         max_token_length = int(os.environ.get("MATH_ENV_MAX_TOKENS", "32000"))
         worker_timeout = float(os.environ.get("MATH_ENV_WORKER_TIMEOUT", "1500"))
-        
+
         env_config = RSConfig(
             tokenizer_name=model_name,
             group_size=8,
