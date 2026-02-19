@@ -22,6 +22,67 @@ from .config import TrainingConfig
 _logprob_alignment_stats: Dict[str, float] = {}
 
 
+def compute_distillation_loss(
+    logits: torch.Tensor,
+    mask: torch.Tensor,
+    distill_token_ids: Optional[list],
+    distill_logprobs: Optional[list],
+    temperature: float = 1.0,
+    loss_type: str = "kl",
+) -> torch.Tensor:
+    """
+    Compute per-token distillation loss from top-K teacher distributions.
+
+    Args:
+        logits: Student logits [batch, seq, vocab]
+        mask: Valid-token mask [batch, seq]
+        distill_token_ids: [batch][seq][top_k] token ids
+        distill_logprobs: [batch][seq][top_k] logprobs
+        temperature: Distillation temperature
+        loss_type: "kl" or "cross_entropy"
+
+    Returns:
+        Scalar mean distillation loss over valid positions with teacher data.
+    """
+    if distill_token_ids is None or distill_logprobs is None:
+        return torch.tensor(0.0, device=logits.device, dtype=logits.dtype)
+
+    total = torch.tensor(0.0, device=logits.device, dtype=logits.dtype)
+    count = torch.tensor(0.0, device=logits.device, dtype=logits.dtype)
+
+    bsz, seq_len, _ = logits.shape
+    for b in range(min(bsz, len(distill_token_ids))):
+        seq_ids = distill_token_ids[b] or []
+        seq_lps = distill_logprobs[b] or []
+        for t in range(min(seq_len, len(seq_ids), len(seq_lps))):
+            if mask[b, t] == 0:
+                continue
+            pos_ids = seq_ids[t] or []
+            pos_lps = seq_lps[t] or []
+            if not pos_ids or not pos_lps:
+                continue
+
+            ids_tensor = torch.tensor(pos_ids, device=logits.device, dtype=torch.long)
+            teacher_lps = torch.tensor(
+                pos_lps, device=logits.device, dtype=logits.dtype
+            ) / temperature
+
+            student_log_probs = F.log_softmax(logits[b, t] / temperature, dim=-1)
+            student_subset = student_log_probs[ids_tensor]
+            teacher_probs = F.softmax(teacher_lps, dim=-1)
+
+            if loss_type == "cross_entropy":
+                token_loss = -(teacher_probs * student_subset).sum()
+            else:
+                teacher_log_probs = F.log_softmax(teacher_lps, dim=-1)
+                token_loss = (teacher_probs * (teacher_log_probs - student_subset)).sum()
+
+            total = total + token_loss
+            count = count + 1.0
+
+    return total / torch.clamp_min(count, 1.0)
+
+
 def setup_wandb(config: TrainingConfig) -> bool:
     """
     Initialize Weights & Biases logging if enabled.
@@ -72,6 +133,12 @@ def compute_grpo_loss(
     kl_coef: float = 0.1,
     clip_eps: float = 0.2,
     use_reference_logprobs: bool = True,
+    distill_token_ids: Optional[list] = None,
+    distill_logprobs: Optional[list] = None,
+    distillation_enabled: bool = False,
+    distillation_coef: float = 0.1,
+    distillation_temperature: float = 1.0,
+    distillation_loss_type: str = "kl",
 ) -> Tuple[torch.Tensor, dict]:
     """
     Compute GRPO (Group Relative Policy Optimization) loss for a single micro-batch.
@@ -255,6 +322,19 @@ def compute_grpo_loss(
         # Interpretable metric: advantage-weighted average logprob
         interpretable_loss = (avg_logp * advantages.squeeze()).mean().item()
 
+    distill_loss_val = 0.0
+    if distillation_enabled and distill_token_ids is not None and distill_logprobs is not None:
+        distill_loss = compute_distillation_loss(
+            logits=scaled_logits,
+            mask=mask,
+            distill_token_ids=distill_token_ids,
+            distill_logprobs=distill_logprobs,
+            temperature=distillation_temperature,
+            loss_type=distillation_loss_type,
+        )
+        total_loss = total_loss + (distillation_coef * distill_loss) / gradient_accumulation_steps
+        distill_loss_val = distill_loss.item()
+
     metrics = {
         "pos_logp": pos_logp,
         "neg_logp": neg_logp,
@@ -277,6 +357,7 @@ def compute_grpo_loss(
         "logprob_diff_mean": logprob_diff_mean,
         "logprob_diff_abs_mean": logprob_diff_abs_mean,
         "logprob_diff_max": logprob_diff_max,
+        "distill_loss": distill_loss_val,
     }
 
     return total_loss, metrics
@@ -291,6 +372,8 @@ def run_training_step(
     temperature_batches: List[torch.Tensor],
     config: TrainingConfig,
     inference_logprob_batches: Optional[List[torch.Tensor]] = None,
+    distill_token_id_batches: Optional[List[list]] = None,
+    distill_logprob_batches: Optional[List[list]] = None,
 ) -> dict:
     """
     Run a single training step with gradient accumulation.
@@ -326,6 +409,7 @@ def run_training_step(
     total_logprob_diff_mean = 0.0
     total_logprob_diff_abs_mean = 0.0
     total_logprob_diff_max = 0.0
+    total_distill_loss = 0.0
     grad_norm = 0.0
     all_training_logprobs: List[torch.Tensor] = []
     all_inference_logprobs: List[torch.Tensor] = []
@@ -351,6 +435,12 @@ def run_training_step(
             inference_logprob_batches
         ):
             inf_logprobs = inference_logprob_batches[batch_idx]
+        distill_ids = None
+        distill_lps = None
+        if distill_token_id_batches is not None and batch_idx < len(distill_token_id_batches):
+            distill_ids = distill_token_id_batches[batch_idx]
+        if distill_logprob_batches is not None and batch_idx < len(distill_logprob_batches):
+            distill_lps = distill_logprob_batches[batch_idx]
 
         loss, metrics = compute_grpo_loss(
             model,
@@ -363,6 +453,12 @@ def run_training_step(
             kl_coef=kl_coef,
             clip_eps=clip_eps,
             use_reference_logprobs=use_reference_logprobs,
+            distill_token_ids=distill_ids,
+            distill_logprobs=distill_lps,
+            distillation_enabled=getattr(config, "distillation_enabled", False),
+            distillation_coef=getattr(config, "distillation_coef", 0.1),
+            distillation_temperature=getattr(config, "distillation_temperature", 1.0),
+            distillation_loss_type=getattr(config, "distillation_loss_type", "kl"),
         )
 
         loss.backward()
@@ -377,6 +473,7 @@ def run_training_step(
         total_mean_ratio += metrics.get("mean_ratio", 1.0)
         total_mean_kl += metrics.get("mean_kl", 0.0)
         total_clipped_fraction += metrics.get("clipped_fraction", 0.0)
+        total_distill_loss += metrics.get("distill_loss", 0.0)
 
         # Accumulate token-level alignment metrics
         total_logprob_diff_mean += metrics.get("logprob_diff_mean", 0.0)
@@ -420,6 +517,7 @@ def run_training_step(
         "mean_ratio": total_mean_ratio / num_batches,
         "mean_kl": total_mean_kl / num_batches,
         "clipped_fraction": total_clipped_fraction / num_batches,
+        "distill_loss": total_distill_loss / num_batches,
     }
 
     # Compute logprob alignment stats for monitoring
@@ -499,6 +597,8 @@ def log_metrics(
             f"    GRPO: KL={mean_kl:.4f}, ratio={mean_ratio:.3f}, "
             f"clipped={clipped_frac*100:.1f}%"
         )
+    if metrics.get("distill_loss", 0.0) > 0:
+        print(f"    Distill: loss={metrics['distill_loss']:.4f}")
 
     # Advantage distribution
     if "pos_count" in metrics or "neg_count" in metrics:
@@ -522,6 +622,7 @@ def log_metrics(
             "grpo/mean_ratio": mean_ratio,
             "grpo/mean_kl": mean_kl,
             "grpo/clipped_fraction": clipped_frac,
+            "distill/loss": metrics.get("distill_loss", 0.0),
         }
         # Add timing metrics if present
         for key in [

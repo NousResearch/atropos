@@ -65,6 +65,31 @@ class TrainingConfig(BaseModel):
             "When False, falls back to REINFORCE-style updates (not recommended)."
         ),
     )
+    distillation_enabled: bool = Field(
+        False,
+        description=(
+            "Enable on-policy distillation from teacher top-K distributions "
+            "provided by Atropos in distill_token_ids/distill_logprobs."
+        ),
+    )
+    distillation_coef: float = Field(
+        0.1,
+        description=(
+            "Scale factor for distillation loss. "
+            "Total loss adds distillation_coef * distillation_loss."
+        ),
+    )
+    distillation_temperature: float = Field(
+        1.0,
+        description="Temperature used when matching teacher distributions.",
+    )
+    distillation_loss_type: Literal["kl", "cross_entropy"] = Field(
+        "kl",
+        description=(
+            "Distillation objective: KL(teacher||student) or cross-entropy "
+            "with teacher soft targets."
+        ),
+    )
 
     # === Device & Storage ===
     device: str = Field(

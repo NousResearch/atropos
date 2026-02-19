@@ -156,6 +156,8 @@ def train_legacy(config: TrainingConfig):
             batch_data[:4]
         )
         inference_logprob_batches = batch_data[4] if len(batch_data) > 4 else None
+        distill_token_id_batches = batch_data[5] if len(batch_data) > 5 else None
+        distill_logprob_batches = batch_data[6] if len(batch_data) > 6 else None
         data_fetch_time = time.time() - data_fetch_start
         benchmark_stats["data_fetch_times"].append(data_fetch_time)
 
@@ -177,6 +179,8 @@ def train_legacy(config: TrainingConfig):
             temperature_batches,
             config,
             inference_logprob_batches=inference_logprob_batches,
+            distill_token_id_batches=distill_token_id_batches,
+            distill_logprob_batches=distill_logprob_batches,
         )
         step_time = time.time() - step_start
         benchmark_stats["step_times"].append(step_time)
@@ -309,6 +313,8 @@ def train_shared_vllm(config: TrainingConfig):
             batch_data[:4]
         )
         inference_logprob_batches = batch_data[4] if len(batch_data) > 4 else None
+        distill_token_id_batches = batch_data[5] if len(batch_data) > 5 else None
+        distill_logprob_batches = batch_data[6] if len(batch_data) > 6 else None
         data_fetch_time = time.time() - data_fetch_start
         benchmark_stats["data_fetch_times"].append(data_fetch_time)
 
@@ -323,6 +329,8 @@ def train_shared_vllm(config: TrainingConfig):
             temperature_batches,
             config,
             inference_logprob_batches=inference_logprob_batches,  # Pass for GRPO ratio computation
+            distill_token_id_batches=distill_token_id_batches,
+            distill_logprob_batches=distill_logprob_batches,
         )
         step_time = time.time() - step_start
         benchmark_stats["step_times"].append(step_time)
@@ -468,6 +476,8 @@ def train_lora(config: TrainingConfig):
             batch_data[:4]
         )
         inference_logprob_batches = batch_data[4] if len(batch_data) > 4 else None
+        distill_token_id_batches = batch_data[5] if len(batch_data) > 5 else None
+        distill_logprob_batches = batch_data[6] if len(batch_data) > 6 else None
         data_fetch_time = time.time() - data_fetch_start
         benchmark_stats["data_fetch_times"].append(data_fetch_time)
 
@@ -482,6 +492,8 @@ def train_lora(config: TrainingConfig):
             temperature_batches,
             config,
             inference_logprob_batches=inference_logprob_batches,
+            distill_token_id_batches=distill_token_id_batches,
+            distill_logprob_batches=distill_logprob_batches,
         )
         step_time = time.time() - step_start
         benchmark_stats["step_times"].append(step_time)
@@ -689,6 +701,8 @@ def train_lora_restart(config: TrainingConfig):
             batch_data[:4]
         )
         inference_logprob_batches = batch_data[4] if len(batch_data) > 4 else None
+        distill_token_id_batches = batch_data[5] if len(batch_data) > 5 else None
+        distill_logprob_batches = batch_data[6] if len(batch_data) > 6 else None
         data_fetch_time = time.time() - data_fetch_start
         benchmark_stats["data_fetch_times"].append(data_fetch_time)
 
@@ -703,6 +717,8 @@ def train_lora_restart(config: TrainingConfig):
             temperature_batches,
             config,
             inference_logprob_batches=inference_logprob_batches,
+            distill_token_id_batches=distill_token_id_batches,
+            distill_logprob_batches=distill_logprob_batches,
         )
         step_time = time.time() - step_start
         benchmark_stats["step_times"].append(step_time)

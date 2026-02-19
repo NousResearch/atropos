@@ -9,5 +9,8 @@ env:
   steps_per_eval: 20
   use_wandb: true
   wandb_name: "math-zero-shared-env"
+  # Optional teacher-behavior steering for on-policy distillation.
+  # teacher_system_prompt: "Use simple language and avoid jargon."
+  # teacher_prefix_text: "Style: concise, non-jargony.\n\n"
   eval_limit_ratio: 0.1
   max_num_workers_per_node: 24
