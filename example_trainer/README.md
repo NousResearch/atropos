@@ -129,9 +129,13 @@ python -m example_trainer.vllm_api_server \
 # Important: Use server_type=vllm to get logprobs (required for GRPO)
 python environments/gsm8k_server.py serve \
     --env.group_size 4 \
-    --env.max_num 200 \
-    --slurm.num_requests_per_time_interval 16 \
-    --slurm.time_interval 10 \
+    --env.batch_size 16 \
+    --env.total_steps 200 \
+    --env.steps_per_eval 50 \
+    --env.max_num_workers_per_node 8 \
+    --env.rollout_server_url "http://localhost:8002" \
+    --env.use_wandb true \
+    --env.wandb_name "gsm8k-lora-only-env" \
     --openai.api_key "dummy" \
     --openai.base_url "http://localhost:9001/v1" \
     --openai.model_name "NousResearch/Hermes-3-Llama-3.1-8B" \
@@ -171,7 +175,18 @@ python -m example_trainer.vllm_api_server --model ... --enable-lora --enforce-ea
 while ! curl -s http://localhost:9001/health > /dev/null; do sleep 1; done
 
 # 4. Start environment (MUST use --openai.server_type vllm for logprobs)
-python environments/gsm8k_server.py serve ...
+python environments/gsm8k_server.py serve \
+    --env.group_size 4 \
+    --env.batch_size 16 \
+    --env.total_steps 200 \
+    --env.steps_per_eval 50 \
+    --env.max_num_workers_per_node 8 \
+    --env.rollout_server_url "http://localhost:8002" \
+    --env.use_wandb true \
+    --env.wandb_name "gsm8k-train-env" \
+    --openai.base_url "http://localhost:9001/v1" \
+    --openai.model_name "NousResearch/Hermes-3-Llama-3.1-8B" \
+    --openai.server_type vllm
 
 # 5. Start trainer (will register with API and begin training)
 python -m example_trainer.grpo --weight-bridge-mode lora_only ...
@@ -226,8 +241,13 @@ python environments/gsm8k_server.py serve \
     --openai.model_name "NousResearch/Hermes-3-Llama-3.1-8B" \
     --openai.server_type vllm \
     --env.group_size 4 \
-    --slurm.num_requests_per_time_interval 16 \
-    --slurm.time_interval 10
+    --env.batch_size 16 \
+    --env.total_steps 200 \
+    --env.steps_per_eval 50 \
+    --env.max_num_workers_per_node 8 \
+    --env.rollout_server_url "http://localhost:8002" \
+    --env.use_wandb true \
+    --env.wandb_name "gsm8k-shared-vllm-env"
 ```
 
 **Terminal 4: Trainer**
