@@ -422,23 +422,9 @@ class ManagedServer:
                 except Exception:
                     pass  # Fall through to no tool calls
 
-            # Extract reasoning content from <think> blocks or similar
-            reasoning_content = None
-            final_content = parsed_content
-            import re as _re
-
-            think_match = _re.search(
-                r"<think>(.*?)</think>", final_content or "", _re.DOTALL
-            )
-            if think_match:
-                reasoning_content = think_match.group(1).strip()
-                # Strip <think> blocks from content
-                final_content = _re.sub(
-                    r"<think>.*?</think>", "", final_content, flags=_re.DOTALL
-                ).strip()
-
-            # Build choice with tool_calls and reasoning if found
-            message_kwargs = {"content": final_content or "", "role": "assistant"}
+            # Build choice - keep full content including any <think> blocks,
+            # since downstream reward functions handle their own parsing
+            message_kwargs = {"content": parsed_content or "", "role": "assistant"}
             choice = Choice(
                 finish_reason=parsed_finish_reason,
                 index=i,
@@ -448,10 +434,6 @@ class ManagedServer:
             # Attach tool_calls if parsed
             if parsed_tool_calls:
                 choice.message.tool_calls = parsed_tool_calls
-
-            # Attach reasoning_content as an extra attribute
-            if reasoning_content:
-                choice.message.reasoning_content = reasoning_content
 
             choices.append(choice)
 
