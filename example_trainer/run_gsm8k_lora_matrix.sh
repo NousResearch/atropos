@@ -26,6 +26,8 @@ set -euo pipefail
 #   LORA_RESTART_TRAINER_GPU=3
 #   LORA_RESTART_VLLM_GPU=4
 #   DRY_RUN=1                # print commands only, do not execute
+#   PARALLEL=1               # run all three modes concurrently
+#   MODE=all                 # one of: all, shared_vllm, lora_only, lora_restart
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LAUNCH_DIR="$PWD"
@@ -64,6 +66,8 @@ ENV_TOTAL_STEPS="${ENV_TOTAL_STEPS:-200}"
 ENV_BATCH_SIZE="${ENV_BATCH_SIZE:-16}"
 ENV_MAX_WORKERS_PER_NODE="${ENV_MAX_WORKERS_PER_NODE:-8}"
 ENV_STEPS_PER_EVAL="${ENV_STEPS_PER_EVAL:-50}"
+PARALLEL="${PARALLEL:-0}"
+MODE="${MODE:-all}"
 
 SHARED_API_PORT="$START_API_PORT"
 SHARED_VLLM_PORT="$START_VLLM_PORT"
@@ -129,16 +133,20 @@ start_process() {
 
 cleanup_run() {
   log "Cleaning up run processes..."
-  for pid in "${run_pids[@]:-}"; do
-    kill "$pid" >/dev/null 2>&1 || true
-  done
-  sleep 1
-  for pid in "${run_pids[@]:-}"; do
-    kill -9 "$pid" >/dev/null 2>&1 || true
-  done
-  for port in "${run_ports[@]:-}"; do
-    kill_port "$port"
-  done
+  if (( ${#run_pids[@]} > 0 )); then
+    for pid in "${run_pids[@]}"; do
+      kill "$pid" >/dev/null 2>&1 || true
+    done
+    sleep 1
+    for pid in "${run_pids[@]}"; do
+      kill -9 "$pid" >/dev/null 2>&1 || true
+    done
+  fi
+  if (( ${#run_ports[@]} > 0 )); then
+    for port in "${run_ports[@]}"; do
+      kill_port "$port"
+    done
+  fi
   run_pids=()
   run_ports=()
 }
@@ -422,9 +430,66 @@ if [[ -n "$LORA_LAYER_INDICES" ]]; then
 else
   log "LoRA layer indices: all matching layers"
 fi
+log "Mode selector: $MODE"
+log "Parallel mode: $PARALLEL"
 
-run_shared_vllm
-run_lora_only
-run_lora_restart
+if [[ "$MODE" != "all" ]]; then
+  case "$MODE" in
+    shared_vllm) run_shared_vllm ;;
+    lora_only) run_lora_only ;;
+    lora_restart) run_lora_restart ;;
+    *)
+      log "Invalid MODE='$MODE' (expected: all|shared_vllm|lora_only|lora_restart)"
+      exit 2
+      ;;
+  esac
+  log "Mode '$MODE' completed."
+  exit 0
+fi
+
+if [[ "$PARALLEL" == "1" ]]; then
+  if [[ "$DRY_RUN" == "1" ]]; then
+    log "[DRY RUN] parallel launcher commands:"
+    for m in shared_vllm lora_only lora_restart; do
+      local_log="${OUTPUT_BASE_DIR}/logs/gsm8k_${m}/orchestrator.log"
+      printf '  '
+      printf '%q ' env MODE="$m" PARALLEL=0 "$0"
+      printf '> %q 2>&1 &\n' "$local_log"
+    done
+    log "[DRY RUN] parent waits for all child mode runners."
+  else
+    log "Launching all modes in parallel..."
+    parallel_pids=()
+    parallel_modes=(shared_vllm lora_only lora_restart)
+    for m in "${parallel_modes[@]}"; do
+      mode_log_dir="${OUTPUT_BASE_DIR}/logs/gsm8k_${m}"
+      mkdir -p "$mode_log_dir"
+      mode_orch_log="${mode_log_dir}/orchestrator.log"
+      log "Starting mode runner: ${m} (log: ${mode_orch_log})"
+      env MODE="$m" PARALLEL=0 "$0" >"$mode_orch_log" 2>&1 &
+      parallel_pids+=("$!")
+    done
+
+    fail_count=0
+    for i in "${!parallel_pids[@]}"; do
+      pid="${parallel_pids[$i]}"
+      mode="${parallel_modes[$i]}"
+      if wait "$pid"; then
+        log "Mode '${mode}' finished successfully."
+      else
+        log "Mode '${mode}' failed. See ${OUTPUT_BASE_DIR}/logs/gsm8k_${mode}/orchestrator.log"
+        fail_count=$((fail_count + 1))
+      fi
+    done
+    if (( fail_count > 0 )); then
+      log "Parallel run finished with ${fail_count} failed mode(s)."
+      exit 1
+    fi
+  fi
+else
+  run_shared_vllm
+  run_lora_only
+  run_lora_restart
+fi
 
 log "All GSM8K mode runs completed."
