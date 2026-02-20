@@ -123,7 +123,11 @@ class GSM8kEnv(BaseEnv):
     async def rollout_and_score_eval(self, question: str, answer: str) -> dict:
         """Rollout and score evaluation with detailed sample data collection."""
 
-        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+        # Important: use ManagedServer's default tokenizer resolution so it uses
+        # the underlying inference server tokenizer (e.g., Qwen) instead of the
+        # environment tokenizer. Passing self.tokenizer here can cause token-ID
+        # mismatch and gibberish generations when model/tokenizer families differ.
+        async with self.server.managed_server() as managed:
             completion = await managed.chat_completion(
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -238,7 +242,9 @@ class GSM8kEnv(BaseEnv):
             flush=True,
         )
 
-        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+        # Important: do not force env tokenizer into ManagedServer for rollout.
+        # Let ManagedServer use the server's tokenizer to keep prompt token IDs aligned.
+        async with self.server.managed_server() as managed:
 
             chat_completions = await managed.chat_completion(
                 messages=[{"role": "system", "content": system_prompt}, user_message],
