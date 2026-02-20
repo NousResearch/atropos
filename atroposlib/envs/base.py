@@ -1276,7 +1276,11 @@ class BaseEnv(ABC):
                             import traceback
                             logger.error(traceback.format_exc())
             else:
-                logger.debug(f"[DISTILL] Skipped - enabled={self.config.distillation_enabled}, url={self.config.teacher_base_url}")
+                logger.debug(
+                    "[DISTILL] Skipped - enabled=%s, url=%s",
+                    self.config.distillation_enabled,
+                    self.config.teacher_base_url,
+                )
 
             data_to_send_to_api: Union[ScoredDataGroup, List[ScoredDataGroup]]
             # send single or list of scored data groups
@@ -1826,7 +1830,11 @@ class BaseEnv(ABC):
                     )
                     print(f"[CLI DEBUG] openai_config_dict after merge = {openai_config_dict}")
                 else:
-                    print(f"[CLI DEBUG] Not merging: default_openai_config_ type={type(default_openai_config_)}, yaml_oai_config type={type(yaml_oai_config)}")
+                    print(
+                        "[CLI DEBUG] Not merging: default_openai_config_ "
+                        f"type={type(default_openai_config_)}, "
+                        f"yaml_oai_config type={type(yaml_oai_config)}"
+                    )
                     openai_config_dict = {}
 
                 # 3. Server Manager Configuration (slurm, testing - not namespaced)

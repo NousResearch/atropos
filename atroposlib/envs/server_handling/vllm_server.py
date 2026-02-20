@@ -2,6 +2,7 @@
 # see example_trainer/vllm_api_server.py for an example
 
 import asyncio
+import os
 import warnings
 
 import aiohttp
@@ -189,6 +190,30 @@ class VLLMServer(APIServer):
         # Prepare request for VLLM native API
         request_data = {"prompt": {"prompt_token_ids": prompt_tokens}, "logprobs": 0}
         request_data.update(kwargs)
+        debug_requests = os.getenv("ATROPOS_DEBUG_REQUESTS", "0") == "1"
+        if debug_requests:
+            base = self.config.base_url.replace("/v1", "")
+            prompt_preview = self.tokenizer.decode(prompt_tokens[:256]).replace("\n", "\\n")
+            print(
+                f"[ATROPOS_REQ_DEBUG] vllm_generate_url={base}/generate "
+                f"prompt_token_len={len(prompt_tokens)}",
+                flush=True,
+            )
+            print(
+                f"[ATROPOS_REQ_DEBUG] request_meta="
+                f"{{'n': {request_data.get('n')}, 'max_tokens': {request_data.get('max_tokens')}, "
+                f"'temperature': {request_data.get('temperature')}, 'top_p': {request_data.get('top_p')}}}",
+                flush=True,
+            )
+            print(
+                f"[ATROPOS_REQ_DEBUG] prompt_preview={prompt_preview!r}",
+                flush=True,
+            )
+            print(
+                f"[ATROPOS_REQ_DEBUG] curl_base=curl -s -X POST {base}/generate "
+                '-H "Content-Type: application/json" -d \'<JSON_PAYLOAD>\'',
+                flush=True,
+            )
 
         # Make async request to VLLM /generate endpoint
         async with aiohttp.ClientSession() as session:
