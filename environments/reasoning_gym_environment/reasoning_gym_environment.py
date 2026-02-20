@@ -478,10 +478,14 @@ class ReasoningGymEnv(BaseEnv):
             # This specific task must exist and be loadable in reasoning_gym.
             try:
                 _ = rg_package_or_none.create_dataset("leg_counting", size=1, seed=0)
-                self.logger.warning("Falling back to absolute minimal task: 'leg_counting'")
+                self.logger.warning(
+                    "Falling back to absolute minimal task: 'leg_counting'"
+                )
                 return ["leg_counting"]
             except Exception:
-                self.logger.error("Absolute fallback 'leg_counting' also failed to load.")
+                self.logger.error(
+                    "Absolute fallback 'leg_counting' also failed to load."
+                )
                 return []
 
         self.logger.info(f"Validated {len(valid_tasks)} tasks for use.")
