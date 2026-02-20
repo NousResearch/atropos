@@ -210,17 +210,8 @@ class VLLMServer(APIServer):
                 flush=True,
             )
             print(
-                "[ATROPOS_REQ_DEBUG] curl_template="
-                + (
-                    "curl -s -X POST "
-                    + f"{base}/generate "
-                    + "-H \"Content-Type: application/json\" "
-                    + "-d '{\"prompt\": \"<PROMPT_FROM_PREVIEW_OR_LOG>\", "
-                    + f"\"n\": {request_data.get('n', 1)}, "
-                    + f"\"max_tokens\": {request_data.get('max_tokens', 256)}, "
-                    + f"\"temperature\": {request_data.get('temperature', 1.0)}, "
-                    + f"\"top_p\": {request_data.get('top_p', 1.0)}}'"
-                ),
+                f"[ATROPOS_REQ_DEBUG] curl_base=curl -s -X POST {base}/generate "
+                '-H "Content-Type: application/json" -d \'<JSON_PAYLOAD>\'',
                 flush=True,
             )
 
