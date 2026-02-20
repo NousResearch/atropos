@@ -7,6 +7,7 @@ This wrapper maintains a tree structure of sequences, where:
 - Branching occurs organically from different contexts and n > 1 completions
 """
 
+import os
 import time
 import uuid
 import warnings
@@ -130,6 +131,10 @@ class ManagedServer:
         else:
             # Fallback for tokenizers without chat template
             return "\n".join([f"{m['role']}: {m['content']}" for m in messages])
+
+    def _debug_requests_enabled(self) -> bool:
+        """Enable verbose request construction logs with ATROPOS_DEBUG_REQUESTS=1."""
+        return os.getenv("ATROPOS_DEBUG_REQUESTS", "0") == "1"
 
     def _find_extending_node(self, input_text: str) -> Optional[SequenceNode]:
         """
@@ -284,6 +289,19 @@ class ManagedServer:
         completion_kwargs = kwargs.copy()
         completion_kwargs["prompt"] = prompt
         completion_kwargs.pop("messages", None)
+        if self._debug_requests_enabled():
+            msg_count = len(messages)
+            prompt_preview = prompt.replace("\n", "\\n")[:600]
+            print(
+                f"[ATROPOS_REQ_DEBUG] chat_completion messages={msg_count} "
+                f"n={completion_kwargs.get('n')} max_tokens={completion_kwargs.get('max_tokens')} "
+                f"temperature={completion_kwargs.get('temperature')}",
+                flush=True,
+            )
+            print(
+                f"[ATROPOS_REQ_DEBUG] prompt_preview={prompt_preview!r}",
+                flush=True,
+            )
 
         # Set model name if not provided
         if "model" not in completion_kwargs:

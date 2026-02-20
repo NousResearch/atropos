@@ -49,6 +49,7 @@ from .server_handling.server_manager import (
     ServerManager,
     ServerManagerConfig,
 )
+from .server_handling.teacher_client import TeacherClient
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -66,6 +67,10 @@ class ScoredDataGroup(TypedDict):
     group_overrides: Optional[Dict]
     overrides: Optional[List[Dict]]
     images: Optional[Any]
+    # On-policy distillation (new format): parallel token ids + logprobs.
+    # distill_token_ids/distill_logprobs are [sequence][position][top_k]
+    distill_token_ids: Optional[List[List[List[int]]]]
+    distill_logprobs: Optional[List[List[List[float]]]]
 
 
 class ScoredDataItem(TypedDict):
@@ -78,6 +83,9 @@ class ScoredDataItem(TypedDict):
     group_overrides: Optional[Dict]
     overrides: Optional[Dict]
     images: Optional[Any]
+    # On-policy distillation (new format): parallel token ids + logprobs per position.
+    distill_token_ids: Optional[List[List[int]]]
+    distill_logprobs: Optional[List[List[float]]]
 
 
 class EvalHandlingEnum(Enum):
@@ -204,6 +212,49 @@ class BaseEnvConfig(BaseModel):
         "no thinking prompt is injected. Use HERMES_REASONING_PROMPT from "
         "eval_helpers for the standard Hermes reasoning prompt.",
     )
+    # On-policy distillation settings
+    distillation_enabled: bool = Field(
+        default=False,
+        description="Enable on-policy distillation. When True, automatically fetches teacher logprobs "
+        "after scoring and includes them in data sent to trainer.",
+    )
+    teacher_base_url: Optional[str] = Field(
+        default=None,
+        description="Base URL of teacher model for distillation. Supports any OpenAI-compatible API "
+        "(vLLM, OpenAI, Together, etc.). Examples: 'http://localhost:8001/v1', 'https://api.openai.com/v1'",
+    )
+    teacher_model_name: Optional[str] = Field(
+        default=None,
+        description="Model name for teacher API calls (e.g., 'gpt-4o', 'meta-llama/Llama-3-70b'). "
+        "If None, uses 'default' which works for single-model vLLM servers.",
+    )
+    teacher_api_key: Optional[str] = Field(
+        default=None,
+        description="API key for teacher model. Can also be set via TEACHER_API_KEY env var.",
+    )
+    teacher_top_k: int = Field(
+        default=20,
+        description="Number of top logprobs to fetch from teacher model per position.",
+    )
+    teacher_prefix_text: Optional[str] = Field(
+        default=None,
+        description="Optional text prefix prepended to teacher scoring prompt. "
+        "Useful for behavior steering. Prefix token positions are trimmed out "
+        "before sending distillation arrays to the trainer, preserving alignment.",
+    )
+    teacher_system_prompt: Optional[str] = Field(
+        default=None,
+        description="Optional teacher system prompt. For completion-style teacher APIs, "
+        "this is converted to a textual prefix. For chat fallback, this is injected "
+        "as a leading system message.",
+    )
+    teacher_prompt_template: Optional[str] = Field(
+        default=None,
+        description="Optional template-first teacher prompt renderer. "
+        "Uses Python format-style variables from runtime context/overrides "
+        "(e.g., {question}, {answer}, {episodes}). If set, this is preferred over "
+        "mode-specific prompt building.",
+    )
 
 
 class BaseEnv(ABC):
@@ -254,6 +305,9 @@ class BaseEnv(ABC):
         self.curr_step = 0
         self.max_token_len = -1
         self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
+        self.teacher_client = TeacherClient(
+            config=self.config, tokenizer=self.tokenizer, logger=logger
+        )
         self.completion_lengths = []
         self.max_num_workers = config.max_num_workers
         if self.max_num_workers == -1:
@@ -308,6 +362,46 @@ class BaseEnv(ABC):
 
         # Calculate derived batch size
         return int(self.config.batch_size * effective_fraction)
+
+    async def get_teacher_logprobs(
+        self,
+        token_sequences: List[List[int]],
+        messages_list: Optional[List[List[Dict]]] = None,
+        seq_overrides: Optional[List[Dict[str, Any]]] = None,
+        group_overrides: Optional[Dict[str, Any]] = None,
+        top_k: Optional[int] = None,
+    ) -> Tuple[List[List[List[int]]], List[List[List[float]]]]:
+        return await self.teacher_client.get_teacher_logprobs(
+            token_sequences=token_sequences,
+            messages_list=messages_list,
+            seq_overrides=seq_overrides,
+            group_overrides=group_overrides,
+            top_k=top_k,
+        )
+
+    def _align_teacher_topk_to_tokens(
+        self,
+        seq_token_ids: List[List[int]],
+        seq_logprobs: List[List[float]],
+        target_token_len: int,
+        prefix_token_len: int = 0,
+    ) -> Tuple[List[List[int]], List[List[float]]]:
+        return self.teacher_client._align_teacher_topk_to_tokens(
+            seq_token_ids=seq_token_ids,
+            seq_logprobs=seq_logprobs,
+            target_token_len=target_token_len,
+            prefix_token_len=prefix_token_len,
+        )
+
+    def _parse_completion_logprobs(
+        self, data: Dict, top_k: int
+    ) -> Tuple[List[List[int]], List[List[float]]]:
+        return self.teacher_client._parse_completion_logprobs(data=data, top_k=top_k)
+
+    def _parse_chat_logprobs(
+        self, data: Dict, top_k: int
+    ) -> Tuple[List[List[int]], List[List[float]]]:
+        return self.teacher_client._parse_chat_logprobs(data=data, top_k=top_k)
 
     @classmethod
     def config_init(
@@ -888,6 +982,8 @@ class BaseEnv(ABC):
             group.setdefault("ref_logprobs", None)
             group.setdefault("overrides", None)
             group.setdefault("group_overrides", None)
+            group.setdefault("distill_token_ids", None)
+            group.setdefault("distill_logprobs", None)
 
             for mask in group["masks"]:
                 self.completion_lengths.append(sum(m != -100 for m in mask))
@@ -905,7 +1001,12 @@ class BaseEnv(ABC):
 
             if self.config.include_messages and group.get("messages") is None:
                 group["messages"] = [
-                    self.tokenizer.decode(group["tokens"][i])
+                    [
+                        {
+                            "role": "user",
+                            "content": self.tokenizer.decode(group["tokens"][i]),
+                        }
+                    ]
                     for i in range(len(group["tokens"]))
                 ]
 
@@ -918,6 +1019,61 @@ class BaseEnv(ABC):
             valid_groups.append(group)
 
         if valid_groups and do_send_to_api:
+            # On-policy distillation: fetch teacher logprobs if enabled
+            if self.config.distillation_enabled and self.config.teacher_base_url:
+                logger.info(
+                    f"[DISTILL] Fetching teacher logprobs for {len(valid_groups)} groups"
+                )
+                for group in valid_groups:
+                    seq_overrides = group.get("overrides") or []
+                    group_overrides = (
+                        group.get("group_overrides")
+                        if isinstance(group.get("group_overrides"), dict)
+                        else {}
+                    )
+                    has_new_format = (
+                        group.get("distill_token_ids") is not None
+                        and group.get("distill_logprobs") is not None
+                    )
+                    if not has_new_format:
+                        try:
+                            teacher_token_ids, teacher_logprobs = (
+                                await self.get_teacher_logprobs(
+                                    token_sequences=group["tokens"],
+                                    messages_list=group.get("messages"),
+                                    seq_overrides=seq_overrides,
+                                    group_overrides=group_overrides,
+                                )
+                            )
+                            if teacher_token_ids and teacher_logprobs:
+                                group["distill_token_ids"] = teacher_token_ids
+                                group["distill_logprobs"] = teacher_logprobs
+                                logger.info(
+                                    f"[DISTILL] Added teacher distill arrays for {len(teacher_token_ids)} sequences"
+                                )
+                            else:
+                                logger.warning(
+                                    "[DISTILL] get_teacher_logprobs returned empty"
+                                )
+                        except Exception as e:
+                            logger.error(
+                                f"[DISTILL] Failed to fetch teacher logprobs: {e}"
+                            )
+                            import traceback
+
+                            logger.error(traceback.format_exc())
+                    self.teacher_client.assert_distill_arrays_aligned(
+                        token_sequences=group["tokens"],
+                        distill_token_ids=group.get("distill_token_ids"),
+                        distill_logprobs=group.get("distill_logprobs"),
+                    )
+            else:
+                logger.debug(
+                    "[DISTILL] Skipped - enabled=%s, url=%s",
+                    self.config.distillation_enabled,
+                    self.config.teacher_base_url,
+                )
+
             data_to_send_to_api: Union[ScoredDataGroup, List[ScoredDataGroup]]
             # send single or list of scored data groups
             if not original_was_list and len(valid_groups) == 1:
@@ -1424,31 +1580,57 @@ class BaseEnv(ABC):
                     cli_passed_flags, openai_full_prefix
                 )  # CLI args
                 yaml_oai_config = yaml_config.get(OPENAI_NAMESPACE, {})
-                if isinstance(default_server_configs, ServerBaseline) and (
+
+                # Debug logging for CLI args
+                print(f"[CLI DEBUG] cli_passed_flags = {cli_passed_flags}")
+                print(f"[CLI DEBUG] openai_full_prefix = {openai_full_prefix}")
+                print(f"[CLI DEBUG] oai_cli_passed_args = {oai_cli_passed_args}")
+                print(f"[CLI DEBUG] yaml_oai_config = {yaml_oai_config}")
+
+                # Auto-convert ServerBaseline to APIServerConfig when CLI/YAML overrides are provided
+                # This allows any environment to use --openai.* CLI args without modifying config_init
+                # Use a new variable to avoid UnboundLocalError from closure scoping
+                effective_server_configs = default_server_configs
+                if isinstance(effective_server_configs, ServerBaseline) and (
                     oai_cli_passed_args or yaml_oai_config
                 ):
-                    raise ValueError(
-                        "ServerBaseline is not compatible with OpenAI-namespaced CLI arguments. Please edit `config_init` directly or use APIServerConfig."  # noqa: E501
+                    # Convert ServerBaseline to APIServerConfig, preserving common fields
+                    baseline_dict = effective_server_configs.model_dump()
+                    effective_server_configs = APIServerConfig(**baseline_dict)
+                    logger.info(
+                        "Auto-converted ServerBaseline to APIServerConfig for CLI/YAML overrides"
                     )
+
                 if (
-                    isinstance(default_server_configs, list)
-                    and len(default_server_configs) == 1
+                    isinstance(effective_server_configs, list)
+                    and len(effective_server_configs) == 1
                 ):
                     # can't use the same var name because it shadows the class variable and we get an error
-                    default_openai_config_ = default_server_configs[0]
+                    default_openai_config_ = effective_server_configs[0]
                 else:
-                    default_openai_config_ = default_server_configs
+                    default_openai_config_ = effective_server_configs
                 if isinstance(yaml_oai_config, list) and len(yaml_oai_config) == 1:
                     yaml_oai_config = yaml_oai_config[0]
                 if isinstance(default_openai_config_, APIServerConfig) and isinstance(
                     yaml_oai_config, dict
                 ):
+                    print(
+                        f"[CLI DEBUG] default_openai_config_.model_dump() = {default_openai_config_.model_dump()}"
+                    )
                     openai_config_dict = merge_dicts(
                         default_openai_config_.model_dump(),  # Default APIServerConfig (or from class init)
                         yaml_oai_config,
                         oai_cli_passed_args,
                     )
+                    print(
+                        f"[CLI DEBUG] openai_config_dict after merge = {openai_config_dict}"
+                    )
                 else:
+                    print(
+                        "[CLI DEBUG] Not merging: default_openai_config_ "
+                        f"type={type(default_openai_config_)}, "
+                        f"yaml_oai_config type={type(yaml_oai_config)}"
+                    )
                     openai_config_dict = {}
 
                 # 3. Server Manager Configuration (slurm, testing - not namespaced)
@@ -1487,7 +1669,7 @@ class BaseEnv(ABC):
                 # Determine the final server_configs, handling single, multiple servers, and overrides.
 
                 openai_configs = resolve_openai_configs(
-                    default_server_configs=default_server_configs,
+                    default_server_configs=effective_server_configs,
                     openai_config_dict=openai_config_dict,
                     yaml_config=yaml_config,
                     cli_passed_flags=cli_passed_flags,
