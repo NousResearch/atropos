@@ -298,7 +298,7 @@ Template-first prompting is the recommended dynamic interface.
 1. **Define one reusable template at config time**
    - Put stable policy/rules in `--env.teacher_prompt_template`.
    - Use variable placeholders for runtime values, e.g. `{question}`, `{answer}`, `{episodes}`.
-   - Keep student trajectory out of the template unless you intentionally want duplication.
+
 
 2. **Pass runtime variables from the environment**
    - At scoring time, attach variables to:
