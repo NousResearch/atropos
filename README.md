@@ -289,6 +289,62 @@ Distillation is configured in `BaseEnvConfig` and available via CLI under `--env
 - Optional steering controls:
   - `--env.teacher_prefix_text "..."`
   - `--env.teacher_system_prompt "..."`
+  - `--env.teacher_prompt_template "Question: {question}\nAnswer: {answer}\n{episodes}"`
+
+Template-first prompting is the recommended dynamic interface.
+
+#### Dynamic system prompts (step by step)
+
+1. **Define one reusable template at config time**
+   - Put stable policy/rules in `--env.teacher_prompt_template`.
+   - Use variable placeholders for runtime values, e.g. `{question}`, `{answer}`, `{episodes}`.
+   - Keep student trajectory out of the template unless you intentionally want duplication.
+
+2. **Pass runtime variables from the environment**
+   - At scoring time, attach variables to:
+     - `group_overrides.teacher_prompt_context` for one context shared by the group, or
+     - `overrides[i].teacher_prompt_context` for per-sequence customization.
+   - Alias key `teacher_prompt_variables` is also accepted.
+
+3. **(Optional) swap template per turn**
+   - You can set `group_overrides.teacher_prompt_template` or `overrides[i].teacher_prompt_template`
+     to change template structure on specific turns/samples.
+
+4. **Understand precedence**
+   - Per-sequence (`overrides[i]`) > group-level (`group_overrides`) > env config defaults.
+   - This lets you define a strong default template while overriding only special cases.
+
+5. **Know what the teacher actually sees**
+   - Teacher prompt is built as: rendered steering prefix + current student sequence text.
+   - Distillation still aligns to student token positions after prefix trimming.
+
+#### Example template
+
+```text
+You are a math teacher supervising a solution process.
+
+Hidden reference answer:
+{answer}
+
+Rules:
+1) Do not reveal the hidden reference directly.
+2) Re-derive from first principles.
+3) Give the final answer only after derivation in \boxed{{...}}.
+
+Question:
+{question}
+```
+
+#### Example runtime injection (inside env scoring)
+
+```python
+scores["group_overrides"] = {
+    "teacher_prompt_context": {
+        "question": rollout_group_data[0]["messages"][1]["content"],
+        "answer": rollout_group_data[0]["gold_answer"],
+    }
+}
+```
 
 ### Self-distillation vs cross-model distillation
 

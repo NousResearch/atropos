@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -42,6 +43,8 @@ class TeacherClient:
         self,
         token_sequences: List[List[int]],
         messages_list: Optional[List[List[Dict]]] = None,
+        seq_overrides: Optional[List[Dict[str, Any]]] = None,
+        group_overrides: Optional[Dict[str, Any]] = None,
         top_k: Optional[int] = None,
     ) -> Tuple[List[List[List[int]]], List[List[List[float]]]]:
         self.logger.info(
@@ -78,14 +81,24 @@ class TeacherClient:
                         len(tokens),
                     )
                     base_text = self.tokenizer.decode(tokens, skip_special_tokens=False)
-                    steering_prefix = ""
-                    if self.config.teacher_system_prompt:
-                        steering_prefix += (
-                            "System instruction:\n"
-                            f"{self.config.teacher_system_prompt.strip()}\n\n"
-                        )
-                    if self.config.teacher_prefix_text:
-                        steering_prefix += self.config.teacher_prefix_text
+                    (
+                        seq_system_prompt,
+                        seq_prefix_text,
+                        seq_prompt_mode,
+                        seq_prompt_context,
+                        seq_prompt_template,
+                    ) = self._resolve_prompt_overrides_for_sequence(
+                        seq_idx=i,
+                        seq_overrides=seq_overrides,
+                        group_overrides=group_overrides,
+                    )
+                    steering_prefix = self._build_teacher_steering_prefix(
+                        system_prompt=seq_system_prompt,
+                        prefix_text=seq_prefix_text,
+                        mode=seq_prompt_mode,
+                        context=seq_prompt_context,
+                        template=seq_prompt_template,
+                    )
                     full_text = steering_prefix + base_text
                     prefix_token_len = (
                         len(
@@ -124,6 +137,9 @@ class TeacherClient:
                                         target_token_len=len(tokens),
                                         prefix_token_len=prefix_token_len,
                                     )
+                                    aligned_ids, aligned_lps = self._normalize_aligned_rows(
+                                        aligned_ids, aligned_lps, top_k
+                                    )
                                     token_id_results.append(aligned_ids)
                                     logprob_results.append(aligned_lps)
                                     continue
@@ -132,20 +148,20 @@ class TeacherClient:
 
                     if messages_list and i < len(messages_list):
                         messages = self._normalize_messages(messages_list[i], full_text)
-                        if self.config.teacher_system_prompt:
+                        if seq_system_prompt:
                             messages = [
                                 {
                                     "role": "system",
-                                    "content": self.config.teacher_system_prompt,
+                                    "content": seq_system_prompt,
                                 }
                             ] + messages
                     else:
                         messages = []
-                        if self.config.teacher_system_prompt:
+                        if seq_system_prompt:
                             messages.append(
                                 {
                                     "role": "system",
-                                    "content": self.config.teacher_system_prompt,
+                                    "content": seq_system_prompt,
                                 }
                             )
                         messages.append({"role": "user", "content": full_text})
@@ -200,6 +216,138 @@ class TeacherClient:
         except Exception as e:
             self.logger.error("Error fetching teacher logprobs: %s", e)
             return [], []
+
+    def _resolve_prompt_overrides_for_sequence(
+        self,
+        seq_idx: int,
+        seq_overrides: Optional[List[Dict[str, Any]]],
+        group_overrides: Optional[Dict[str, Any]],
+    ) -> Tuple[Optional[str], Optional[str], str, Dict[str, Any], Optional[str]]:
+        group_overrides = group_overrides or {}
+        seq_override: Dict[str, Any] = {}
+        if (
+            seq_overrides is not None
+            and seq_idx < len(seq_overrides)
+            and isinstance(seq_overrides[seq_idx], dict)
+        ):
+            seq_override = seq_overrides[seq_idx]
+
+        seq_system_prompt = seq_override.get(
+            "teacher_system_prompt",
+            group_overrides.get("teacher_system_prompt", self.config.teacher_system_prompt),
+        )
+        seq_prefix_text = seq_override.get(
+            "teacher_prefix_text",
+            group_overrides.get("teacher_prefix_text", self.config.teacher_prefix_text),
+        )
+        seq_prompt_mode = seq_override.get(
+            "teacher_prompt_mode",
+            group_overrides.get("teacher_prompt_mode", "default"),
+        )
+        # `teacher_prompt_variables` is accepted as an alias for template-style usage.
+        seq_prompt_context = seq_override.get("teacher_prompt_context")
+        if seq_prompt_context is None:
+            seq_prompt_context = seq_override.get("teacher_prompt_variables")
+        if seq_prompt_context is None:
+            seq_prompt_context = group_overrides.get("teacher_prompt_context")
+        if seq_prompt_context is None:
+            seq_prompt_context = group_overrides.get("teacher_prompt_variables")
+        if seq_prompt_context is None:
+            seq_prompt_context = {}
+        if not isinstance(seq_prompt_context, dict):
+            seq_prompt_context = {}
+        seq_prompt_template = seq_override.get(
+            "teacher_prompt_template",
+            group_overrides.get(
+                "teacher_prompt_template", self.config.teacher_prompt_template
+            ),
+        )
+        return (
+            seq_system_prompt,
+            seq_prefix_text,
+            seq_prompt_mode,
+            seq_prompt_context,
+            seq_prompt_template,
+        )
+
+    def _build_teacher_steering_prefix(
+        self,
+        system_prompt: Optional[str],
+        prefix_text: Optional[str],
+        mode: str,
+        context: Dict[str, Any],
+        template: Optional[str],
+    ) -> str:
+        base_parts: List[str] = []
+        if system_prompt:
+            base_parts.append(f"System instruction:\n{system_prompt.strip()}\n")
+        if prefix_text:
+            base_parts.append(str(prefix_text))
+        base = "\n".join(x for x in base_parts if x).strip()
+
+        normalized_mode = (mode or "default").strip().lower()
+        ctx = context or {}
+
+        # Template-first path (recommended): render once with runtime variables.
+        if template:
+            template_vars = self._prepare_template_vars(
+                context=ctx, system_prompt=system_prompt, prefix_text=prefix_text
+            )
+            try:
+                rendered = template.format_map(_SafeFormatDict(template_vars))
+            except Exception:
+                rendered = template
+            return f"{rendered}\n\n" if rendered else ""
+
+        if normalized_mode == "answer_context":
+            answer = ctx.get("answer")
+            if answer:
+                return (
+                    f"{base}\n\nReference answer/context:\n{answer}\n\n"
+                    if base
+                    else f"Reference answer/context:\n{answer}\n\n"
+                )
+            return f"{base}\n\n" if base else ""
+
+        if normalized_mode == "history_context":
+            episodes = ctx.get("episodes")
+            if isinstance(episodes, list) and episodes:
+                episode_lines = [f"Episode {idx + 1}: {ep}" for idx, ep in enumerate(episodes)]
+                history_block = "\n".join(episode_lines)
+                return (
+                    f"{base}\n\nPrevious episodes:\n{history_block}\n\n"
+                    if base
+                    else f"Previous episodes:\n{history_block}\n\n"
+                )
+            return f"{base}\n\n" if base else ""
+
+        return f"{base}\n\n" if base else ""
+
+    def _prepare_template_vars(
+        self,
+        context: Dict[str, Any],
+        system_prompt: Optional[str],
+        prefix_text: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        Build template variables with convenience aliases for common dynamic fields.
+        """
+        template_vars = dict(context)
+        template_vars.setdefault("system_prompt", system_prompt or "")
+        template_vars.setdefault("prefix_text", prefix_text or "")
+        template_vars.setdefault("answer", context.get("answer", ""))
+        template_vars.setdefault("question", context.get("question", ""))
+        episodes = context.get("episodes")
+        if isinstance(episodes, list):
+            template_vars.setdefault(
+                "episodes",
+                "\n".join(f"Episode {idx + 1}: {ep}" for idx, ep in enumerate(episodes)),
+            )
+            template_vars.setdefault("episodes_json", json.dumps(episodes, ensure_ascii=True))
+        else:
+            template_vars.setdefault("episodes", "")
+            template_vars.setdefault("episodes_json", "[]")
+        return template_vars
 
     def _normalize_aligned_rows(
         self,
@@ -404,3 +552,8 @@ class TeacherClient:
         except Exception as e:
             self.logger.warning("Error parsing chat logprobs: %s", e)
             return [], []
+
+
+class _SafeFormatDict(dict):
+    def __missing__(self, key):
+        return "{" + key + "}"
