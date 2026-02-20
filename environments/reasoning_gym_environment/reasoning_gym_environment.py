@@ -239,8 +239,8 @@ class ReasoningGymEnv(BaseEnv):
         Falls back to a predefined list if registry access fails.
         """
         if reasoning_gym is None:
-            print(
-                "ERROR: The local reasoning-gym submodule could not be imported. "
+            self.logger.error(
+                "The local reasoning-gym submodule could not be imported. "
                 "Ensure it is present in 'atropos/environments/reasoning_gym_environment/reasoning-gym' "
                 "and is a valid Python package (e.g., has __init__.py)."
             )
@@ -252,13 +252,13 @@ class ReasoningGymEnv(BaseEnv):
             from reasoning_gym.factory import DATASETS
 
             discovered_tasks = list(DATASETS.keys())
-            print(
+            self.logger.info(
                 f"Discovered {len(discovered_tasks)} tasks from DATASETS registry: {discovered_tasks[:10]}{'...' if len(discovered_tasks) > 10 else ''}"  # noqa: E501
             )
 
         except Exception as e:
-            print(
-                f"WARNING: Could not access DATASETS registry: {e}. "
+            self.logger.warning(
+                f"Could not access DATASETS registry: {e}. "
                 "Falling back to manual discovery and validation."
             )
 
@@ -270,14 +270,14 @@ class ReasoningGymEnv(BaseEnv):
 
                 base_module_path_parts = package.__name__.split(".")
 
-                print(
+                self.logger.info(
                     f"Attempting to discover tasks in package: {package.__name__} from path: {package.__path__}"
                 )
 
                 for _, modname, ispkg in pkgutil.walk_packages(
                     path=package.__path__,
                     prefix=package.__name__ + ".",
-                    onerror=lambda name: print(
+                    onerror=lambda name: self.logger.error(
                         f"Error importing module during task discovery: {name}"
                     ),
                 ):
@@ -303,18 +303,18 @@ class ReasoningGymEnv(BaseEnv):
                             discovered_tasks.append(task_name)
 
                 if discovered_tasks:
-                    print(
+                    self.logger.info(
                         f"Dynamically discovered {len(discovered_tasks)} potential task names from submodule."
                     )
 
             except Exception as e2:
-                print(
-                    f"WARNING: Pkgutil discovery also failed: {e2}. Using fallback list."
+                self.logger.warning(
+                    f"Pkgutil discovery also failed: {e2}. Using fallback list."
                 )
 
         if not discovered_tasks:
-            print(
-                "WARNING: All discovery methods failed. Using fallback list of known tasks."
+            self.logger.warning(
+                "All discovery methods failed. Using fallback list of known tasks."
             )
             # Complete fallback list with all available reasoning-gym tasks
             fallback_tasks = [
@@ -440,13 +440,13 @@ class ReasoningGymEnv(BaseEnv):
             A list of task names that were successfully validated.
         """
         if rg_package_or_none is None:
-            print(
+            self.logger.warning(
                 "Validation SKIPPED: reasoning_gym package not available for validation."
             )
             return []
 
         valid_tasks = []
-        print(
+        self.logger.info(
             f"Validating {len(task_names_to_validate)} discovered/fallback task names..."
         )
         for task_name in task_names_to_validate:
@@ -455,36 +455,36 @@ class ReasoningGymEnv(BaseEnv):
                 _ = rg_package_or_none.create_dataset(task_name, size=1, seed=0)
                 valid_tasks.append(task_name)
             except Exception as e:
-                print(
+                self.logger.debug(
                     f"Note: Task '{task_name}' could not be loaded (validation failed): {type(e).__name__} - {e}"
                 )  # noqa: E501
                 pass
 
         if not valid_tasks and task_names_to_validate:
-            print(
-                "WARNING: Validation of discovered/fallback tasks failed for all. This might indicate a systematic issue."  # noqa: E501
+            self.logger.warning(
+                "Validation of discovered/fallback tasks failed for all. This might indicate a systematic issue."  # noqa: E501
             )
             # If validation fails for all, it's safer to return an empty list or a minimal known-good set.
             # However, if task_names_to_validate was non-empty, returning it raw might be a last resort if validation itself is flawed. # noqa: E501
             # For safety, let's prefer an empty list if validation fails completely.
-            print("No tasks passed validation.")
+            self.logger.warning("No tasks passed validation.")
             return []
 
         if not valid_tasks:
-            print(
-                "CRITICAL WARNING: No valid reasoning-gym tasks could be loaded. Environment may not function."
+            self.logger.error(
+                "No valid reasoning-gym tasks could be loaded. Environment may not function."
             )
             # Return an absolute minimal, known-good task if everything else fails.
             # This specific task must exist and be loadable in reasoning_gym.
             try:
                 _ = rg_package_or_none.create_dataset("leg_counting", size=1, seed=0)
-                print("Falling back to absolute minimal task: 'leg_counting'")
+                self.logger.warning("Falling back to absolute minimal task: 'leg_counting'")
                 return ["leg_counting"]
             except Exception:
-                print("Absolute fallback 'leg_counting' also failed to load.")
+                self.logger.error("Absolute fallback 'leg_counting' also failed to load.")
                 return []
 
-        print(f"Validated {len(valid_tasks)} tasks for use.")
+        self.logger.info(f"Validated {len(valid_tasks)} tasks for use.")
         return valid_tasks
 
     async def setup(self):
@@ -1284,8 +1284,8 @@ class ReasoningGymEnv(BaseEnv):
                     (full_text, score_val, expected_answer, task_name)
                 )
             else:
-                print(
-                    f"Warning: Mismatch in lengths of tokens/scores for wandb logging at index {i}."
+                self.logger.warning(
+                    f"Mismatch in lengths of tokens/scores for wandb logging at index {i}."
                 )
 
         self.rollouts_for_wandb.append(current_rollouts)
@@ -1304,8 +1304,8 @@ class ReasoningGymEnv(BaseEnv):
                     if len(rollout_tuple) == 4:
                         table.add_data(*rollout_tuple)
                     else:
-                        print(
-                            f"Warning: Skipping malformed rollout_tuple for wandb table: {rollout_tuple}"
+                        self.logger.warning(
+                            f"Skipping malformed rollout_tuple for wandb table: {rollout_tuple}"
                         )
             wandb_metrics["train/rollouts"] = table
 
