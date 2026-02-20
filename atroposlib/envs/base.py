@@ -1034,6 +1034,11 @@ class BaseEnv(ABC):
                             logger.error(f"[DISTILL] Failed to fetch teacher logprobs: {e}")
                             import traceback
                             logger.error(traceback.format_exc())
+                    self.teacher_client.assert_distill_arrays_aligned(
+                        token_sequences=group["tokens"],
+                        distill_token_ids=group.get("distill_token_ids"),
+                        distill_logprobs=group.get("distill_logprobs"),
+                    )
             else:
                 logger.debug(
                     "[DISTILL] Skipped - enabled=%s, url=%s",

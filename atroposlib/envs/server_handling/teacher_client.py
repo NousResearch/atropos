@@ -177,6 +177,9 @@ class TeacherClient:
                                         target_token_len=len(tokens),
                                         prefix_token_len=0,
                                     )
+                                    aligned_ids, aligned_lps = self._normalize_aligned_rows(
+                                        aligned_ids, aligned_lps, top_k
+                                    )
                                 else:
                                     aligned_ids = [[] for _ in range(len(tokens))]
                                     aligned_lps = [[] for _ in range(len(tokens))]
@@ -197,6 +200,84 @@ class TeacherClient:
         except Exception as e:
             self.logger.error("Error fetching teacher logprobs: %s", e)
             return [], []
+
+    def _normalize_aligned_rows(
+        self,
+        seq_token_ids: List[List[int]],
+        seq_logprobs: List[List[float]],
+        top_k: int,
+    ) -> Tuple[List[List[int]], List[List[float]]]:
+        """
+        Enforce per-position alignment invariants:
+        - same number of positions in ids and logprobs
+        - same number of top-k entries per position
+        - cap each position to <= top_k
+        """
+        normalized_ids: List[List[int]] = []
+        normalized_lps: List[List[float]] = []
+        n_positions = max(len(seq_token_ids), len(seq_logprobs))
+        for pos in range(n_positions):
+            ids = (
+                seq_token_ids[pos]
+                if pos < len(seq_token_ids) and isinstance(seq_token_ids[pos], list)
+                else []
+            )
+            lps = (
+                seq_logprobs[pos]
+                if pos < len(seq_logprobs) and isinstance(seq_logprobs[pos], list)
+                else []
+            )
+            n = min(len(ids), len(lps), top_k)
+            normalized_ids.append([int(x) for x in ids[:n]])
+            normalized_lps.append([float(x) for x in lps[:n]])
+        return normalized_ids, normalized_lps
+
+    def assert_distill_arrays_aligned(
+        self,
+        token_sequences: List[List[int]],
+        distill_token_ids: Optional[List[List[List[int]]]],
+        distill_logprobs: Optional[List[List[List[float]]]],
+    ) -> None:
+        """
+        Strict OPD invariant checks:
+        - both arrays exist
+        - one sequence row per token sequence
+        - one position row per token position
+        - ids/logprobs top-k row lengths match at each position
+        """
+        if distill_token_ids is None or distill_logprobs is None:
+            raise AssertionError(
+                "[DISTILL] distill_token_ids/distill_logprobs must both be present."
+            )
+
+        if len(distill_token_ids) != len(token_sequences) or len(distill_logprobs) != len(
+            token_sequences
+        ):
+            raise AssertionError(
+                "[DISTILL] sequence count mismatch: "
+                f"tokens={len(token_sequences)} ids={len(distill_token_ids)} "
+                f"lps={len(distill_logprobs)}"
+            )
+
+        for seq_idx, tokens in enumerate(token_sequences):
+            expected_positions = len(tokens)
+            seq_ids = distill_token_ids[seq_idx]
+            seq_lps = distill_logprobs[seq_idx]
+
+            if len(seq_ids) != expected_positions or len(seq_lps) != expected_positions:
+                raise AssertionError(
+                    "[DISTILL] position count mismatch at seq "
+                    f"{seq_idx}: tokens={expected_positions} ids={len(seq_ids)} "
+                    f"lps={len(seq_lps)}"
+                )
+
+            for pos_idx in range(expected_positions):
+                if len(seq_ids[pos_idx]) != len(seq_lps[pos_idx]):
+                    raise AssertionError(
+                        "[DISTILL] top-k row mismatch at "
+                        f"seq={seq_idx}, pos={pos_idx}: "
+                        f"ids={len(seq_ids[pos_idx])}, lps={len(seq_lps[pos_idx])}"
+                    )
 
     def _normalize_messages(
         self, raw_messages: Any, fallback_text: str
