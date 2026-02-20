@@ -294,10 +294,10 @@ Distillation is configured in `BaseEnvConfig` and available via CLI under `--env
 
 Both setups are supported:
 
-- **Self-distillation (same model family for teacher and student)**  
+- **Self-distillation (same model family for teacher and student)**
   Point `teacher_base_url` to a server running the same model (or equivalent checkpoint family) as the student. This is the most stable setup for token-level alignment.
 
-- **Cross-model distillation (different teacher and student models)**  
+- **Cross-model distillation (different teacher and student models)**
   Also supported, but tokenization compatibility becomes more important. If token vocabularies/template behavior differ significantly, alignment quality may degrade.
 
 In practice, self-distillation is usually easiest to bring up first, then cross-model can be layered in once your pipeline is stable.

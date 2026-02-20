@@ -136,15 +136,17 @@ class TrainingConfig(BaseModel):
     wandb_group: Optional[str] = Field(None, description="Wandb group name")
 
     # === Training Mode Configuration ===
-    weight_bridge_mode: Literal["shared_vllm", "lora_only", "lora_restart", "none"] = Field(
-        "none",
-        description=(
-            "How to synchronize weights with inference server. "
-            "'shared_vllm': attach to vLLM's shared memory tensors and update in-place. "
-            "'lora_only': keep base model frozen, train/swap LoRA adapters via HTTP (slow, needs --enforce-eager). "
-            "'lora_restart': LoRA training with vLLM restarts (fast, CUDA graphs enabled). "
-            "'none': legacy mode, restart vLLM with new checkpoint files."
-        ),
+    weight_bridge_mode: Literal["shared_vllm", "lora_only", "lora_restart", "none"] = (
+        Field(
+            "none",
+            description=(
+                "How to synchronize weights with inference server. "
+                "'shared_vllm': attach to vLLM's shared memory tensors and update in-place. "
+                "'lora_only': keep base model frozen, train/swap LoRA adapters via HTTP (slow, needs --enforce-eager). "
+                "'lora_restart': LoRA training with vLLM restarts (fast, CUDA graphs enabled). "
+                "'none': legacy mode, restart vLLM with new checkpoint files."
+            ),
+        )
     )
 
     # === Distributed Training Configuration ===

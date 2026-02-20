@@ -194,7 +194,7 @@ python -m example_trainer.grpo --weight-bridge-mode lora_only ...
 
 ---
 
-##  Shared vLLM Mode 
+##  Shared vLLM Mode
 
 Single-copy mode shares GPU memory between vLLM and the trainer - zero model duplication!
 

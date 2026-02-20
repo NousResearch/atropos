@@ -258,10 +258,14 @@ def pad_data_to_good_offset(
         else None
     )
     final_distill_token_id_batches = (
-        distill_token_id_batches if (has_any_distill and distill_token_id_batches) else None
+        distill_token_id_batches
+        if (has_any_distill and distill_token_id_batches)
+        else None
     )
     final_distill_logprob_batches = (
-        distill_logprob_batches if (has_any_distill and distill_logprob_batches) else None
+        distill_logprob_batches
+        if (has_any_distill and distill_logprob_batches)
+        else None
     )
 
     return (

@@ -12,7 +12,6 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import wandb
 from datasets import load_dataset
-
 from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
 from math_verify.errors import TimeoutException
@@ -146,7 +145,7 @@ class MathEnv(BaseEnv):
         wandb_name = os.environ.get("MATH_ENV_WANDB_NAME", "math-zero-env")
         max_token_length = int(os.environ.get("MATH_ENV_MAX_TOKENS", "32000"))
         worker_timeout = float(os.environ.get("MATH_ENV_WORKER_TIMEOUT", "1500"))
-        
+
         env_config = RSConfig(
             tokenizer_name=model_name,
             group_size=8,
@@ -524,7 +523,7 @@ class MathEnv(BaseEnv):
                 and (not scores["overrides"][i].get("set_advantage_to_zero", False))
             ]
         )
-        
+
         return scores
 
     async def get_next_item(self):

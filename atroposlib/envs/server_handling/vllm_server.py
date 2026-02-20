@@ -193,7 +193,9 @@ class VLLMServer(APIServer):
         debug_requests = os.getenv("ATROPOS_DEBUG_REQUESTS", "0") == "1"
         if debug_requests:
             base = self.config.base_url.replace("/v1", "")
-            prompt_preview = self.tokenizer.decode(prompt_tokens[:256]).replace("\n", "\\n")
+            prompt_preview = self.tokenizer.decode(prompt_tokens[:256]).replace(
+                "\n", "\\n"
+            )
             print(
                 f"[ATROPOS_REQ_DEBUG] vllm_generate_url={base}/generate "
                 f"prompt_token_len={len(prompt_tokens)}",
@@ -211,7 +213,7 @@ class VLLMServer(APIServer):
             )
             print(
                 f"[ATROPOS_REQ_DEBUG] curl_base=curl -s -X POST {base}/generate "
-                '-H "Content-Type: application/json" -d \'<JSON_PAYLOAD>\'',
+                "-H \"Content-Type: application/json\" -d '<JSON_PAYLOAD>'",
                 flush=True,
             )
 
