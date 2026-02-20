@@ -990,7 +990,12 @@ class BaseEnv(ABC):
 
             if self.config.include_messages and group.get("messages") is None:
                 group["messages"] = [
-                    self.tokenizer.decode(group["tokens"][i])
+                    [
+                        {
+                            "role": "user",
+                            "content": self.tokenizer.decode(group["tokens"][i]),
+                        }
+                    ]
                     for i in range(len(group["tokens"]))
                 ]
 

@@ -312,7 +312,7 @@ Atropos handles tokenization in two places:
    - Recommendation: set `--openai.tokenizer_name` explicitly to match the student serving model.
 
 2. **Teacher top-k parsing path**
-   - Teacher responses are parsed into token ids/logprobs in `BaseEnv.get_teacher_logprobs`.
+   - Teacher responses are fetched/parsed in `TeacherClient.get_teacher_logprobs` (called by `BaseEnv`).
    - The parser maps teacher token strings into ids using the environment tokenizer (`self.tokenizer`) and then aligns to student sequence length.
 
 Because distillation is token-position based, keeping tokenizer families compatible is strongly recommended, especially for cross-model distillation.
