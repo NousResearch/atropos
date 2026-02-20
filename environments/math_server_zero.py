@@ -11,7 +11,6 @@ from typing import Dict, List, Optional, Tuple
 
 import wandb
 from datasets import load_dataset
-
 from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
 from math_verify.errors import TimeoutException
@@ -480,7 +479,7 @@ class MathEnv(BaseEnv):
                 and (not scores["overrides"][i].get("set_advantage_to_zero", False))
             ]
         )
-        
+
         return scores
 
     async def get_next_item(self):
