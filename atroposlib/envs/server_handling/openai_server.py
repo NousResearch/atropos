@@ -185,8 +185,14 @@ def resolve_openai_configs(
         and len(default_server_configs) >= 2
     )
 
-    print(f"[RESOLVE DEBUG] is_multi_server_yaml={is_multi_server_yaml}, is_multi_server_default={is_multi_server_default}")
-    print(f"[RESOLVE DEBUG] isinstance(default_server_configs, ServerBaseline) = {isinstance(default_server_configs, ServerBaseline)}")
+    print(
+        "[RESOLVE DEBUG] is_multi_server_yaml="
+        f"{is_multi_server_yaml}, is_multi_server_default={is_multi_server_default}"
+    )
+    print(
+        "[RESOLVE DEBUG] isinstance(default_server_configs, ServerBaseline) = "
+        f"{isinstance(default_server_configs, ServerBaseline)}"
+    )
 
     if (is_multi_server_yaml or is_multi_server_default) and openai_cli_config:
         raise FailedExecutionException(
