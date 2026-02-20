@@ -392,12 +392,12 @@ class BaseEnv(ABC):
             target_token_len=target_token_len,
             prefix_token_len=prefix_token_len,
         )
-    
+
     def _parse_completion_logprobs(
         self, data: Dict, top_k: int
     ) -> Tuple[List[List[int]], List[List[float]]]:
         return self.teacher_client._parse_completion_logprobs(data=data, top_k=top_k)
-    
+
     def _parse_chat_logprobs(
         self, data: Dict, top_k: int
     ) -> Tuple[List[List[int]], List[List[float]]]:
@@ -1021,7 +1021,9 @@ class BaseEnv(ABC):
         if valid_groups and do_send_to_api:
             # On-policy distillation: fetch teacher logprobs if enabled
             if self.config.distillation_enabled and self.config.teacher_base_url:
-                logger.info(f"[DISTILL] Fetching teacher logprobs for {len(valid_groups)} groups")
+                logger.info(
+                    f"[DISTILL] Fetching teacher logprobs for {len(valid_groups)} groups"
+                )
                 for group in valid_groups:
                     seq_overrides = group.get("overrides") or []
                     group_overrides = (
@@ -1035,11 +1037,13 @@ class BaseEnv(ABC):
                     )
                     if not has_new_format:
                         try:
-                            teacher_token_ids, teacher_logprobs = await self.get_teacher_logprobs(
-                                token_sequences=group["tokens"],
-                                messages_list=group.get("messages"),
-                                seq_overrides=seq_overrides,
-                                group_overrides=group_overrides,
+                            teacher_token_ids, teacher_logprobs = (
+                                await self.get_teacher_logprobs(
+                                    token_sequences=group["tokens"],
+                                    messages_list=group.get("messages"),
+                                    seq_overrides=seq_overrides,
+                                    group_overrides=group_overrides,
+                                )
                             )
                             if teacher_token_ids and teacher_logprobs:
                                 group["distill_token_ids"] = teacher_token_ids
@@ -1048,10 +1052,15 @@ class BaseEnv(ABC):
                                     f"[DISTILL] Added teacher distill arrays for {len(teacher_token_ids)} sequences"
                                 )
                             else:
-                                logger.warning("[DISTILL] get_teacher_logprobs returned empty")
+                                logger.warning(
+                                    "[DISTILL] get_teacher_logprobs returned empty"
+                                )
                         except Exception as e:
-                            logger.error(f"[DISTILL] Failed to fetch teacher logprobs: {e}")
+                            logger.error(
+                                f"[DISTILL] Failed to fetch teacher logprobs: {e}"
+                            )
                             import traceback
+
                             logger.error(traceback.format_exc())
                     self.teacher_client.assert_distill_arrays_aligned(
                         token_sequences=group["tokens"],
@@ -1571,13 +1580,13 @@ class BaseEnv(ABC):
                     cli_passed_flags, openai_full_prefix
                 )  # CLI args
                 yaml_oai_config = yaml_config.get(OPENAI_NAMESPACE, {})
-                
+
                 # Debug logging for CLI args
                 print(f"[CLI DEBUG] cli_passed_flags = {cli_passed_flags}")
                 print(f"[CLI DEBUG] openai_full_prefix = {openai_full_prefix}")
                 print(f"[CLI DEBUG] oai_cli_passed_args = {oai_cli_passed_args}")
                 print(f"[CLI DEBUG] yaml_oai_config = {yaml_oai_config}")
-                
+
                 # Auto-convert ServerBaseline to APIServerConfig when CLI/YAML overrides are provided
                 # This allows any environment to use --openai.* CLI args without modifying config_init
                 # Use a new variable to avoid UnboundLocalError from closure scoping
@@ -1591,7 +1600,7 @@ class BaseEnv(ABC):
                     logger.info(
                         "Auto-converted ServerBaseline to APIServerConfig for CLI/YAML overrides"
                     )
-                
+
                 if (
                     isinstance(effective_server_configs, list)
                     and len(effective_server_configs) == 1
@@ -1605,13 +1614,17 @@ class BaseEnv(ABC):
                 if isinstance(default_openai_config_, APIServerConfig) and isinstance(
                     yaml_oai_config, dict
                 ):
-                    print(f"[CLI DEBUG] default_openai_config_.model_dump() = {default_openai_config_.model_dump()}")
+                    print(
+                        f"[CLI DEBUG] default_openai_config_.model_dump() = {default_openai_config_.model_dump()}"
+                    )
                     openai_config_dict = merge_dicts(
                         default_openai_config_.model_dump(),  # Default APIServerConfig (or from class init)
                         yaml_oai_config,
                         oai_cli_passed_args,
                     )
-                    print(f"[CLI DEBUG] openai_config_dict after merge = {openai_config_dict}")
+                    print(
+                        f"[CLI DEBUG] openai_config_dict after merge = {openai_config_dict}"
+                    )
                 else:
                     print(
                         "[CLI DEBUG] Not merging: default_openai_config_ "

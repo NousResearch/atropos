@@ -289,7 +289,9 @@ class GSM8kEnv(BaseEnv):
                 }
             )
         to_postprocess = await self.score(to_score)
-        accepted = 0 if to_postprocess is None else len(to_postprocess.get("tokens", []))
+        accepted = (
+            0 if to_postprocess is None else len(to_postprocess.get("tokens", []))
+        )
         print(
             f"[GSM8K_DEBUG] collect_done accepted={accepted} submitted={len(to_score)}",
             flush=True,

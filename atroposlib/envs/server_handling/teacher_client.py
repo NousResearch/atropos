@@ -54,7 +54,9 @@ class TeacherClient:
         self.logger.info("[TEACHER] teacher_base_url=%s", self.config.teacher_base_url)
 
         if not self.config.teacher_base_url:
-            self.logger.warning("[TEACHER] No teacher_base_url configured, returning empty")
+            self.logger.warning(
+                "[TEACHER] No teacher_base_url configured, returning empty"
+            )
             return [], []
 
         if top_k is None:
@@ -127,18 +129,22 @@ class TeacherClient:
                         ) as response:
                             if response.status == 200:
                                 data = await response.json()
-                                seq_token_ids, seq_logprobs = self._parse_completion_logprobs(
-                                    data, top_k
+                                seq_token_ids, seq_logprobs = (
+                                    self._parse_completion_logprobs(data, top_k)
                                 )
                                 if seq_token_ids and seq_logprobs:
-                                    aligned_ids, aligned_lps = self._align_teacher_topk_to_tokens(
-                                        seq_token_ids,
-                                        seq_logprobs,
-                                        target_token_len=len(tokens),
-                                        prefix_token_len=prefix_token_len,
+                                    aligned_ids, aligned_lps = (
+                                        self._align_teacher_topk_to_tokens(
+                                            seq_token_ids,
+                                            seq_logprobs,
+                                            target_token_len=len(tokens),
+                                            prefix_token_len=prefix_token_len,
+                                        )
                                     )
-                                    aligned_ids, aligned_lps = self._normalize_aligned_rows(
-                                        aligned_ids, aligned_lps, top_k
+                                    aligned_ids, aligned_lps = (
+                                        self._normalize_aligned_rows(
+                                            aligned_ids, aligned_lps, top_k
+                                        )
                                     )
                                     token_id_results.append(aligned_ids)
                                     logprob_results.append(aligned_lps)
@@ -187,14 +193,18 @@ class TeacherClient:
                                     data, top_k
                                 )
                                 if seq_token_ids and len(seq_token_ids) >= len(tokens):
-                                    aligned_ids, aligned_lps = self._align_teacher_topk_to_tokens(
-                                        seq_token_ids,
-                                        seq_logprobs,
-                                        target_token_len=len(tokens),
-                                        prefix_token_len=0,
+                                    aligned_ids, aligned_lps = (
+                                        self._align_teacher_topk_to_tokens(
+                                            seq_token_ids,
+                                            seq_logprobs,
+                                            target_token_len=len(tokens),
+                                            prefix_token_len=0,
+                                        )
                                     )
-                                    aligned_ids, aligned_lps = self._normalize_aligned_rows(
-                                        aligned_ids, aligned_lps, top_k
+                                    aligned_ids, aligned_lps = (
+                                        self._normalize_aligned_rows(
+                                            aligned_ids, aligned_lps, top_k
+                                        )
                                     )
                                 else:
                                     aligned_ids = [[] for _ in range(len(tokens))]
@@ -205,7 +215,9 @@ class TeacherClient:
                                 self.logger.warning(
                                     "Teacher API returned %s", response.status
                                 )
-                                token_id_results.append([[] for _ in range(len(tokens))])
+                                token_id_results.append(
+                                    [[] for _ in range(len(tokens))]
+                                )
                                 logprob_results.append([[] for _ in range(len(tokens))])
                     except Exception as e:
                         self.logger.warning("Teacher chat request failed: %s", e)
@@ -234,7 +246,9 @@ class TeacherClient:
 
         seq_system_prompt = seq_override.get(
             "teacher_system_prompt",
-            group_overrides.get("teacher_system_prompt", self.config.teacher_system_prompt),
+            group_overrides.get(
+                "teacher_system_prompt", self.config.teacher_system_prompt
+            ),
         )
         seq_prefix_text = seq_override.get(
             "teacher_prefix_text",
@@ -315,7 +329,9 @@ class TeacherClient:
         if normalized_mode == "history_context":
             episodes = ctx.get("episodes")
             if isinstance(episodes, list) and episodes:
-                episode_lines = [f"Episode {idx + 1}: {ep}" for idx, ep in enumerate(episodes)]
+                episode_lines = [
+                    f"Episode {idx + 1}: {ep}" for idx, ep in enumerate(episodes)
+                ]
                 history_block = "\n".join(episode_lines)
                 return (
                     f"{base}\n\nPrevious episodes:\n{history_block}\n\n"
@@ -353,9 +369,13 @@ class TeacherClient:
         if isinstance(episodes, list):
             template_vars.setdefault(
                 "episodes",
-                "\n".join(f"Episode {idx + 1}: {ep}" for idx, ep in enumerate(episodes)),
+                "\n".join(
+                    f"Episode {idx + 1}: {ep}" for idx, ep in enumerate(episodes)
+                ),
             )
-            template_vars.setdefault("episodes_json", json.dumps(episodes, ensure_ascii=True))
+            template_vars.setdefault(
+                "episodes_json", json.dumps(episodes, ensure_ascii=True)
+            )
         else:
             template_vars.setdefault("episodes", "")
             template_vars.setdefault("episodes_json", "[]")
@@ -410,9 +430,9 @@ class TeacherClient:
                 "[DISTILL] distill_token_ids/distill_logprobs must both be present."
             )
 
-        if len(distill_token_ids) != len(token_sequences) or len(distill_logprobs) != len(
-            token_sequences
-        ):
+        if len(distill_token_ids) != len(token_sequences) or len(
+            distill_logprobs
+        ) != len(token_sequences):
             raise AssertionError(
                 "[DISTILL] sequence count mismatch: "
                 f"tokens={len(token_sequences)} ids={len(distill_token_ids)} "
