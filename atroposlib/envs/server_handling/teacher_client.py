@@ -278,6 +278,9 @@ class TeacherClient:
         context: Dict[str, Any],
         template: Optional[str],
     ) -> str:
+        system_prompt = self._normalize_multiline_text(system_prompt)
+        prefix_text = self._normalize_multiline_text(prefix_text)
+        template = self._normalize_multiline_text(template)
         base_parts: List[str] = []
         if system_prompt:
             base_parts.append(f"System instruction:\n{system_prompt.strip()}\n")
@@ -322,6 +325,15 @@ class TeacherClient:
             return f"{base}\n\n" if base else ""
 
         return f"{base}\n\n" if base else ""
+
+    def _normalize_multiline_text(self, value: Optional[str]) -> Optional[str]:
+        """
+        Normalize common escaped newlines from CLI/YAML strings.
+        Keep other backslash sequences (e.g., \\boxed) intact.
+        """
+        if value is None:
+            return None
+        return value.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
 
     def _prepare_template_vars(
         self,
