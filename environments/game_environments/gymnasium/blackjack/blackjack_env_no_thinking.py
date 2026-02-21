@@ -181,7 +181,9 @@ class BlackjackEnvNoThinking(BaseEnv):
             async with self.server.dedicated_server() as server:
                 for _ in range(self.config.max_episode_turns):
                     if (
-                        len(self.tokenizer.apply_chat_template(messages, tokenize=False))
+                        len(
+                            self.tokenizer.apply_chat_template(messages, tokenize=False)
+                        )
                         > self.config.max_token_length - 50
                     ):
                         logger.warning(
@@ -208,7 +210,9 @@ class BlackjackEnvNoThinking(BaseEnv):
                         logger.error(f"[Seed: {seed}] LLM API error: {e}")
                         break
 
-                    messages.append({"role": "assistant", "content": llm_action_response})
+                    messages.append(
+                        {"role": "assistant", "content": llm_action_response}
+                    )
 
                     action = self._parse_action_from_llm(llm_action_response)
                     if action is None:
