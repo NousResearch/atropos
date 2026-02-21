@@ -152,7 +152,10 @@ class Run:
             f.write(str(train_time) + "\n")
 
     def _validate(
-        self, validator: Trainer, model: LightningModule, data_module: LightningDataModule
+        self,
+        validator: Trainer,
+        model: LightningModule,
+        data_module: LightningDataModule,
     ) -> _EVALUATE_OUTPUT:
         score = validator.validate(model, datamodule=data_module)
         return score
