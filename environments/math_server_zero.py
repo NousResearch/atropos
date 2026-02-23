@@ -421,6 +421,10 @@ class MathEnv(BaseEnv):
                 if self.config.mask_too_long_completions:
                     scores["overrides"][-1]["set_advantage_to_zero"] = True
             else:
+                # re-append </answer> if stripped by vLLM stop string handling
+                # (mirrors the eval path in rollout_and_score_eval)
+                if ("<answer>" in resp) and ("</answer>" not in resp):
+                    resp = resp + "</answer>"
                 task = loop.run_in_executor(self.mp_executor, score_answer, gold, resp)
                 reward = await task
                 if reward is None:
