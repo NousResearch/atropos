@@ -404,10 +404,6 @@ class SingleToolCallingEnv(BaseEnv):
                     # Apply linear penalty scaling from 1.0 down to 0.0
                     scores["scores"].append(1.0 - percentage_of_range)
 
-        # Check if all scores are the same (no learning signal)
-        if all(scores["scores"][0] == score for score in scores["scores"]):
-            return None
-
         return scores
 
     async def get_next_item(self):
