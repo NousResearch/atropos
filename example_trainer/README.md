@@ -8,8 +8,8 @@ A modular training framework for fine-tuning language models with **Group Relati
 
 ```
 example_trainer/
-├── grpo.py              # CLI entry point (dispatches to 4 training modes)
-├── run.py               # Unified launcher for shared_vllm mode (starts vLLM+trainer)
+├── grpo.py              # CLI entry point (also exposed as `atropos-grpo`)
+├── run.py               # Unified shared_vllm launcher (also exposed as `atropos-grpo-run`)
 ├── config.py            # TrainingConfig Pydantic model (all hyperparameters)
 ├── cli.py               # CLI argument parsing (modular, single source of truth)
 ├── api.py               # Atropos API communication (registration, batch fetching)
@@ -26,6 +26,10 @@ example_trainer/
     ├── math_zero_shared.yaml  # Config for math_server_zero.py (shared_vllm mode)
     └── math_zero_lora.yaml    # Config for math_server_zero.py (lora mode)
 ```
+
+After `pip install -e .` from the repository root, you can launch with either:
+- `python -m example_trainer.grpo` or `atropos-grpo`
+- `python -m example_trainer.run` or `atropos-grpo-run`
 
 
 ## GRPO Training Loop
