@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Runs three GSM8K test trainings with separate infra/ports:
 #   1) shared_vllm
-#   2) lora_only (+ layer filtering support)
-#   3) lora_restart (+ layer filtering support)
+#   2) lora_only
+#   3) lora_restart
 #
 # Usage:
 #   chmod +x example_trainer/run_gsm8k_lora_matrix.sh
@@ -12,8 +12,11 @@ set -euo pipefail
 #
 # Optional environment overrides:
 #   MODEL_NAME="NousResearch/Hermes-3-Llama-3.1-8B"
-#   TRAINING_STEPS=10
-#   LORA_LAYER_INDICES="20-31"
+#   TRAINING_STEPS=30
+#   WARMUP_STEPS=5
+#   MATRIX_TARGETED=1          # auto-enable layer targeting defaults for smoke tests
+#   SHARED_LAYER_INDICES="0-3" # overrides MATRIX_TARGETED default
+#   LORA_LAYER_INDICES="0-3"   # overrides MATRIX_TARGETED default
 #   WANDB_PROJECT="gsm8k-grpo-smoke"
 #   WANDB_GROUP="gsm8k-$(date +%Y%m%d-%H%M%S)"
 #   START_API_PORT=8002
@@ -37,11 +40,12 @@ cd "$ROOT_DIR"
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 MODEL_NAME="${MODEL_NAME:-NousResearch/Hermes-3-Llama-3.1-8B}"
-TRAINING_STEPS="${TRAINING_STEPS:-10}"
+TRAINING_STEPS="${TRAINING_STEPS:-30}"
 BATCH_SIZE="${BATCH_SIZE:-4}"
 GRAD_ACCUM="${GRAD_ACCUM:-4}"
 LR="${LR:-1e-5}"
-KL_COEF="${KL_COEF:-0.1}"
+WARMUP_STEPS="${WARMUP_STEPS:-5}"
+KL_COEF="${KL_COEF:-0.0}"
 CLIP_EPS="${CLIP_EPS:-0.2}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.45}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
@@ -50,7 +54,13 @@ LORA_R="${LORA_R:-16}"
 LORA_ALPHA="${LORA_ALPHA:-32}"
 LORA_DROPOUT="${LORA_DROPOUT:-0.05}"
 LORA_TARGET_MODULES="${LORA_TARGET_MODULES:-q_proj v_proj}"
+MATRIX_TARGETED="${MATRIX_TARGETED:-1}"
+SHARED_LAYER_INDICES="${SHARED_LAYER_INDICES:-}"
 LORA_LAYER_INDICES="${LORA_LAYER_INDICES:-}"
+if [[ "$MATRIX_TARGETED" == "1" ]]; then
+  SHARED_LAYER_INDICES="${SHARED_LAYER_INDICES:-0-3}"
+  LORA_LAYER_INDICES="${LORA_LAYER_INDICES:-0-3}"
+fi
 WANDB_PROJECT="${WANDB_PROJECT:-gsm8k-grpo-smoke}"
 WANDB_GROUP="${WANDB_GROUP:-gsm8k-$(date +%Y%m%d-%H%M%S)}"
 START_API_PORT="${START_API_PORT:-8002}"
@@ -153,6 +163,12 @@ cleanup_run() {
   run_ports=()
 }
 
+add_shared_layer_flag() {
+  if [[ -n "$SHARED_LAYER_INDICES" ]]; then
+    echo "--train-layer-indices" "$SHARED_LAYER_INDICES"
+  fi
+}
+
 add_lora_layer_flag() {
   if [[ -n "$LORA_LAYER_INDICES" ]]; then
     echo "--lora-layer-indices" "$LORA_LAYER_INDICES"
@@ -165,6 +181,7 @@ common_trainer_flags() {
     --training-steps "$TRAINING_STEPS" \
     --batch-size "$BATCH_SIZE" \
     --gradient-accumulation-steps "$GRAD_ACCUM" \
+    --warmup-steps "$WARMUP_STEPS" \
     --lr "$LR" \
     --kl-coef "$KL_COEF" \
     --clip-eps "$CLIP_EPS" \
@@ -252,7 +269,8 @@ run_shared_vllm() {
       --save-path "$save_dir" \
       --vllm-port "$vllm_port" \
       --vllm-config-path "${bridge_dir}/vllm_bridge_config.json" \
-      --atropos-url "http://localhost:${api_port}"
+      --atropos-url "http://localhost:${api_port}" \
+      $(add_shared_layer_flag)
     printf '\n'
     log "[DRY RUN] trainer log path: $mode_dir/trainer.log"
   else
@@ -263,7 +281,8 @@ run_shared_vllm() {
       --save-path "$save_dir" \
       --vllm-port "$vllm_port" \
       --vllm-config-path "${bridge_dir}/vllm_bridge_config.json" \
-      --atropos-url "http://localhost:${api_port}" | tee "$mode_dir/trainer.log"
+      --atropos-url "http://localhost:${api_port}" \
+      $(add_shared_layer_flag) | tee "$mode_dir/trainer.log"
   fi
 
   cleanup_run
@@ -419,6 +438,8 @@ log "Model: $MODEL_NAME"
 log "W&B project/group: $WANDB_PROJECT / $WANDB_GROUP"
 log "Dry run mode: $DRY_RUN"
 log "Output base directory (logs + saves): $OUTPUT_BASE_DIR"
+log "Warmup steps: $WARMUP_STEPS"
+log "Targeted-layer matrix profile: $MATRIX_TARGETED"
 log "Port plan:"
 log "  shared_vllm:   run-api=${SHARED_API_PORT}, vllm=${SHARED_VLLM_PORT}"
 log "  lora_only:     run-api=${LORA_ONLY_API_PORT}, vllm=${LORA_ONLY_VLLM_PORT}"
@@ -427,6 +448,11 @@ log "GPU plan:"
 log "  shared_vllm:   trainer+vllm on GPU ${SHARED_GPU} (required for shared weights)"
 log "  lora_only:     trainer GPU ${LORA_ONLY_TRAINER_GPU}, vllm GPU ${LORA_ONLY_VLLM_GPU}"
 log "  lora_restart:  trainer GPU ${LORA_RESTART_TRAINER_GPU}, vllm GPU ${LORA_RESTART_VLLM_GPU}"
+if [[ -n "$SHARED_LAYER_INDICES" ]]; then
+  log "Shared-model train layer indices: $SHARED_LAYER_INDICES"
+else
+  log "Shared-model train layer indices: all layers"
+fi
 if [[ -n "$LORA_LAYER_INDICES" ]]; then
   log "LoRA layer indices: $LORA_LAYER_INDICES"
 else

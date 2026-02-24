@@ -10,6 +10,7 @@ Handles:
 import base64
 import json
 import os
+import re
 from typing import Dict, Optional, Tuple
 
 import torch
@@ -119,6 +120,7 @@ def load_model_and_tokenizer(
 
         if model is not None:
             print("[Setup] ✓ Single-copy mode active - using vLLM's tensors directly!")
+            _apply_train_layer_filter(model, config.train_layer_indices)
             # Enable gradient checkpointing to save memory (was missing before!)
             _setup_gradient_checkpointing(model, config)
             model.train()
@@ -141,6 +143,7 @@ def load_model_and_tokenizer(
         print("[Setup] Loading model for legacy mode...")
         model = _load_model_with_attention(config.model_name)
         model.to(config.device)
+        _apply_train_layer_filter(model, config.train_layer_indices)
 
     # Enable gradient checkpointing
     _setup_gradient_checkpointing(model, config)
@@ -240,6 +243,59 @@ def _load_model_with_lora(config: TrainingConfig) -> torch.nn.Module:
     model.print_trainable_parameters()
 
     return model
+
+
+def _apply_train_layer_filter(
+    model: torch.nn.Module, layer_indices: Optional[list[int]]
+) -> None:
+    """
+    Freeze all parameters except selected transformer block indices.
+
+    Applies to full-model modes (shared_vllm / legacy), not LoRA.
+    """
+    if layer_indices is None:
+        return
+
+    num_hidden_layers = getattr(model.config, "num_hidden_layers", None)
+    if num_hidden_layers is None:
+        num_hidden_layers = getattr(model.config, "n_layer", None)
+    if num_hidden_layers is None:
+        raise RuntimeError(
+            "Model config does not expose num_hidden_layers or n_layer; "
+            "cannot validate --train-layer-indices for this architecture."
+        )
+
+    invalid = [idx for idx in layer_indices if idx >= num_hidden_layers]
+    if invalid:
+        raise ValueError(
+            f"Invalid --train-layer-indices {invalid} for model with "
+            f"{num_hidden_layers} layers (valid range: 0-{num_hidden_layers - 1})"
+        )
+
+    allowed = set(layer_indices)
+    layer_pattern = re.compile(r"\.layers\.(\d+)\.")
+    trainable_params = 0
+    total_params = 0
+
+    for name, param in model.named_parameters():
+        match = layer_pattern.search(name)
+        should_train = bool(match and int(match.group(1)) in allowed)
+        param.requires_grad_(should_train)
+        total_params += param.numel()
+        if should_train:
+            trainable_params += param.numel()
+
+    if trainable_params == 0:
+        raise RuntimeError(
+            "--train-layer-indices did not match any trainable parameters. "
+            "Check architecture naming and selected indices."
+        )
+
+    pct = 100.0 * trainable_params / max(total_params, 1)
+    print(
+        f"[Setup] Training only transformer layers {sorted(allowed)} "
+        f"({trainable_params}/{total_params} params, {pct:.2f}%)"
+    )
 
 
 def _setup_gradient_checkpointing(
