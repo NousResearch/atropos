@@ -1427,9 +1427,11 @@ class BaseEnv(ABC):
                 if isinstance(default_server_configs, ServerBaseline) and (
                     oai_cli_passed_args or yaml_oai_config
                 ):
-                    raise ValueError(
-                        "ServerBaseline is not compatible with OpenAI-namespaced CLI arguments. Please edit `config_init` directly or use APIServerConfig."  # noqa: E501
-                    )
+                    # If config_init provided ServerBaseline, but CLI/YAML provides OpenAI specifics,
+                    # it implies an override intent for a single server.
+                    # We use the default_openai_config_instance_for_cli (which would be a default APIServerConfig)
+                    # as the base for merging, allowing it to be fully specified by YAML/CLI.
+                    pass  # Base is already set correctly for this case
                 if (
                     isinstance(default_server_configs, list)
                     and len(default_server_configs) == 1
