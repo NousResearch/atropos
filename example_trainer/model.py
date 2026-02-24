@@ -305,16 +305,14 @@ def _setup_gradient_checkpointing(
     # Disable KV cache - incompatible with gradient checkpointing
     model.config.use_cache = False
 
-    if config.weight_bridge_mode in ("lora_only", "lora_restart"):
-        # PEFT models need special handling - enable_input_require_grads is CRITICAL
-        # Without this, the LoRA parameters won't receive gradients!
-        if hasattr(model, "enable_input_require_grads"):
-            model.enable_input_require_grads()
-        model.gradient_checkpointing_enable(
-            gradient_checkpointing_kwargs={"use_reentrant": False}
-        )
-    else:
-        model.gradient_checkpointing_enable()
+    # When only a subset of layers/params is trainable (LoRA or shared layer targeting),
+    # reentrant checkpointing can detach activations if inputs don't require grads.
+    # Use non-reentrant checkpointing everywhere for robust partial-freeze training.
+    if hasattr(model, "enable_input_require_grads"):
+        model.enable_input_require_grads()
+    model.gradient_checkpointing_enable(
+        gradient_checkpointing_kwargs={"use_reentrant": False}
+    )
 
 
 def _attach_to_vllm_shared_tensors(

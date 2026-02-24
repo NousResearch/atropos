@@ -23,6 +23,7 @@ set -euo pipefail
 #   START_VLLM_PORT=9001
 #   PYTHON_BIN=python3
 #   OUTPUT_BASE_DIR="$PWD"   # logs/saves base (defaults to launch directory)
+#   SHARED_GPU_MEMORY_UTILIZATION=0.60  # shared_vllm only (H100-friendly default)
 #   SHARED_GPU=0
 #   LORA_ONLY_TRAINER_GPU=1
 #   LORA_ONLY_VLLM_GPU=2
@@ -48,6 +49,7 @@ WARMUP_STEPS="${WARMUP_STEPS:-5}"
 KL_COEF="${KL_COEF:-0.0}"
 CLIP_EPS="${CLIP_EPS:-0.2}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.45}"
+SHARED_GPU_MEMORY_UTILIZATION="${SHARED_GPU_MEMORY_UTILIZATION:-0.60}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
 DTYPE="${DTYPE:-bfloat16}"
 LORA_R="${LORA_R:-16}"
@@ -246,7 +248,7 @@ run_shared_vllm() {
     "$PYTHON_BIN" -m example_trainer.vllm_api_server \
       --model "$MODEL_NAME" \
       --port "$vllm_port" \
-      --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION" \
+      --gpu-memory-utilization "$SHARED_GPU_MEMORY_UTILIZATION" \
       --max-model-len "$MAX_MODEL_LEN" \
       --dtype "$DTYPE" \
       --enforce-eager
@@ -440,6 +442,7 @@ log "Dry run mode: $DRY_RUN"
 log "Output base directory (logs + saves): $OUTPUT_BASE_DIR"
 log "Warmup steps: $WARMUP_STEPS"
 log "Targeted-layer matrix profile: $MATRIX_TARGETED"
+log "vLLM memory utilization: shared=${SHARED_GPU_MEMORY_UTILIZATION}, lora=${GPU_MEMORY_UTILIZATION}"
 log "Port plan:"
 log "  shared_vllm:   run-api=${SHARED_API_PORT}, vllm=${SHARED_VLLM_PORT}"
 log "  lora_only:     run-api=${LORA_ONLY_API_PORT}, vllm=${LORA_ONLY_VLLM_PORT}"
