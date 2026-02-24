@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import time
+import logging
 from typing import Iterable, Optional
 
 import requests
@@ -21,16 +22,22 @@ from torch.optim import AdamW
 from .api import check_atropos_api, register_trainer
 
 
+logger = logging.getLogger(__name__)
+
+
 def create_optimizer(model: torch.nn.Module, config) -> torch.optim.Optimizer:
     """
     Create optimizer based on config.optimizer setting.
 
     Options:
-    - 'adamw': Standard AdamW (full precision, ~32GB GPU for 8B model)
-    - 'adamw_8bit': 8-bit AdamW from bitsandbytes (~8GB GPU, requires bitsandbytes)
-    - 'adafactor': Adafactor without momentum (~8GB GPU, no extra dependencies)
+    - 'adamw': Standard AdamW
+    - 'adamw_8bit': 8-bit AdamW from bitsandbytes (requires bitsandbytes)
+    - 'adafactor': Adafactor optimizer (requires transformers)
     """
-    return create_optimizer_for_params(model.parameters(), config)
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    if not trainable_params:
+        raise RuntimeError("No trainable parameters found for optimizer creation.")
+    return create_optimizer_for_params(trainable_params, config)
 
 
 def create_optimizer_for_params(
@@ -38,36 +45,46 @@ def create_optimizer_for_params(
 ) -> torch.optim.Optimizer:
     """Create optimizer for a specific parameter iterable."""
     params = list(params)
+    if not params:
+        raise RuntimeError("Optimizer received an empty parameter list.")
 
     if config.optimizer == "adamw_8bit":
         try:
             import bitsandbytes as bnb
 
             optimizer = bnb.optim.AdamW8bit(params, lr=config.lr)
-            print("[Setup] Using 8-bit AdamW (saves ~24GB optimizer memory)")
+            logger.info("[Setup] Using 8-bit AdamW optimizer")
             return optimizer
         except ImportError:
-            print("[Setup] WARNING: bitsandbytes not installed, falling back to AdamW")
-            print("[Setup] Install with: pip install bitsandbytes")
+            logger.warning(
+                "[Setup] bitsandbytes not installed, falling back to AdamW"
+            )
+            logger.info("[Setup] Install with: pip install bitsandbytes")
 
     if config.optimizer == "adafactor":
         try:
             from transformers.optimization import Adafactor
 
+            scale_parameter = getattr(config, "adafactor_scale_parameter", False)
+            relative_step = getattr(config, "adafactor_relative_step", False)
             optimizer = Adafactor(
                 params,
                 lr=config.lr,
-                scale_parameter=False,
-                relative_step=False,
+                scale_parameter=scale_parameter,
+                relative_step=relative_step,
             )
-            print("[Setup] Using Adafactor (no momentum, saves ~24GB)")
+            logger.info(
+                "[Setup] Using Adafactor optimizer (scale_parameter=%s, relative_step=%s)",
+                scale_parameter,
+                relative_step,
+            )
             return optimizer
         except ImportError:
-            print("[Setup] WARNING: transformers Adafactor not available, using AdamW")
+            logger.warning("[Setup] transformers Adafactor unavailable, using AdamW")
 
     # Default: standard AdamW
     optimizer = AdamW(params, lr=config.lr)
-    print("[Setup] Using standard AdamW (requires ~32GB for optimizer states)")
+    logger.info("[Setup] Using standard AdamW optimizer")
     return optimizer
 
 
@@ -176,6 +193,7 @@ def train_legacy(config: TrainingConfig):
             advantage_batches,
             temperature_batches,
             config,
+            step_idx=step,
             inference_logprob_batches=inference_logprob_batches,
         )
         step_time = time.time() - step_start
@@ -322,6 +340,7 @@ def train_shared_vllm(config: TrainingConfig):
             advantage_batches,
             temperature_batches,
             config,
+            step_idx=step,
             inference_logprob_batches=inference_logprob_batches,  # Pass for GRPO ratio computation
         )
         step_time = time.time() - step_start
@@ -481,6 +500,7 @@ def train_lora(config: TrainingConfig):
             advantage_batches,
             temperature_batches,
             config,
+            step_idx=step,
             inference_logprob_batches=inference_logprob_batches,
         )
         step_time = time.time() - step_start
@@ -702,6 +722,7 @@ def train_lora_restart(config: TrainingConfig):
             advantage_batches,
             temperature_batches,
             config,
+            step_idx=step,
             inference_logprob_batches=inference_logprob_batches,
         )
         step_time = time.time() - step_start

@@ -69,7 +69,7 @@ def compute_grpo_loss(
     temperatures: torch.Tensor,
     gradient_accumulation_steps: int,
     inference_logprobs: Optional[torch.Tensor] = None,
-    kl_coef: float = 0.1,
+    kl_coef: float = 0.0,
     clip_eps: float = 0.2,
     use_reference_logprobs: bool = True,
 ) -> Tuple[torch.Tensor, dict]:
@@ -79,12 +79,12 @@ def compute_grpo_loss(
     This implements proper GRPO/PPO with:
     - Importance sampling ratio: policy(a|s) / policy_old(a|s)
     - PPO-style clipping to prevent large updates
-    - KL penalty to prevent reward hacking/policy collapse
+    - Optional KL-like regularization term on sampled actions
 
     The loss encourages the model to:
     - Increase probability for tokens with positive advantages
     - Decrease probability for tokens with negative advantages
-    - Stay close to the reference policy (inference-time policy)
+    - Stay close to the rollout/reference policy on sampled tokens
 
     Args:
         model: The model to compute loss for
@@ -94,7 +94,7 @@ def compute_grpo_loss(
         temperatures: Temperature values [batch, 1, 1]
         gradient_accumulation_steps: Number of accumulation steps (for scaling)
         inference_logprobs: Logprobs from inference (π_old), aligned with labels [batch, seq_len]
-        kl_coef: KL penalty coefficient (beta). Higher = more conservative updates
+        kl_coef: Coefficient for sampled-token KL-like regularization
         clip_eps: PPO clipping epsilon. Clips ratio to [1-eps, 1+eps]
         use_reference_logprobs: If True, use inference_logprobs as reference policy
 
@@ -192,12 +192,13 @@ def compute_grpo_loss(
         # Average over tokens, then over batch
         policy_loss = ((policy_loss_per_token * mask).sum(dim=-1) / mask_sum).mean()
 
-        # KL penalty: encourage staying close to reference policy
-        # Using Schulman's unbiased KL estimator from the DeepSeek GRPO paper (Equation 4):
-        # This estimator is guaranteed to be non-negative (unlike squared log-ratio).
+        # KL-like sampled-token regularizer: encourages staying close to rollout policy.
+        # This uses Schulman's non-negative estimator on sampled actions:
+        #   exp(-log_ratio) + log_ratio - 1
+        # where log_ratio = log pi(a|s) - log pi_ref(a|s).
+        # NOTE: this is not full-distribution KL unless evaluated over the full action space.
         if kl_coef > 0:
-            # Schulman's unbiased KL estimator: (π_ref/π) - log(π_ref/π) - 1
-            # = exp(-log_ratio) + log_ratio - 1
+            # Schulman's sampled-token estimator.
             kl_per_token = torch.exp(-log_ratio) + log_ratio - 1.0
             kl_penalty = ((kl_per_token * mask).sum(dim=-1) / mask_sum).mean()
             total_loss = (
@@ -290,6 +291,7 @@ def run_training_step(
     advantage_batches: List[torch.Tensor],
     temperature_batches: List[torch.Tensor],
     config: TrainingConfig,
+    step_idx: int,
     inference_logprob_batches: Optional[List[torch.Tensor]] = None,
 ) -> dict:
     """
@@ -308,7 +310,8 @@ def run_training_step(
         label_batches: List of label tensors
         advantage_batches: List of advantage tensors
         temperature_batches: List of temperature tensors
-        config: Training configuration (includes kl_coef, clip_eps, use_reference_logprobs)
+        config: Training configuration (includes kl_coef, clip_eps, warmup_steps)
+        step_idx: Current global training step (0-based)
         inference_logprob_batches: Batched logprobs from inference (π_old), aligned with labels
 
     Returns:
@@ -331,9 +334,19 @@ def run_training_step(
     all_inference_logprobs: List[torch.Tensor] = []
 
     # Get GRPO hyperparameters from config
-    kl_coef = getattr(config, "kl_coef", 0.1)
+    kl_coef = getattr(config, "kl_coef", 0.0)
     clip_eps = getattr(config, "clip_eps", 0.2)
     use_reference_logprobs = getattr(config, "use_reference_logprobs", True)
+
+    # Apply linear warmup to optimizer LR for early-step stability.
+    warmup_steps = max(0, int(getattr(config, "warmup_steps", 0)))
+    if warmup_steps > 0 and step_idx < warmup_steps:
+        warmup_scale = float(step_idx + 1) / float(max(1, warmup_steps))
+        current_lr = float(config.lr) * warmup_scale
+    else:
+        current_lr = float(config.lr)
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = current_lr
 
     # Accumulate gradients over micro-batches
     num_batches = len(token_batches) if token_batches else 1
@@ -410,6 +423,7 @@ def run_training_step(
 
     result = {
         "loss": total_loss,
+        "lr": current_lr,
         "grad_norm": grad_norm.item() if hasattr(grad_norm, "item") else grad_norm,
         "pos_logp": total_pos_logp,
         "neg_logp": total_neg_logp,
@@ -515,6 +529,7 @@ def log_metrics(
         log_dict = {
             "train/loss": metrics["loss"],
             "train/grad_norm": metrics["grad_norm"],
+            "train/lr": metrics.get("lr", 0.0),
             "train/pos_logp": metrics.get("pos_logp", 0),
             "train/neg_logp": metrics.get("neg_logp", 0),
             # GRPO-specific metrics

@@ -194,6 +194,7 @@ def main():
         batch_size=args.batch_size,
         seq_len=args.seq_len,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
+        warmup_steps=getattr(args, "warmup_steps", 0),
         optimizer=args.optimizer,
         device="cuda:0",  # Always 0 since we set CUDA_VISIBLE_DEVICES
         save_path=args.save_path,

@@ -102,7 +102,7 @@ def save_checkpoint(
         torch.save(state_dict, os.path.join(checkpoint_path, "pytorch_model.bin"))
         model.config.save_pretrained(checkpoint_path)
 
-        # CRITICAL: Clean up the copied state_dict to free ~8GB GPU memory!
+        # CRITICAL: Clean up the copied state_dict to free significant GPU memory.
         del state_dict
         import gc
 
