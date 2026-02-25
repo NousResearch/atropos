@@ -397,7 +397,7 @@ class BaseEnv(ABC):
         Get the next items to be rolled out
         """
         raise NotImplementedError(
-            "Get_next_items method must be implemented in subclass "
+            "Get_next_item method must be implemented in subclass "
         )
 
     @abstractmethod
