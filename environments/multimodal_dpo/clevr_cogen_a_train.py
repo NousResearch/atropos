@@ -29,39 +29,30 @@ class MultimodalExampleEnv(BaseEnv):
     ) -> Tuple[GameHistory | None, List[Item]]:
         to_score = list()
         to_backlog = list()
+        prompt_tuple, gold_answer, base64_image = item
 
-        # Get the current image if it was stored
-        if hasattr(self, "current_image"):
+        # Extract text content from item
+        user_content = dict(prompt_tuple[0]).get("content", "")
 
-            # Convert PIL image to base64
-            import io
+        # Try to parse if it's JSON
+        if isinstance(user_content, str) and (
+            user_content.startswith("[") or user_content.startswith("{")
+        ):
+            try:
+                parsed = json.loads(user_content)
+                text_content = ""
+                for element in parsed:
+                    if element.get("type") == "text":
+                        text_content = element.get("text", "")
 
-            img_byte_arr = io.BytesIO()
-            self.current_image.save(img_byte_arr, format="PNG")
-            img_byte_arr = img_byte_arr.getvalue()
-            base64_image = base64.b64encode(img_byte_arr).decode("utf-8")
-
-            # Extract text content from item
-            user_content = dict(item[0][0]).get("content", "")
-
-            # Try to parse if it's JSON
-            if isinstance(user_content, str) and (
-                user_content.startswith("[") or user_content.startswith("{")
-            ):
-                try:
-                    parsed = json.loads(user_content)
-                    text_content = ""
-                    for element in parsed:
-                        if element.get("type") == "text":
-                            text_content = element.get("text", "")
-
-                    if not text_content:
-                        text_content = "Please solve this problem and provide your answer as \\boxed{answer}."
-                except Exception:
+                if not text_content:
                     text_content = "Please solve this problem and provide your answer as \\boxed{answer}."
-            else:
-                text_content = user_content
+            except Exception:
+                text_content = "Please solve this problem and provide your answer as \\boxed{answer}."
+        else:
+            text_content = user_content
 
+        if base64_image:
             # Create messages with the new format
             messages = [
                 {
@@ -100,10 +91,10 @@ class MultimodalExampleEnv(BaseEnv):
 
         for i, chat_completion in enumerate(chat_completions.choices):
             messages = (
-                dict(item[0][0]),
+                dict(prompt_tuple[0]),
                 {"role": "assistant", "content": chat_completion.message.content},
             )
-            to_score.append((messages, item[1], base64_image))
+            to_score.append((messages, gold_answer, base64_image))
 
         return to_score, to_backlog
 
