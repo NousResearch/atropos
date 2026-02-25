@@ -494,9 +494,10 @@ class ManagedServer:
                 Dictionary with 'sequences': Dict[str, SequenceNode] and 'tree' alias
         """
         if self.track_tree:
+            sequences_snapshot = self.sequences.copy()
             return {
-                "sequences": self.sequences.copy(),
-                "tree": self.sequences.copy(),  # Alias for compatibility
+                "sequences": sequences_snapshot,
+                "tree": sequences_snapshot,  # Alias for compatibility
             }
         else:
             return {
@@ -607,9 +608,10 @@ class DummyManagedServer:
     def get_state(self) -> Dict[str, Any]:
         """Get the current state of tracked sequences."""
         if self.track_tree:
+            sequences_snapshot = self.sequences.copy()
             return {
-                "sequences": self.sequences.copy(),
-                "tree": self.sequences.copy(),
+                "sequences": sequences_snapshot,
+                "tree": sequences_snapshot,
             }
         else:
             return {"nodes": self.current_nodes.copy()}
