@@ -91,7 +91,7 @@ class ClockDatasetEnv(BaseEnv):
             entry = self.train[self.iter % len(self.train)]
             self.iter += 1
 
-            text_prompt = "What time does the clock show"
+            text_prompt = "What time does the clock show?"
             prompt = tuple(
                 [frozenset({"role": "user", "content": text_prompt}.items())]
             )
