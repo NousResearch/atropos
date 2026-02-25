@@ -108,7 +108,7 @@ class BlackjackEnv(BaseEnv):
 
         tools_json = json.dumps(self.tools)
         self.system_prompt = (
-            "You are an AI agent playing Blackjack who uses extreme long chains of thought "
+            "You are an AI agent playing Blackjack who uses extremely long chains of thought "
             "to carefully consider the probabilities and optimal strategy. "
             "You need to decide whether to hit or stick based on your current hand and the dealer's showing card.\n\n"
             "You should enclose your thoughts and internal monologue inside <think> </think> tags, and then "
