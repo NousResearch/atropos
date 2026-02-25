@@ -62,7 +62,7 @@ class MathCurriculum:
         4: [
             9,  # LCM (Least Common Multiple)
             10,  # GCD (Greatest Common Denominator)
-            20,  # Midpoint of the two point
+            20,  # Midpoint of the two points
             21,  # Factoring Quadratic
             23,  # Solve a System of Equations in R^2
             26,  # Linear Equations
