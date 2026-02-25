@@ -98,7 +98,7 @@ class PydanticEnvConfig(BaseEnvConfig):
     """Custom config class for PydanticSchemaFollowingEnv with additional parameters."""
 
     dataset_name: str = Field(
-        default="justus27/pydantic-adherance-test",
+        default="justus27/pydantic-adherence-test",
         description="Name of the HuggingFace dataset to load",
     )
     dataset_split: str = Field(
@@ -342,7 +342,7 @@ class PydanticSchemaFollowingEnv(BaseEnv):
             wandb_name="pydantic_schema_following",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
-            dataset_name="justus27/pydantic-adherance-test",
+            dataset_name="justus27/pydantic-adherence-test",
             dataset_split="train",
             debug_logging=False,
             dump_rollouts=False,
@@ -466,7 +466,7 @@ class PydanticSchemaFollowingEnv(BaseEnv):
         try:
             # Load the dataset - you'll need to specify the correct dataset name/path
             dataset_name = getattr(
-                self.config, "dataset_name", "justus27/pydantic-adherance-test"
+                self.config, "dataset_name", "justus27/pydantic-adherence-test"
             )
             dataset_split = getattr(self.config, "dataset_split", "train")
 
