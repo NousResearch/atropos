@@ -53,7 +53,7 @@ Please respond with the action number only.
 You cannot move the taxi into walls, which are displayed as | in the map. : means you are free to move through that column.
 
 
-For an example, if the passenger is at R, and the destination is G, and the taxi is at (2, 2), then here are the following actions to solve this in the correct order:
+For example, if the passenger is at R, and the destination is G, and the taxi is at (2, 2), then here are the following actions to solve this in the correct order:
 
 3 (move west)
 3 (move west)
