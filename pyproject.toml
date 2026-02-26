@@ -40,10 +40,17 @@ atropos-grpo-run = "example_trainer.run:main"
 
 [project.optional-dependencies]
 all = [
-    "atroposlib[dev,examples]"
+    "atroposlib[dev,examples,example_trainer]"
 ]
 rewardfns = [
     "torch"
+]
+example_trainer = [
+    "atroposlib[rewardfns]",
+    "vllm",
+    "accelerate",
+    "peft",
+    "requests",
 ]
 dev = [
     "pytest",
