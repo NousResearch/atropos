@@ -299,7 +299,7 @@ The `example_trainer/` directory provides `grpo.py`, a script demonstrating inte
 
 1.  Python 3.8+ (Python 3.10+ recommended for Atropos overall).
 2.  Running Atropos API server (default: `http://localhost:8000`). Accessible via `run-api`.
-3.  Required Python packages: `torch`, `transformers`, `vllm`, `pydantic`, `numpy`, `requests`, `tenacity`, `wandb` (optional). Install via `pip install -r example_trainer/requirements.txt` or `pip install -e .[examples]`.
+3.  Required Python packages: `torch`, `transformers`, `vllm`, `pydantic`, `numpy`, `requests`, `tenacity`, `wandb` (optional). Install via `pip install -e ".[example_trainer]"` (or `pip install -e ".[all]"`).
 4.  A running Atropos environment (e.g., `python environments/gsm8k_server.py serve --slurm False`).
 
 ### 9.2. Setup

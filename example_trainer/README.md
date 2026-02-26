@@ -107,7 +107,9 @@ The `lora_only` mode requires `--enforce-eager` which **disables CUDA graphs**, 
 ## Quick Start: LoRA Training (Recommended)
 
 ### Step 1: Install Dependencies
-- They are listed in the requirements.txt file that you can see
+- Install from `pyproject.toml` extras:
+  - `pip install -e ".[example_trainer]"`
+  - or everything: `pip install -e ".[all]"`
 
 ### Step 2: Start All Components
 
