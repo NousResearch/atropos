@@ -7,8 +7,8 @@ This wrapper maintains a tree structure of sequences, where:
 - Branching occurs organically from different contexts and n > 1 completions
 """
 
-import os
 import logging
+import os
 import time
 import uuid
 import warnings

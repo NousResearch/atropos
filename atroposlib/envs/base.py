@@ -1445,9 +1445,11 @@ class BaseEnv(ABC):
                 # Debug logging for CLI args
                 logger.debug("[CLI DEBUG] cli_passed_flags = %s", cli_passed_flags)
                 logger.debug("[CLI DEBUG] openai_full_prefix = %s", openai_full_prefix)
-                logger.debug("[CLI DEBUG] oai_cli_passed_args = %s", oai_cli_passed_args)
+                logger.debug(
+                    "[CLI DEBUG] oai_cli_passed_args = %s", oai_cli_passed_args
+                )
                 logger.debug("[CLI DEBUG] yaml_oai_config = %s", yaml_oai_config)
-                
+
                 # Auto-convert ServerBaseline to APIServerConfig when CLI/YAML overrides are provided
                 # This allows any environment to use --openai.* CLI args without modifying config_init
                 # Use a new variable to avoid UnboundLocalError from closure scoping
