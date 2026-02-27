@@ -479,7 +479,7 @@ class HighlightSectionChecker(Instruction):
 
         Returns:
           True if the actual number of highlighted sections in the format of
-          *highlighed sections* meets the minimum requirement; otherwise False.
+          *highlighted sections* meets the minimum requirement; otherwise False.
         """
         num_highlights = 0
         highlights = re.findall(r"\*[^\n\*]*\*", value)
