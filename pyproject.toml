@@ -35,13 +35,22 @@ view-run = "atroposlib.cli.view_run:main"
 view-run-multimodal = "atroposlib.cli.view_run_multimodal:main"
 atropos-sft-gen = "atroposlib.cli.sft:main"
 atropos-dpo-gen = "atroposlib.cli.dpo:main"
+atropos-grpo = "example_trainer.grpo:main"
+atropos-grpo-run = "example_trainer.run:main"
 
 [project.optional-dependencies]
 all = [
-    "atroposlib[dev,examples]"
+    "atroposlib[dev,examples,example_trainer]"
 ]
 rewardfns = [
     "torch"
+]
+example_trainer = [
+    "atroposlib[rewardfns]",
+    "vllm",
+    "accelerate",
+    "peft",
+    "requests",
 ]
 dev = [
     "pytest",
@@ -67,4 +76,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["atroposlib"]
+packages = ["atroposlib", "example_trainer"]
