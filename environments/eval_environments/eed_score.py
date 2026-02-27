@@ -28,7 +28,7 @@ https://github.com/phybench-official/phybench/tree/main/EED
 import re
 from typing import List, Optional, Tuple
 
-from numpy import ones, zeros
+import numpy as np
 
 # Try to import required dependencies
 try:

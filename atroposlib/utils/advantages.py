@@ -118,7 +118,7 @@ def compute_discounted_returns(rewards: np.ndarray, gamma: float) -> np.ndarray:
         list[float]: A list containing the discounted returns for each timestep.
     """
     if not isinstance(rewards, np.ndarray):
-        rewards = np.array(rewards, dtype=np.float32)  # Use float32 for numpy default
+        rewards = np.array(rewards, dtype=np.float64)  # Use float64 (numpy 2.x default for float arrays)
     discounted_returns = np.empty_like(rewards)
     running_return = 0.0
 

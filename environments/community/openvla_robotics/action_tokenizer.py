@@ -51,7 +51,7 @@ class ActionTokenizer:
         action = np.clip(
             action, a_min=float(self.min_action), a_max=float(self.max_action)
         )
-        discretized_action = np.digitize(action, self.bins)
+        discretized_action = np.digitize(action, self.bins[:-1])
 
         # Handle single element vs. batch
         if len(discretized_action.shape) == 1:

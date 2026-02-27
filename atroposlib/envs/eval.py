@@ -24,7 +24,7 @@ def pass_at_k(m, c, k):
     """
     if m - c < k:
         return 1.0
-    return 1.0 - np.prod(1.0 - k / np.arange(m - c + 1, m + 1))
+    return 1.0 - np.prod(1.0 - k / np.arange(m - c + 1, m + 1, dtype=np.float64))
 
 
 def evaluate_log(
