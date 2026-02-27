@@ -1,4 +1,5 @@
 import gzip
+import logging
 import time
 import uuid
 from typing import Any, Dict, List, Optional
@@ -25,6 +26,7 @@ MIN_ENV_WEIGHT = (
 # Message import removed - using Dict[str, Any] for more flexible validation
 
 app = FastAPI(title="AtroposLib API")
+logger = logging.getLogger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
@@ -391,7 +393,10 @@ async def get_batch():
             app.state.curr_batch.append(batch)
         curr_batch = app.state.curr_batch.pop()
         # check length before sending
-        print(f"Sending batch of {sum(len(x['tokens']) for x in curr_batch)} sequences")
+        logger.info(
+            "Sending batch of %s sequences",
+            sum(len(x["tokens"]) for x in curr_batch),
+        )
         return {"batch": curr_batch}
 
 

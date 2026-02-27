@@ -8,6 +8,7 @@ This wrapper maintains a tree structure of sequences, where:
 """
 
 import os
+import logging
 import time
 import uuid
 import warnings
@@ -22,6 +23,8 @@ from openai.types.completion import Completion, CompletionChoice
 from pydantic import BaseModel
 
 from atroposlib.envs.server_handling.server_baseline import APIServer
+
+logger = logging.getLogger(__name__)
 
 
 class SequenceNode(BaseModel):
@@ -292,16 +295,14 @@ class ManagedServer:
         if self._debug_requests_enabled():
             msg_count = len(messages)
             prompt_preview = prompt.replace("\n", "\\n")[:600]
-            print(
-                f"[ATROPOS_REQ_DEBUG] chat_completion messages={msg_count} "
-                f"n={completion_kwargs.get('n')} max_tokens={completion_kwargs.get('max_tokens')} "
-                f"temperature={completion_kwargs.get('temperature')}",
-                flush=True,
+            logger.debug(
+                "[ATROPOS_REQ_DEBUG] chat_completion messages=%s n=%s max_tokens=%s temperature=%s",
+                msg_count,
+                completion_kwargs.get("n"),
+                completion_kwargs.get("max_tokens"),
+                completion_kwargs.get("temperature"),
             )
-            print(
-                f"[ATROPOS_REQ_DEBUG] prompt_preview={prompt_preview!r}",
-                flush=True,
-            )
+            logger.debug("[ATROPOS_REQ_DEBUG] prompt_preview=%r", prompt_preview)
 
         # Set model name if not provided
         if "model" not in completion_kwargs:
