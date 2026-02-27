@@ -123,11 +123,7 @@ class GSM8kEnv(BaseEnv):
     async def rollout_and_score_eval(self, question: str, answer: str) -> dict:
         """Rollout and score evaluation with detailed sample data collection."""
 
-        # Important: use ManagedServer's default tokenizer resolution so it uses
-        # the underlying inference server tokenizer (e.g., Qwen) instead of the
-        # environment tokenizer. Passing self.tokenizer here can cause token-ID
-        # mismatch and gibberish generations when model/tokenizer families differ.
-        async with self.server.managed_server() as managed:
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
             completion = await managed.chat_completion(
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -236,9 +232,7 @@ class GSM8kEnv(BaseEnv):
             "\\boxed{" + item["answer"].split("#")[-1].strip().replace(",", "") + "}"
         )
 
-        # Important: do not force env tokenizer into ManagedServer for rollout.
-        # Let ManagedServer use the server's tokenizer to keep prompt token IDs aligned.
-        async with self.server.managed_server() as managed:
+        async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
 
             chat_completions = await managed.chat_completion(
                 messages=[{"role": "system", "content": system_prompt}, user_message],
@@ -287,7 +281,7 @@ class GSM8kEnv(BaseEnv):
         if len(gold_parsed) != 0:
             # We require the answer to be provided in correct latex (no malformed operators)
             random.shuffle(rollout_group_data)
-            for idx, item in enumerate(rollout_group_data):
+            for item in rollout_group_data:
                 # print(item[0][-1]["content"])
                 answer_parsed = parse(
                     item["messages"][-1]["content"].split("</think>")[-1],
@@ -316,8 +310,7 @@ class GSM8kEnv(BaseEnv):
                 logprobs = item["logprobs"]
 
                 # remove obviously bad examples
-                valid_mask_count = len([1 for i in masks if i != -100])
-                if valid_mask_count < 10:
+                if len([1 for i in masks if i != -100]) < 10:
                     continue
                 scores["tokens"].append(tokens)
                 scores["masks"].append(masks)
@@ -329,9 +322,6 @@ class GSM8kEnv(BaseEnv):
 
             for score in scores["scores"]:
                 self.percent_correct_buffer.append(max(score, 0))
-
-            if len(scores["scores"]) == 0:
-                return None
 
             # check if all the same
             # print(scores['scores'])
@@ -362,9 +352,7 @@ class GSM8kEnv(BaseEnv):
                         percentage_of_range = min(percentage_of_range, 1.0)
                         # Apply linear penalty scaling from 1.0 down to 0.0
                         scores["scores"].append(1.0 - percentage_of_range)
-            if self.config.ensure_scores_are_not_same and all(
-                [scores["scores"][0] == score for score in scores["scores"]]
-            ):
+            if all([scores["scores"][0] == score for score in scores["scores"]]):
                 return None  # If all the same, we return None
             return scores
         else:
