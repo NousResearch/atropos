@@ -69,9 +69,7 @@ def compute_grpo_loss(
     temperatures: torch.Tensor,
     gradient_accumulation_steps: int,
     inference_logprobs: Optional[torch.Tensor] = None,
-    kl_coef: float = 0.0,
     clip_eps: float = 0.2,
-    use_reference_logprobs: bool = True,
 ) -> Tuple[torch.Tensor, dict]:
     """
     Compute GRPO (Group Relative Policy Optimization) loss for a single micro-batch.
@@ -79,12 +77,10 @@ def compute_grpo_loss(
     This implements proper GRPO/PPO with:
     - Importance sampling ratio: policy(a|s) / policy_old(a|s)
     - PPO-style clipping to prevent large updates
-    - Optional KL-like regularization term on sampled actions
 
     The loss encourages the model to:
     - Increase probability for tokens with positive advantages
     - Decrease probability for tokens with negative advantages
-    - Stay close to the rollout/reference policy on sampled tokens
 
     Args:
         model: The model to compute loss for
@@ -94,9 +90,7 @@ def compute_grpo_loss(
         temperatures: Temperature values [batch, 1, 1]
         gradient_accumulation_steps: Number of accumulation steps (for scaling)
         inference_logprobs: Logprobs from inference (π_old), aligned with labels [batch, seq_len]
-        kl_coef: Coefficient for sampled-token KL-like regularization
         clip_eps: PPO clipping epsilon. Clips ratio to [1-eps, 1+eps]
-        use_reference_logprobs: If True, use inference_logprobs as reference policy
 
     Returns:
         Tuple of (loss tensor, metrics dict)
@@ -132,7 +126,7 @@ def compute_grpo_loss(
     logprob_diff_max = 0.0
 
     # === GRPO/PPO Loss Computation ===
-    if use_reference_logprobs and inference_logprobs is not None:
+    if inference_logprobs is not None:
         # Move inference logprobs to correct device/dtype
         ref_logprobs = inference_logprobs.to(
             logp_per_token.device, logp_per_token.dtype
@@ -192,21 +186,7 @@ def compute_grpo_loss(
         # Average over tokens, then over batch
         policy_loss = ((policy_loss_per_token * mask).sum(dim=-1) / mask_sum).mean()
 
-        # KL-like sampled-token regularizer: encourages staying close to rollout policy.
-        # This uses Schulman's non-negative estimator on sampled actions:
-        #   exp(-log_ratio) + log_ratio - 1
-        # where log_ratio = log pi(a|s) - log pi_ref(a|s).
-        # NOTE: this is not full-distribution KL unless evaluated over the full action space.
-        if kl_coef > 0:
-            # Schulman's sampled-token estimator.
-            kl_per_token = torch.exp(-log_ratio) + log_ratio - 1.0
-            kl_penalty = ((kl_per_token * mask).sum(dim=-1) / mask_sum).mean()
-            total_loss = (
-                policy_loss + kl_coef * kl_penalty
-            ) / gradient_accumulation_steps
-        else:
-            kl_penalty = torch.tensor(0.0, device=logp_per_token.device)
-            total_loss = policy_loss / gradient_accumulation_steps
+        total_loss = policy_loss / gradient_accumulation_steps
 
         # Compute metrics for logging
         with torch.no_grad():
@@ -216,11 +196,8 @@ def compute_grpo_loss(
             ).float()
             clipped_fraction = (clipped_fraction * mask).sum() / mask.sum()
 
-            # Mean ratio and KL for monitoring (using Schulman's estimator)
+            # Mean ratio for monitoring
             mean_ratio = (ratio * mask).sum() / mask.sum()
-            # Schulman KL: exp(-log_ratio) + log_ratio - 1
-            schulman_kl = torch.exp(-log_ratio) + log_ratio - 1.0
-            mean_kl = (schulman_kl * mask).sum() / mask.sum()
 
             # For backward compatibility: collect training logprobs
             raw_logp_per_token = -F.cross_entropy(
@@ -240,8 +217,7 @@ def compute_grpo_loss(
             "  2. Ensure vLLM is returning logprobs in /generate response\n"
             "  3. Check that gsm8k_server is configured correctly\n"
             "\n"
-            "Without inference logprobs, training will cause reward hacking.\n"
-            "If you REALLY want vanilla REINFORCE (not recommended), set use_reference_logprobs=False"
+            "Without inference logprobs, training will cause reward hacking."
         )
 
     # === Compute Additional Metrics ===
@@ -266,9 +242,7 @@ def compute_grpo_loss(
         "inference_logprobs": inference_logprobs_flat,
         "interpretable_loss": interpretable_loss,
         # GRPO-specific metrics
-        "kl_penalty": kl_penalty.item() if torch.is_tensor(kl_penalty) else kl_penalty,
         "mean_ratio": mean_ratio.item() if torch.is_tensor(mean_ratio) else mean_ratio,
-        "mean_kl": mean_kl.item() if torch.is_tensor(mean_kl) else mean_kl,
         "clipped_fraction": (
             clipped_fraction.item()
             if torch.is_tensor(clipped_fraction)
@@ -310,7 +284,7 @@ def run_training_step(
         label_batches: List of label tensors
         advantage_batches: List of advantage tensors
         temperature_batches: List of temperature tensors
-        config: Training configuration (includes kl_coef, clip_eps, warmup_steps)
+        config: Training configuration (includes clip_eps, warmup_steps)
         step_idx: Current global training step (0-based)
         inference_logprob_batches: Batched logprobs from inference (π_old), aligned with labels
 
@@ -322,9 +296,7 @@ def run_training_step(
     total_neg_logp = 0.0
     total_pos = 0.0
     total_neg = 0.0
-    total_kl_penalty = 0.0
     total_mean_ratio = 0.0
-    total_mean_kl = 0.0
     total_clipped_fraction = 0.0
     total_logprob_diff_mean = 0.0
     total_logprob_diff_abs_mean = 0.0
@@ -334,9 +306,7 @@ def run_training_step(
     all_inference_logprobs: List[torch.Tensor] = []
 
     # Get GRPO hyperparameters from config
-    kl_coef = getattr(config, "kl_coef", 0.0)
     clip_eps = getattr(config, "clip_eps", 0.2)
-    use_reference_logprobs = getattr(config, "use_reference_logprobs", True)
 
     # Apply linear warmup to optimizer LR for early-step stability.
     warmup_steps = max(0, int(getattr(config, "warmup_steps", 0)))
@@ -373,9 +343,7 @@ def run_training_step(
             temperatures,
             config.gradient_accumulation_steps,
             inference_logprobs=inf_logprobs,
-            kl_coef=kl_coef,
             clip_eps=clip_eps,
-            use_reference_logprobs=use_reference_logprobs,
         )
 
         loss.backward()
@@ -386,9 +354,7 @@ def run_training_step(
         total_neg += metrics["neg_count"]
 
         # Accumulate GRPO-specific metrics
-        total_kl_penalty += metrics.get("kl_penalty", 0.0)
         total_mean_ratio += metrics.get("mean_ratio", 1.0)
-        total_mean_kl += metrics.get("mean_kl", 0.0)
         total_clipped_fraction += metrics.get("clipped_fraction", 0.0)
 
         # Accumulate token-level alignment metrics
@@ -430,9 +396,7 @@ def run_training_step(
         "pos_count": total_pos,
         "neg_count": total_neg,
         # GRPO-specific metrics (averaged over batches)
-        "kl_penalty": total_kl_penalty / num_batches,
         "mean_ratio": total_mean_ratio / num_batches,
-        "mean_kl": total_mean_kl / num_batches,
         "clipped_fraction": total_clipped_fraction / num_batches,
     }
 
@@ -502,17 +466,11 @@ def log_metrics(
     )
     print(f"  Loss: {loss_str}, Grad norm: {metrics['grad_norm']:.4f}{timing_str}")
 
-    # GRPO metrics line: KL, ratio, clipping
-    kl_penalty = metrics.get("kl_penalty", 0)
+    # GRPO metrics line: ratio and clipping
     mean_ratio = metrics.get("mean_ratio", 1.0)
-    mean_kl = metrics.get("mean_kl", 0)
     clipped_frac = metrics.get("clipped_fraction", 0)
 
-    if kl_penalty > 0 or mean_kl > 0:
-        print(
-            f"    GRPO: KL={mean_kl:.4f}, ratio={mean_ratio:.3f}, "
-            f"clipped={clipped_frac*100:.1f}%"
-        )
+    print(f"    GRPO: ratio={mean_ratio:.3f}, clipped={clipped_frac*100:.1f}%")
 
     # Advantage distribution
     if "pos_count" in metrics or "neg_count" in metrics:
@@ -533,9 +491,7 @@ def log_metrics(
             "train/pos_logp": metrics.get("pos_logp", 0),
             "train/neg_logp": metrics.get("neg_logp", 0),
             # GRPO-specific metrics
-            "grpo/kl_penalty": kl_penalty,
             "grpo/mean_ratio": mean_ratio,
-            "grpo/mean_kl": mean_kl,
             "grpo/clipped_fraction": clipped_frac,
         }
         # Add timing metrics if present
