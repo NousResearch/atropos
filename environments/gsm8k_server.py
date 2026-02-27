@@ -11,8 +11,8 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
-    ServerBaseline,
     ScoredDataGroup,
+    ServerBaseline,
 )
 from atroposlib.type_definitions import Item
 
