@@ -200,7 +200,9 @@ def resolve_openai_configs(
             ) from e
     elif isinstance(default_server_configs, APIServerConfig):
         # Check APIServerConfig BEFORE ServerBaseline since APIServerConfig inherits from ServerBaseline
-        logger.info("Using single OpenAI server configuration based on merged settings (default/YAML/CLI).")
+        logger.info(
+            "Using single OpenAI server configuration based on merged settings (default/YAML/CLI)."
+        )
         try:
             final_openai_config = APIServerConfig(**openai_config_dict)
         except Exception as e:
