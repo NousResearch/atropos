@@ -81,14 +81,13 @@ atropos-grpo \
   --gradient-accumulation-steps 64 \
   --warmup-steps 5 \
   --training-steps 30 \
-  --kl-coef 0.0 \
   --clip-eps 0.2
 ```
 
 ## Objective Notes
 
 - GRPO uses rollout/inference logprobs (`pi_old`) for importance-ratio computation.
-- The optional KL-like term is sampled-token regularization against rollout policy logprobs, not a separate frozen-reference-model KL.
+- The trainer currently uses clipped importance-ratio updates without a separate frozen-reference-model KL term.
 
 ## Outputs
 

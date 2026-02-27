@@ -15,7 +15,7 @@ example_trainer/
 ├── api.py               # Atropos API communication (registration, batch fetching)
 ├── data.py              # Data fetching, preprocessing, logprob alignment
 ├── model.py             # Model loading, CUDA IPC, tensor mapping (QKV/Gate fusion)
-├── training.py          # GRPO loss (importance sampling, KL penalty, clipping)
+├── training.py          # GRPO loss (importance sampling and clipping)
 ├── checkpointing.py     # Save models & LoRA adapters (handles fused tensor unfusing)
 ├── vllm_manager.py      # vLLM process lifecycle (launch, health, termination)
 ├── trainers.py          # 4 training mode implementations + optimizer selection
@@ -48,7 +48,7 @@ After `pip install -e .` from the repository root, you can launch with either:
 |---------|---------------|
 | **Advantage** | How much better/worse than average a response was |
 | **Importance Sampling** | Corrects for policy drift during training |
-| **KL Penalty** | Prevents the model from changing too drastically from base |
+| **Rollout Logprobs** | Provide `pi_old` needed for importance sampling ratios |
 | **Clipping** | Limits update magnitude for stability |
 
 
@@ -160,7 +160,6 @@ python -m example_trainer.grpo \
     --warmup-steps 20 \
     --lr 1e-5 \
     --training-steps 30 \
-    --kl-coef 0.0 \
     --clip-eps 0.2 \
     --vllm-restart-interval 5 \
     --save-path ./lora_checkpoints \
@@ -266,7 +265,6 @@ python -m example_trainer.grpo \
     --vllm-config-path /tmp/grpo_training/vllm_bridge_config.json \
     --atropos-url "http://localhost:8002" \
     --warmup-steps 20 \
-    --kl-coef 0.0 \
     --clip-eps 0.2
 ```
 
@@ -289,7 +287,7 @@ VLLM_ENABLE_SHARED_WEIGHTS=1 python -m example_trainer.run \
 
 **CRITICAL:** The atropos environment MUST use `server_type=vllm` to get logprobs for proper GRPO training.
 
-Only `server_type=vllm` calls the `/generate` endpoint which returns token-level logprobs. These logprobs serve as the reference policy (π_old) for importance sampling in GRPO.
+Only `server_type=vllm` calls the `/generate` endpoint which returns token-level logprobs. These logprobs serve as the rollout policy (`pi_old`) for importance sampling in GRPO.
 
 ```bash
 # CORRECT - gets logprobs for training (REQUIRED!)
@@ -301,7 +299,7 @@ Only `server_type=vllm` calls the `/generate` endpoint which returns token-level
 
 **What happens without logprobs:**
 - The trainer will raise an error: "GRPO requires inference_logprobs for importance sampling!"
-- Without the reference policy, GRPO degenerates to vanilla REINFORCE (leads to reward hacking)
+- Without rollout logprobs, GRPO updates are unsafe and training is aborted.
 
 **How logprobs flow through the system:**
 1. Environment calls vLLM `/generate` with `logprobs=true`
@@ -310,31 +308,24 @@ Only `server_type=vllm` calls the `/generate` endpoint which returns token-level
 4. Trainer extracts and aligns logprobs with training labels
 5. GRPO loss uses logprobs as π_old for importance sampling ratio
 
-### 2. KL Coefficient and Clipping Are Essential
+### 2. Clipping Is Essential
 
-**CRITICAL:** Without these hyperparameters, training WILL collapse (reward hacking):
+**CRITICAL:** Keep clipping enabled to avoid unstable policy updates:
 
 ```bash
---kl-coef 0.0      # Default (disable KL penalty)
 --clip-eps 0.2     # Limits importance sampling ratio to [0.8, 1.2]
 ```
 
-**Why these matter:**
-- **KL Penalty** (β): Penalizes the policy for deviating from the reference policy (inference-time policy)
-  - Uses Schulman's unbiased estimator: `exp(-log_ratio) + log_ratio - 1`
-  - Higher β = more conservative updates
-  - Set to 0 to disable (NOT recommended - leads to instability)
-
+**Why this matters:**
 - **PPO Clipping** (ε): Clips the importance sampling ratio to `[1-ε, 1+ε]`
   - Prevents catastrophically large policy updates
   - Takes pessimistic bound (conservative update)
 
-**Symptoms of missing/misconfigured KL/clipping:**
+**Symptoms of missing/misconfigured clipping:**
 - Accuracy drops dramatically (e.g., 59% → 7%)
 - Loss goes to very negative values (< -10)
 - Model outputs become repetitive/degenerate
 - `mean_ratio` diverges far from 1.0
-- `mean_kl` explodes (> 1.0)
 
 ### 3. Use LR Warmup for Stability
 
@@ -348,7 +339,6 @@ This linearly ramps learning rate from 0 to `--lr` over the first N optimizer st
 
 **Healthy training metrics:**
 - `mean_ratio`: 0.8 - 1.2 (close to 1.0)
-- `mean_kl`: 0.01 - 0.1
 - `clipped_fraction`: < 0.3 (< 30% of tokens clipped)
 
 ### 3. Memory Budgeting for Large Models
@@ -597,10 +587,8 @@ python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--kl-coef` | 0.0 | KL penalty strength (higher = more conservative) |
 | `--clip-eps` | 0.2 | PPO clipping range [1-ε, 1+ε] |
 | `--lr` | 1e-5 | Learning rate (NOT --learning-rate) |
-| `--no-reference-logprobs` | False | Disable GRPO reference logprobs (falls back to REINFORCE-style updates) |
 
 ### LoRA Arguments
 
@@ -711,7 +699,7 @@ If your model has `N` layers:
 | `api.py` | Communication with Atropos API (registration, batch fetching) |
 | `data.py` | Batch preprocessing, padding, logprob extraction and alignment |
 | `model.py` | Model loading, CUDA IPC attachment, tensor mapping (QKV/Gate fusion) |
-| `training.py` | GRPO loss computation (importance sampling, KL penalty, clipping) |
+| `training.py` | GRPO loss computation (importance sampling and clipping) |
 | `trainers.py` | Mode-specific training loops (4 implementations + optimizer selection) |
 | `vllm_api_server.py` | Custom vLLM server with `/generate` endpoint and LoRA support |
 | `vllm_manager.py` | vLLM process lifecycle management (launch, health checks, termination) |
@@ -754,7 +742,6 @@ If your model has `N` layers:
       │  │  │  ├─ Compute log probabilities
       │  │  │  ├─ Importance sampling ratio (using inference logprobs)
       │  │  │  ├─ PPO clipping
-      │  │  │  ├─ Schulman KL penalty
       │  │  │  └─ Return loss + metrics
       │  │  └─ Backward pass (accumulate gradients)
       │  ├─ Clip gradients (norm=1.0)
@@ -935,17 +922,12 @@ If your model has `N` layers:
    - surr2 = clipped_ratio * advantage
    - policy_loss = -min(surr1, surr2)  # pessimistic bound
 
-5. KL Penalty (Schulman's estimator):
-   - kl = exp(-log_ratio) + log_ratio - 1
-   - Guaranteed non-negative, unbiased
-
-6. Total Loss:
-   - loss = policy_loss + β * kl_penalty
+5. Total Loss:
+   - loss = policy_loss
    - Scaled by 1/gradient_accumulation_steps
 
-7. Metrics:
+6. Metrics:
    - mean_ratio: Average importance sampling ratio
-   - mean_kl: Average KL divergence
    - clipped_fraction: % of tokens clipped
    - alignment/* : Token-level logprob alignment (verifies weight sharing)
 ```

@@ -61,14 +61,6 @@ class TrainingConfig(BaseModel):
     )
 
     # === GRPO/PPO Hyperparameters ===
-    kl_coef: float = Field(
-        0.0,
-        description=(
-            "Coefficient for sampled-token KL-like regularization against rollout/reference "
-            "logprobs. Higher values make updates more conservative. "
-            "Set to 0 to disable this term."
-        ),
-    )
     clip_eps: float = Field(
         0.2,
         description=(
@@ -77,15 +69,6 @@ class TrainingConfig(BaseModel):
             "Prevents large policy updates that could destabilize training."
         ),
     )
-    use_reference_logprobs: bool = Field(
-        True,
-        description=(
-            "Whether to use inference logprobs as the reference policy (π_old). "
-            "When True, implements proper GRPO with importance sampling. "
-            "When False, falls back to REINFORCE-style updates (not recommended)."
-        ),
-    )
-
     # === Device & Storage ===
     device: str = Field(
         "cuda" if torch.cuda.is_available() else "cpu", description="Device to train on"

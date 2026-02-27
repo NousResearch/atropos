@@ -11,6 +11,7 @@ from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
     BaseEnvConfig,
+    ServerBaseline,
     ScoredDataGroup,
 )
 from atroposlib.type_definitions import Item
@@ -55,7 +56,7 @@ class GSM8kEnv(BaseEnv):
         self.completion_lengths = []
 
     @classmethod
-    def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
+    def config_init(cls) -> Tuple[BaseEnvConfig, ServerBaseline]:
         env_config = BaseEnvConfig(
             tokenizer_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
             group_size=8,
@@ -67,16 +68,14 @@ class GSM8kEnv(BaseEnv):
             max_token_length=2048,
             wandb_name="gsm8k",
         )
-        server_configs = [
-            APIServerConfig(
-                model_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
-                base_url="http://localhost:9001/v1",
-                api_key="x",
-                num_requests_for_eval=256,
-            ),
-        ]
+        server_config = APIServerConfig(
+            model_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
+            base_url="http://localhost:9001/v1",
+            api_key="x",
+            num_requests_for_eval=256,
+        )
 
-        return env_config, server_configs
+        return env_config, server_config
 
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
         if wandb_metrics is None:

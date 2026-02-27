@@ -41,7 +41,7 @@ def main():
     print(f"Model: {config.model_name}")
     print(f"Mode: {config.weight_bridge_mode}")
     print(f"Training steps: {config.training_steps}")
-    print(f"GRPO: kl_coef={config.kl_coef}, clip_eps={config.clip_eps}")
+    print(f"GRPO: clip_eps={config.clip_eps}")
     print(f"{'='*60}\n")
 
     if config.weight_bridge_mode == "shared_vllm":

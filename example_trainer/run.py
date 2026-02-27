@@ -102,7 +102,7 @@ def main():
     print(f"GPU memory utilization: {args.gpu_memory_utilization}")
     print(f"Training steps: {args.training_steps}")
     print(f"Optimizer: {args.optimizer}")
-    print(f"GRPO: kl_coef={args.kl_coef}, clip_eps={args.clip_eps}")
+    print(f"GRPO: clip_eps={args.clip_eps}")
     print("=" * 60 + "\n")
 
     # Get the path to vllm_api_server.py
@@ -200,9 +200,7 @@ def main():
         save_path=args.save_path,
         checkpoint_interval=args.checkpoint_interval,
         # GRPO hyperparameters
-        kl_coef=args.kl_coef,
         clip_eps=args.clip_eps,
-        use_reference_logprobs=not getattr(args, "no_reference_logprobs", False),
         # vLLM settings
         vllm_port=args.vllm_port,
         vllm_gpu_memory_utilization=args.gpu_memory_utilization,

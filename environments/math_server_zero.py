@@ -4,7 +4,6 @@ Original Repository: https://github.com/Open-Reasoner-Zero/Open-Reasoner-Zero
 """
 
 import asyncio
-import os
 import random
 import re
 from concurrent.futures import ProcessPoolExecutor
@@ -139,43 +138,34 @@ class MathEnv(BaseEnv):
         self.iter = 0
 
     @classmethod
-    def config_init(cls) -> Tuple[RSConfig, List[APIServerConfig]]:
-        # Allow configuration via environment variables for running multiple instances
-        model_name = os.environ.get("MATH_ENV_MODEL", "Qwen/Qwen3-4B-Instruct-2507")
-        rollout_url = os.environ.get("MATH_ENV_ROLLOUT_URL", "http://localhost:8000")
-        vllm_url = os.environ.get("MATH_ENV_VLLM_URL", "http://localhost:9001/v1")
-        wandb_name = os.environ.get("MATH_ENV_WANDB_NAME", "math-zero-env")
-        max_token_length = int(os.environ.get("MATH_ENV_MAX_TOKENS", "32000"))
-        worker_timeout = float(os.environ.get("MATH_ENV_WORKER_TIMEOUT", "1500"))
-        
+    def config_init(cls) -> Tuple[RSConfig, ServerBaseline]:
+        model_name = "Qwen/Qwen3-4B-Instruct-2507"
         env_config = RSConfig(
             tokenizer_name=model_name,
             group_size=8,
             use_wandb=True,
-            rollout_server_url=rollout_url,
+            rollout_server_url="http://localhost:8000",
             total_steps=120,
             batch_size=64,
             steps_per_eval=20,
-            max_token_length=max_token_length,
-            start_tok_length=max_token_length,
-            wandb_name=wandb_name,
+            max_token_length=32000,
+            start_tok_length=32000,
+            wandb_name="math-zero-env",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
             max_num_workers_per_node=24,
-            worker_timeout=worker_timeout,
+            worker_timeout=1500.0,
         )
-        server_configs = [
-            APIServerConfig(
-                model_name=model_name,
-                base_url=vllm_url,
-                api_key="x",
-                num_requests_for_eval=256,
-                server_type="vllm",
-                weight=1.0,
-            )
-        ]
+        server_config = APIServerConfig(
+            model_name=model_name,
+            base_url="http://localhost:9001/v1",
+            api_key="x",
+            num_requests_for_eval=256,
+            server_type="vllm",
+            weight=1.0,
+        )
 
-        return env_config, server_configs
+        return env_config, server_config
 
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
         if wandb_metrics is None:

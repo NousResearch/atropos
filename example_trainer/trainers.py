@@ -330,7 +330,7 @@ def train_shared_vllm(config: TrainingConfig):
         data_fetch_time = time.time() - data_fetch_start
         benchmark_stats["data_fetch_times"].append(data_fetch_time)
 
-        # Training step with proper GRPO (importance sampling + KL penalty)
+        # Training step with proper GRPO (importance sampling + clipping)
         step_start = time.time()
         metrics = run_training_step(
             model,

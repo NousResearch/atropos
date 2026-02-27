@@ -46,7 +46,6 @@ BATCH_SIZE="${BATCH_SIZE:-4}"
 GRAD_ACCUM="${GRAD_ACCUM:-4}"
 LR="${LR:-1e-5}"
 WARMUP_STEPS="${WARMUP_STEPS:-5}"
-KL_COEF="${KL_COEF:-0.0}"
 CLIP_EPS="${CLIP_EPS:-0.2}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.45}"
 SHARED_GPU_MEMORY_UTILIZATION="${SHARED_GPU_MEMORY_UTILIZATION:-0.60}"
@@ -185,7 +184,6 @@ common_trainer_flags() {
     --gradient-accumulation-steps "$GRAD_ACCUM" \
     --warmup-steps "$WARMUP_STEPS" \
     --lr "$LR" \
-    --kl-coef "$KL_COEF" \
     --clip-eps "$CLIP_EPS" \
     --use-wandb \
     --wandb-project "$WANDB_PROJECT" \

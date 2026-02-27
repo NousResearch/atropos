@@ -158,21 +158,10 @@ def add_grpo_args(parser: argparse.ArgumentParser) -> None:
     """Add GRPO/PPO hyperparameter arguments."""
     group = parser.add_argument_group("GRPO/PPO Hyperparameters")
     group.add_argument(
-        "--kl-coef",
-        type=float,
-        default=0.0,
-        help="Sampled-token KL-like regularization coefficient. Higher = more conservative.",
-    )
-    group.add_argument(
         "--clip-eps",
         type=float,
         default=0.2,
         help="PPO-style clipping epsilon. Clips ratio to [1-eps, 1+eps].",
-    )
-    group.add_argument(
-        "--no-reference-logprobs",
-        action="store_true",
-        help="Disable use of inference logprobs as reference policy (not recommended).",
     )
 
 
@@ -434,9 +423,7 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         save_path=args.save_path,
         checkpoint_interval=getattr(args, "checkpoint_interval", 3),
         # GRPO/PPO hyperparameters
-        kl_coef=getattr(args, "kl_coef", 0.0),
         clip_eps=getattr(args, "clip_eps", 0.2),
-        use_reference_logprobs=not getattr(args, "no_reference_logprobs", False),
         adafactor_scale_parameter=getattr(args, "adafactor_scale_parameter", False),
         adafactor_relative_step=getattr(args, "adafactor_relative_step", False),
         # vLLM settings
