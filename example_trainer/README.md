@@ -8,6 +8,16 @@ This example uses `vLLM` for efficient inference during the (simulated) data gen
 
 **Note:** This script is intended as a *reference example* for API integration and basic training setup. It is not optimized for large-scale, efficient training.
 
+## On-Policy Distillation Scope
+
+The current OPD integration in Atropos is transport-only:
+
+- `ScoredDataGroup` / API payloads support `distill_token_ids` and `distill_logprobs`.
+- Atropos API stores and returns those fields through `/scored_data` and `/batch`.
+- Teacher orchestration (teacher endpoint calls, prompt rendering, top-k fetching) is intentionally out of scope in this PR.
+
+If you train with distillation, provide the two distill arrays from your environment or external data pipeline before posting to the API.
+
 ### Custom vLLM Server
 
 The `vllm_api_server.py` file in this directory provides a customized vLLM API server implementation based on vLLM's native API. This server exposes enhanced endpoints for token and logprob tracking. The `VLLMServer` class in `atroposlib/envs/server_handling/vllm_server.py` can connect to this server for direct access to vLLM's `/generate` endpoint with full token-level logprobs.

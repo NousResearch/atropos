@@ -256,6 +256,48 @@ Atropos repo contains an example trainer that should primarily be used as a refe
 
 To use the example trainer, see this page: [training example guide](example_trainer/README.md)
 
+## On-Policy Distillation (API + ScoredDataGroup Contract)
+
+Atropos now supports OPD at the transport layer by carrying distillation arrays
+through `ScoredDataGroup` and the API queue/batch endpoints.
+
+### Scope of this change
+
+- No teacher fetching/orchestration in `BaseEnv`.
+- Environments or external pipelines are responsible for populating distillation arrays.
+- API stores and returns those arrays unchanged.
+
+### Distillation payload fields
+
+Each scored group may include:
+
+- `distill_token_ids`: shape `[sequence][position][top_k]`
+- `distill_logprobs`: shape `[sequence][position][top_k]`
+
+These fields are optional, and when present are forwarded from:
+
+- environment -> `/scored_data` or `/scored_data_list`
+- API queue -> `/batch` -> trainer
+
+### Minimal producer example (environment side)
+
+```python
+scores["distill_token_ids"] = distill_token_ids
+scores["distill_logprobs"] = distill_logprobs
+```
+
+### Minimal consumer check (trainer/debug side)
+
+```bash
+curl -s http://localhost:8002/latest_example | jq '{has_ids:(.distill_token_ids!=null), has_lps:(.distill_logprobs!=null)}'
+```
+
+### Notes
+
+- The API does not validate cross-field semantics beyond schema typing.
+- Trainers should validate alignment assumptions they require (sequence length, per-position top-k, etc.).
+- Teacher-side architecture and prompt/rendering strategy are intentionally out of scope for this PR.
+
 ---
 
 ## Testing and Debugging Tools

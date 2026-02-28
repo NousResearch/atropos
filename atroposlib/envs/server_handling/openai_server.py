@@ -198,7 +198,21 @@ def resolve_openai_configs(
             raise FailedExecutionException(
                 f"Error parsing multi-server OpenAI configuration from YAML under '{OPENAI_NAMESPACE}': {e}"
             ) from e
+    elif isinstance(default_server_configs, APIServerConfig):
+        # Check APIServerConfig BEFORE ServerBaseline since APIServerConfig inherits from ServerBaseline
+        logger.info(
+            "Using single OpenAI server configuration based on merged settings (default/YAML/CLI)."
+        )
+        try:
+            final_openai_config = APIServerConfig(**openai_config_dict)
+        except Exception as e:
+            raise FailedExecutionException(
+                f"Error creating final OpenAI configuration from merged settings: {e}\n"
+                f"Merged Dict: {openai_config_dict}"
+            ) from e
+        server_configs = final_openai_config
     elif isinstance(default_server_configs, ServerBaseline):
+        # Pure ServerBaseline (not APIServerConfig) - no CLI overrides possible
         logger.info("Using ServerBaseline configuration.")
         server_configs = default_server_configs
     elif is_multi_server_default:

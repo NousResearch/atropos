@@ -7,6 +7,8 @@ This wrapper maintains a tree structure of sequences, where:
 - Branching occurs organically from different contexts and n > 1 completions
 """
 
+import logging
+import os
 import time
 import uuid
 import warnings
@@ -21,6 +23,8 @@ from openai.types.completion import Completion, CompletionChoice
 from pydantic import BaseModel
 
 from atroposlib.envs.server_handling.server_baseline import APIServer
+
+logger = logging.getLogger(__name__)
 
 
 class SequenceNode(BaseModel):
@@ -130,6 +134,10 @@ class ManagedServer:
         else:
             # Fallback for tokenizers without chat template
             return "\n".join([f"{m['role']}: {m['content']}" for m in messages])
+
+    def _debug_requests_enabled(self) -> bool:
+        """Enable verbose request construction logs with ATROPOS_DEBUG_REQUESTS=1."""
+        return os.getenv("ATROPOS_DEBUG_REQUESTS", "0") == "1"
 
     def _find_extending_node(self, input_text: str) -> Optional[SequenceNode]:
         """
@@ -284,6 +292,17 @@ class ManagedServer:
         completion_kwargs = kwargs.copy()
         completion_kwargs["prompt"] = prompt
         completion_kwargs.pop("messages", None)
+        if self._debug_requests_enabled():
+            msg_count = len(messages)
+            prompt_preview = prompt.replace("\n", "\\n")[:600]
+            logger.debug(
+                "[ATROPOS_REQ_DEBUG] chat_completion messages=%s n=%s max_tokens=%s temperature=%s",
+                msg_count,
+                completion_kwargs.get("n"),
+                completion_kwargs.get("max_tokens"),
+                completion_kwargs.get("temperature"),
+            )
+            logger.debug("[ATROPOS_REQ_DEBUG] prompt_preview=%r", prompt_preview)
 
         # Set model name if not provided
         if "model" not in completion_kwargs:
