@@ -439,7 +439,7 @@ class GSM8KConversationalStyleDPOEnv(BaseEnv):
             APIServerConfig(
                 model_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
                 base_url="https://inference-api.nousresearch.com/v1",
-                api_key="sk-3DvYKMv_-BfAoDSTfdSvEQ",
+                api_key="your-api-key-here",
                 num_requests_for_eval=256,  # Copied from gsm8k_server.py
             )
         ]
