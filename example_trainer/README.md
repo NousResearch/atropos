@@ -180,7 +180,7 @@ python -m example_trainer.vllm_api_server --model ... --enable-lora --enforce-ea
 # 3. Wait for vLLM health endpoint to return 200
 while ! curl -s http://localhost:9001/health > /dev/null; do sleep 1; done
 
-# 4. Start environment (MUST use --openai.server_type vllm for logprobs)
+# 4. Start environment (use --openai.server_type vllm for logprobs)
 python environments/gsm8k_server.py serve \
     --env.group_size 4 \
     --env.batch_size 16 \
@@ -290,10 +290,10 @@ environment uses the `/generate` path and includes token-level
 `inference_logprobs` in the trajectory payload consumed by the trainer.
 
 ```bash
-# CORRECT - gets logprobs for training (REQUIRED!)
+# gets logprobs for training
 --openai.server_type vllm
 
-# WRONG for this trainer path - missing rollout inference_logprobs
+# does NOT return rollout inference_logprobs — trainer will error
 --openai.server_type openai
 ```
 
@@ -304,24 +304,19 @@ environment uses the `/generate` path and includes token-level
 4. Trainer extracts and aligns logprobs with training labels
 5. GRPO loss uses these rollout logprobs in importance-ratio terms
 
-### 2. Clipping Is Essential
-
-Keep clipping enabled to avoid unstable policy updates:
+### 2. Clipping
 
 ```bash
 --clip-eps 0.2     # Limits importance sampling ratio to [0.8, 1.2]
 ```
-
-**Why this matters:**
-- **PPO Clipping** (ε): Clips the importance sampling ratio to `[1-ε, 1+ε]`
-  - Prevents catastrophically large policy updates
-  - Takes pessimistic bound (conservative update)
 
 **Symptoms of missing/misconfigured clipping:**
 - Accuracy drops dramatically (e.g., 59% → 7%)
 - Loss goes to very negative values (< -10)
 - Model outputs become repetitive/degenerate
 - `mean_ratio` diverges far from 1.0
+
+For background on clipping and importance sampling, see https://fengyao.notion.site/off-policy-rl
 
 ### 3. Use LR Warmup for Stability
 
