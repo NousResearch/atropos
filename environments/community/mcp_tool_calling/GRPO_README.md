@@ -86,7 +86,7 @@ atropos-grpo \
 
 ## Objective Notes
 
-- GRPO uses rollout/inference logprobs (`pi_old`) for importance-ratio computation.
+- GRPO uses rollout `inference_logprobs` for importance-ratio computation.
 - The trainer currently uses clipped importance-ratio updates without a separate frozen-reference-model KL term.
 
 ## Outputs
