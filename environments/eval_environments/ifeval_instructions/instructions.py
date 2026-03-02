@@ -716,7 +716,7 @@ class RephraseChecker(Instruction):
         r"""Checks if the rephrasing follows the instruction.
 
         Args:
-          value: A string representing the response, which is expected to rephras
+          value: A string representing the response, which is expected to rephrase
             the string of `instruction_args`.
 
         Returns:
