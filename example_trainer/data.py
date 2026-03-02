@@ -5,7 +5,7 @@ Handles data retrieval from Atropos API, padding, batching,
 and advantage normalization.
 
 Also extracts inference logprobs for proper GRPO loss computation:
-- Inference logprobs serve as π_old (reference policy) for importance sampling
+- Inference logprobs are used in importance-ratio computation
 - They are batched and padded to align token-by-token with training labels
 """
 

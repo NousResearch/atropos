@@ -287,7 +287,7 @@ def run_training_step(
         temperature_batches: List of temperature tensors
         config: Training configuration (includes clip_eps, warmup_steps)
         step_idx: Current global training step (0-based)
-        inference_logprob_batches: Batched logprobs from inference (π_old), aligned with labels
+        inference_logprob_batches: Rollout logprobs from inference, aligned with labels
 
     Returns:
         Dict of training metrics for this step
