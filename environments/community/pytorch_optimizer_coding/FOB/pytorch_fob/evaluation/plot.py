@@ -269,7 +269,7 @@ def get_num_rows(
     """each matrix has 2 params (on for x and y each), one value, and we aggregate over seeds;
     if there are more than these 4 parameter with different values,
     we want to put that in separate rows instead of aggregating over them.
-    returning: the number of rows (atleast 1) and the names of the cols"""
+    returning: the number of rows (at least 1) and the names of the cols"""
     necessary_rows = 0
 
     # the user might specify a value for the groups that we should split on in <split_groups>
@@ -367,7 +367,7 @@ def create_figure(dataframe_list: list[pd.DataFrame], config: AttributeDict):
     log_debug(f"{n_rows=} and {num_cols=}")
 
     # TODO, figsize was just hardcoded for (1, 2) grid and left to default for (1, 1) grid
-    #       probably not worth the hazzle to create something dynamic (atleast not now)
+    #       probably not worth the hassle to create something dynamic (at least not now)
     # EDIT: it was slightly adapted to allow num rows without being completely unreadable
     # margin = (num_subfigures - 1) * 0.3
     # figsize=(5*n_cols + margin, 2.5)
