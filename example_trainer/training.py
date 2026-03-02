@@ -74,8 +74,8 @@ def compute_grpo_loss(
     """
     Compute GRPO (Group Relative Policy Optimization) loss for a single micro-batch.
 
-    This implements proper GRPO/PPO with:
-    - Importance sampling ratio: policy(a|s) / policy_old(a|s)
+    This implements GRPO/PPO-style clipped ratio training with:
+    - Importance sampling ratio from current logprobs vs rollout inference_logprobs
     - PPO-style clipping to prevent large updates
 
     The loss encourages the model to:
@@ -89,7 +89,7 @@ def compute_grpo_loss(
         advantages: Advantage values [batch, 1]
         temperatures: Temperature values [batch, 1, 1]
         gradient_accumulation_steps: Number of accumulation steps (for scaling)
-        inference_logprobs: Logprobs from inference (π_old), aligned with labels [batch, seq_len]
+        inference_logprobs: Rollout logprobs from inference, aligned with labels [batch, seq_len]
         clip_eps: PPO clipping epsilon. Clips ratio to [1-eps, 1+eps]
 
     Returns:
@@ -163,7 +163,8 @@ def compute_grpo_loss(
                     f"    [DEBUG] Logprob gap: ref={ref_at_generated:.3f}, train={train_at_generated:.3f}"
                 )
 
-        # Compute importance sampling ratio: policy(a|s) / policy_old(a|s) = exp(log policy - log policy_old)
+        # Compute importance ratio from current training logprobs and rollout inference_logprobs.
+        # ratio = exp(current_logprob - rollout_inference_logprob)
         log_ratio = logp_per_token - ref_logprobs
         ratio = torch.exp(log_ratio)
 
@@ -217,7 +218,7 @@ def compute_grpo_loss(
             "  2. Ensure vLLM is returning logprobs in /generate response\n"
             "  3. Check that gsm8k_server is configured correctly\n"
             "\n"
-            "Without inference logprobs, training will cause reward hacking."
+            "This trainer path requires inference_logprobs and aborts without them."
         )
 
     # === Compute Additional Metrics ===

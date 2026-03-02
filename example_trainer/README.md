@@ -169,7 +169,7 @@ python -m example_trainer.grpo \
 ### Startup Order
 
 ```bash
-# CRITICAL: Follow this exact order!
+# Follow this startup order
 # 1. Start API first
 run-api --port 8002
 
@@ -306,7 +306,7 @@ environment uses the `/generate` path and includes token-level
 
 ### 2. Clipping Is Essential
 
-**CRITICAL:** Keep clipping enabled to avoid unstable policy updates:
+Keep clipping enabled to avoid unstable policy updates:
 
 ```bash
 --clip-eps 0.2     # Limits importance sampling ratio to [0.8, 1.2]
@@ -869,7 +869,7 @@ If your model has `N` layers:
          "tokens": [[tok1, tok2, ...], ...],  # group_size sequences
          "masks": [[mask1, mask2, ...], ...],  # -100 for prompt, token_id for generated
          "scores": [score1, score2, ...],      # rewards
-         "inference_logprobs": [[lp1, lp2, ...], ...],  # CRITICAL for GRPO!
+         "inference_logprobs": [[lp1, lp2, ...], ...],  # required for this GRPO trainer
          "generation_params": {"temperature": 1.0},
          ...
        }
