@@ -638,3 +638,43 @@ class APIServer(ABC):
             self.eval_request_timings.append(stat_dict["end"] - stat_dict["start"])
             self.eval_attempts_list.append(stat_dict["attempts"])
         return ret_data
+
+    async def get_logprobs(self, **kwargs) -> Dict[str, Any]:
+        """
+        Trainer-agnostic logprob API with normalized output schema.
+
+        This default implementation is built from `tokens_and_logprobs_completion`
+        and returns sampled-token logprobs (top-k singleton per position).
+
+        Returns:
+            Dict with:
+              - prompt_tokens: List[int]
+              - sequence_token_ids: List[List[int]]
+              - sequence_logprobs: List[List[float]]
+              - sequence_topk_token_ids: List[List[List[int]]]
+              - sequence_topk_logprobs: List[List[List[float]]]
+              - finish_reasons: List[Any]
+        """
+        (
+            prompt_tokens,
+            output_tokens_list,
+            output_logprobs_list,
+            finish_reasons,
+        ) = await self.tokens_and_logprobs_completion(**kwargs)
+
+        topk_token_ids = [
+            [[token_id] for token_id in seq_tokens] for seq_tokens in output_tokens_list
+        ]
+        topk_logprobs = [
+            [[logprob] for logprob in seq_logprobs]
+            for seq_logprobs in output_logprobs_list
+        ]
+
+        return {
+            "prompt_tokens": prompt_tokens,
+            "sequence_token_ids": output_tokens_list,
+            "sequence_logprobs": output_logprobs_list,
+            "sequence_topk_token_ids": topk_token_ids,
+            "sequence_topk_logprobs": topk_logprobs,
+            "finish_reasons": finish_reasons,
+        }
