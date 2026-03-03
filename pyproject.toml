@@ -46,11 +46,13 @@ rewardfns = [
     "torch"
 ]
 example_trainer = [
-    "atroposlib[rewardfns]",
-    "vllm",
+    "atroposlib[rewardfns, openai_endpoint]",
     "accelerate",
     "peft",
     "requests",
+]
+openai_endpoint = [
+    "vllm",
 ]
 dev = [
     "pytest",
