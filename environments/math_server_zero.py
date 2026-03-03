@@ -7,7 +7,7 @@ import asyncio
 import random
 import re
 from concurrent.futures import ProcessPoolExecutor
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import wandb
 from datasets import load_dataset
@@ -24,6 +24,7 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
     ServerBaseline,
 )
+from atroposlib.envs.server_handling.server_baseline import APIServerConfig
 
 prompt_format = (
     "A conversation between User and Assistant. The User asks a question, and the Assistant solves it. The Assistant "
@@ -119,7 +120,7 @@ class MathEnv(BaseEnv):
     def __init__(
         self,
         config: RSConfig,
-        server_configs: ServerBaseline,
+        server_configs: Union[ServerBaseline, List[APIServerConfig]],
         slurm=True,
         testing=False,
     ):
@@ -138,27 +139,33 @@ class MathEnv(BaseEnv):
 
     @classmethod
     def config_init(cls) -> Tuple[RSConfig, ServerBaseline]:
+        model_name = "Qwen/Qwen3-4B-Instruct-2507"
         env_config = RSConfig(
-            tokenizer_name="Qwen/Qwen2.5-7B",
-            group_size=16,
+            tokenizer_name=model_name,
+            group_size=8,
             use_wandb=True,
             rollout_server_url="http://localhost:8000",
-            total_steps=1000,
-            batch_size=1024,
-            steps_per_eval=25,
-            max_token_length=31000,  # 22000 // (2 ** i),
-            wandb_name="math",
+            total_steps=120,
+            batch_size=64,
+            steps_per_eval=20,
+            max_token_length=32000,
+            start_tok_length=32000,
+            wandb_name="math-zero-env",
             eval_handling=EvalHandlingEnum.LIMIT_TRAIN,
             eval_limit_ratio=0.1,
             max_num_workers_per_node=24,
+            worker_timeout=1500.0,
         )
-        server_configs = ServerBaseline(
-            model_name="Qwen/Qwen2.5-7B",
-            num_requests_for_eval=256,  # since evaling only on one...
+        server_config = APIServerConfig(
+            model_name=model_name,
+            base_url="http://localhost:9001/v1",
+            api_key="x",
+            num_requests_for_eval=256,
             server_type="vllm",
+            weight=1.0,
         )
 
-        return env_config, server_configs
+        return env_config, server_config
 
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
         if wandb_metrics is None:
@@ -259,7 +266,7 @@ class MathEnv(BaseEnv):
             completion = await managed.completion(
                 prompt=question,
                 n=1,
-                max_tokens=32765,
+                max_tokens=self.config.max_token_length,
                 temperature=0.0,
                 split="eval",
                 stop=stop_list,
@@ -283,6 +290,10 @@ class MathEnv(BaseEnv):
     async def evaluate(self, *args, **kwargs):
         if not self.config.run_evaluation:
             return
+        import time
+
+        start_time = time.time()
+
         eval_tasks = []
         for item in self.test:
             eval_tasks.append(self.rollout_and_score_eval(item[0], item[1], item[2]))
@@ -292,17 +303,53 @@ class MathEnv(BaseEnv):
             if subset not in task_lists:
                 task_lists[subset] = list()
             task_lists[subset].append(score)
-        # Now get the average
+
+        # Build metrics dictionary for saving
+        metrics = {}
+
+        # Now get the average per subset
         for subset, scores in task_lists.items():
-            self.eval_metrics.append(
-                (f"eval/{subset}_percent_correct", sum(scores) / len(scores))
-            )
+            accuracy = sum(scores) / len(scores)
+            metrics[f"{subset}_accuracy"] = accuracy
+            metrics[f"{subset}_total"] = len(scores)
+            metrics[f"{subset}_correct"] = sum(scores)
+            self.eval_metrics.append((f"eval/{subset}_percent_correct", accuracy))
+
         # overall score
-        scores = []
+        all_scores = []
         for subset, score in task_lists.items():
-            scores.extend(score)
-        self.eval_metrics.append(
-            ("eval/overall_percent_correct", sum(scores) / len(scores))
+            all_scores.extend(score)
+        overall_accuracy = sum(all_scores) / len(all_scores)
+        metrics["overall_accuracy"] = overall_accuracy
+        metrics["overall_total"] = len(all_scores)
+        metrics["overall_correct"] = sum(all_scores)
+        self.eval_metrics.append(("eval/overall_percent_correct", overall_accuracy))
+
+        end_time = time.time()
+
+        # Print results to console
+        print("\n" + "=" * 60)
+        print("Math Zero Evaluation Results")
+        print("=" * 60)
+        print(
+            f"Overall Accuracy: {overall_accuracy:.2%} ({sum(all_scores)}/{len(all_scores)})"
+        )
+        print("\nPer-subset breakdown:")
+        for subset, scores in sorted(task_lists.items()):
+            acc = sum(scores) / len(scores)
+            print(f"  {subset}: {acc:.2%} ({sum(scores)}/{len(scores)})")
+        print("=" * 60 + "\n")
+
+        # Save results to disk
+        await self.evaluate_log(
+            metrics=metrics,
+            task_name="math_zero",
+            start_time=start_time,
+            end_time=end_time,
+            generation_parameters={
+                "max_tokens": self.config.max_token_length,
+                "temperature": 0.0,
+            },
         )
 
     async def collect_trajectories(self, item) -> Tuple[List, List]:
