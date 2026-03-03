@@ -564,7 +564,9 @@ class ManagedServer:
             and prompt is not None
         ):
             extending_node = self._find_extending_node(prompt)
-            request_kwargs["input_ids"] = self._compute_input_ids(prompt, extending_node)
+            request_kwargs["input_ids"] = self._compute_input_ids(
+                prompt, extending_node
+            )
 
         if hasattr(self.server, "get_logprobs"):
             payload = await self.server.get_logprobs(**request_kwargs)
