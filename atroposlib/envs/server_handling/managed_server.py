@@ -134,7 +134,9 @@ class ManagedServer:
             except Exception as e:
                 warnings.warn(
                     f"Failed to create ToolCallTranslator: {e}. "
-                    "Tool call parsing will be disabled.",
+                    "Tool call parsing will be disabled. "
+                    "Install vllm to enable structured tool call extraction from model output (pip install vllm "
+                    "or pip install 'atroposlib[openai_endpoint]').",
                     stacklevel=2,
                 )
                 self._tool_parser_name = None  # Don't retry
