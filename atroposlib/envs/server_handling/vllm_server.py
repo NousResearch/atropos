@@ -295,8 +295,7 @@ class VLLMServer(APIServer):
         # Only normalize BOS for tokenizer-encoded prompt text.
         if (
             from_prompt_text
-            and
-            len(prompt_tokens) >= 2
+            and len(prompt_tokens) >= 2
             and prompt_tokens[0] == self.tokenizer.bos_token_id == prompt_tokens[1]
         ):
             prompt_tokens = prompt_tokens[1:]
