@@ -624,7 +624,6 @@ Fetch logprobs with a normalized schema that is backend-agnostic.
   "prompt_tokens": List[int],
   "prompt_topk_token_ids": List[List[int]],       # [pos][k]
   "prompt_topk_logprobs": List[List[float]],      # [pos][k]
-  "finish_reasons": List[Any],                     # optional compatibility field
 }
 ```
 

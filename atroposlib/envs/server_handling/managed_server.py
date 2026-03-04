@@ -711,13 +711,11 @@ class DummyManagedServer:
         This keeps interface parity with ManagedServer while making it explicit
         that results are placeholders and not suitable for training.
         """
-        n = int(kwargs.get("n", 1))
         prompt_tokens = self.DUMMY_TOKENS[:]
         return {
             "prompt_tokens": prompt_tokens,
             "prompt_topk_token_ids": [[tok] for tok in prompt_tokens],
             "prompt_topk_logprobs": [[self.DUMMY_LOGPROBS[0]] for _ in prompt_tokens],
-            "finish_reasons": ["stop"] * n,  # Retained for compatibility in callers.
         }
 
 
