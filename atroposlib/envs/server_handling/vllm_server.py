@@ -284,14 +284,18 @@ class VLLMServer(APIServer):
         top_k = max(1, top_k)
 
         # Use input_ids if provided (from ManagedServer), otherwise tokenize prompt
+        from_prompt_text = False
         if "input_ids" in kwargs:
             prompt_tokens = kwargs.pop("input_ids")
             kwargs.pop("prompt", None)
         else:
             prompt_tokens = self.tokenizer.encode(kwargs.pop("prompt"))
+            from_prompt_text = True
 
-        # Check for double BOS token.
+        # Only normalize BOS for tokenizer-encoded prompt text.
         if (
+            from_prompt_text
+            and
             len(prompt_tokens) >= 2
             and prompt_tokens[0] == self.tokenizer.bos_token_id == prompt_tokens[1]
         ):
@@ -306,6 +310,11 @@ class VLLMServer(APIServer):
         request_data = {"prompt": {"prompt_token_ids": prompt_tokens}}
         request_data["prompt_logprobs"] = top_k
         request_data.update(kwargs)
+        # This API is prompt-logprobs focused, not generation-focused.
+        request_data["n"] = 1
+        request_data["temperature"] = 0.0
+        request_data["top_p"] = 1.0
+        request_data.setdefault("max_tokens", 1)
 
         # Keep semaphore behavior consistent with other server calls.
         split = request_data.pop("split", "train")

@@ -293,24 +293,12 @@ async def test_get_logprobs_normalized_schema(mock_server):
 
 
 @pytest.mark.asyncio
-async def test_get_logprobs_strict_mode_rejects_misaligned_payload(mock_server):
-    """ManagedServer.get_logprobs fails fast on malformed prompt top-k payload."""
+async def test_get_logprobs_strict_mode_requires_backend_impl(mock_server):
+    """ManagedServer.get_logprobs requires backend get_logprobs in strict mode."""
     managed = ManagedServer(mock_server, tokenizer=mock_server.tokenizer)
 
     prompt = "Hello"
-    prompt_tokens = mock_server.tokenizer.encode(prompt)
-
-    async def _mock_get_logprobs(**kwargs):
-        return {
-            "prompt_tokens": prompt_tokens,
-            "prompt_topk_token_ids": [[tok] for tok in prompt_tokens],
-            # Missing one row on purpose -> misaligned with prompt length
-            "prompt_topk_logprobs": [[-0.1] for _ in prompt_tokens[:-1]],
-        }
-
-    mock_server.get_logprobs = _mock_get_logprobs
-
-    with pytest.raises(ValueError, match="align with prompt_tokens length"):
+    with pytest.raises(NotImplementedError, match="does not implement get_logprobs"):
         await managed.get_logprobs(prompt=prompt, n=1)
 
 

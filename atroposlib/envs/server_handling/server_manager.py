@@ -355,19 +355,6 @@ class ServerManager:
           - prompt_topk_token_ids
           - prompt_topk_logprobs
         """
-        n = kwargs.get("n", 1)
-        if n > self.max_n_completions:
-            # Prompt logprobs are prompt-level; n-splitting does not change prompt arrays.
-            results = []
-            total_n = n
-            while total_n > 0:
-                n_to_use = min(total_n, self.max_n_completions)
-                kwargs["n"] = n_to_use
-                results.append(self.get_logprobs(**kwargs))
-                total_n -= n_to_use
-            results = await asyncio.gather(*results)
-            return results[0]
-
         is_train = kwargs.pop("split", "train") == "train"
         most_available_server = 0
         most_available_server_num_slots = -1

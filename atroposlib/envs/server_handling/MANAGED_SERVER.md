@@ -36,6 +36,7 @@ async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
 
 - ✅ **Automatic Tokenization**: No need to manually tokenize prompts and completions
 - ✅ **Automatic Masking**: Prompt tokens automatically masked with -100, logprobs with 1.0
+- ✅ **Perfect Alignment**: Tokens and logprobs align positionally for tracked sequences
 - ✅ **Normalized Alignment Contract**: Tokens/logprobs are shape-normalized for downstream consumers
 - ✅ **Multi-turn Support**: Automatically handles conversation extensions
 - ✅ **Branching Support**: Handles n>1 completions naturally
@@ -628,8 +629,8 @@ Fetch logprobs with a normalized schema that is backend-agnostic.
 ```
 
 **Notes:**
-- Strict mode: backend must provide real prompt top-k arrays with aligned shapes.
-- Missing fields or shape mismatches fail fast with explicit errors.
+- Strict mode: backend must provide real prompt top-k arrays.
+- Missing keys should be treated as backend contract violations.
 
 #### `def get_state() -> Dict[str, Any]`
 Get the current state of tracked sequences.
@@ -736,7 +737,7 @@ With this flag set, `managed_server()` will return a `DummyManagedServer` that:
 - Provides the same interface as `ManagedServer`
 - Returns **fixed placeholder values** for tokens and logprobs (constant synthetic arrays)
 - Uses simple text formatting for `full_text`: `role:content` joined by `\n\n`
-- Implements `get_logprobs(...)` with the same normalized keys as `ManagedServer`, but placeholder values (not suitable for training)
+- Raises for `get_logprobs(...)` in strict mode (no fake prompt-logprob payload)
 
 ### When to Use DummyManagedServer
 
@@ -769,8 +770,8 @@ async with self.server.managed_server() as managed:
         print(node.tokens[:5])     # placeholder values
         print(node.logprobs[:5])   # placeholder values
 
-    payload = await managed.get_logprobs(messages=messages, n=4)
-    print(payload.keys())  # normalized schema keys
+    # Strict mode: get_logprobs is not available on DummyManagedServer
+    # and will raise NotImplementedError.
 ```
 
 ### Recommendation

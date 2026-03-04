@@ -10,13 +10,13 @@ For automatic token and logprob tracking, see the [ManagedServer Guide](MANAGED_
 
 ### Normalized `get_logprobs` API
 
-`ManagedServer` and server backends now expose a normalized `get_logprobs(...)` interface so callers can consume a single schema across backends:
+`ManagedServer` and server backends expose a normalized `get_logprobs(...)` interface so callers can consume a single schema across backends:
 
 - `prompt_tokens`
 - `prompt_topk_token_ids`
 - `prompt_topk_logprobs`
 
-Strict mode: backends must return real prompt top-k arrays. Missing keys or malformed shapes fail fast.
+Backends must return real prompt top-k arrays. Missing keys or malformed shapes fail fast.
 
 ## Reasoning Model Support
 
