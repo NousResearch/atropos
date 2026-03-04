@@ -5,6 +5,7 @@ Tests for API server message handling, particularly for SFT (Supervised Fine-Tun
 import os
 import signal
 import subprocess
+import sys
 import time
 
 import pytest
@@ -30,7 +31,7 @@ def api_server():
     # Start the API server as a subprocess
     proc = subprocess.Popen(
         [
-            "python",
+            sys.executable,
             "-m",
             "atroposlib.cli.run_api",
             "--host",
