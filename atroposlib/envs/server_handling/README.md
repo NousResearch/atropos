@@ -16,7 +16,7 @@ For automatic token and logprob tracking, see the [ManagedServer Guide](MANAGED_
 - `prompt_topk_token_ids`
 - `prompt_topk_logprobs`
 
-For backends that only expose sampled-token logprobs, prompt top-k arrays are synthesized with `k=1` for interface compatibility.
+Strict mode: backends must return real prompt top-k arrays. Missing keys or malformed shapes fail fast.
 
 ## Reasoning Model Support
 

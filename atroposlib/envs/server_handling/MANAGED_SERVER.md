@@ -628,8 +628,8 @@ Fetch logprobs with a normalized schema that is backend-agnostic.
 ```
 
 **Notes:**
-- If the backend only returns sampled-token logprobs, ManagedServer synthesizes `k=1` singleton prompt top-k arrays.
-- This method is prompt-focused; richer top-k depends on backend support.
+- Strict mode: backend must provide real prompt top-k arrays with aligned shapes.
+- Missing fields or shape mismatches fail fast with explicit errors.
 
 #### `def get_state() -> Dict[str, Any]`
 Get the current state of tracked sequences.
