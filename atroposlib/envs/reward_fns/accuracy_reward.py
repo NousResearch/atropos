@@ -24,7 +24,6 @@ def _extract_final_answer(text: str) -> str:
 
     Handles formats like:
     - "#### 42" (GSM8K style)
-    - "The answer is 42"
     - "\\boxed{42}"
 
     Returns the extracted answer or the original text if no pattern is found.
