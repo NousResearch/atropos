@@ -622,17 +622,15 @@ Fetch logprobs with a normalized schema that is backend-agnostic.
 ```python
 {
   "prompt_tokens": List[int],
-  "sequence_token_ids": List[List[int]],          # [seq][pos]
-  "sequence_logprobs": List[List[float]],         # [seq][pos]
-  "sequence_topk_token_ids": List[List[List[int]]],   # [seq][pos][k]
-  "sequence_topk_logprobs": List[List[List[float]]],  # [seq][pos][k]
-  "finish_reasons": List[Any],
+  "prompt_topk_token_ids": List[List[int]],       # [pos][k]
+  "prompt_topk_logprobs": List[List[float]],      # [pos][k]
+  "finish_reasons": List[Any],                     # optional compatibility field
 }
 ```
 
 **Notes:**
-- If the backend only returns sampled-token logprobs, ManagedServer synthesizes `k=1` singleton top-k arrays.
-- This method is for transport/interface consistency; richer top-k depends on backend support.
+- If the backend only returns sampled-token logprobs, ManagedServer synthesizes `k=1` singleton prompt top-k arrays.
+- This method is prompt-focused; richer top-k depends on backend support.
 
 #### `def get_state() -> Dict[str, Any]`
 Get the current state of tracked sequences.

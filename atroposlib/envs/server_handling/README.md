@@ -13,13 +13,11 @@ For automatic token and logprob tracking, see the [ManagedServer Guide](MANAGED_
 `ManagedServer` and server backends now expose a normalized `get_logprobs(...)` interface so callers can consume a single schema across backends:
 
 - `prompt_tokens`
-- `sequence_token_ids`
-- `sequence_logprobs`
-- `sequence_topk_token_ids`
-- `sequence_topk_logprobs`
+- `prompt_topk_token_ids`
+- `prompt_topk_logprobs`
 - `finish_reasons`
 
-For backends that only expose sampled-token logprobs, top-k arrays are synthesized with `k=1` for interface compatibility.
+For backends that only expose sampled-token logprobs, prompt top-k arrays are synthesized with `k=1` for interface compatibility.
 
 ## Reasoning Model Support
 
