@@ -581,9 +581,7 @@ class ManagedServer:
         required = ("prompt_tokens", "prompt_topk_token_ids", "prompt_topk_logprobs")
         missing = [k for k in required if k not in payload]
         if missing:
-            raise ValueError(
-                f"get_logprobs response missing required keys: {missing}"
-            )
+            raise ValueError(f"get_logprobs response missing required keys: {missing}")
 
         prompt_tokens = payload["prompt_tokens"]
         token_ids = payload["prompt_topk_token_ids"]
@@ -596,9 +594,7 @@ class ManagedServer:
                 "prompt_topk_token_ids and prompt_topk_logprobs must be list-of-list."
             )
         if len(token_ids) != len(prompt_tokens) or len(logprobs) != len(prompt_tokens):
-            raise ValueError(
-                "prompt_topk arrays must align with prompt_tokens length."
-            )
+            raise ValueError("prompt_topk arrays must align with prompt_tokens length.")
 
         for idx, (tok_row, lp_row) in enumerate(zip(token_ids, logprobs)):
             if not isinstance(tok_row, list) or not isinstance(lp_row, list):
