@@ -384,6 +384,7 @@ class ServerManager:
         self,
         tokenizer=None,
         base_url: Optional[str] = None,
+        preserve_think_blocks: bool = False,
     ):
         """
         Context manager that provides a ManagedServer instance.
@@ -397,10 +398,13 @@ class ServerManager:
 
         Args:
             tokenizer: Optional tokenizer to use. If not provided, will attempt to
-                      extract from server or create from model name.
+                        extract from server or create from model name.
             base_url: Pin the session to a specific backend server by its base_url.
-                     In production, this comes from the atropos API's server allocation.
-
+                        In production, this comes from the atropos API's server allocation.
+            preserve_think_blocks: If True, preserves <think> blocks in assistant messages,
+                        which are sometimes stripped by chat templates. Defaults to False.
+                        Usually not needed, since the chat template should be configured
+                        to preserve thinking blocks until a user message arrives.
         Yields:
             ManagedServer, DummyManagedServer, or ProxyManagedServer instance
 
@@ -502,6 +506,7 @@ class ServerManager:
                 server=selected_server,
                 tokenizer=tokenizer,
                 tool_parser=self.tool_parser,
+                preserve_think_blocks=preserve_think_blocks,
             )
 
             try:

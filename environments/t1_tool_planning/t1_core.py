@@ -201,7 +201,9 @@ async def collect_multistep_trajectory(
         f"collect_multistep_trajectory: {len(conversation)} turns, temp={temperature}"
     )
 
-    async with server.managed_server(tokenizer=tokenizer) as managed:
+    async with server.managed_server(
+        tokenizer=tokenizer, preserve_think_blocks=True
+    ) as managed:
         for i, turn in enumerate(conversation):
             role = turn["Role"].strip().lower()
 

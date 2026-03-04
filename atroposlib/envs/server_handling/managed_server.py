@@ -63,6 +63,7 @@ class ManagedServer:
         tokenizer: Optional[Any] = None,
         track_tree: bool = False,
         tool_parser: Optional[str] = None,
+        preserve_think_blocks: bool = False,
     ):
         """
         Initialize the managed server.
@@ -79,12 +80,17 @@ class ManagedServer:
                         chat_completion(). The parser handles extraction of structured
                         tool calls from raw model output. See
                         ToolParserManager.list_registered() for available parsers.
+            preserve_think_blocks: If True, preserves <think> blocks in assistant messages,
+                        which are sometimes stripped by chat templates. Defaults to False.
+                        Usually not needed, since the chat template should be configured
+                        to preserve thinking blocks until a user message arrives.
         """
         self.server = server
         self.tokenizer = tokenizer
         self.track_tree = track_tree
         self._tool_parser_name = tool_parser
         self._translator = None  # Lazy init
+        self._preserve_think_blocks = preserve_think_blocks
 
         # Initialize storage based on mode
         if track_tree:
@@ -179,10 +185,11 @@ class ManagedServer:
                 len(messages) == 0 or messages[-1].get("role") != "assistant"
             )
 
-            # Protect <think> blocks in assistant messages — some chat templates
-            # (e.g. Qwen3) strip them during re-rendering, which breaks prefix
-            # matching for multi-turn sequence extension.
-            messages = self._protect_think_blocks(messages)
+            if not self._preserve_think_blocks:
+                # Protect <think> blocks in assistant messages — some chat templates
+                # (e.g. Qwen3) strip them during re-rendering, which breaks prefix
+                # matching for multi-turn sequence extension.
+                messages = self._protect_think_blocks(messages)
 
             # Build kwargs
             template_kwargs = {
