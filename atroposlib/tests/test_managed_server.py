@@ -4,6 +4,9 @@ import pytest
 
 from atroposlib.envs.server_handling.managed_server import ManagedServer
 from atroposlib.envs.server_handling.server_harness import ServerHarness
+from atroposlib.envs.server_handling.tool_call_translator import VLLM_AVAILABLE
+
+skip_no_vllm = pytest.mark.skipif(not VLLM_AVAILABLE, reason="vLLM not installed")
 
 
 class MockTokenizer:
@@ -553,6 +556,7 @@ def _setup_chat_completion(server, tokenizer, messages, output_texts, tools=None
 
 
 @pytest.mark.asyncio
+@skip_no_vllm
 async def test_tool_call_parsing_outbound(mock_server_with_tools):
     """Model generates <tool_call> → chat_completion returns structured tool_calls."""
     managed = ManagedServer(
@@ -593,6 +597,7 @@ async def test_tool_call_parsing_outbound(mock_server_with_tools):
 
 
 @pytest.mark.asyncio
+@skip_no_vllm
 async def test_tool_choice_none_skips(mock_server_with_tools):
     """tool_choice='none' returns raw text, no parsing."""
     managed = ManagedServer(
@@ -647,6 +652,7 @@ async def test_no_tool_parser_passes_through(mock_server_with_tools):
 
 
 @pytest.mark.asyncio
+@skip_no_vllm
 async def test_tool_call_multi_turn_extends_node(mock_server_with_tools):
     """Multi-turn with tool calls should extend to 1 node."""
     managed = ManagedServer(
@@ -708,6 +714,7 @@ async def test_tool_call_multi_turn_extends_node(mock_server_with_tools):
 
 
 @pytest.mark.asyncio
+@skip_no_vllm
 async def test_tool_call_multiple_tools_parsed(mock_server_with_tools):
     """Multiple tool calls in one response are all parsed."""
     managed = ManagedServer(
@@ -744,6 +751,7 @@ async def test_tool_call_multiple_tools_parsed(mock_server_with_tools):
 
 
 @pytest.mark.asyncio
+@skip_no_vllm
 async def test_tool_call_node_masking(mock_server_with_tools):
     """Nodes have proper masking even with tool parsing active."""
     managed = ManagedServer(

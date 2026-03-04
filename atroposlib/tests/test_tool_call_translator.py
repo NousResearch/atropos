@@ -7,7 +7,12 @@ import json
 
 import pytest
 
-from atroposlib.envs.server_handling.tool_call_translator import ToolCallTranslator
+from atroposlib.envs.server_handling.tool_call_translator import (
+    VLLM_AVAILABLE,
+    ToolCallTranslator,
+)
+
+pytestmark = pytest.mark.skipif(not VLLM_AVAILABLE, reason="vLLM not installed")
 
 # ---------------------------------------------------------------------------
 # Mock tokenizer (same one from test_managed_server.py)

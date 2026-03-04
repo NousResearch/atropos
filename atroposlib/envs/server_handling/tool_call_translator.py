@@ -208,11 +208,20 @@ class ToolCallTranslator:
 
             if role == "assistant" and msg.get("tool_calls"):
                 # Reconstruct raw text from tool_calls
+                first_id = (
+                    msg["tool_calls"][0].get("id", "") if msg["tool_calls"] else ""
+                )
+                is_exact = first_id in self.call_id_to_raw_text
                 raw_text = self.reconstruct_raw_text_from_tool_calls(msg["tool_calls"])
-                # Prepend any content that came before the tool calls
-                content = msg.get("content") or ""
-                if content:
-                    raw_text = content + "\n" + raw_text
+
+                if not is_exact:
+                    # Fallback reconstruction — prepend any content (e.g. <think>)
+                    # that came before the tool calls
+                    content = msg.get("content") or ""
+                    if content:
+                        raw_text = content + "\n" + raw_text
+                # When exact lookup succeeds, raw_text already contains
+                # the full model output (including any <think> blocks)
 
                 converted.append(
                     {

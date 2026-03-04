@@ -13,6 +13,9 @@ from fastapi.testclient import TestClient
 from atroposlib.envs.server_handling.managed_server_proxy import create_app
 from atroposlib.envs.server_handling.server_harness import ServerHarness
 from atroposlib.envs.server_handling.server_manager import ServerManager
+from atroposlib.envs.server_handling.tool_call_translator import VLLM_AVAILABLE
+
+skip_no_vllm = pytest.mark.skipif(not VLLM_AVAILABLE, reason="vLLM not installed")
 
 # ---------------------------------------------------------------------------
 # Mock tokenizer (same as test_managed_server.py / test_tool_call_translator.py)
@@ -304,6 +307,7 @@ class TestChatCompletions:
 # ---------------------------------------------------------------------------
 
 
+@skip_no_vllm
 class TestToolCalls:
     def test_tool_call_outbound(self, client_and_backend):
         """Model generates <tool_call> tags → response has structured tool_calls."""
@@ -535,6 +539,7 @@ class TestNodes:
 # ---------------------------------------------------------------------------
 
 
+@skip_no_vllm
 class TestMultiStepNodeHandling:
     """Test that multi-step conversations with tool calls produce exactly 1 node.
 
