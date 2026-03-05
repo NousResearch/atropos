@@ -8,6 +8,16 @@ For automatic token and logprob tracking, see the [ManagedServer Guide](MANAGED_
 
 > **Note:** OpenAI endpoints do not support token IDs/logprobs required for ManagedServer. Set `ATROPOS_ALLOW_DUMMY_MANAGED_SERVER=1` to use a placeholder implementation for testing/evaluation. See [OpenAI Endpoint Limitations](MANAGED_SERVER.md#openai-endpoint-limitations) for details.
 
+### Normalized `get_logprobs` API
+
+`ManagedServer` and supported server backends expose a normalized `get_logprobs(...)` interface so callers can consume a single schema:
+
+- `prompt_tokens`
+- `prompt_topk_token_ids`
+- `prompt_topk_logprobs`
+
+Backends are expected to return real prompt top-k arrays (`[pos][k]`) matching this schema.
+
 ## Reasoning Model Support
 
 The `ReasoningConfig` class enables support for reasoning/thinking models across different providers.

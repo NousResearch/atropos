@@ -3,6 +3,7 @@
 
 import asyncio
 import warnings
+from typing import Any, Dict, List, Tuple
 
 import aiohttp
 import openai
@@ -230,6 +231,129 @@ class VLLMServer(APIServer):
             output_logprobs_list,
             finish_reasons_list,
         )
+
+    @staticmethod
+    def _normalize_topk_entry(
+        token_logprobs_entry: Any,
+    ) -> Tuple[List[int], List[float]]:
+        """
+        Normalize a single token-position logprob payload into parallel top-k arrays.
+
+        Supports common structures from vLLM responses:
+          - dict: {token_id: logprob, ...}
+          - list[dict]: [{token_id: logprob}, ...]
+        """
+        if isinstance(token_logprobs_entry, dict):
+            items = list(token_logprobs_entry.items())
+            return [int(k) for k, _ in items], [float(v) for _, v in items]
+
+        if isinstance(token_logprobs_entry, list):
+            token_ids: List[int] = []
+            logprobs: List[float] = []
+            for item in token_logprobs_entry:
+                if not isinstance(item, dict):
+                    continue
+                for key, value in item.items():
+                    token_ids.append(int(key))
+                    logprobs.append(float(value))
+            return token_ids, logprobs
+
+        return [], []
+
+    async def _get_logprobs_wrapper(self, **kwargs) -> Dict[str, Any]:
+        """
+        Fetch normalized prompt logprobs from vLLM /generate with optional top-k.
+
+        Args:
+            top_k / top_logprobs: Optional number of logprobs per position.
+                                 Defaults to 1.
+            prompt or input_ids: Input text or token IDs.
+
+        Returns:
+            Normalized dict:
+              - prompt_tokens
+              - prompt_topk_token_ids
+              - prompt_topk_logprobs
+        """
+        assert (
+            kwargs.get("prompt", None) is not None
+            or kwargs.get("input_ids", None) is not None
+        ), "Prompt or input_ids is required for get_logprobs!"
+
+        top_k = int(kwargs.pop("top_k", kwargs.pop("top_logprobs", 1)))
+        top_k = max(1, top_k)
+
+        # Use input_ids if provided (from ManagedServer), otherwise tokenize prompt
+        from_prompt_text = False
+        if "input_ids" in kwargs:
+            prompt_tokens = kwargs.pop("input_ids")
+            kwargs.pop("prompt", None)
+        else:
+            prompt_tokens = self.tokenizer.encode(kwargs.pop("prompt"))
+            from_prompt_text = True
+
+        # Only normalize BOS for tokenizer-encoded prompt text.
+        if (
+            from_prompt_text
+            and len(prompt_tokens) >= 2
+            and prompt_tokens[0] == self.tokenizer.bos_token_id == prompt_tokens[1]
+        ):
+            prompt_tokens = prompt_tokens[1:]
+
+        if "max_new_tokens" in kwargs:
+            kwargs["max_tokens"] = kwargs.pop("max_new_tokens")
+        if "max_completion_tokens" in kwargs:
+            kwargs["max_tokens"] = kwargs.pop("max_completion_tokens")
+        kwargs.pop("model", None)
+
+        request_data = {"prompt": {"prompt_token_ids": prompt_tokens}}
+        request_data["prompt_logprobs"] = top_k
+        request_data.update(kwargs)
+        # This API is prompt-logprobs focused, not generation-focused.
+        request_data["n"] = 1
+        request_data["temperature"] = 0.0
+        request_data["top_p"] = 1.0
+        request_data.setdefault("max_tokens", 1)
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{self.config.base_url.replace('/v1', '')}/generate",
+                json=request_data,
+                headers=(
+                    {"Authorization": f"Bearer {self.config.api_key}"}
+                    if self.config.api_key
+                    else {}
+                ),
+                timeout=aiohttp.ClientTimeout(total=self.config.timeout),
+            ) as response:
+                response.raise_for_status()
+                results = await response.json()
+
+        raw_prompt_logprobs = results.get("prompt_logprobs")
+        if raw_prompt_logprobs is None:
+            raise ValueError(
+                "vLLM /generate response missing 'prompt_logprobs'. "
+                "Ensure backend supports prompt logprobs."
+            )
+
+        # Handle either direct [position] payloads or [sequence][position] payloads.
+        if raw_prompt_logprobs and isinstance(raw_prompt_logprobs[0], list):
+            prompt_entries = raw_prompt_logprobs[0]
+        else:
+            prompt_entries = raw_prompt_logprobs
+
+        prompt_topk_token_ids: List[List[int]] = []
+        prompt_topk_logprobs: List[List[float]] = []
+        for entry in prompt_entries:
+            topk_ids, topk_lps = self._normalize_topk_entry(entry)
+            prompt_topk_token_ids.append(topk_ids)
+            prompt_topk_logprobs.append(topk_lps)
+
+        return {
+            "prompt_tokens": prompt_tokens,
+            "prompt_topk_token_ids": prompt_topk_token_ids,
+            "prompt_topk_logprobs": prompt_topk_logprobs,
+        }
 
 
 def resolve_openai_configs(
