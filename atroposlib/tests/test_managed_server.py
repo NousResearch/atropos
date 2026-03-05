@@ -317,6 +317,30 @@ async def test_get_logprobs_messages_passthrough(mock_server):
 
 
 @pytest.mark.asyncio
+async def test_get_logprobs_input_ids_only_passthrough(mock_server):
+    """ManagedServer.get_logprobs supports input_ids-only without requiring prompt."""
+    managed = ManagedServer(mock_server, tokenizer=mock_server.tokenizer)
+    input_ids = [10, 20, 30]
+
+    async def _mock_get_logprobs(**kwargs):
+        assert "input_ids" in kwargs
+        assert kwargs["input_ids"] == input_ids
+        assert kwargs.get("prompt") is None
+        return {
+            "prompt_tokens": input_ids,
+            "prompt_topk_token_ids": [[t] for t in input_ids],
+            "prompt_topk_logprobs": [[-0.1] for _ in input_ids],
+        }
+
+    mock_server.get_logprobs = _mock_get_logprobs
+    payload = await managed.get_logprobs(input_ids=input_ids, top_k=1)
+
+    assert payload["prompt_tokens"] == input_ids
+    assert payload["prompt_topk_token_ids"] == [[10], [20], [30]]
+    assert payload["prompt_topk_logprobs"] == [[-0.1], [-0.1], [-0.1]]
+
+
+@pytest.mark.asyncio
 async def test_get_logprobs_strict_mode_requires_backend_impl(mock_server):
     """ManagedServer.get_logprobs requires backend get_logprobs in strict mode."""
     managed = ManagedServer(mock_server, tokenizer=mock_server.tokenizer)
