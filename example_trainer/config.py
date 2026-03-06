@@ -69,6 +69,18 @@ class TrainingConfig(BaseModel):
             "Prevents large policy updates that could destabilize training."
         ),
     )
+    distill_enabled: bool = Field(
+        False,
+        description="Enable teacher distillation loss when distill tensors are present.",
+    )
+    distill_coef: float = Field(
+        0.0,
+        description="Weight for distillation loss in total loss.",
+    )
+    distill_temperature: float = Field(
+        1.0,
+        description="Temperature applied when converting teacher top-k logprobs.",
+    )
     # === Device & Storage ===
     device: str = Field(
         "cuda" if torch.cuda.is_available() else "cpu", description="Device to train on"
