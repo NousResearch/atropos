@@ -74,10 +74,10 @@ def _verify_answer(
     elif isinstance(gold_answer, str):
         # Try to extract numerical value if it's in boxed format
         if "\\boxed{" in gold_answer:
+            clean_answer = gold_answer.replace("\\boxed{", "").replace("}", "")
+
             try:
-                gold_value = _normalize_numerical_value(
-                    gold_answer.replace("\\boxed{", "").replace("}", "")
-                )
+                gold_value = _normalize_numerical_value(clean_answer)
             except ValueError:
                 # Not a numerical value, keep as string for LaTeX parsing
                 pass
