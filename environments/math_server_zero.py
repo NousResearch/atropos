@@ -259,7 +259,7 @@ class MathEnv(BaseEnv):
             completion = await managed.completion(
                 prompt=question,
                 n=1,
-                max_tokens=self.config.max_token_length,
+                max_tokens=32765,
                 temperature=0.0,
                 split="eval",
                 stop=stop_list,
