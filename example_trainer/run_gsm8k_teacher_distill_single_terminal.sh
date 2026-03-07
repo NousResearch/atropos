@@ -34,6 +34,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LAUNCH_DIR="$PWD"
 cd "$ROOT_DIR"
 
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 STUDENT_MODEL="${STUDENT_MODEL:-Qwen/Qwen3-4B-Instruct-2507-FP8}"
 TEACHER_MODEL="${TEACHER_MODEL:-Qwen/Qwen3-30B-A3B-Instruct-2507}"
 
@@ -159,15 +160,15 @@ log "  saves=${SAVE_DIR}"
 
 # 1) Atropos API
 start_process "run_api" "${LOG_DIR}/run_api.log" \
-  uv run python -m atroposlib.cli.run_api --port "$API_PORT"
+  run-api --port "$API_PORT"
 if [[ "$DRY_RUN" == "0" ]]; then
-  wait_for_http "http://localhost:${API_PORT}/info" 60 "run-api"
+  wait_for_http "http://localhost:${API_PORT}/info" 180 "run-api"
 fi
 
 # 2) Student vLLM server
 start_process "student_vllm" "${LOG_DIR}/student_vllm.log" \
   env CUDA_VISIBLE_DEVICES="$STUDENT_GPUS" \
-  uv run python -m example_trainer.vllm_api_server \
+  "$PYTHON_BIN" -m example_trainer.vllm_api_server \
     --model "$STUDENT_MODEL" \
     --port "$STUDENT_PORT" \
     --tensor-parallel-size "$STUDENT_TP" \
@@ -181,7 +182,7 @@ fi
 # 3) Teacher vLLM server
 start_process "teacher_vllm" "${LOG_DIR}/teacher_vllm.log" \
   env CUDA_VISIBLE_DEVICES="$TEACHER_GPUS" \
-  uv run python -m example_trainer.vllm_api_server \
+  "$PYTHON_BIN" -m example_trainer.vllm_api_server \
     --model "$TEACHER_MODEL" \
     --port "$TEACHER_PORT" \
     --tensor-parallel-size "$TEACHER_TP" \
@@ -194,7 +195,7 @@ fi
 
 # 4) Teacher-distill GSM8K env
 start_process "gsm8k_teacher_env" "${LOG_DIR}/env.log" \
-  uv run python environments/gsm8k_server_teacher_distill.py serve \
+  "$PYTHON_BIN" environments/gsm8k_server_teacher_distill.py serve \
     --env.group_size "$ENV_GROUP_SIZE" \
     --env.batch_size "$ENV_BATCH_SIZE" \
     --env.total_steps "$ENV_TOTAL_STEPS" \
@@ -227,7 +228,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
   log "[DRY RUN] trainer command:"
   printf '  '
   printf '%q ' env CUDA_VISIBLE_DEVICES="$TRAINER_GPU" \
-    uv run python -m example_trainer.grpo \
+    "$PYTHON_BIN" -m example_trainer.grpo \
     --model-name "$STUDENT_MODEL" \
     --weight-bridge-mode none \
     --device cuda:0 \
@@ -248,7 +249,7 @@ fi
 
 log "Starting trainer in foreground..."
 env CUDA_VISIBLE_DEVICES="$TRAINER_GPU" \
-  uv run python -m example_trainer.grpo \
+  "$PYTHON_BIN" -m example_trainer.grpo \
     --model-name "$STUDENT_MODEL" \
     --weight-bridge-mode none \
     --device cuda:0 \
