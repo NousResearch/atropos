@@ -503,11 +503,6 @@ class DynastAIEnv(BaseEnv):
         for score in scores["scores"]:
             self.percent_correct_buffer.append(max(score, 0))
 
-        # Check if all the same
-        if all([score == scores["scores"][0] for score in scores["scores"]]):
-            print("[DYNASTAI] All scores identical, returning None")
-            return None  # If all the same, we return None
-
         return scores
 
     async def get_next_item(self) -> DynastAIRow:

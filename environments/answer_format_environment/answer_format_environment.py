@@ -3653,14 +3653,6 @@ class AnswerFormatEnv(BaseEnv):
                     )
                 await self._save_failed_rollouts_to_jsonl()
 
-        # Check if all scores are the same (no learning signal)
-        if all(group_scores[0] == score for score in group_scores):
-            if self.debug_logging:
-                self.logger.debug(
-                    "All scores are identical, returning None for learning signal"
-                )
-            return None
-
         # Track successful groups for equivalent ratio enforcement
         if self.ensure_equivalent_ratios:
             # Count this as a successful group if we have any successful examples

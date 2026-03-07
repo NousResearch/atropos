@@ -770,10 +770,6 @@ class TextReversalEnv(BaseEnv):
             for score in scores["scores"]:
                 self.percent_correct_buffer.append(max(score, 0))
 
-            # Return None if all scores are the same (no learning signal)
-            if len(set(scores["scores"])) == 1:
-                return None
-
             return scores
 
         except Exception as e:

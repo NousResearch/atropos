@@ -408,9 +408,6 @@ class SQLQueryEnv(BaseEnv):
                     percentage_of_range = min(percentage_of_range, 1.0)
                     scores["scores"].append(1.0 - percentage_of_range)
 
-        if all([scores["scores"][0] == score for score in scores["scores"]]):
-            return None  # If all the same, return None
-
         return scores
 
     async def get_next_item(self) -> WikiSQLRow:
