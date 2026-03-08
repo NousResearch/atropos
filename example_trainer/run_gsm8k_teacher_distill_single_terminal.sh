@@ -190,7 +190,7 @@ start_process "teacher_vllm" "${LOG_DIR}/teacher_vllm.log" \
     --max-model-len "$MAX_MODEL_LEN" \
     --dtype "$DTYPE"
 if [[ "$DRY_RUN" == "0" ]]; then
-  wait_for_http "http://localhost:${TEACHER_PORT}/health" 600 "teacher vLLM"
+  wait_for_http "http://localhost:${TEACHER_PORT}/health" 1800 "teacher vLLM"
 fi
 
 # 4) Teacher-distill GSM8K env
