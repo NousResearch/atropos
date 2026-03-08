@@ -18,7 +18,7 @@ set -euo pipefail
 #   TEACHER_MODEL="Qwen/Qwen3-30B-A3B-Instruct-2507"
 #   STUDENT_GPUS="0,1"
 #   TEACHER_GPUS="4,5,6,7"
-#   TRAINER_GPU="2"
+#   TRAINER_GPUS="0,1"
 #   STUDENT_TP=2
 #   TEACHER_TP=4
 #   API_PORT=8002
@@ -40,7 +40,7 @@ TEACHER_MODEL="${TEACHER_MODEL:-Qwen/Qwen3-30B-A3B-Instruct-2507}"
 
 STUDENT_GPUS="${STUDENT_GPUS:-0,1}"
 TEACHER_GPUS="${TEACHER_GPUS:-4,5,6,7}"
-TRAINER_GPU="${TRAINER_GPU:-2}"
+TRAINER_GPUS="${TRAINER_GPUS:-$STUDENT_GPUS}"
 
 STUDENT_TP="${STUDENT_TP:-2}"
 TEACHER_TP="${TEACHER_TP:-4}"
@@ -65,6 +65,7 @@ TEACHER_GPU_MEMORY_UTILIZATION="${TEACHER_GPU_MEMORY_UTILIZATION:-0.92}"
 DTYPE="${DTYPE:-bfloat16}"
 SAVE_DIR="${SAVE_DIR:-${LAUNCH_DIR}/saves/gsm8k_teacher_distill}"
 LOG_DIR="${LOG_DIR:-${LAUNCH_DIR}/logs/gsm8k_teacher_distill}"
+BRIDGE_DIR="${BRIDGE_DIR:-${LOG_DIR}/bridge}"
 DRY_RUN="${DRY_RUN:-0}"
 
 ENV_GROUP_SIZE="${ENV_GROUP_SIZE:-4}"
@@ -144,7 +145,7 @@ cleanup_all() {
 
 trap cleanup_all EXIT INT TERM
 
-mkdir -p "$LOG_DIR" "$SAVE_DIR"
+mkdir -p "$LOG_DIR" "$SAVE_DIR" "$BRIDGE_DIR"
 RUN_PORTS+=("$API_PORT" "$STUDENT_PORT" "$TEACHER_PORT")
 kill_port "$API_PORT"
 kill_port "$STUDENT_PORT"
@@ -153,10 +154,11 @@ kill_port "$TEACHER_PORT"
 log "Config:"
 log "  student=${STUDENT_MODEL}"
 log "  teacher=${TEACHER_MODEL}"
-log "  gpus student=${STUDENT_GPUS}, teacher=${TEACHER_GPUS}, trainer=${TRAINER_GPU}"
+log "  gpus student=${STUDENT_GPUS}, teacher=${TEACHER_GPUS}, trainer=${TRAINER_GPUS}"
 log "  ports api=${API_PORT}, student=${STUDENT_PORT}, teacher=${TEACHER_PORT}"
 log "  logs=${LOG_DIR}"
 log "  saves=${SAVE_DIR}"
+log "  bridge=${BRIDGE_DIR}"
 
 # 1) Atropos API
 start_process "run_api" "${LOG_DIR}/run_api.log" \
@@ -167,14 +169,15 @@ fi
 
 # 2) Student vLLM server
 start_process "student_vllm" "${LOG_DIR}/student_vllm.log" \
-  env CUDA_VISIBLE_DEVICES="$STUDENT_GPUS" \
+  env CUDA_VISIBLE_DEVICES="$STUDENT_GPUS" VLLM_ENABLE_SHARED_WEIGHTS=1 LOGDIR="$BRIDGE_DIR" \
   "$PYTHON_BIN" -m example_trainer.vllm_api_server \
     --model "$STUDENT_MODEL" \
     --port "$STUDENT_PORT" \
     --tensor-parallel-size "$STUDENT_TP" \
     --gpu-memory-utilization "$STUDENT_GPU_MEMORY_UTILIZATION" \
     --max-model-len "$MAX_MODEL_LEN" \
-    --dtype "$DTYPE"
+    --dtype "$DTYPE" \
+    --enforce-eager
 if [[ "$DRY_RUN" == "0" ]]; then
   wait_for_http "http://localhost:${STUDENT_PORT}/health" 420 "student vLLM"
 fi
@@ -226,13 +229,15 @@ log "  ${LOG_DIR}/env.log"
 if [[ "$DRY_RUN" == "1" ]]; then
   log "[DRY RUN] trainer command:"
   printf '  '
-  printf '%q ' env CUDA_VISIBLE_DEVICES="$TRAINER_GPU" \
+  printf '%q ' env CUDA_VISIBLE_DEVICES="$TRAINER_GPUS" \
     "$PYTHON_BIN" -m example_trainer.grpo \
     --model-name "$STUDENT_MODEL" \
-    --weight-bridge-mode none \
+    --weight-bridge-mode shared_vllm \
     --device cuda:0 \
     --save-path "$SAVE_DIR" \
     --atropos-url "http://localhost:${API_PORT}" \
+    --vllm-port "$STUDENT_PORT" \
+    --vllm-config-path "${BRIDGE_DIR}/vllm_bridge_config.json" \
     --training-steps "$TRAINING_STEPS" \
     --batch-size "$BATCH_SIZE" \
     --gradient-accumulation-steps "$GRAD_ACCUM" \
@@ -247,13 +252,15 @@ if [[ "$DRY_RUN" == "1" ]]; then
 fi
 
 log "Starting trainer in foreground..."
-env CUDA_VISIBLE_DEVICES="$TRAINER_GPU" \
+env CUDA_VISIBLE_DEVICES="$TRAINER_GPUS" \
   "$PYTHON_BIN" -m example_trainer.grpo \
     --model-name "$STUDENT_MODEL" \
-    --weight-bridge-mode none \
+    --weight-bridge-mode shared_vllm \
     --device cuda:0 \
     --save-path "$SAVE_DIR" \
     --atropos-url "http://localhost:${API_PORT}" \
+    --vllm-port "$STUDENT_PORT" \
+    --vllm-config-path "${BRIDGE_DIR}/vllm_bridge_config.json" \
     --training-steps "$TRAINING_STEPS" \
     --batch-size "$BATCH_SIZE" \
     --gradient-accumulation-steps "$GRAD_ACCUM" \
