@@ -16,10 +16,10 @@ set -euo pipefail
 # Optional overrides:
 #   STUDENT_MODEL="Qwen/Qwen3-4B-Instruct-2507-FP8"
 #   TEACHER_MODEL="Qwen/Qwen3-30B-A3B-Instruct-2507"
-#   STUDENT_GPUS="0,1"
+#   STUDENT_GPUS="0"
 #   TEACHER_GPUS="4,5,6,7"
-#   TRAINER_GPUS="0,1"
-#   STUDENT_TP=2
+#   TRAINER_GPUS="0"
+#   STUDENT_TP=1
 #   TEACHER_TP=4
 #   API_PORT=8002
 #   STUDENT_PORT=9001
@@ -38,11 +38,11 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 STUDENT_MODEL="${STUDENT_MODEL:-Qwen/Qwen3-4B-Instruct-2507-FP8}"
 TEACHER_MODEL="${TEACHER_MODEL:-Qwen/Qwen3-30B-A3B-Instruct-2507}"
 
-STUDENT_GPUS="${STUDENT_GPUS:-0,1}"
+STUDENT_GPUS="${STUDENT_GPUS:-0}"
 TEACHER_GPUS="${TEACHER_GPUS:-4,5,6,7}"
 TRAINER_GPUS="${TRAINER_GPUS:-$STUDENT_GPUS}"
 
-STUDENT_TP="${STUDENT_TP:-2}"
+STUDENT_TP="${STUDENT_TP:-1}"
 TEACHER_TP="${TEACHER_TP:-4}"
 
 API_PORT="${API_PORT:-8002}"
@@ -159,6 +159,20 @@ log "  ports api=${API_PORT}, student=${STUDENT_PORT}, teacher=${TEACHER_PORT}"
 log "  logs=${LOG_DIR}"
 log "  saves=${SAVE_DIR}"
 log "  bridge=${BRIDGE_DIR}"
+
+# Shared-vLLM attach path currently expects the student server to expose
+# unsharded weights. Keep the student on TP=1 and the trainer on the same GPU set.
+if [[ "$STUDENT_TP" != "1" ]]; then
+  log "ERROR: shared_vllm teacher-distill runner currently requires STUDENT_TP=1."
+  log "       The current attach path does not support TP-sharded student bridge weights."
+  exit 2
+fi
+
+if [[ "$TRAINER_GPUS" != "$STUDENT_GPUS" ]]; then
+  log "ERROR: TRAINER_GPUS must match STUDENT_GPUS for shared_vllm mode."
+  log "       Got student=${STUDENT_GPUS}, trainer=${TRAINER_GPUS}"
+  exit 2
+fi
 
 # 1) Atropos API
 start_process "run_api" "${LOG_DIR}/run_api.log" \
