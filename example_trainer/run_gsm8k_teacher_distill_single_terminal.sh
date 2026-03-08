@@ -205,7 +205,6 @@ start_process "gsm8k_teacher_env" "${LOG_DIR}/env.log" \
     --env.rollout_server_url "http://localhost:${API_PORT}" \
     --env.use_wandb true \
     --env.wandb_name "gsm8k-teacher-distill" \
-    --env.distillation_enabled true \
     --env.teacher_enabled true \
     --env.teacher_base_url "http://localhost:${TEACHER_PORT}/v1" \
     --env.teacher_model_name "$TEACHER_MODEL" \
