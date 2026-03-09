@@ -296,6 +296,17 @@ async def _generate(request_dict: dict, raw_request: Request) -> Response:
     if engine is None:
         raise HTTPException(status_code=503, detail="Engine not initialized")
 
+    request_preview = {
+        "has_prompt": "prompt" in request_dict,
+        "n": request_dict.get("n"),
+        "max_tokens": request_dict.get("max_tokens"),
+        "temperature": request_dict.get("temperature"),
+        "top_p": request_dict.get("top_p"),
+        "logprobs": request_dict.get("logprobs"),
+        "prompt_logprobs": request_dict.get("prompt_logprobs"),
+    }
+    logger.info("POST /generate received %s", request_preview)
+
     prompt = request_dict.pop("prompt")
     stream = request_dict.pop("stream", False)
     request_dict["output_kind"] = RequestOutputKind.FINAL_ONLY
@@ -325,6 +336,7 @@ async def _generate(request_dict: dict, raw_request: Request) -> Response:
         async for request_output in results_generator:
             final_output = request_output
     except asyncio.CancelledError:
+        logger.warning("POST /generate cancelled request_id=%s", request_id)
         return Response(status_code=499)
 
     assert final_output is not None
@@ -347,6 +359,13 @@ async def _generate(request_dict: dict, raw_request: Request) -> Response:
         ret["logprobs"] = output_logprobs
         ret["prompt_token_ids"] = final_output.prompt_token_ids
         ret["token_ids"] = [x.token_ids for x in final_output.outputs]
+
+    logger.info(
+        "POST /generate completed request_id=%s outputs=%s finish_reasons=%s",
+        request_id,
+        len(text_outputs),
+        finish_reasons,
+    )
 
     return JSONResponse(ret)
 

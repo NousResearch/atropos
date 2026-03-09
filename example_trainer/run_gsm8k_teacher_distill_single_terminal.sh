@@ -56,6 +56,7 @@ LR="${LR:-1e-5}"
 WARMUP_STEPS="${WARMUP_STEPS:-0}"
 CLIP_EPS="${CLIP_EPS:-0.2}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-16384}"
+ENV_MAX_TOKEN_LENGTH="${ENV_MAX_TOKEN_LENGTH:-4096}"
 DISTILL_COEF="${DISTILL_COEF:-0.2}"
 DISTILL_TEMPERATURE="${DISTILL_TEMPERATURE:-1.0}"
 TEACHER_TOP_K="${TEACHER_TOP_K:-8}"
@@ -72,7 +73,8 @@ ENV_GROUP_SIZE="${ENV_GROUP_SIZE:-4}"
 ENV_BATCH_SIZE="${ENV_BATCH_SIZE:-16}"
 ENV_TOTAL_STEPS="${ENV_TOTAL_STEPS:-200}"
 ENV_STEPS_PER_EVAL="${ENV_STEPS_PER_EVAL:-50}"
-ENV_MAX_WORKERS_PER_NODE="${ENV_MAX_WORKERS_PER_NODE:-8}"
+ENV_MAX_WORKERS_PER_NODE="${ENV_MAX_WORKERS_PER_NODE:-1}"
+ENV_WORKER_TIMEOUT="${ENV_WORKER_TIMEOUT:-1800}"
 
 RUN_PIDS=()
 RUN_PORTS=()
@@ -159,6 +161,7 @@ log "  ports api=${API_PORT}, student=${STUDENT_PORT}, teacher=${TEACHER_PORT}"
 log "  logs=${LOG_DIR}"
 log "  saves=${SAVE_DIR}"
 log "  bridge=${BRIDGE_DIR}"
+log "  env max_token_length=${ENV_MAX_TOKEN_LENGTH}, env workers=${ENV_MAX_WORKERS_PER_NODE}, env worker_timeout=${ENV_WORKER_TIMEOUT}"
 
 # Shared-vLLM attach path currently expects the student server to expose
 # unsharded weights. Keep the student on TP=1 and the trainer on the same GPU set.
@@ -218,7 +221,8 @@ start_process "gsm8k_teacher_env" "${LOG_DIR}/env.log" \
     --env.total_steps "$ENV_TOTAL_STEPS" \
     --env.steps_per_eval "$ENV_STEPS_PER_EVAL" \
     --env.max_num_workers_per_node "$ENV_MAX_WORKERS_PER_NODE" \
-    --env.max_token_length "$MAX_MODEL_LEN" \
+    --env.max_token_length "$ENV_MAX_TOKEN_LENGTH" \
+    --env.worker_timeout "$ENV_WORKER_TIMEOUT" \
     --env.rollout_server_url "http://localhost:${API_PORT}" \
     --env.use_wandb true \
     --env.wandb_name "gsm8k-teacher-distill" \

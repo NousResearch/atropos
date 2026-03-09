@@ -1,3 +1,4 @@
+import logging
 import random
 import time
 from typing import Dict, List, Optional, Tuple, TypedDict, Union
@@ -30,6 +31,8 @@ You will then provide your answer like this: \\boxed{your answer here}
 It is important that you provide your answer in the correct format.
 If you do not, you will not receive credit for your answer.
 So please end your answer with \\boxed{your answer here}"""
+
+logger = logging.getLogger(__name__)
 
 
 class GSM8kRow(TypedDict):
@@ -232,6 +235,12 @@ class GSM8kEnv(BaseEnv):
         )
 
         async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+            logger.info(
+                "gsm8k collect_trajectories start group_size=%s max_tokens=%s question_chars=%s",
+                self.config.group_size,
+                self.config.max_token_length,
+                len(item["question"]),
+            )
 
             chat_completions = await managed.chat_completion(
                 messages=[{"role": "system", "content": system_prompt}, user_message],
@@ -239,9 +248,17 @@ class GSM8kEnv(BaseEnv):
                 max_tokens=self.config.max_token_length,
                 temperature=1.0,
             )
+            logger.info(
+                "gsm8k collect_trajectories completion_received choices=%s",
+                len(chat_completions.choices),
+            )
 
             state = managed.get_state()
             nodes = state["nodes"]
+            logger.info(
+                "gsm8k collect_trajectories managed_state_nodes=%s",
+                len(nodes),
+            )
 
         to_score = list()
         to_backlog = list()
