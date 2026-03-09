@@ -373,6 +373,10 @@ class MCQAThinkingEnv(BaseEnv):
         for score in scores["scores"]:
             self.percent_correct_buffer.append(max(score, 0))
 
+        # Return None if all scores are the same (no learning signal)
+        if all(scores["scores"][0] == score for score in scores["scores"]):
+            return None
+
         return scores
 
     async def rollout_and_score_eval(self, test_item):

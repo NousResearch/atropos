@@ -383,6 +383,10 @@ class MathEnv(BaseEnv):
         to_postprocess = await self.score(to_score)
         if to_postprocess is None:
             return None, to_backlog
+        if all(
+            [to_postprocess["scores"][0] == score for score in to_postprocess["scores"]]
+        ):
+            return None, to_backlog
         self.normal_rollouts.append(
             (
                 prompt_format.format(prompt=problem_format.format(problem=item[0])),

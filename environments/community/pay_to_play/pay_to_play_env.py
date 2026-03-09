@@ -777,6 +777,10 @@ End your evaluation with \\boxed{{score}} where score is your numerical rating.
         if hasattr(self, "last_agent_card_feedback"):
             self.last_agent_card_feedback = agent_card_feedback
 
+        # Ensure we have different scores for training signal
+        if len(set(scores["scores"])) == 1:
+            return None
+
         return scores
 
     def _extract_score_from_agent_card(self, agent_card_response: str) -> float:

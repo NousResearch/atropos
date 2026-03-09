@@ -347,6 +347,9 @@ class McpEnv(BaseEnv):
         for score in scores["scores"]:
             self.percent_correct_buffer.append(max(score, 0))
 
+        if all(scores["scores"][0] == score for score in scores["scores"]):
+            return None
+
         return scores
 
     async def get_next_item(self):

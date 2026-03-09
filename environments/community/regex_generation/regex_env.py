@@ -248,6 +248,10 @@ class RegexEnv(BaseEnv):
                 1.0 if s >= self.config.score_threshold else 0.0
             )
 
+        # If all scores identical, no learning signal
+        if len(set(scores["scores"])) == 1:
+            return None
+
         return scores
 
     async def rollout_and_score_eval(self, problem: dict) -> dict:

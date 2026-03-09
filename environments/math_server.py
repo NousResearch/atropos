@@ -534,6 +534,8 @@ class MathEnv(BaseEnv):
                         return None, to_backlog
                 else:
                     return None, to_backlog
+            else:
+                return None, to_backlog
         else:
             self.normal_rollouts.append(
                 (
@@ -1165,6 +1167,8 @@ class MathEnv(BaseEnv):
                     "Max message delta is less than 0.1 * shortest message, no length penalty"
                 )
                 return None, []
+        elif all([score == scores["scores"][0] for score in scores["scores"]]):
+            return None, []
         if len(for_table) > 0:
             self.judge_rollouts.append(for_table)
             if len(self.judge_rollouts) >= self.config.num_rollouts_to_keep:

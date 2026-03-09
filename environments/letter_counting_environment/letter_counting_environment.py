@@ -1248,6 +1248,13 @@ class LetterCountingEnv(BaseEnv):
             )
             return None
 
+        # Skip if all scores are identical (no learning signal)
+        if all(scores["scores"][0] == score for score in scores["scores"]):
+            self.logger.debug(
+                f"All scores identical ({scores['scores'][0]:.2f}) - skipping group"
+            )
+            return None
+
         return scores
 
     async def rollout_and_score_eval(self, eval_item: Dict) -> Tuple[int, int]:
