@@ -390,7 +390,7 @@ class ServerManager:
 
     @asynccontextmanager
     async def managed_server(
-        self, tokenizer=None
+        self, tokenizer=None, tool_call_parser=None
     ) -> AsyncGenerator[Union[ManagedServer, DummyManagedServer], None]:
         """
         Context manager that provides a ManagedServer instance.
@@ -405,6 +405,8 @@ class ServerManager:
         Args:
             tokenizer: Optional tokenizer to use. If not provided, will attempt to
                       extract from server or create from model name.
+            tool_call_parser: Optional tool call parser instance for extracting
+                            structured tool_calls from raw completion text (Phase 2).
 
         Yields:
             ManagedServer (or DummyManagedServer for OpenAI) instance wrapping
@@ -467,7 +469,11 @@ class ServerManager:
             finally:
                 managed.reset()
         else:
-            managed = ManagedServer(server=selected_server, tokenizer=tokenizer)
+            managed = ManagedServer(
+                server=selected_server,
+                tokenizer=tokenizer,
+                tool_call_parser=tool_call_parser,
+            )
 
             try:
                 yield managed
