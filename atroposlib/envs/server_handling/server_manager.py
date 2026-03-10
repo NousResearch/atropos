@@ -363,6 +363,32 @@ class ServerManager:
             **kwargs
         )
 
+    async def get_logprobs(self, **kwargs) -> dict:
+        """
+        Route normalized prompt-logprob requests to the most available server.
+
+        Returns a normalized dict with:
+          - prompt_tokens
+          - prompt_topk_token_ids
+          - prompt_topk_logprobs
+        """
+        is_train = kwargs.pop("split", "train") == "train"
+        most_available_server = 0
+        most_available_server_num_slots = -1
+        await self.wait_for_sem(is_train)
+        for i, server in enumerate(self.servers):
+            if not server.server_healthy:
+                continue
+            if (
+                server.sem._value if is_train else server.eval_sem._value
+            ) > most_available_server_num_slots:
+                most_available_server = i
+                most_available_server_num_slots = (
+                    server.sem._value if is_train else server.eval_sem._value
+                )
+
+        return await self.servers[most_available_server].get_logprobs(**kwargs)
+
     @asynccontextmanager
     async def dedicated_server(self) -> AsyncGenerator[OpenAIServer, None]:
         most_available_server = 0
