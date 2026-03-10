@@ -193,7 +193,7 @@ class VLLMServer(APIServer):
         # Prepare request for VLLM native API
         request_data = {"prompt": {"prompt_token_ids": prompt_tokens}, "logprobs": 0}
         request_data.update(kwargs)
-        logger.info(
+        logger.warning(
             "vllm_server completion POST start base_url=%s prompt_tokens=%s n=%s max_tokens=%s temperature=%s",
             self.config.base_url,
             len(prompt_tokens),
@@ -216,7 +216,7 @@ class VLLMServer(APIServer):
             ) as response:
                 response.raise_for_status()
                 results = await response.json()
-        logger.info(
+        logger.warning(
             "vllm_server completion POST done outputs=%s finish_reasons=%s",
             len(results.get("logprobs", [])),
             len(results.get("finish_reasons", [])),
@@ -330,7 +330,7 @@ class VLLMServer(APIServer):
         request_data["temperature"] = 0.0
         request_data["top_p"] = 1.0
         request_data.setdefault("max_tokens", 1)
-        logger.info(
+        logger.warning(
             "vllm_server get_logprobs POST start base_url=%s prompt_tokens=%s top_k=%s max_tokens=%s",
             self.config.base_url,
             len(prompt_tokens),
@@ -351,7 +351,7 @@ class VLLMServer(APIServer):
             ) as response:
                 response.raise_for_status()
                 results = await response.json()
-        logger.info(
+        logger.warning(
             "vllm_server get_logprobs POST done prompt_logprobs_present=%s",
             results.get("prompt_logprobs") is not None,
         )

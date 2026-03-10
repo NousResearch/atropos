@@ -210,7 +210,7 @@ def resolve_openai_configs(
                 f"Error creating final OpenAI configuration from merged settings: {e}\n"
                 f"Merged Dict: {openai_config_dict}"
             ) from e
-        server_configs = final_openai_config
+        server_configs = [final_openai_config]
     elif isinstance(default_server_configs, ServerBaseline):
         # Pure ServerBaseline (not APIServerConfig) - no CLI overrides possible
         logger.info("Using ServerBaseline configuration.")
@@ -231,7 +231,7 @@ def resolve_openai_configs(
             ) from e
 
         if isinstance(default_server_configs, APIServerConfig):
-            server_configs = final_openai_config
+            server_configs = [final_openai_config]
         elif isinstance(default_server_configs, list):
             server_configs = [final_openai_config]
         else:

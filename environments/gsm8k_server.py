@@ -235,7 +235,7 @@ class GSM8kEnv(BaseEnv):
         )
 
         async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
-            logger.info(
+            logger.warning(
                 "gsm8k collect_trajectories start group_size=%s max_tokens=%s question_chars=%s",
                 self.config.group_size,
                 self.config.max_token_length,
@@ -248,14 +248,14 @@ class GSM8kEnv(BaseEnv):
                 max_tokens=self.config.max_token_length,
                 temperature=1.0,
             )
-            logger.info(
+            logger.warning(
                 "gsm8k collect_trajectories completion_received choices=%s",
                 len(chat_completions.choices),
             )
 
             state = managed.get_state()
             nodes = state["nodes"]
-            logger.info(
+            logger.warning(
                 "gsm8k collect_trajectories managed_state_nodes=%s",
                 len(nodes),
             )
