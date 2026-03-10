@@ -61,8 +61,8 @@ DISTILL_COEF="${DISTILL_COEF:-0.2}"
 DISTILL_TEMPERATURE="${DISTILL_TEMPERATURE:-1.0}"
 TEACHER_TOP_K="${TEACHER_TOP_K:-8}"
 
-STUDENT_GPU_MEMORY_UTILIZATION="${STUDENT_GPU_MEMORY_UTILIZATION:-0.90}"
-TEACHER_GPU_MEMORY_UTILIZATION="${TEACHER_GPU_MEMORY_UTILIZATION:-0.92}"
+STUDENT_GPU_MEMORY_UTILIZATION="${STUDENT_GPU_MEMORY_UTILIZATION:-0.95}"
+TEACHER_GPU_MEMORY_UTILIZATION="${TEACHER_GPU_MEMORY_UTILIZATION:-0.95}"
 DTYPE="${DTYPE:-bfloat16}"
 SAVE_DIR="${SAVE_DIR:-${LAUNCH_DIR}/saves/gsm8k_teacher_distill}"
 LOG_DIR="${LOG_DIR:-${LAUNCH_DIR}/logs/gsm8k_teacher_distill}"
@@ -269,8 +269,8 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
-log "Starting trainer in foreground..."
-env CUDA_VISIBLE_DEVICES="$TRAINER_GPUS" \
+start_process "trainer" "${LOG_DIR}/trainer.log" \
+  env CUDA_VISIBLE_DEVICES="$TRAINER_GPUS" \
   "$PYTHON_BIN" -m example_trainer.grpo \
     --model-name "$STUDENT_MODEL" \
     --weight-bridge-mode shared_vllm \
@@ -287,6 +287,20 @@ env CUDA_VISIBLE_DEVICES="$TRAINER_GPUS" \
     --clip-eps "$CLIP_EPS" \
     --distill-enabled \
     --distill-coef "$DISTILL_COEF" \
-    --distill-temperature "$DISTILL_TEMPERATURE" | tee "${LOG_DIR}/trainer.log"
+    --distill-temperature "$DISTILL_TEMPERATURE"
 
-log "Training finished."
+log "All processes running in background."
+log ""
+log "Monitor with:"
+log "  tail -f ${LOG_DIR}/trainer.log"
+log "  tail -f ${LOG_DIR}/env.log"
+log "  tail -f ${LOG_DIR}/student_vllm.log"
+log "  tail -f ${LOG_DIR}/teacher_vllm.log"
+log ""
+log "Test endpoints:"
+log "  curl -s http://localhost:${STUDENT_PORT}/health"
+log "  curl -s http://localhost:${TEACHER_PORT}/health"
+log "  curl -s http://localhost:${STUDENT_PORT}/bridge/is_paused | jq ."
+log ""
+log "Press Ctrl+C to stop all processes."
+wait
