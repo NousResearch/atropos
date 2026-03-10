@@ -93,6 +93,13 @@ class TeacherDistillationEnv(BaseEnv, ABC):
                 slurm=False,
                 testing=False,
             )
+            logger.warning(
+                "TeacherDistillationEnv: teacher server configured at %s "
+                "(model=%s, top_k=%s)",
+                config.teacher_base_url,
+                config.teacher_model_name,
+                config.teacher_top_k,
+            )
 
     async def _fetch_teacher_for_sequence(
         self, token_ids: List[int], top_k: int

@@ -241,4 +241,17 @@ def resolve_openai_configs(
             )
             server_configs = [final_openai_config]
 
+    if isinstance(server_configs, list):
+        logger.warning(
+            "resolve_openai_configs: returning list of %s config(s), URLs: %s",
+            len(server_configs),
+            [c.base_url for c in server_configs],
+        )
+    else:
+        logger.warning(
+            "resolve_openai_configs: returning single %s (base_url=%s) — "
+            "ServerManager will use template mode!",
+            type(server_configs).__name__,
+            getattr(server_configs, "base_url", "N/A"),
+        )
     return server_configs
