@@ -193,8 +193,7 @@ start_process "student_vllm" "${LOG_DIR}/student_vllm.log" \
     --tensor-parallel-size "$STUDENT_TP" \
     --gpu-memory-utilization "$STUDENT_GPU_MEMORY_UTILIZATION" \
     --max-model-len "$MAX_MODEL_LEN" \
-    --dtype "$DTYPE" \
-    --enforce-eager
+    --dtype "$DTYPE"
 if [[ "$DRY_RUN" == "0" ]]; then
   wait_for_http "http://localhost:${STUDENT_PORT}/health" 420 "student vLLM"
 fi
