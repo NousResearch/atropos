@@ -74,7 +74,7 @@ ENV_BATCH_SIZE="${ENV_BATCH_SIZE:-16}"
 ENV_TOTAL_STEPS="${ENV_TOTAL_STEPS:-200}"
 ENV_STEPS_PER_EVAL="${ENV_STEPS_PER_EVAL:-50}"
 ENV_MAX_WORKERS_PER_NODE="${ENV_MAX_WORKERS_PER_NODE:-1}"
-ENV_WORKER_TIMEOUT="${ENV_WORKER_TIMEOUT:-1800}"
+ENV_WORKER_TIMEOUT="${ENV_WORKER_TIMEOUT:-300}"
 
 RUN_PIDS=()
 RUN_PORTS=()
@@ -302,5 +302,6 @@ log "  curl -s http://localhost:${STUDENT_PORT}/health"
 log "  curl -s http://localhost:${TEACHER_PORT}/health"
 log "  curl -s http://localhost:${STUDENT_PORT}/bridge/is_paused | jq ."
 log ""
-log "Press Ctrl+C to stop all processes."
-wait
+log "To stop all processes:"
+log "  kill ${RUN_PIDS[*]:-} 2>/dev/null; sleep 1; kill -9 ${RUN_PIDS[*]:-} 2>/dev/null"
+trap - EXIT INT TERM
