@@ -1,0 +1,19 @@
+env:
+  tokenizer_name: "Qwen/Qwen3-1.7B"
+  rollout_server_url: "http://localhost:8002"
+  max_token_length: 4096
+  start_tok_length: 4096
+  group_size: 2
+  batch_size: 8
+  total_steps: 200
+  steps_per_eval: 25
+  use_wandb: false
+  wandb_name: "t1-tool-planning-env"
+  eval_limit_ratio: 0.1
+  max_num_workers_per_node: 8
+
+openai:
+  model_name: "Qwen/Qwen3-1.7B"
+  base_url: "http://localhost:9001/v1"
+  api_key: "x"
+  server_type: "vllm"
