@@ -108,6 +108,7 @@ def test_sft_main_invokes_dry_run_when_flag_is_set(monkeypatch):
         append_to_previous = False
         tasks_per_step = 64
         dry_run = True
+
     monkeypatch.setattr(
         sft_cli,
         "argparse",
@@ -154,6 +155,7 @@ def test_dpo_main_invokes_dry_run_when_flag_is_set(monkeypatch):
         minimum_score_diff_max_min = 0.5
         append_to_previous = False
         dry_run = True
+
     monkeypatch.setattr(
         dpo_cli,
         "argparse",
