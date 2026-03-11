@@ -229,6 +229,7 @@ start_process "gsm8k_teacher_env" "${LOG_DIR}/env.log" \
     --env.teacher_base_url "http://localhost:${TEACHER_PORT}/v1" \
     --env.teacher_model_name "$TEACHER_MODEL" \
     --env.teacher_top_k "$TEACHER_TOP_K" \
+    --env.ensure_scores_are_not_same false \
     --openai.api_key "dummy" \
     --openai.base_url "http://localhost:${STUDENT_PORT}/v1" \
     --openai.model_name "$STUDENT_MODEL" \
