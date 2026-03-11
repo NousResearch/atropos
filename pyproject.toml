@@ -1,6 +1,6 @@
 [project]
 name = "atroposlib"
-version = "0.3.0"
+version = "0.4.0"
 description = "Atropos: An Environment and Rollout handler for LLM RL"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -49,11 +49,13 @@ rewardfns = [
     "torch"
 ]
 example_trainer = [
-    "atroposlib[rewardfns]",
-    "vllm",
+    "atroposlib[rewardfns, openai_endpoint]",
     "accelerate",
     "peft",
     "requests",
+]
+openai_endpoint = [
+    "vllm",
 ]
 dev = [
     "pytest",
