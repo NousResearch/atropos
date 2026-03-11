@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - endpoint
     paths:
       - ".github/workflows/deploy-web.yml"
       - "scripts/build_env_manifest.py"
