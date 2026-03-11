@@ -93,36 +93,32 @@ def test_sft_main_invokes_dry_run_when_flag_is_set(monkeypatch):
     monkeypatch.setattr(sft_cli, "sft_dry_run", _fake_sft_dry_run)
     monkeypatch.setattr(sft_cli, "sft_data_grabber", _fake_sft_data_grabber)
 
-    # Build a fake argv
-    argv = [
-        "atropos-sft-gen",
-        "out.jsonl",
-        "--api-url",
-        "http://example.com",
-        "--tokenizer",
-        "tok",
-        "--dry-run",
-    ]
-
-    monkeypatch.setattr(sft_cli, "asyncio", SimpleNamespace(run=asyncio.run))
-
-    # Patch argparse to use our argv
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    # We don't care about exact options here; we just call main() with patched argv via parse_args
-    # by temporarily replacing argparse.ArgumentParser with one that uses our argv internally.
-
-    original_argparse = sft_cli.argparse
-
-    class _FakeParser(argparse.ArgumentParser):
-        def parse_args(self, _args=None, *_a, **_k):
-            return original_argparse.ArgumentParser(
-                description="Grab SFT data from an Atropos API instance."
-            ).parse_args(argv[1:])
-
+    # Simulate that argparse has already parsed args with --dry-run
+    class _Args:
+        filepath = "out.jsonl"
+        api_url = "http://example.com"
+        group_size = 2
+        max_token_len = 2048
+        tokenizer = "tok"
+        save_messages = False
+        save_top_n_per_group = 3
+        num_seqs_to_save = 10
+        allow_negative_scores = False
+        minimum_score_diff_max_min = 0.0
+        append_to_previous = False
+        tasks_per_step = 64
+        dry_run = True
     monkeypatch.setattr(
-        sft_cli, "argparse", SimpleNamespace(ArgumentParser=_FakeParser)
+        sft_cli,
+        "argparse",
+        SimpleNamespace(Namespace=_Args, ArgumentParser=lambda *_, **__: None),
+    )
+    monkeypatch.setattr(
+        sft_cli,
+        "asyncio",
+        SimpleNamespace(
+            run=lambda coro: asyncio.get_event_loop().run_until_complete(coro)
+        ),
     )
 
     sft_cli.main()
@@ -145,30 +141,30 @@ def test_dpo_main_invokes_dry_run_when_flag_is_set(monkeypatch):
     monkeypatch.setattr(dpo_cli, "dpo_dry_run", _fake_dpo_dry_run)
     monkeypatch.setattr(dpo_cli, "dpo_data_grabber", _fake_dpo_data_grabber)
 
-    argv = [
-        "atropos-dpo-gen",
-        "out.jsonl",
-        "--api-url",
-        "http://example.com",
-        "--tokenizer",
-        "tok",
-        "--dry-run",
-    ]
-
-    monkeypatch.setattr(dpo_cli, "asyncio", SimpleNamespace(run=asyncio.run))
-
-    import argparse
-
-    original_argparse = dpo_cli.argparse
-
-    class _FakeParser(argparse.ArgumentParser):
-        def parse_args(self, _args=None, *_a, **_k):
-            return original_argparse.ArgumentParser(
-                description="Grab DPO data from an Atropos API instance."
-            ).parse_args(argv[1:])
-
+    class _Args:
+        filepath = "out.jsonl"
+        api_url = "http://example.com"
+        group_size = 2
+        max_token_len = 2048
+        tokenizer = "tok"
+        save_messages = False
+        save_n_pairs_per_group = 3
+        num_seqs_to_save = 10
+        allow_negative_scores = False
+        minimum_score_diff_max_min = 0.5
+        append_to_previous = False
+        dry_run = True
     monkeypatch.setattr(
-        dpo_cli, "argparse", SimpleNamespace(ArgumentParser=_FakeParser)
+        dpo_cli,
+        "argparse",
+        SimpleNamespace(Namespace=_Args, ArgumentParser=lambda *_, **__: None),
+    )
+    monkeypatch.setattr(
+        dpo_cli,
+        "asyncio",
+        SimpleNamespace(
+            run=lambda coro: asyncio.get_event_loop().run_until_complete(coro)
+        ),
     )
 
     dpo_cli.main()
