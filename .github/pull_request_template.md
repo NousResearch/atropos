@@ -57,6 +57,19 @@
 
 ---
 
+## 🌐 Web Checklist
+<!-- For PRs that touch anything under web/ — delete this section otherwise -->
+- [ ] `cd web && npm run build` completes with no errors
+- [ ] `cd web && npm run lint` passes (ESLint clean)
+- [ ] `cd web && npx tsc --noEmit` reports no type errors
+- [ ] UI tested in both light and dark mode
+- [ ] UI tested at mobile (< 768px) and desktop (≥ 1280px) widths
+- [ ] No hardcoded `localhost` URLs or dev-only values left in code
+- [ ] If adding/modifying environments: ran `python scripts/build_env_manifest.py` to rebuild `web/public/environments.json`
+- [ ] New environment variables documented (added to `web/.env.example` or equivalent)
+
+---
+
 ## ✅ Developer & Reviewer Checklist
 <!-- Common checklist for all PR types - adapt as needed for your PR type -->
 - [ ] Code follows project style (black, isort, flake8 pass with pre-commit)

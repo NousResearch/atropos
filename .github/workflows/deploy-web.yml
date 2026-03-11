@@ -1,0 +1,111 @@
+name: Deploy Web Hub
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-web.yml"
+      - "scripts/build_env_manifest.py"
+      - "web/**"
+      - "environments/**/README.md"
+      - "environments/**/*.py"
+      - "environments/**/*.md"
+      - "environments/**/*.json"
+      - "environments/**/*.toml"
+      - "environments/**/*.yaml"
+      - "environments/**/*.yml"
+      - "environments/**/*.txt"
+      - "environments/**/*.ts"
+      - "environments/**/*.tsx"
+      - "environments/**/*.js"
+      - "environments/**/*.css"
+      - "environments/**/*.html"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      base_path: ${{ steps.base-path.outputs.base_path }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute base path
+        id: base-path
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY%%/*}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          if [ "$repo" = "${owner}.github.io" ]; then
+            echo "base_path=" >> "$GITHUB_OUTPUT"
+          else
+            echo "base_path=/$repo" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Generate static environment data
+        run: python scripts/build_env_manifest.py
+
+      - name: Hide local API routes for Pages export
+        working-directory: web
+        shell: bash
+        run: |
+          if [ -d app/api ]; then
+            mkdir -p ../.pages-build-cache
+            mv app/api ../.pages-build-cache/app-api
+          fi
+
+      - name: Build static site
+        working-directory: web
+        env:
+          STATIC_EXPORT: "true"
+          PAGES_BASE_PATH: ${{ steps.base-path.outputs.base_path }}
+          NEXT_PUBLIC_BASE_PATH: ${{ steps.base-path.outputs.base_path }}
+          NEXT_PUBLIC_GITHUB_REPO: ${{ github.repository }}
+          NEXT_PUBLIC_GITHUB_REF: ${{ github.sha }}
+        run: npm run build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

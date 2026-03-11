@@ -119,6 +119,31 @@ pre-commit run --all-files
 ```
 This command will automatically fix formatting issues found by `black` and `isort`. However, you may need to manually address any linting errors reported by `flake8`.
 
+## Environments Hub (Web + CLI)
+
+The project includes an **Environments Hub**: a Next.js web app for browsing environments and a CLI for installing them locally.
+
+*   **Web app** (`web/`): Lists environments from a manifest, shows detail pages, and exposes APIs for listing files and downloading environments (per-file or as a zip). Run from repo root with the manifest and `environments/` folder available:
+```bash
+cd web && npm install && npm run dev
+```
+Set `ENVIRONMENTS_MANIFEST_PATH` and `ENVIRONMENTS_PATH` if the defaults (`web/public/environments.json` and `../environments`) do not apply.
+*   **Manifest**: The web app reads `web/public/environments.json`. Rebuild it after adding or changing environments under `environments/`:
+```bash
+python scripts/build_env_manifest.py
+```
+(Optional: pass an output path, e.g. `python scripts/build_env_manifest.py web/public/environments.json`.)
+*   **CLI** (`atropos`): Install, list, or delete cached environments. It talks to the web app API (list files, then download each file with progress). Example:
+```bash
+pip install -e .
+atropos install answer_format_environment --base-url http://localhost:3000
+atropos list
+atropos delete answer_format_environment --yes
+```
+Default base URL is `http://localhost:3000`; override with `ATROPOS_BASE_URL` or `--base-url`.
+
+When contributing a new environment under `environments/community/`, ensure it has a `README.md` and at least one `.py` file so the manifest builder will include it. See [web/README.md](web/README.md) for more detail.
+
 ## License for Contributions
 Any contributions you make will be under the MIT License. In short, when you submit code changes, your submissions are understood to be under the same [MIT License](LICENSE) that covers the project. Feel free to contact the maintainers if that's a concern.
 
