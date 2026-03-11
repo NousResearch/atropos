@@ -16,32 +16,20 @@ import type { Environment } from "@/types/env";
 
 const STEPS = [
   {
-    title: "Clone repo sparsely",
-    note: "Only pull the environment subtree you need from the Atropos repository.",
-    code: (id: string) =>
-      `git clone --depth 1 --filter=blob:none --sparse https://github.com/${GITHUB_REPO}.git\ncd atropos\ngit sparse-checkout set environments/${id}`,
+    title: "Install Atropos",
+    note: "Install the CLI directly from the repository.",
+    code: "pip install git+https://github.com/NousResearch/atropos.git",
   },
   {
-    title: "Open the environment folder",
-    note: "Inspect the package locally after the sparse checkout is configured.",
-    code: (id: string) => `cd environments/${id}`,
-  },
-  {
-    title: "Install Atropos tooling",
-    note: "Install the Python package if you want the CLI and surrounding training helpers.",
-    code: "pip install atroposlib",
-  },
-  {
-    title: "Install via CLI",
-    note: "Download the environment files directly using the Atropos CLI (requires atroposlib installed).",
+    title: "Install Environment",
+    note: "Install a specific environment from your base URL.",
     code: (id: string) =>
       `atropos install ${id} --base-url ${getSiteUrl()}`,
   },
   {
-    title: "Use environment",
-    note: "Route the checked out environment path into your experiment or config.",
-    code: (id: string) =>
-      `# Repo ref: ${GITHUB_REF}\n# Environment path:\n./environments/${id}`,
+    title: "List Installed Environments",
+    note: "Verify available environments.",
+    code: "atropos list",
   },
 ];
 

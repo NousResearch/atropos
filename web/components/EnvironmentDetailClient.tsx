@@ -12,8 +12,6 @@ import {
   Folder,
   Orbit,
   ScanSearch,
-  Settings,
-  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -234,20 +232,6 @@ export function EnvironmentDetailClient({ slug }: { slug: string }) {
               <div className="screen-frame-alt p-5">
                 <div className="data-label">Action Cluster</div>
                 <div className="mt-4 flex flex-col gap-3">
-                  <Button variant="outline" className="justify-between" size="sm">
-                    <span className="flex items-center gap-2">
-                      <Star className="h-4 w-4" />
-                      Star Environment
-                    </span>
-                    <span>--</span>
-                  </Button>
-                  <Button variant="outline" className="justify-between" size="sm">
-                    <span className="flex items-center gap-2">
-                      <Settings className="h-4 w-4" />
-                      Training Fit
-                    </span>
-                    <span>Ready</span>
-                  </Button>
                   <Button className="justify-between" size="sm" onClick={() => setInstallOpen(true)}>
                     <span className="flex items-center gap-2">
                       <Folder className="h-4 w-4" />
