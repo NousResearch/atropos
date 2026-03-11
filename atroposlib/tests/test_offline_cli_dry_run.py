@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import atroposlib.cli.sft as sft_cli
 import atroposlib.cli.dpo as dpo_cli
+import atroposlib.cli.sft as sft_cli
 
 
 class _DummyResponse:
@@ -41,10 +41,14 @@ async def test_sft_dry_run_uses_tokenizer_and_reaches_api(monkeypatch):
         assert model_name == "dummy-tokenizer"
         return object()
 
-    monkeypatch.setattr(sft_cli, "AutoTokenizer", SimpleNamespace(from_pretrained=_fake_from_pretrained))
+    monkeypatch.setattr(
+        sft_cli, "AutoTokenizer", SimpleNamespace(from_pretrained=_fake_from_pretrained)
+    )
     monkeypatch.setattr(sft_cli.aiohttp, "ClientSession", _DummySession)
 
-    await sft_cli.sft_dry_run(api_url="http://localhost:8000", tokenizer="dummy-tokenizer")
+    await sft_cli.sft_dry_run(
+        api_url="http://localhost:8000", tokenizer="dummy-tokenizer"
+    )
 
     assert called.tok is True
 
@@ -58,10 +62,14 @@ async def test_dpo_dry_run_uses_tokenizer_and_reaches_api(monkeypatch):
         assert model_name == "dummy-tokenizer"
         return object()
 
-    monkeypatch.setattr(dpo_cli, "AutoTokenizer", SimpleNamespace(from_pretrained=_fake_from_pretrained))
+    monkeypatch.setattr(
+        dpo_cli, "AutoTokenizer", SimpleNamespace(from_pretrained=_fake_from_pretrained)
+    )
     monkeypatch.setattr(dpo_cli.aiohttp, "ClientSession", _DummySession)
 
-    await dpo_cli.dpo_dry_run(api_url="http://localhost:8000", tokenizer="dummy-tokenizer")
+    await dpo_cli.dpo_dry_run(
+        api_url="http://localhost:8000", tokenizer="dummy-tokenizer"
+    )
 
     assert called.tok is True
 
@@ -113,7 +121,9 @@ def test_sft_main_invokes_dry_run_when_flag_is_set(monkeypatch):
                 description="Grab SFT data from an Atropos API instance."
             ).parse_args(argv[1:])
 
-    monkeypatch.setattr(sft_cli, "argparse", SimpleNamespace(ArgumentParser=_FakeParser))
+    monkeypatch.setattr(
+        sft_cli, "argparse", SimpleNamespace(ArgumentParser=_FakeParser)
+    )
 
     sft_cli.main()
 
@@ -157,10 +167,11 @@ def test_dpo_main_invokes_dry_run_when_flag_is_set(monkeypatch):
                 description="Grab DPO data from an Atropos API instance."
             ).parse_args(argv[1:])
 
-    monkeypatch.setattr(dpo_cli, "argparse", SimpleNamespace(ArgumentParser=_FakeParser))
+    monkeypatch.setattr(
+        dpo_cli, "argparse", SimpleNamespace(ArgumentParser=_FakeParser)
+    )
 
     dpo_cli.main()
 
     assert called.dry is True
     assert called.full is False
-
