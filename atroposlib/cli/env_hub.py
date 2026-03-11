@@ -7,10 +7,10 @@ import shutil
 import sys
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote as urlquote
 
 import requests
 import typer
-from urllib.parse import quote as urlquote
 from rich.console import Console
 from rich.progress import (
     BarColumn,

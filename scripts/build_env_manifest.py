@@ -133,7 +133,9 @@ def find_environment_dirs(environments_root: Path) -> list[Path]:
             "game_environments",
         )
 
-    minimal_readme = [candidate for candidate in minimal_readme if not is_category_root(candidate)]
+    minimal_readme = [
+        candidate for candidate in minimal_readme if not is_category_root(candidate)
+    ]
     return sorted(minimal_readme, key=lambda path: str(path))
 
 
