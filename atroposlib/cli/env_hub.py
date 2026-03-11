@@ -10,6 +10,7 @@ from typing import Optional
 
 import requests
 import typer
+from urllib.parse import quote as urlquote
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -57,17 +58,53 @@ def _normalize_file_paths(files: list) -> list[str]:
     return out
 
 
+def _slugify_env_id(env_id: str) -> str:
+    """Convert env_id to static-file slug (/ -> --)."""
+    return env_id.replace("/", "--")
+
+
+def _try_api_file_list(base_url: str, env_id: str) -> list[str] | None:
+    """Fetch file list from the API endpoint. Returns None on any failure."""
+    url = f"{base_url.rstrip('/')}/api/environments/{urlquote(env_id, safe='')}/files"
+    try:
+        r = requests.get(url, timeout=30)
+        if not r.ok:
+            return None
+        raw = r.json()
+        return _normalize_file_paths(raw if isinstance(raw, list) else [])
+    except Exception:
+        return None
+
+
+def _try_static_file_list(base_url: str, env_id: str) -> list[str] | None:
+    """Fetch file list from the static env-data JSON (GitHub Pages fallback). Returns None on any failure."""
+    slug = _slugify_env_id(env_id)
+    url = f"{base_url.rstrip('/')}/env-data/{slug}.json"
+    try:
+        r = requests.get(url, timeout=30)
+        if not r.ok:
+            return None
+        data = r.json()
+        files = data.get("files", [])
+        return _normalize_file_paths(files)
+    except Exception:
+        return None
+
+
 def download_with_progress(
     base_url: str,
     env_id: str,
     rel_path: str,
     dest_path: Path,
+    static: bool = False,
 ) -> None:
-    from urllib.parse import quote
-
-    safe_id = requests.utils.quote(env_id, safe="")
-    safe_path = quote(rel_path.replace("\\", "/"), safe="/")
-    url = f"{base_url.rstrip('/')}/api/environments/{safe_id}/files/{safe_path}"
+    safe_path = urlquote(rel_path.replace("\\", "/"), safe="/")
+    if static:
+        slug = _slugify_env_id(env_id)
+        url = f"{base_url.rstrip('/')}/env-files/{slug}/{safe_path}"
+    else:
+        safe_id = urlquote(env_id, safe="")
+        url = f"{base_url.rstrip('/')}/api/environments/{safe_id}/files/{safe_path}"
     resp = requests.get(url, stream=True, timeout=60)
     resp.raise_for_status()
     total = int(resp.headers.get("Content-Length", 0)) or None
@@ -105,14 +142,16 @@ def install(
 ) -> None:
     """Download and install an environment."""
     cache = cache_dir if cache_dir is not None else get_cache_dir()
-    list_url = f"{base_url.rstrip('/')}/api/environments/{requests.utils.quote(env_id, safe='')}/files"
-    try:
-        r = requests.get(list_url, timeout=30)
-        r.raise_for_status()
-        raw = r.json()
-        files = _normalize_file_paths(raw if isinstance(raw, list) else [])
-    except requests.RequestException as e:
-        console.print(f"[red]Failed to list files: {e}[/red]")
+
+    files = _try_api_file_list(base_url, env_id)
+    use_static = False
+    if files is None:
+        console.print("[yellow]API unavailable, trying static fallback...[/yellow]")
+        files = _try_static_file_list(base_url, env_id)
+        use_static = True
+
+    if files is None:
+        console.print(f"[red]Failed to list files from {base_url}[/red]")
         raise typer.Exit(1)
     if not files:
         console.print("[red]No files returned[/red]")
@@ -130,7 +169,9 @@ def install(
             continue
         dest_path = dest_dir / rel_path
         try:
-            download_with_progress(base_url, env_id, rel_path, dest_path)
+            download_with_progress(
+                base_url, env_id, rel_path, dest_path, static=use_static
+            )
         except requests.RequestException as e:
             console.print(f"[red]Failed to download {rel_path}: {e}[/red]")
             raise typer.Exit(1)

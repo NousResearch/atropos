@@ -217,6 +217,17 @@ def build_manifest(environments_path: Path, output_path: Path) -> None:
             encoding="utf-8",
         )
 
+        # Copy env files to static path so they can be downloaded without API
+        env_files_dir = output_path.parent / "env-files" / slug
+        if env_files_dir.exists():
+            shutil.rmtree(env_files_dir)
+        env_files_dir.mkdir(parents=True, exist_ok=True)
+        for file_info in files:
+            src = env_dir / file_info["path"]
+            dst = env_files_dir / file_info["path"]
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(entries, indent=2), encoding="utf-8")
     print(
