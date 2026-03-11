@@ -57,6 +57,9 @@ WARMUP_STEPS="${WARMUP_STEPS:-0}"
 CLIP_EPS="${CLIP_EPS:-0.2}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-16384}"
 TEACHER_MAX_MODEL_LEN="${TEACHER_MAX_MODEL_LEN:-32768}"
+# Trainer seq_len must be larger than ENV_MAX_TOKEN_LENGTH to accommodate
+# chat template overhead (~400-800 tokens for Qwen3 thinking format).
+TRAINER_SEQ_LEN="${TRAINER_SEQ_LEN:-20480}"
 ENV_MAX_TOKEN_LENGTH="${ENV_MAX_TOKEN_LENGTH:-16384}"
 DISTILL_COEF="${DISTILL_COEF:-0.2}"
 DISTILL_TEMPERATURE="${DISTILL_TEMPERATURE:-1.0}"
@@ -263,7 +266,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
     --warmup-steps "$WARMUP_STEPS" \
     --lr "$LR" \
     --clip-eps "$CLIP_EPS" \
-    --seq-len "$ENV_MAX_TOKEN_LENGTH" \
+    --seq-len "$TRAINER_SEQ_LEN" \
     --distill-enabled \
     --distill-coef "$DISTILL_COEF" \
     --distill-temperature "$DISTILL_TEMPERATURE"
@@ -287,7 +290,7 @@ start_process "trainer" "${LOG_DIR}/trainer.log" \
     --warmup-steps "$WARMUP_STEPS" \
     --lr "$LR" \
     --clip-eps "$CLIP_EPS" \
-    --seq-len "$ENV_MAX_TOKEN_LENGTH" \
+    --seq-len "$TRAINER_SEQ_LEN" \
     --distill-enabled \
     --distill-coef "$DISTILL_COEF" \
     --distill-temperature "$DISTILL_TEMPERATURE"
