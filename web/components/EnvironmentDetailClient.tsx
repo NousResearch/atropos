@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ArrowLeft,
   ChevronRight,
@@ -365,7 +367,15 @@ export function EnvironmentDetailClient({ slug }: { slug: string }) {
                         <span className="text-foreground">Environment ID:</span> <code>{env.id}</code>
                       </li>
                       <li>
-                        <span className="text-foreground">Description:</span> {env.description || "—"}
+                        <span className="text-foreground">Description:</span>{" "}
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            p: ({ children }) => <span>{children}</span>,
+                          }}
+                        >
+                          {env.description || "—"}
+                        </ReactMarkdown>
                       </li>
                       <li>
                         <span className="text-foreground">Research Tags:</span>{" "}
@@ -393,7 +403,14 @@ export function EnvironmentDetailClient({ slug }: { slug: string }) {
                   <div className="screen-frame-alt p-4">
                     <div className="data-label">About</div>
                     <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                      {env.description || "No additional notes available."}
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ children }) => <>{children}</>,
+                        }}
+                      >
+                        {env.description || "No additional notes available."}
+                      </ReactMarkdown>
                     </p>
                   </div>
                   <div className="screen-frame-alt p-4">

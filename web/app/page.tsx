@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ArrowUpRight,
   ChevronRight,
@@ -80,12 +82,18 @@ function EnvironmentCard({
               </Badge>
             </div>
             <CardDescription className="line-clamp-3">
-              {env.description || "No descriptive abstract has been logged for this environment."}
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => <>{children}</>,
+                }}
+              >
+                {env.description || "No descriptive abstract has been logged for this environment."}
+              </ReactMarkdown>
             </CardDescription>
           </div>
 
           <div className="space-y-3">
-            <div className="barcode-rule opacity-80" />
             <div className="grid gap-2 text-xs uppercase tracking-[0.22em] text-muted-foreground sm:grid-cols-2">
               <div className="screen-frame-alt p-3">
                 <div className="data-label">Files</div>
