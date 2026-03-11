@@ -907,7 +907,7 @@ class BaseEnv(ABC):
                     "ensure your trainer handles this appropriately."
                 )
             elif abort_on_any_max_length_exceeded and any(
-                [len(x) >= self.max_token_len for x in group["tokens"]]
+                [len(x) > self.max_token_len for x in group["tokens"]]
             ):
                 logger.warning("Token length is too long in a group, skipping...")
                 continue
