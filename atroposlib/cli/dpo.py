@@ -235,15 +235,76 @@ async def dpo_data_grabber(
                 pbar.update(min(batch_count, num_seqs_to_save - total_count))
 
 
+async def dpo_dry_run(
+    api_url: str,
+    tokenizer: str,
+) -> None:
+    """
+    Lightweight connectivity check for offline DPO data generation.
+
+    This function verifies that:
+    - the tokenizer can be loaded, and
+    - the rollout API is reachable.
+
+    It does not register a run, reset any server state, or write output files.
+    """
+    print("[atropos-dpo-gen] Starting dry run...")
+
+    # 1) Check tokenizer loading
+    try:
+        AutoTokenizer.from_pretrained(tokenizer)
+        print(f"[atropos-dpo-gen] ✅ Loaded tokenizer '{tokenizer}'.")
+    except Exception as exc:  # pragma: no cover - defensive
+        raise SystemExit(
+            "[atropos-dpo-gen] Failed to load tokenizer "
+            f"'{tokenizer}'. Please check the model name and your "
+            "Hugging Face credentials.\n"
+            f"Underlying error: {exc}"
+        ) from exc
+
+    # 2) Check basic API connectivity without mutating state
+    try:
+        timeout = aiohttp.ClientTimeout(total=5)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(f"{api_url}/batch") as response:
+                if response.status >= 400:
+                    raise SystemExit(
+                        "[atropos-dpo-gen] Connected to rollout server but "
+                        f"received HTTP {response.status} for GET /batch. "
+                        "Please ensure the Atropos API is started with "
+                        "`run-api` and that the URL/port is correct."
+                    )
+        print(f"[atropos-dpo-gen] ✅ Reached rollout server at '{api_url}'.")
+    except aiohttp.ClientConnectorError as exc:
+        raise SystemExit(
+            "[atropos-dpo-gen] Could not reach rollout server at "
+            f"'{api_url}'. Please ensure:\n"
+            "- `run-api` is running (default: http://localhost:8000)\n"
+            "- your `--api-url` matches the server host and port\n"
+            "- no firewall or proxy is blocking the request."
+        ) from exc
+    except asyncio.TimeoutError as exc:
+        raise SystemExit(
+            "[atropos-dpo-gen] Timed out while trying to reach the rollout "
+            f"server at '{api_url}'. The server may be overloaded or not "
+            "running. Try again after confirming `run-api` is up."
+        ) from exc
+
+    print(
+        "[atropos-dpo-gen] Dry run completed successfully. "
+        "You are ready to generate DPO data."
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Grab SFT data from an Atropos API instance."
+        description="Grab DPO data from an Atropos API instance."
     )
     parser.add_argument(
         "filepath",
         type=str,
         default="sft_data.jsonl",
-        help="Path to the output JSONL file for SFT data.",
+        help="Path to the output JSONL file for DPO data.",
     )
     parser.add_argument(
         "--api-url",
@@ -302,22 +363,42 @@ def main():
         action="store_true",
         help="Append to the previous file instead of overwriting it.",
     )
-    args = parser.parse_args()
-    asyncio.run(
-        dpo_data_grabber(
-            args.filepath,
-            args.api_url,
-            args.group_size,
-            args.max_token_len,
-            args.tokenizer,
-            args.save_messages,
-            args.save_n_pairs_per_group,
-            args.num_seqs_to_save,
-            args.allow_negative_scores,
-            args.minimum_score_diff_max_min,
-            args.append_to_previous,
-        )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Validate tokenizer loading and rollout server connectivity "
+            "without registering a run or writing any output. "
+            "Useful for quickly checking your configuration before "
+            "collecting DPO data."
+        ),
     )
+    args = parser.parse_args()
+
+    # Run either a dry run (connectivity + config check) or full data grab
+    if args.dry_run:
+        asyncio.run(
+            dpo_dry_run(
+                api_url=args.api_url,
+                tokenizer=args.tokenizer,
+            )
+        )
+    else:
+        asyncio.run(
+            dpo_data_grabber(
+                args.filepath,
+                args.api_url,
+                args.group_size,
+                args.max_token_len,
+                args.tokenizer,
+                args.save_messages,
+                args.save_n_pairs_per_group,
+                args.num_seqs_to_save,
+                args.allow_negative_scores,
+                args.minimum_score_diff_max_min,
+                args.append_to_previous,
+            )
+        )
 
 
 if __name__ == "__main__":

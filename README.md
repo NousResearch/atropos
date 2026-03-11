@@ -376,17 +376,27 @@ python gsm8k_server.py evaluate \
 Run the following commands in **separate terminals**, in this order:
 
 **Terminal 1** — Start the API server first (must be running before environments connect):
-```sh
+```bash
 run-api
 ```
 
 **Terminal 2** — Start an environment:
-```sh
-python gsm8k_server.py serve --slurm False # or an env of your choice
+```bash
+python environments/gsm8k_server.py serve --slurm False # or an env of your choice
 ```
 
+**Terminal 3** — (Optional) Dry-run your configuration:
+
+```bash
+atropos-sft-gen path/to/output.jsonl \
+  --tokenizer Qwen/Qwen2.5-1.5B-Instruct \
+  --dry-run
+```
+
+If this succeeds, your tokenizer and rollout server connectivity are correctly configured.
+
 **Terminal 3** — Generate data:
-```sh
+```bash
 atropos-sft-gen path/to/output.jsonl --tokenizer Qwen/Qwen2.5-1.5B-Instruct # or whichever tokenizer you have in your env config
 ```
 Rejection sampling can be controlled via `--save-top-n-per-group`, `--allow-negative-scores`, and `--minimum-score-diff-max-min`. See `atropos-sft-gen -h` for more detailed usage info.
@@ -442,9 +452,59 @@ Ensure you're using a clean virtual environment with the correct Python version:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # On Windows (PowerShell): .venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 ```
+
+### Windows Quickstart
+
+While Atropos is primarily documented with Unix-like shells in mind, it works well on Windows too.
+Below is a minimal end-to-end example using **PowerShell**.
+
+1. Create and activate a virtual environment:
+
+```powershell
+cd C:\path\to\atropos
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -e .[dev]
+```
+
+2. Start the API server:
+
+```powershell
+run-api
+```
+
+3. In a new PowerShell window, start an environment (for example GSM8K):
+
+```powershell
+cd C:\path\to\atropos
+.venv\Scripts\Activate.ps1
+python .\environments\gsm8k_server.py serve --slurm False
+```
+
+4. In a third PowerShell window, dry-run your offline data generation setup, then generate data:
+
+```powershell
+cd C:\path\to\atropos
+.venv\Scripts\Activate.ps1
+
+# Optional: configuration check
+atropos-sft-gen .\gsm8k_rollouts.jsonl `
+  --tokenizer Qwen/Qwen2.5-1.5B-Instruct `
+  --dry-run
+
+# Actual data generation
+atropos-sft-gen .\gsm8k_rollouts.jsonl `
+  --tokenizer Qwen/Qwen2.5-1.5B-Instruct
+```
+
+If you see connectivity errors in dry-run, double-check that:
+
+- `run-api` is running and listening on the expected port (default `http://localhost:8000`)
+- Your environment script (e.g. `gsm8k_server.py`) is running without errors
+- Any firewall or VPN software is not blocking local HTTP requests
 
 **`OPENAI_API_KEY` not set errors**
 

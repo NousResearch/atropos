@@ -239,6 +239,68 @@ async def sft_data_grabber(
                 pbar.update(min(batch_count, num_seqs_to_save - total_count))
 
 
+async def sft_dry_run(
+    api_url: str,
+    tokenizer: str,
+) -> None:
+    """
+    Lightweight connectivity check for offline SFT data generation.
+
+    This function verifies that:
+    - the tokenizer can be loaded, and
+    - the rollout API is reachable.
+
+    It does not register a run, reset any server state, or write output files.
+    """
+    print("[atropos-sft-gen] Starting dry run...")
+
+    # 1) Check tokenizer loading
+    try:
+        AutoTokenizer.from_pretrained(tokenizer)
+        print(f"[atropos-sft-gen] ✅ Loaded tokenizer '{tokenizer}'.")
+    except Exception as exc:  # pragma: no cover - defensive
+        raise SystemExit(
+            "[atropos-sft-gen] Failed to load tokenizer "
+            f"'{tokenizer}'. Please check the model name and your "
+            "Hugging Face credentials.\n"
+            f"Underlying error: {exc}"
+        ) from exc
+
+    # 2) Check basic API connectivity without mutating state
+    try:
+        timeout = aiohttp.ClientTimeout(total=5)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            # /batch is always expected to exist on a running rollout server
+            async with session.get(f"{api_url}/batch") as response:
+                if response.status >= 400:
+                    raise SystemExit(
+                        "[atropos-sft-gen] Connected to rollout server but "
+                        f"received HTTP {response.status} for GET /batch. "
+                        "Please ensure the Atropos API is started with "
+                        "`run-api` and that the URL/port is correct."
+                    )
+        print(f"[atropos-sft-gen] ✅ Reached rollout server at '{api_url}'.")
+    except aiohttp.ClientConnectorError as exc:
+        raise SystemExit(
+            "[atropos-sft-gen] Could not reach rollout server at "
+            f"'{api_url}'. Please ensure:\n"
+            "- `run-api` is running (default: http://localhost:8000)\n"
+            "- your `--api-url` matches the server host and port\n"
+            "- no firewall or proxy is blocking the request."
+        ) from exc
+    except asyncio.TimeoutError as exc:
+        raise SystemExit(
+            "[atropos-sft-gen] Timed out while trying to reach the rollout "
+            f"server at '{api_url}'. The server may be overloaded or not "
+            "running. Try again after confirming `run-api` is up."
+        ) from exc
+
+    print(
+        "[atropos-sft-gen] Dry run completed successfully. "
+        "You are ready to generate SFT data."
+    )
+
+
 def main():
     """Parses command-line arguments and runs the SFT data grabber."""
     parser = argparse.ArgumentParser(
@@ -313,25 +375,43 @@ def main():
         default=64,
         help="Number of tasks per step for batch size calculation (batch_size = group_size * tasks_per_step).",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Validate tokenizer loading and rollout server connectivity "
+            "without registering a run or writing any output. "
+            "Useful for quickly checking your configuration before "
+            "collecting SFT data."
+        ),
+    )
     args = parser.parse_args()
 
-    # Run the main async function
-    asyncio.run(
-        sft_data_grabber(
-            args.filepath,
-            args.api_url,
-            args.group_size,
-            args.max_token_len,
-            args.tokenizer,
-            args.save_messages,
-            args.save_top_n_per_group,
-            args.num_seqs_to_save,
-            args.allow_negative_scores,
-            args.minimum_score_diff_max_min,
-            args.append_to_previous,
-            args.tasks_per_step,
+    # Run either a dry run (connectivity + config check) or full data grab
+    if args.dry_run:
+        asyncio.run(
+            sft_dry_run(
+                api_url=args.api_url,
+                tokenizer=args.tokenizer,
+            )
         )
-    )
+    else:
+        asyncio.run(
+            sft_data_grabber(
+                args.filepath,
+                args.api_url,
+                args.group_size,
+                args.max_token_len,
+                args.tokenizer,
+                args.save_messages,
+                args.save_top_n_per_group,
+                args.num_seqs_to_save,
+                args.allow_negative_scores,
+                args.minimum_score_diff_max_min,
+                args.append_to_previous,
+                args.tasks_per_step,
+            )
+        )
 
 
 if __name__ == "__main__":
