@@ -221,14 +221,6 @@ export function EnvironmentDetailClient({ slug }: { slug: string }) {
                 </div>
                 <div className="mt-6 caution-rule" />
               </div>
-
-              <div className="screen-frame-elevated terminal-code p-5">
-                <div className="data-label text-primary">Access Pattern</div>
-                <pre className="mt-3 overflow-x-auto text-xs leading-6 text-foreground">
-                  {`inspect manifest\npreview tracked text files\nopen source tree on GitHub`}
-                </pre>
-              </div>
-
               <div className="screen-frame-alt p-5">
                 <div className="data-label">Action Cluster</div>
                 <div className="mt-4 flex flex-col gap-3">
