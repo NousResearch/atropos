@@ -262,6 +262,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
     --warmup-steps "$WARMUP_STEPS" \
     --lr "$LR" \
     --clip-eps "$CLIP_EPS" \
+    --seq-len "$ENV_MAX_TOKEN_LENGTH" \
     --distill-enabled \
     --distill-coef "$DISTILL_COEF" \
     --distill-temperature "$DISTILL_TEMPERATURE"
@@ -285,6 +286,7 @@ start_process "trainer" "${LOG_DIR}/trainer.log" \
     --warmup-steps "$WARMUP_STEPS" \
     --lr "$LR" \
     --clip-eps "$CLIP_EPS" \
+    --seq-len "$ENV_MAX_TOKEN_LENGTH" \
     --distill-enabled \
     --distill-coef "$DISTILL_COEF" \
     --distill-temperature "$DISTILL_TEMPERATURE"
