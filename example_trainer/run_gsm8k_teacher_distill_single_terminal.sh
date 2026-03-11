@@ -56,6 +56,7 @@ LR="${LR:-1e-5}"
 WARMUP_STEPS="${WARMUP_STEPS:-0}"
 CLIP_EPS="${CLIP_EPS:-0.2}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-16384}"
+TEACHER_MAX_MODEL_LEN="${TEACHER_MAX_MODEL_LEN:-32768}"
 ENV_MAX_TOKEN_LENGTH="${ENV_MAX_TOKEN_LENGTH:-16384}"
 DISTILL_COEF="${DISTILL_COEF:-0.2}"
 DISTILL_TEMPERATURE="${DISTILL_TEMPERATURE:-1.0}"
@@ -206,7 +207,7 @@ start_process "teacher_vllm" "${LOG_DIR}/teacher_vllm.log" \
     --port "$TEACHER_PORT" \
     --tensor-parallel-size "$TEACHER_TP" \
     --gpu-memory-utilization "$TEACHER_GPU_MEMORY_UTILIZATION" \
-    --max-model-len "$MAX_MODEL_LEN" \
+    --max-model-len "$TEACHER_MAX_MODEL_LEN" \
     --dtype "$DTYPE"
 if [[ "$DRY_RUN" == "0" ]]; then
   wait_for_http "http://localhost:${TEACHER_PORT}/health" 1800 "teacher vLLM"
