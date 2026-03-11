@@ -55,6 +55,15 @@
 
 </details>
 
+## 🗂️ Environment Manifest Checklist
+<!-- For RL Environment PRs only — the manifest powers the Environments Hub web UI -->
+- [ ] Environment directory is under `environments/community/` (or appropriate category subfolder)
+- [ ] `README.md` is present with a `#` heading (used as the display name) and a short description paragraph below it
+- [ ] At least one `.py` file exists in the environment directory (required for discovery)
+- [ ] Ran `python scripts/build_env_manifest.py` from the repo root to rebuild the manifest
+- [ ] Committed the updated `web/public/environments.json` and the new `web/public/env-data/<slug>.json` file(s)
+- [ ] Committed the copied environment files under `web/public/env-files/<slug>/`
+
 ---
 
 ## 🌐 Web Checklist

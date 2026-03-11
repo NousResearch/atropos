@@ -144,6 +144,17 @@ Default base URL is `http://localhost:3000`; override with `ATROPOS_BASE_URL` or
 
 When contributing a new environment under `environments/community/`, ensure it has a `README.md` and at least one `.py` file so the manifest builder will include it. See [web/README.md](web/README.md) for more detail.
 
+After adding or changing an environment, **rebuild the static manifest** and commit the output:
+```bash
+python scripts/build_env_manifest.py
+```
+This script writes three things that must be committed with your PR:
+- `web/public/environments.json` — the full index of all environments
+- `web/public/env-data/<slug>.json` — per-environment detail (name, description, file list)
+- `web/public/env-files/<slug>/` — static copies of the environment's files for download
+
+The script derives each environment's display name and description from the first `#` heading and the first non-heading paragraph in its `README.md`, so make sure your README follows that format.
+
 ## License for Contributions
 Any contributions you make will be under the MIT License. In short, when you submit code changes, your submissions are understood to be under the same [MIT License](LICENSE) that covers the project. Feel free to contact the maintainers if that's a concern.
 
@@ -152,6 +163,14 @@ Any contributions you make will be under the MIT License. In short, when you sub
 Since Atropos is focused on reinforcement learning environments, we encourage contributions of new training environments. However, please adhere to the following guidelines:
 
 *   **Directory Structure**: Please create your new environment within the `environments/community/` subdirectory. This helps us organize incoming contributions and allows for a streamlined initial review process before full testing and integration.
+*   **Required files**: Your environment directory must contain:
+    *   `README.md` — with a `# Title` heading (used as the display name in the hub) and a short description paragraph immediately below it
+    *   At least one `.py` file — required for the manifest builder to recognise the directory as an environment
+*   **Rebuild the manifest**: After adding your environment, run the manifest builder from the repo root and commit its output alongside your code:
+    ```bash
+    python scripts/build_env_manifest.py
+    ```
+    The files to commit are `web/public/environments.json`, `web/public/env-data/<your-slug>.json`, and `web/public/env-files/<your-slug>/`. Without this step your environment will not appear in the Environments Hub.
 *   **Import Style**: We prefer that you treat your environment's directory as the package root for imports. For example, if your environment resides in `environments/community/my_new_env/` and you need to import `SomeClass` (assuming it's in a `some_file_in_my_env.py` file at the root of your `my_new_env` directory or accessible via your Python path setup), you should be able to use a direct import like:
     ```python
     from some_file_in_my_env import SomeClass
