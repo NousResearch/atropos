@@ -105,7 +105,9 @@ def download_with_progress(
     else:
         safe_id = urlquote(env_id, safe="")
         url = f"{base_url.rstrip('/')}/api/environments/{safe_id}/files/{safe_path}"
-    resp = requests.get(url, stream=True, timeout=60)
+    resp = requests.get(
+        url, stream=True, timeout=60, headers={"Accept-Encoding": "identity"}
+    )
     resp.raise_for_status()
     total = int(resp.headers.get("Content-Length", 0)) or None
     dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -137,7 +139,6 @@ def install(
         None,
         "--cache-dir",
         help="Override cache dir",
-        path_type=Path,
     ),
 ) -> None:
     """Download and install an environment."""
@@ -146,7 +147,6 @@ def install(
     files = _try_api_file_list(base_url, env_id)
     use_static = False
     if files is None:
-        console.print("[yellow]API unavailable, trying static fallback...[/yellow]")
         files = _try_static_file_list(base_url, env_id)
         use_static = True
 
@@ -185,7 +185,6 @@ def list_cached(
         None,
         "--cache-dir",
         help="Override cache dir",
-        path_type=Path,
     ),
 ) -> None:
     """List cached environments."""
@@ -216,7 +215,6 @@ def delete(
         None,
         "--cache-dir",
         help="Override cache dir",
-        path_type=Path,
     ),
 ) -> None:
     """Remove an environment from cache."""
