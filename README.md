@@ -399,8 +399,9 @@ run-api --port 8001
 Ensure you're using a clean virtual environment with the correct Python version:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+python3 -m venv .venv  # Use python3 on Linux/WSL
+source .venv/bin/activate  # On Linux/WSL use this command
+                           # On Windows use `.venv\Scripts\activate`
 pip install -e ".[dev]"
 ```
 
