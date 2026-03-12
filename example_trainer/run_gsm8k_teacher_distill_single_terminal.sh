@@ -251,8 +251,8 @@ log "  ${LOG_DIR}/env.log"
 if [[ "$DRY_RUN" == "1" ]]; then
   log "[DRY RUN] trainer command:"
   printf '  '
-  printf '%q ' env CUDA_VISIBLE_DEVICES="$TRAINER_GPUS" \
-    "$PYTHON_BIN" -m example_trainer.grpo \
+  printf '%q ' env CUDA_VISIBLE_DEVICES="$TRAINER_GPUS" PYTHONUNBUFFERED=1 \
+    "$PYTHON_BIN" -u -m example_trainer.grpo \
     --model-name "$STUDENT_MODEL" \
     --weight-bridge-mode shared_vllm \
     --device cuda:0 \
@@ -275,8 +275,8 @@ if [[ "$DRY_RUN" == "1" ]]; then
 fi
 
 start_process "trainer" "${LOG_DIR}/trainer.log" \
-  env CUDA_VISIBLE_DEVICES="$TRAINER_GPUS" \
-  "$PYTHON_BIN" -m example_trainer.grpo \
+  env CUDA_VISIBLE_DEVICES="$TRAINER_GPUS" PYTHONUNBUFFERED=1 \
+  "$PYTHON_BIN" -u -m example_trainer.grpo \
     --model-name "$STUDENT_MODEL" \
     --weight-bridge-mode shared_vllm \
     --device cuda:0 \
