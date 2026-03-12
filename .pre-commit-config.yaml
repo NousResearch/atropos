@@ -36,3 +36,4 @@ repos:
     hooks:
     -   id: codespell
         args: ["--skip", "*.csv,*.html", "-L", "te,ans,sems,lsat,anc,strokin,lod,nam,ques,unparseable,rouge,oll,managin,expressio,re-declare"]
+        exclude: 'package-lock\.json'
