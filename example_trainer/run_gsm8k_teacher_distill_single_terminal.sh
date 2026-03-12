@@ -251,59 +251,48 @@ log "  ${LOG_DIR}/student_vllm.log"
 log "  ${LOG_DIR}/teacher_vllm.log"
 log "  ${LOG_DIR}/env.log"
 
-# 5) Trainer (foreground, primary output)
+# 5) Trainer (background)
+TRAINER_CMD=(
+  env
+  CUDA_VISIBLE_DEVICES="$TRAINER_GPUS"
+  PYTHONUNBUFFERED=1
+  "$PYTHON_BIN"
+  -u
+  -m
+  example_trainer.grpo
+  --model-name "$STUDENT_MODEL"
+  --weight-bridge-mode shared_vllm
+  --device cuda:0
+  --save-path "$SAVE_DIR"
+  --atropos-url "http://localhost:${API_PORT}"
+  --vllm-port "$STUDENT_PORT"
+  --vllm-config-path "${BRIDGE_DIR}/vllm_bridge_config.json"
+  --training-steps "$TRAINING_STEPS"
+  --batch-size "$BATCH_SIZE"
+  --gradient-accumulation-steps "$GRAD_ACCUM"
+  --warmup-steps "$WARMUP_STEPS"
+  --lr "$LR"
+  --clip-eps "$CLIP_EPS"
+  --seq-len "$TRAINER_SEQ_LEN"
+  --distill-enabled
+  --distill-coef "$DISTILL_COEF"
+  --distill-temperature "$DISTILL_TEMPERATURE"
+  --use-wandb
+  --wandb-project "$WANDB_PROJECT"
+)
+if [[ -n "$WANDB_GROUP" ]]; then
+  TRAINER_CMD+=(--wandb-group "$WANDB_GROUP")
+fi
+
 if [[ "$DRY_RUN" == "1" ]]; then
   log "[DRY RUN] trainer command:"
   printf '  '
-  printf '%q ' env CUDA_VISIBLE_DEVICES="$TRAINER_GPUS" PYTHONUNBUFFERED=1 \
-    "$PYTHON_BIN" -u -m example_trainer.grpo \
-    --model-name "$STUDENT_MODEL" \
-    --weight-bridge-mode shared_vllm \
-    --device cuda:0 \
-    --save-path "$SAVE_DIR" \
-    --atropos-url "http://localhost:${API_PORT}" \
-    --vllm-port "$STUDENT_PORT" \
-    --vllm-config-path "${BRIDGE_DIR}/vllm_bridge_config.json" \
-    --training-steps "$TRAINING_STEPS" \
-    --batch-size "$BATCH_SIZE" \
-    --gradient-accumulation-steps "$GRAD_ACCUM" \
-    --warmup-steps "$WARMUP_STEPS" \
-    --lr "$LR" \
-    --clip-eps "$CLIP_EPS" \
-    --seq-len "$TRAINER_SEQ_LEN" \
-    --distill-enabled \
-    --distill-coef "$DISTILL_COEF" \
-    --distill-temperature "$DISTILL_TEMPERATURE" \
-    --use-wandb \
-    --wandb-project "$WANDB_PROJECT" \
-    ${WANDB_GROUP:+--wandb-group "$WANDB_GROUP"}
+  printf '%q ' "${TRAINER_CMD[@]}"
   printf '\n'
   exit 0
 fi
 
-start_process "trainer" "${LOG_DIR}/trainer.log" \
-  env CUDA_VISIBLE_DEVICES="$TRAINER_GPUS" PYTHONUNBUFFERED=1 \
-  "$PYTHON_BIN" -u -m example_trainer.grpo \
-    --model-name "$STUDENT_MODEL" \
-    --weight-bridge-mode shared_vllm \
-    --device cuda:0 \
-    --save-path "$SAVE_DIR" \
-    --atropos-url "http://localhost:${API_PORT}" \
-    --vllm-port "$STUDENT_PORT" \
-    --vllm-config-path "${BRIDGE_DIR}/vllm_bridge_config.json" \
-    --training-steps "$TRAINING_STEPS" \
-    --batch-size "$BATCH_SIZE" \
-    --gradient-accumulation-steps "$GRAD_ACCUM" \
-    --warmup-steps "$WARMUP_STEPS" \
-    --lr "$LR" \
-    --clip-eps "$CLIP_EPS" \
-    --seq-len "$TRAINER_SEQ_LEN" \
-    --distill-enabled \
-    --distill-coef "$DISTILL_COEF" \
-    --distill-temperature "$DISTILL_TEMPERATURE" \
-    --use-wandb \
-    --wandb-project "$WANDB_PROJECT" \
-    ${WANDB_GROUP:+--wandb-group "$WANDB_GROUP"}
+start_process "trainer" "${LOG_DIR}/trainer.log" "${TRAINER_CMD[@]}"
 
 log "All processes running in background."
 log ""
