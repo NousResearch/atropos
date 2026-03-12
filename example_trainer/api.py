@@ -7,6 +7,7 @@ Handles communication with the Atropos API server for:
 - Batch retrieval
 """
 
+import os
 import time as _time
 
 import requests
@@ -99,7 +100,14 @@ def get_batch(url: str = "http://localhost:8000"):
     Raises:
         RuntimeError: If trainer is not registered or other API error
     """
-    data = requests.get(f"{url}/batch", timeout=10).json()
+    data = requests.get(
+        f"{url}/batch",
+        headers={
+            "X-Atropos-Client": "trainer",
+            "X-Atropos-Pid": str(os.getpid()),
+        },
+        timeout=10,
+    ).json()
 
     # Check if there was an error (trainer not registered)
     if data.get("status") == "error":
