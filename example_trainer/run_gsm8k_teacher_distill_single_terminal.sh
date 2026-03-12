@@ -65,6 +65,9 @@ DISTILL_COEF="${DISTILL_COEF:-0.2}"
 DISTILL_TEMPERATURE="${DISTILL_TEMPERATURE:-1.0}"
 TEACHER_TOP_K="${TEACHER_TOP_K:-8}"
 
+WANDB_PROJECT="${WANDB_PROJECT:-gsm8k-teacher-distill}"
+WANDB_GROUP="${WANDB_GROUP:-}"
+
 STUDENT_GPU_MEMORY_UTILIZATION="${STUDENT_GPU_MEMORY_UTILIZATION:-0.95}"
 TEACHER_GPU_MEMORY_UTILIZATION="${TEACHER_GPU_MEMORY_UTILIZATION:-0.95}"
 DTYPE="${DTYPE:-bfloat16}"
@@ -166,6 +169,7 @@ log "  logs=${LOG_DIR}"
 log "  saves=${SAVE_DIR}"
 log "  bridge=${BRIDGE_DIR}"
 log "  env max_token_length=${ENV_MAX_TOKEN_LENGTH}, env workers=${ENV_MAX_WORKERS_PER_NODE}, env worker_timeout=${ENV_WORKER_TIMEOUT}"
+log "  wandb project=${WANDB_PROJECT}${WANDB_GROUP:+, group=${WANDB_GROUP}}"
 
 # Shared-vLLM attach path currently expects the student server to expose
 # unsharded weights. Keep the student on TP=1 and the trainer on the same GPU set.
@@ -269,7 +273,10 @@ if [[ "$DRY_RUN" == "1" ]]; then
     --seq-len "$TRAINER_SEQ_LEN" \
     --distill-enabled \
     --distill-coef "$DISTILL_COEF" \
-    --distill-temperature "$DISTILL_TEMPERATURE"
+    --distill-temperature "$DISTILL_TEMPERATURE" \
+    --use-wandb \
+    --wandb-project "$WANDB_PROJECT" \
+    ${WANDB_GROUP:+--wandb-group "$WANDB_GROUP"}
   printf '\n'
   exit 0
 fi
@@ -293,7 +300,10 @@ start_process "trainer" "${LOG_DIR}/trainer.log" \
     --seq-len "$TRAINER_SEQ_LEN" \
     --distill-enabled \
     --distill-coef "$DISTILL_COEF" \
-    --distill-temperature "$DISTILL_TEMPERATURE"
+    --distill-temperature "$DISTILL_TEMPERATURE" \
+    --use-wandb \
+    --wandb-project "$WANDB_PROJECT" \
+    ${WANDB_GROUP:+--wandb-group "$WANDB_GROUP"}
 
 log "All processes running in background."
 log ""
