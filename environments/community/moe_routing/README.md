@@ -83,7 +83,7 @@ The environment accepts standard Atropos configuration plus:
 
 ## Generalization
 
-The routing-over-frozen-experts pattern generalizes beyond LLMs. The same reward structure applies to any domain with multiple specialized classifiers and a feedback signal: RF signal detection, medical triage, content moderation, network security. See the [Chameleon concept paper](https://github.com/thomasperry/chameleon) for cross-domain analysis.
+The routing-over-frozen-experts pattern generalizes beyond LLMs. The same reward structure applies to any domain with multiple specialized classifiers and a feedback signal: RF signal detection, medical triage, content moderation, network security.
 
 ## License
 

@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from pydantic import Field
 
@@ -395,7 +395,7 @@ class MoERoutingEnv(BaseEnv):
                 APIServerConfig(
                     model_name="Qwen/Qwen3-8B",
                     base_url="http://127.0.0.1:8378/v1",
-                    api_key="local",
+                    api_key="local",  # pragma: allowlist secret
                 )
             ],
         )
