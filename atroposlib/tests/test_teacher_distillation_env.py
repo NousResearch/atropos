@@ -88,7 +88,9 @@ def test_teacher_tokenizer_mismatch_raises(monkeypatch):
         lambda *args, **kwargs: _TeacherTokenizer(),
     )
 
-    with pytest.raises(ValueError, match="Cross-tokenizer distillation is not supported"):
+    with pytest.raises(
+        ValueError, match="Cross-tokenizer distillation is not supported"
+    ):
         TeacherDistillationEnv._validate_teacher_tokenizer_compatibility(
             env,
             teacher_tokenizer_name="teacher-model",

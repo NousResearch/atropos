@@ -89,7 +89,9 @@ class TeacherDistillationEnv(BaseEnv, ABC):
     # Core fetch
     # ------------------------------------------------------------------
 
-    def _validate_teacher_tokenizer_compatibility(self, teacher_tokenizer_name: str) -> None:
+    def _validate_teacher_tokenizer_compatibility(
+        self, teacher_tokenizer_name: str
+    ) -> None:
         student_tok_name = getattr(self.tokenizer, "name_or_path", None) or ""
         if student_tok_name == teacher_tokenizer_name:
             return
