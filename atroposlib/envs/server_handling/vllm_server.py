@@ -2,7 +2,6 @@
 # see example_trainer/vllm_api_server.py for an example
 
 import asyncio
-import logging
 import warnings
 from typing import Any, Dict, List, Tuple
 
@@ -19,8 +18,6 @@ from atroposlib.envs.server_handling.server_baseline import (
     APIServerConfig,
     ReasoningConfig,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class VLLMServer(APIServer):

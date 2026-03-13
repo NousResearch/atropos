@@ -1,6 +1,5 @@
 import asyncio
 import inspect
-import logging
 import os
 import warnings
 from contextlib import asynccontextmanager
@@ -25,8 +24,6 @@ from atroposlib.envs.server_handling.server_harness import ServerHarness
 from atroposlib.envs.server_handling.sglang_server import SGLangServer
 from atroposlib.envs.server_handling.trl_vllm_server import TrlVllmServer
 from atroposlib.envs.server_handling.vllm_server import VLLMServer
-
-logger = logging.getLogger(__name__)
 
 
 class ServerManagerConfig(BaseModel):
