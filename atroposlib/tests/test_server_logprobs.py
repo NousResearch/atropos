@@ -5,15 +5,15 @@ import logging
 import pytest
 
 from atroposlib.envs.server_handling.openai_server import resolve_openai_configs
-from atroposlib.envs.server_handling.vllm_server import (
-    resolve_openai_configs as resolve_vllm_configs,
-)
 from atroposlib.envs.server_handling.server_baseline import (
     APIServer,
     APIServerConfig,
     AsyncSemWithAdaptiveWeight,
 )
 from atroposlib.envs.server_handling.server_manager import ServerManager
+from atroposlib.envs.server_handling.vllm_server import (
+    resolve_openai_configs as resolve_vllm_configs,
+)
 
 
 class _FakeAPIServer(APIServer):
