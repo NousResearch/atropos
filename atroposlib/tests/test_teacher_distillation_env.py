@@ -297,4 +297,3 @@ def test_resolve_teacher_server_configs_uses_teacher_namespace(monkeypatch):
         "openai": {"tokenizer_name": "teacher-tokenizer"}
     }
     assert captured["cli_passed_flags"] == {"openai.base_url": "http://override/v1"}
-

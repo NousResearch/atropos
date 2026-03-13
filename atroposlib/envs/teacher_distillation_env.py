@@ -22,17 +22,17 @@ from pydantic import Field
 from pydantic_cli import Cmd
 from rich import print as rprint
 
-from .base import BaseEnv, BaseEnvConfig, ScoredDataGroup
-from .constants import ENV_NAMESPACE, NAMESPACE_SEP, OPENAI_NAMESPACE
-from .server_handling.openai_server import resolve_openai_configs
-from .server_handling.server_baseline import APIServerConfig, ServerBaseline
-from .server_handling.server_manager import ServerManager, ServerManagerConfig
 from ..utils.cli import (
     extract_namespace,
     get_double_dash_flags,
     get_prefixed_pydantic_model,
     merge_dicts,
 )
+from .base import BaseEnv, BaseEnvConfig, ScoredDataGroup
+from .constants import ENV_NAMESPACE, NAMESPACE_SEP, OPENAI_NAMESPACE
+from .server_handling.openai_server import resolve_openai_configs
+from .server_handling.server_baseline import APIServerConfig, ServerBaseline
+from .server_handling.server_manager import ServerManager, ServerManagerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,9 @@ class TeacherDistillationEnv(BaseEnv, ABC):
         cli_passed_flags: Dict[str, Any],
     ) -> Optional[Union[ServerBaseline, List[APIServerConfig]]]:
         teacher_full_prefix = f"{cls.teacher_namespace}{NAMESPACE_SEP}"
-        teacher_cli_passed_args = extract_namespace(cli_passed_flags, teacher_full_prefix)
+        teacher_cli_passed_args = extract_namespace(
+            cli_passed_flags, teacher_full_prefix
+        )
         yaml_teacher_config = yaml_config.get(cls.teacher_namespace, {})
 
         if (
