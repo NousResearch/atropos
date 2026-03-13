@@ -424,6 +424,10 @@ def resolve_openai_configs(
         elif isinstance(default_server_configs, list):
             server_configs = [final_openai_config]
         else:
+            logger.warning(
+                f"Unexpected type for default_server_configs: {type(default_server_configs)}. "
+                "Proceeding with single OpenAI server configuration based on merged settings."
+            )
             server_configs = [final_openai_config]
 
     return server_configs

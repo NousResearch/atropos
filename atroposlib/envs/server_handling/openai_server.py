@@ -234,4 +234,16 @@ def resolve_openai_configs(
             server_configs = [final_openai_config]
         else:
             server_configs = [final_openai_config]
+
+    if isinstance(server_configs, list):
+        logger.info(
+            "resolve_openai_configs returning %s config(s) with URLs: %s",
+            len(server_configs),
+            [getattr(c, "base_url", None) for c in server_configs],
+        )
+    else:
+        logger.info(
+            "resolve_openai_configs returning %s",
+            type(server_configs).__name__,
+        )
     return server_configs
