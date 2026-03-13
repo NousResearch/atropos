@@ -32,13 +32,6 @@ class GSM8kTeacherDistillEnv(GSM8kEnv, TeacherDistillationEnv):
             max_token_length=2048,
             wandb_name="gsm8k_teacher_distill",
             teacher_enabled=True,
-            teacher_server=APIServerConfig(
-                base_url="http://localhost:8003/v1",
-                model_name="mock-teacher",
-                api_key="",
-                server_type="vllm",
-                tokenizer_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
-            ),
             teacher_top_k=4,
         )
         server_config = APIServerConfig(
@@ -48,6 +41,17 @@ class GSM8kTeacherDistillEnv(GSM8kEnv, TeacherDistillationEnv):
             num_requests_for_eval=256,
         )
         return env_config, server_config
+
+    @classmethod
+    def teacher_config_init(cls) -> APIServerConfig:
+        return APIServerConfig(
+            base_url="http://localhost:9003/v1",
+            model_name="mock-teacher",
+            api_key="",
+            server_type="vllm",
+            tokenizer_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
+            timeout=1200,
+        )
 
 
 if __name__ == "__main__":

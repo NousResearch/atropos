@@ -308,29 +308,42 @@ Teacher config shape:
 ```python
 TeacherDistillationConfig(
     teacher_enabled=True,
-    teacher_server=APIServerConfig(
-        base_url="http://localhost:9003/v1",
-        model_name="Qwen/Qwen3-30B-A3B-Instruct-2507",
-        api_key="",
-        server_type="vllm",
-    ),
     teacher_top_k=8,
 )
 ```
 
-If `teacher_server.model_name` is a deployment alias rather than a tokenizer
-identifier, set `teacher_server.tokenizer_name` explicitly so the env can
-validate tokenizer compatibility.
+Teacher server configs are passed separately at init, just like the primary
+`server_configs`:
+
+```python
+env = MyTeacherEnv(
+    config=env_config,
+    server_configs=student_server_configs,
+    teacher_server_configs=[
+        APIServerConfig(
+            base_url="http://localhost:9003/v1",
+            model_name="Qwen/Qwen3-30B-A3B-Instruct-2507",
+            api_key="",
+            server_type="vllm",
+            tokenizer_name="Qwen/Qwen3-30B-A3B-Instruct-2507",
+        )
+    ],
+)
+```
 
 CLI shape:
 
 ```bash
 --env.teacher_enabled true \
---env.teacher_server.base_url "http://localhost:9003/v1" \
---env.teacher_server.model_name "Qwen/Qwen3-30B-A3B-Instruct-2507" \
---env.teacher_server.server_type vllm \
+--teacher.base_url "http://localhost:9003/v1" \
+--teacher.model_name "Qwen/Qwen3-30B-A3B-Instruct-2507" \
+--teacher.server_type vllm \
 --env.teacher_top_k 8
 ```
+
+If `--teacher.model_name` is a deployment alias rather than a tokenizer
+identifier, also set `--teacher.tokenizer_name ...` so the env can validate
+tokenizer compatibility.
 
 Tokenizer requirement:
 

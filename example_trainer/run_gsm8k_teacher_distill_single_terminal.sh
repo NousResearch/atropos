@@ -234,9 +234,9 @@ start_process "gsm8k_teacher_env" "${LOG_DIR}/env.log" \
     --env.use_wandb true \
     --env.wandb_name "gsm8k-teacher-distill" \
     --env.teacher_enabled true \
-    --env.teacher_server.base_url "http://localhost:${TEACHER_PORT}/v1" \
-    --env.teacher_server.model_name "$TEACHER_MODEL" \
-    --env.teacher_server.server_type vllm \
+    --teacher.base_url "http://localhost:${TEACHER_PORT}/v1" \
+    --teacher.model_name "$TEACHER_MODEL" \
+    --teacher.server_type vllm \
     --env.teacher_top_k "$TEACHER_TOP_K" \
     --env.ensure_scores_are_not_same false \
     --openai.api_key "dummy" \

@@ -314,14 +314,14 @@ What to configure on the environment side:
 
 ```bash
 --env.teacher_enabled true \
---env.teacher_server.base_url "http://localhost:9003/v1" \
---env.teacher_server.model_name "$TEACHER_MODEL" \
---env.teacher_server.server_type vllm \
+--teacher.base_url "http://localhost:9003/v1" \
+--teacher.model_name "$TEACHER_MODEL" \
+--teacher.server_type vllm \
 --env.teacher_top_k 8
 ```
 
 If `$TEACHER_MODEL` is a deployment alias instead of a tokenizer identifier,
-also set `--env.teacher_server.tokenizer_name ...` so the env can validate
+also set `--teacher.tokenizer_name ...` so the env can validate
 tokenizer compatibility.
 
 Why cross-tokenizer conversion is not acceptable here:
