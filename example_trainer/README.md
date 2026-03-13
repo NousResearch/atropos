@@ -573,7 +573,7 @@ python -m example_trainer.vllm_api_server  # NOT direct vllm commands
 
 ### WandB Logging
 
-    ```bash
+```bash
 --use-wandb \
 --wandb-project "my-grpo-training" \
 --wandb-group "hermes-8b-gsm8k"

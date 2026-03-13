@@ -296,17 +296,6 @@ async def _generate(request_dict: dict, raw_request: Request) -> Response:
     if engine is None:
         raise HTTPException(status_code=503, detail="Engine not initialized")
 
-    request_preview = {
-        "has_prompt": "prompt" in request_dict,
-        "n": request_dict.get("n"),
-        "max_tokens": request_dict.get("max_tokens"),
-        "temperature": request_dict.get("temperature"),
-        "top_p": request_dict.get("top_p"),
-        "logprobs": request_dict.get("logprobs"),
-        "prompt_logprobs": request_dict.get("prompt_logprobs"),
-    }
-    logger.info("POST /generate received %s", request_preview)
-
     prompt = request_dict.pop("prompt")
     stream = request_dict.pop("stream", False)
     request_dict["output_kind"] = RequestOutputKind.FINAL_ONLY

@@ -7,7 +7,6 @@ Handles communication with the Atropos API server for:
 - Batch retrieval
 """
 
-import os
 import time as _time
 
 import requests
@@ -102,10 +101,6 @@ def get_batch(url: str = "http://localhost:8000"):
     """
     response = requests.get(
         f"{url}/batch",
-        headers={
-            "X-Atropos-Client": "trainer",
-            "X-Atropos-Pid": str(os.getpid()),
-        },
         timeout=10,
     )
     data = response.json()
