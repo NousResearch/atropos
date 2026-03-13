@@ -88,6 +88,24 @@ async def test_attach_teacher_distillation_negative_topk_skips_fetch():
 
 
 @pytest.mark.asyncio
+async def test_attach_teacher_distillation_zero_topk_passthrough():
+    env = object.__new__(_ConcreteTeacherEnv)
+    env.config = SimpleNamespace(teacher_enabled=True, teacher_top_k=0)
+    env.teacher_server = _FakeTeacherServer()
+
+    group = {
+        "tokens": [[1, 2, 3]],
+        "group_overrides": None,
+        "masks": [[-100, 2, 3]],
+        "scores": [1.0],
+    }
+    out = await TeacherDistillationEnv._attach_teacher_distillation(env, group)
+    assert env.teacher_server.calls == 1
+    assert out["distill_token_ids"] is not None
+    assert out["distill_logprobs"] is not None
+
+
+@pytest.mark.asyncio
 async def test_attach_teacher_distillation_group_override_can_skip_fetch():
     env = object.__new__(_ConcreteTeacherEnv)
     env.config = SimpleNamespace(teacher_enabled=True, teacher_top_k=2)
