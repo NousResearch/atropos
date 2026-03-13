@@ -447,33 +447,14 @@ class ManagedServer:
         if not self.track_tree and self.tokenizer is not None:
             input_ids = self._compute_input_ids(prompt, extending_node)
             completion_kwargs["input_ids"] = input_ids
-            logger.warning(
-                "managed_server chat_completion prepared input_ids=%s extending=%s",
-                len(input_ids),
-                extending_node is not None,
-            )
-        else:
-            logger.warning(
-                "managed_server chat_completion using prompt passthrough track_tree=%s tokenizer=%s",
-                self.track_tree,
-                self.tokenizer is not None,
-            )
 
         # Call the tokens and logprobs wrapper directly
-        logger.warning(
-            "managed_server chat_completion calling backend completion wrapper"
-        )
         (
             prompt_tokens,
             output_tokens_list,
             output_logprobs_list,
             finish_reasons,
         ) = await self.server.tokens_and_logprobs_completion(**completion_kwargs)
-        logger.warning(
-            "managed_server chat_completion backend returned prompt_tokens=%s outputs=%s",
-            len(prompt_tokens),
-            len(output_tokens_list),
-        )
 
         # Track each completion and build choices
         n = len(output_tokens_list)

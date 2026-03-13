@@ -106,13 +106,6 @@ class ServerManager:
             self.servers = [ServerHarness()]
             return
         if not isinstance(configs, list):
-            logger.warning(
-                "ServerManager: configs is NOT a list (type=%s). "
-                "Using auto-generated URLs (template mode). "
-                "Passed base_url=%s will be IGNORED.",
-                type(configs).__name__,
-                getattr(configs, "base_url", "N/A"),
-            )
             urls = []
             if os.environ.get("SLURM_JOB_NODELIST", None) is not None:
                 nodelist = (
@@ -155,21 +148,11 @@ class ServerManager:
                 server_class(config, reasoning_config=reasoning_config)
                 for config in openai_configs
             ]
-            logger.warning(
-                "ServerManager: auto-generated %s server(s) at URLs: %s",
-                len(self.servers),
-                [c.base_url for c in openai_configs],
-            )
         elif not slurm:
             self.servers = [
                 server_class(config, reasoning_config=reasoning_config)
                 for config in configs
             ]
-            logger.warning(
-                "ServerManager: using %s explicit config(s) at URLs: %s",
-                len(self.servers),
-                [c.base_url for c in configs],
-            )
         else:
             nodelist = (
                 os.popen(f'scontrol show hostnames {os.environ["SLURM_JOB_NODELIST"]}')
