@@ -47,5 +47,6 @@ class GSM8kTeacherDistillEnv(GSM8kEnv, TeacherDistillationEnv):
         )
         return env_config, server_config
 
+
 if __name__ == "__main__":
     GSM8kTeacherDistillEnv.cli()

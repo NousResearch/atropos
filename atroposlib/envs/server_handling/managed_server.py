@@ -460,7 +460,9 @@ class ManagedServer:
             )
 
         # Call the tokens and logprobs wrapper directly
-        logger.warning("managed_server chat_completion calling backend completion wrapper")
+        logger.warning(
+            "managed_server chat_completion calling backend completion wrapper"
+        )
         (
             prompt_tokens,
             output_tokens_list,

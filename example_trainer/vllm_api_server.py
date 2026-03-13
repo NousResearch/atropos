@@ -360,10 +360,16 @@ async def _generate(request_dict: dict, raw_request: Request) -> Response:
         ret["prompt_token_ids"] = final_output.prompt_token_ids
         ret["token_ids"] = [x.token_ids for x in final_output.outputs]
 
-    if sampling_params.prompt_logprobs is not None and final_output.prompt_logprobs is not None:
+    if (
+        sampling_params.prompt_logprobs is not None
+        and final_output.prompt_logprobs is not None
+    ):
         ret["prompt_logprobs"] = [
-            {int(tok_id): lp.logprob for tok_id, lp in pos.items()}
-            if pos is not None else None
+            (
+                {int(tok_id): lp.logprob for tok_id, lp in pos.items()}
+                if pos is not None
+                else None
+            )
             for pos in final_output.prompt_logprobs
         ]
 

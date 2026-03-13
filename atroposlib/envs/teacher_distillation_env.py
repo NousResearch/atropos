@@ -151,7 +151,11 @@ class TeacherDistillationEnv(BaseEnv, ABC):
             # and Qwen3-30B) share the same vocabulary, so even though the
             # name_or_path strings differ they should use the fast path.
             student_tok_name = getattr(self.tokenizer, "name_or_path", None) or ""
-            if student_tok_name and teacher_tok_name and student_tok_name != teacher_tok_name:
+            if (
+                student_tok_name
+                and teacher_tok_name
+                and student_tok_name != teacher_tok_name
+            ):
                 try:
                     from transformers import AutoTokenizer
 
@@ -367,7 +371,9 @@ class TeacherDistillationEnv(BaseEnv, ABC):
         teacher_topk_lps = payload["prompt_topk_logprobs"]
 
         alignment = self._build_student_teacher_alignment(text, token_ids, teacher_ids)
-        return self._align_and_remap(token_ids, teacher_topk_ids, teacher_topk_lps, alignment)
+        return self._align_and_remap(
+            token_ids, teacher_topk_ids, teacher_topk_lps, alignment
+        )
 
     # ------------------------------------------------------------------
     # Group enrichment

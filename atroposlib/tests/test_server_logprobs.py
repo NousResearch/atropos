@@ -41,7 +41,9 @@ class _FakeAPIServer(APIServer):
 
 
 class _FakeRoutedServer:
-    def __init__(self, name: str, train_slots: int, eval_slots: int, healthy: bool = True):
+    def __init__(
+        self, name: str, train_slots: int, eval_slots: int, healthy: bool = True
+    ):
         self.name = name
         self.server_healthy = healthy
         self.sem = AsyncSemWithAdaptiveWeight(4)
