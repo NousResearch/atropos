@@ -201,9 +201,6 @@ def main():
         checkpoint_interval=args.checkpoint_interval,
         # GRPO hyperparameters
         clip_eps=args.clip_eps,
-        distill_enabled=getattr(args, "distill_enabled", False),
-        distill_coef=getattr(args, "distill_coef", 0.0),
-        distill_temperature=getattr(args, "distill_temperature", 1.0),
         # vLLM settings
         vllm_port=args.vllm_port,
         vllm_gpu_memory_utilization=args.gpu_memory_utilization,
