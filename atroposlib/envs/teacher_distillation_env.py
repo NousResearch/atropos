@@ -175,9 +175,7 @@ class TeacherDistillationEnv(BaseEnv, ABC):
             group["distill_logprobs"] = None
             return group
 
-        top_k = int(
-            group_overrides.get("teacher_top_k", self.config.teacher_top_k)
-        )
+        top_k = int(group_overrides.get("teacher_top_k", self.config.teacher_top_k))
         if top_k <= -1:
             group["distill_token_ids"] = None
             group["distill_logprobs"] = None
