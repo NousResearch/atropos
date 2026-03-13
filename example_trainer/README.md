@@ -304,6 +304,29 @@ environment uses the `/generate` path and includes token-level
 4. Trainer extracts and aligns logprobs with training labels
 5. GRPO loss uses these rollout logprobs in importance-ratio terms
 
+### 1b. Teacher distillation requires the same tokenizer
+
+When distillation data is attached to Atropos batches, the trainer treats
+`distill_token_ids` as indices into the student's logit tensor. That only works
+if the teacher and student share the same tokenizer vocabulary.
+
+What to configure on the environment side:
+
+```bash
+--env.teacher_enabled true \
+--env.teacher_server.base_url "http://localhost:9003/v1" \
+--env.teacher_server.model_name "$TEACHER_MODEL" \
+--env.teacher_server.server_type vllm \
+--env.teacher_top_k 8
+```
+
+Why cross-tokenizer conversion is not acceptable here:
+
+- Teacher token ID `1234` and student token ID `1234` can correspond to different text.
+- Re-tokenizing teacher text changes token boundaries, so teacher position `i` may no longer correspond to student position `i`.
+- Remapping teacher top-k tokens back into student vocab can collapse multiple teacher candidates into one student token or expand one teacher token into multiple student tokens.
+- The current distillation loss expects exact per-position supervision in student token space, so an approximate remapping would silently produce misleading targets.
+
 ### 2. Clipping
 
 ```bash

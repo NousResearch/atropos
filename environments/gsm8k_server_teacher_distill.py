@@ -32,11 +32,12 @@ class GSM8kTeacherDistillEnv(GSM8kEnv, TeacherDistillationEnv):
             max_token_length=2048,
             wandb_name="gsm8k_teacher_distill",
             teacher_enabled=True,
-            teacher_base_url="http://localhost:8003/v1",
-            teacher_model_name="mock-teacher",
-            teacher_api_key="",
-            teacher_server_type="vllm",
-            teacher_tokenizer_name="none",
+            teacher_server=APIServerConfig(
+                base_url="http://localhost:8003/v1",
+                model_name="mock-teacher",
+                api_key="",
+                server_type="vllm",
+            ),
             teacher_top_k=4,
         )
         server_config = APIServerConfig(
