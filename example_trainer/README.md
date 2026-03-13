@@ -320,6 +320,10 @@ What to configure on the environment side:
 --env.teacher_top_k 8
 ```
 
+If `$TEACHER_MODEL` is a deployment alias instead of a tokenizer identifier,
+also set `--env.teacher_server.tokenizer_name ...` so the env can validate
+tokenizer compatibility.
+
 Why cross-tokenizer conversion is not acceptable here:
 
 - Teacher token ID `1234` and student token ID `1234` can correspond to different text.

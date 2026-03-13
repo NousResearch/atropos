@@ -281,7 +281,7 @@ class VLLMServer(APIServer):
         ), "Prompt or input_ids is required for get_logprobs!"
 
         top_k = int(kwargs.pop("top_k", kwargs.pop("top_logprobs", 1)))
-        top_k = max(1, top_k)
+        top_k = max(0, top_k)
 
         # Use input_ids if provided (from ManagedServer), otherwise tokenize prompt
         from_prompt_text = False
@@ -420,7 +420,7 @@ def resolve_openai_configs(
             ) from e
 
         if isinstance(default_server_configs, APIServerConfig):
-            server_configs = final_openai_config
+            server_configs = [final_openai_config]
         elif isinstance(default_server_configs, list):
             server_configs = [final_openai_config]
         else:

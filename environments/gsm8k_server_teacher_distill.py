@@ -37,6 +37,7 @@ class GSM8kTeacherDistillEnv(GSM8kEnv, TeacherDistillationEnv):
                 model_name="mock-teacher",
                 api_key="",
                 server_type="vllm",
+                tokenizer_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
             ),
             teacher_top_k=4,
         )

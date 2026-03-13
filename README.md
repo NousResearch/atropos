@@ -318,6 +318,10 @@ TeacherDistillationConfig(
 )
 ```
 
+If `teacher_server.model_name` is a deployment alias rather than a tokenizer
+identifier, set `teacher_server.tokenizer_name` explicitly so the env can
+validate tokenizer compatibility.
+
 CLI shape:
 
 ```bash
