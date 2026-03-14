@@ -432,7 +432,9 @@ def resolve_openai_configs(
                 f"Merged Dict: {openai_config_dict}"
             ) from e
 
-        if isinstance(default_server_configs, list):
+        if isinstance(default_server_configs, APIServerConfig):
+            server_configs = [final_openai_config]
+        elif isinstance(default_server_configs, list):
             server_configs = [final_openai_config]
         else:
             logger.warning(

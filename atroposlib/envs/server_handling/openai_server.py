@@ -230,20 +230,14 @@ def resolve_openai_configs(
                 f"Merged Dict: {openai_config_dict}"
             ) from e
 
-        if isinstance(default_server_configs, list):
+        if isinstance(default_server_configs, APIServerConfig):
+            server_configs = [final_openai_config]
+        elif isinstance(default_server_configs, list):
             server_configs = [final_openai_config]
         else:
+            logger.warning(
+                f"Unexpected type for default_server_configs: {type(default_server_configs)}. "
+                "Proceeding with single OpenAI server configuration based on merged settings."
+            )
             server_configs = [final_openai_config]
-
-    if isinstance(server_configs, list):
-        logger.info(
-            "resolve_openai_configs returning %s config(s) with URLs: %s",
-            len(server_configs),
-            [getattr(c, "base_url", None) for c in server_configs],
-        )
-    else:
-        logger.info(
-            "resolve_openai_configs returning %s",
-            type(server_configs).__name__,
-        )
     return server_configs
