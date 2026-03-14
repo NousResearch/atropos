@@ -205,7 +205,9 @@ def test_init_requires_teacher_server_source(monkeypatch):
         teacher_enabled=True,
         teacher_top_k=0,
     )
-    with pytest.raises(ValueError, match="no teacher server configuration was provided"):
+    with pytest.raises(
+        ValueError, match="no teacher server configuration was provided"
+    ):
         _ConcreteTeacherEnv(
             config=config,
             server_configs=[],
