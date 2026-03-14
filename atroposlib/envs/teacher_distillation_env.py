@@ -285,7 +285,7 @@ class TeacherDistillationEnv(BaseEnv, ABC):
         config: TeacherDistillationConfig,
         server_configs: Union[ServerBaseline, List[APIServerConfig]],
         teacher_server_configs: Optional[
-            Union[ServerBaseline, List[APIServerConfig]]
+            Union[ServerBaseline, APIServerConfig, List[APIServerConfig]]
         ] = None,
         slurm: bool = False,
         testing: bool = False,
@@ -302,7 +302,10 @@ class TeacherDistillationEnv(BaseEnv, ABC):
                     "path with --teacher.* flags. The generic BaseEnv 'process' and "
                     "'evaluate' commands do not currently wire teacher_server_configs."
                 )
-            teacher_config_source = teacher_server_configs
+            if isinstance(teacher_server_configs, APIServerConfig):
+                teacher_config_source = [teacher_server_configs]
+            else:
+                teacher_config_source = teacher_server_configs
             self.teacher_server = ServerManager(
                 teacher_config_source,
                 slurm=False,
