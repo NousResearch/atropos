@@ -324,6 +324,11 @@ If `$TEACHER_MODEL` is a deployment alias instead of a tokenizer identifier,
 also set `--teacher.tokenizer_name ...` so the env can validate
 tokenizer compatibility.
 
+The teacher-aware CLI path is currently wired for `serve`. If
+`teacher_enabled=True`, the generic `process` and `evaluate` commands are not
+teacher-aware and will fail loudly unless the environment is instantiated
+manually with `teacher_server_configs=...`.
+
 Why cross-tokenizer conversion is not acceptable here:
 
 - Teacher token ID `1234` and student token ID `1234` can correspond to different text.

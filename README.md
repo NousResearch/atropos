@@ -331,6 +331,17 @@ env = MyTeacherEnv(
 )
 ```
 
+You can either:
+
+- build a teacher-enabled env by mixing `TeacherDistillationEnv` into an existing
+  `BaseEnv`-derived env such as `GSM8kEnv`, or
+- subclass `TeacherDistillationEnv` directly and implement the usual environment
+  methods yourself.
+
+In both cases, `TeacherDistillationEnv` still assumes the normal `BaseEnv`
+runtime contract: tokenized rollouts, `ScoredDataGroup` payloads, and the
+standard `handle_send_to_api(...)` transport path.
+
 CLI shape:
 
 ```bash
@@ -344,6 +355,13 @@ CLI shape:
 If `--teacher.model_name` is a deployment alias rather than a tokenizer
 identifier, also set `--teacher.tokenizer_name ...` so the env can validate
 tokenizer compatibility.
+
+Scope note:
+
+- The teacher-aware CLI wiring currently exists for `serve`.
+- If `teacher_enabled=True`, the generic `process` and `evaluate` commands will
+  fail loudly at env construction time unless you instantiate the env yourself
+  and pass `teacher_server_configs=...`.
 
 Tokenizer requirement:
 

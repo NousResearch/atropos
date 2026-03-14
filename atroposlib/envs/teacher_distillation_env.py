@@ -296,7 +296,11 @@ class TeacherDistillationEnv(BaseEnv, ABC):
         if config.teacher_enabled:
             if teacher_server_configs is None:
                 raise ValueError(
-                    "teacher_enabled=True requires teacher_server_configs at init."
+                    "teacher_enabled=True but no teacher server configuration was "
+                    "provided. Pass teacher_server_configs=... when instantiating "
+                    "the environment directly, or use the teacher-aware 'serve' CLI "
+                    "path with --teacher.* flags. The generic BaseEnv 'process' and "
+                    "'evaluate' commands do not currently wire teacher_server_configs."
                 )
             teacher_config_source = teacher_server_configs
             self.teacher_server = ServerManager(
