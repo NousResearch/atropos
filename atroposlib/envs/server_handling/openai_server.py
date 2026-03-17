@@ -199,16 +199,12 @@ def resolve_openai_configs(
                 f"Error parsing multi-server OpenAI configuration from YAML under '{OPENAI_NAMESPACE}': {e}"
             ) from e
     elif isinstance(default_server_configs, APIServerConfig):
-        # Check APIServerConfig BEFORE ServerBaseline since APIServerConfig inherits from ServerBaseline
-        logger.info(
-            "Using single OpenAI server configuration based on merged settings (default/YAML/CLI)."
-        )
+        logger.info("Using single OpenAI server configuration.")
         try:
             final_openai_config = APIServerConfig(**openai_config_dict)
         except Exception as e:
             raise FailedExecutionException(
-                f"Error creating final OpenAI configuration from merged settings: {e}\n"
-                f"Merged Dict: {openai_config_dict}"
+                f"Error creating final OpenAI configuration: {e}"
             ) from e
         server_configs = [final_openai_config]
     elif isinstance(default_server_configs, ServerBaseline):
@@ -219,15 +215,12 @@ def resolve_openai_configs(
         logger.info("Using default multi-server configuration (length >= 2).")
         server_configs = default_server_configs
     else:
-        logger.info(
-            "Using single OpenAI server configuration based on merged settings (default/YAML/CLI)."
-        )
+        logger.info("Using single OpenAI server configuration.")
         try:
             final_openai_config = APIServerConfig(**openai_config_dict)
         except Exception as e:
             raise FailedExecutionException(
-                f"Error creating final OpenAI configuration from merged settings: {e}\n"
-                f"Merged Dict: {openai_config_dict}"
+                f"Error creating final OpenAI configuration: {e}"
             ) from e
 
         if isinstance(default_server_configs, APIServerConfig):
@@ -237,7 +230,7 @@ def resolve_openai_configs(
         else:
             logger.warning(
                 f"Unexpected type for default_server_configs: {type(default_server_configs)}. "
-                "Proceeding with single OpenAI server configuration based on merged settings."
+                "Proceeding with single OpenAI server configuration."
             )
             server_configs = [final_openai_config]
     return server_configs
