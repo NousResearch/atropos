@@ -401,15 +401,6 @@ def resolve_openai_configs(
             raise FailedExecutionException(
                 f"Error parsing multi-server OpenAI configuration from YAML under '{OPENAI_NAMESPACE}': {e}"
             ) from e
-    elif isinstance(default_server_configs, APIServerConfig):
-        logger.info("Using single OpenAI server configuration.")
-        try:
-            final_openai_config = APIServerConfig(**openai_config_dict)
-        except Exception as e:
-            raise FailedExecutionException(
-                f"Error creating final OpenAI configuration: {e}"
-            ) from e
-        server_configs = [final_openai_config]
     elif isinstance(default_server_configs, ServerBaseline):
         logger.info("Using ServerBaseline configuration.")
         server_configs = default_server_configs
