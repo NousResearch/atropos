@@ -8,7 +8,7 @@ from atroposlib.envs.teacher_distillation_env import (
 from environments.gsm8k_server import GSM8kEnv
 
 
-class GSM8kTeacherDistillEnv(GSM8kEnv, TeacherDistillationEnv):
+class GSM8kTeacherDistillEnv(TeacherDistillationEnv, GSM8kEnv):
     """
     GSM8K environment variant that enables TeacherDistillationEnv config fields.
 
