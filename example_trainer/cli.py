@@ -165,6 +165,64 @@ def add_grpo_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_distillation_args(parser: argparse.ArgumentParser) -> None:
+    """Add on-policy distillation arguments."""
+    group = parser.add_argument_group("On-Policy Distillation")
+    group.add_argument(
+        "--distill-enabled",
+        action="store_true",
+        help="Enable teacher distillation from distill_token_ids/distill_logprobs.",
+    )
+    group.add_argument(
+        "--distill-coef",
+        type=float,
+        default=1.0,
+        help="Coefficient applied to the distillation loss term.",
+    )
+    group.add_argument(
+        "--distill-temperature",
+        type=float,
+        default=1.0,
+        help="Temperature used when computing student distillation logits.",
+    )
+    group.add_argument(
+        "--distill-loss-type",
+        type=str,
+        choices=["kl", "forward_kl", "reverse_kl", "jsd", "cross_entropy", "mse"],
+        default="forward_kl",
+        help="Distillation loss type to apply to teacher supervision.",
+    )
+    group.add_argument(
+        "--distill-jsd-beta",
+        type=float,
+        default=0.5,
+        help="Beta parameter for generalized JSD; lower is more forward-KL-like.",
+    )
+    group.add_argument(
+        "--distill-only",
+        action="store_true",
+        help="Run pure on-policy distillation without the GRPO ratio objective.",
+    )
+
+
+def add_gkd_args(parser: argparse.ArgumentParser) -> None:
+    """Add dedicated GKD arguments for the standalone distillation entrypoint."""
+    group = parser.add_argument_group("GKD")
+    group.add_argument(
+        "--divergence",
+        type=str,
+        choices=["forward_kl", "reverse_kl", "jsd"],
+        default="forward_kl",
+        help="Teacher/student divergence to optimize in the dedicated GKD trainer.",
+    )
+    group.add_argument(
+        "--jsd-beta",
+        type=float,
+        default=0.5,
+        help="Beta parameter used when --divergence jsd.",
+    )
+
+
 def add_vllm_args(parser: argparse.ArgumentParser) -> None:
     """Add vLLM server arguments."""
     group = parser.add_argument_group("vLLM Server")
@@ -354,6 +412,7 @@ def create_full_parser() -> argparse.ArgumentParser:
     add_model_args(parser)
     add_training_args(parser)
     add_grpo_args(parser)
+    add_distillation_args(parser)
     add_vllm_args(parser)
     add_atropos_args(parser)
     add_wandb_args(parser)
@@ -376,9 +435,33 @@ def create_unified_parser() -> argparse.ArgumentParser:
     add_model_args(parser)
     add_training_args(parser)
     add_grpo_args(parser)
+    add_distillation_args(parser)
     add_vllm_args(parser)
     add_atropos_args(parser)
     add_wandb_args(parser)
+    add_debug_args(parser)
+
+    return parser
+
+
+def create_gkd_parser() -> argparse.ArgumentParser:
+    """
+    Create a parser for the dedicated GKD trainer entry point.
+    """
+    parser = create_base_parser(
+        "GKD Trainer - Dedicated on-policy teacher distillation"
+    )
+
+    add_model_args(parser)
+    add_training_args(parser)
+    add_distillation_args(parser)
+    add_gkd_args(parser)
+    add_vllm_args(parser)
+    add_atropos_args(parser)
+    add_wandb_args(parser)
+    add_mode_args(parser)
+    add_lora_args(parser)
+    add_distributed_args(parser)
     add_debug_args(parser)
 
     return parser
@@ -397,6 +480,14 @@ def parse_args() -> argparse.Namespace:
         Parsed arguments namespace
     """
     parser = create_full_parser()
+    return parser.parse_args()
+
+
+def parse_gkd_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments for the dedicated GKD trainer.
+    """
+    parser = create_gkd_parser()
     return parser.parse_args()
 
 
@@ -424,6 +515,12 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         checkpoint_interval=getattr(args, "checkpoint_interval", 3),
         # GRPO/PPO hyperparameters
         clip_eps=getattr(args, "clip_eps", 0.2),
+        distill_enabled=getattr(args, "distill_enabled", False),
+        distill_coef=getattr(args, "distill_coef", 1.0),
+        distill_temperature=getattr(args, "distill_temperature", 1.0),
+        distill_loss_type=getattr(args, "distill_loss_type", "forward_kl"),
+        distill_jsd_beta=getattr(args, "distill_jsd_beta", 0.5),
+        distill_only=getattr(args, "distill_only", False),
         adafactor_scale_parameter=getattr(args, "adafactor_scale_parameter", False),
         adafactor_relative_step=getattr(args, "adafactor_relative_step", False),
         # vLLM settings
@@ -452,3 +549,15 @@ def config_from_args(args: argparse.Namespace) -> TrainingConfig:
         benchmark=getattr(args, "benchmark", False),
         atropos_url=getattr(args, "atropos_url", "http://localhost:8000"),
     )
+
+
+def config_from_gkd_args(args: argparse.Namespace) -> TrainingConfig:
+    """
+    Build a TrainingConfig for the dedicated GKD trainer.
+    """
+    config = config_from_args(args)
+    config.distill_enabled = True
+    config.distill_only = True
+    config.distill_loss_type = getattr(args, "divergence", "jsd")
+    config.distill_jsd_beta = getattr(args, "jsd_beta", 0.5)
+    return config

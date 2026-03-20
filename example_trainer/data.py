@@ -23,12 +23,15 @@ def pad_data_to_good_offset(
     data: dict,
     batch_size: int,
     extract_inference_logprobs: bool = True,
+    extract_distillation_targets: bool = False,
 ) -> Tuple[
     List[torch.Tensor],  # token_batches
     List[torch.Tensor],  # label_batches
     List[torch.Tensor],  # advantage_batches
     List[torch.Tensor],  # temperature_batches
     Optional[List[torch.Tensor]],  # inference_logprob_batches (aligned with labels)
+    Optional[List[list]],  # distill_token_id_batches (ragged top-k)
+    Optional[List[list]],  # distill_logprob_batches (ragged top-k)
 ]:
     """
     Pad and batch data from the Atropos API.
@@ -45,7 +48,15 @@ def pad_data_to_good_offset(
         extract_inference_logprobs: Whether to extract inference logprobs
 
     Returns:
-        Tuple of (token_batches, label_batches, advantage_batches, temperature_batches, inference_logprob_batches)
+        Tuple of (
+            token_batches,
+            label_batches,
+            advantage_batches,
+            temperature_batches,
+            inference_logprob_batches,
+            distill_token_id_batches,
+            distill_logprob_batches,
+        )
         inference_logprob_batches is None if extract_inference_logprobs=False or no logprobs in data
 
     Note:
@@ -73,6 +84,9 @@ def pad_data_to_good_offset(
     temperatures = []
     inference_logprobs_padded: List[np.ndarray] = []  # Padded to match labels shape
     has_any_logprobs = False
+    distill_token_ids_padded: List[Optional[list]] = []
+    distill_logprobs_padded: List[Optional[list]] = []
+    has_any_distill = False
 
     for item in data["batch"]:
         # Normalize advantage scores
@@ -153,6 +167,29 @@ def pad_data_to_good_offset(
                     np.full(token_setup_len - 1, 1.0, dtype=np.float32)
                 )
 
+            if extract_distillation_targets:
+                seq_target_len = token_setup_len - 1
+                if (
+                    item.get("distill_token_ids") is not None
+                    and item.get("distill_logprobs") is not None
+                    and i < len(item["distill_token_ids"])
+                    and i < len(item["distill_logprobs"])
+                ):
+                    seq_ids = item["distill_token_ids"][i]
+                    seq_lps = item["distill_logprobs"][i]
+                    padded_ids = list(seq_ids[:seq_target_len]) + [
+                        [] for _ in range(max(0, seq_target_len - len(seq_ids)))
+                    ]
+                    padded_lps = list(seq_lps[:seq_target_len]) + [
+                        [] for _ in range(max(0, seq_target_len - len(seq_lps)))
+                    ]
+                    distill_token_ids_padded.append(padded_ids)
+                    distill_logprobs_padded.append(padded_lps)
+                    has_any_distill = True
+                else:
+                    distill_token_ids_padded.append(None)
+                    distill_logprobs_padded.append(None)
+
             # Extract temperature (priority: override > generation_params > group_overrides > 1.0)
             t = 1.0
             if (
@@ -178,6 +215,8 @@ def pad_data_to_good_offset(
     advantage_batches = []
     temperature_batches = []
     inference_logprob_batches = []
+    distill_token_id_batches = []
+    distill_logprob_batches = []
 
     for start in range(0, len(input_ids), batch_size):
         end = min(start + batch_size, len(input_ids))
@@ -198,11 +237,24 @@ def pad_data_to_good_offset(
             inference_logprob_batches.append(
                 torch.tensor(np.stack(inference_logprobs_padded[start:end], axis=0))
             )
+        if extract_distillation_targets and distill_token_ids_padded:
+            distill_token_id_batches.append(list(distill_token_ids_padded[start:end]))
+            distill_logprob_batches.append(list(distill_logprobs_padded[start:end]))
 
     # Return inference logprob batches if we have any real logprobs
     final_logprob_batches = (
         inference_logprob_batches
         if (has_any_logprobs and inference_logprob_batches)
+        else None
+    )
+    final_distill_token_id_batches = (
+        distill_token_id_batches
+        if (extract_distillation_targets and has_any_distill and distill_token_id_batches)
+        else None
+    )
+    final_distill_logprob_batches = (
+        distill_logprob_batches
+        if (extract_distillation_targets and has_any_distill and distill_logprob_batches)
         else None
     )
 
@@ -212,6 +264,8 @@ def pad_data_to_good_offset(
         advantage_batches,
         temperature_batches,
         final_logprob_batches,
+        final_distill_token_id_batches,
+        final_distill_logprob_batches,
     )
 
 
@@ -220,6 +274,7 @@ def get_data(
     seq_len: int,
     atropos_url: str = "http://localhost:8000",
     extract_inference_logprobs: bool = True,
+    extract_distillation_targets: bool = False,
 ) -> Tuple[
     List[
         Tuple[
@@ -228,6 +283,8 @@ def get_data(
             List[torch.Tensor],  # advantage_batches
             List[torch.Tensor],  # temperature_batches
             Optional[List[torch.Tensor]],  # inference_logprob_batches
+            Optional[List[list]],  # distill_token_id_batches
+            Optional[List[list]],  # distill_logprob_batches
         ]
     ],
     None,  # Legacy return (no longer used)
@@ -247,7 +304,15 @@ def get_data(
     Returns:
         Tuple of (batches, None)
         - batches: List of processed batch tuples, each containing:
-          (token_batches, label_batches, advantage_batches, temperature_batches, inference_logprob_batches)
+          (
+              token_batches,
+              label_batches,
+              advantage_batches,
+              temperature_batches,
+              inference_logprob_batches,
+              distill_token_id_batches,
+              distill_logprob_batches,
+          )
         - inference_logprob_batches are aligned with labels for proper GRPO loss computation
     """
     batches = []
@@ -299,7 +364,14 @@ def get_data(
                 adv_batches,
                 temp_batches,
                 inf_logprob_batches,
-            ) = pad_data_to_good_offset(data, batch_size, extract_inference_logprobs)
+                distill_token_id_batches,
+                distill_logprob_batches,
+            ) = pad_data_to_good_offset(
+                data,
+                batch_size,
+                extract_inference_logprobs,
+                extract_distillation_targets,
+            )
 
             # Include inference logprob batches in the tuple
             batches.append(
@@ -309,6 +381,8 @@ def get_data(
                     adv_batches,
                     temp_batches,
                     inf_logprob_batches,
+                    distill_token_id_batches,
+                    distill_logprob_batches,
                 )
             )
 

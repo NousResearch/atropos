@@ -27,6 +27,8 @@ set -euo pipefail
 #   TRAINING_STEPS=100
 #   DISTILL_COEF=0.2
 #   DISTILL_TEMPERATURE=1.0
+#   DIVERGENCE=forward_kl
+#   JSD_BETA=0.1
 #   TEACHER_TOP_K=8
 #   DRY_RUN=1
 
@@ -63,6 +65,8 @@ TRAINER_SEQ_LEN="${TRAINER_SEQ_LEN:-20480}"
 ENV_MAX_TOKEN_LENGTH="${ENV_MAX_TOKEN_LENGTH:-16384}"
 DISTILL_COEF="${DISTILL_COEF:-0.2}"
 DISTILL_TEMPERATURE="${DISTILL_TEMPERATURE:-1.0}"
+DIVERGENCE="${DIVERGENCE:-forward_kl}"
+JSD_BETA="${JSD_BETA:-0.1}"
 TEACHER_TOP_K="${TEACHER_TOP_K:-8}"
 
 WANDB_PROJECT="${WANDB_PROJECT:-gsm8k-teacher-distill}"
@@ -170,6 +174,7 @@ log "  saves=${SAVE_DIR}"
 log "  bridge=${BRIDGE_DIR}"
 log "  env max_token_length=${ENV_MAX_TOKEN_LENGTH}, env workers=${ENV_MAX_WORKERS_PER_NODE}, env worker_timeout=${ENV_WORKER_TIMEOUT}"
 log "  wandb project=${WANDB_PROJECT}${WANDB_GROUP:+, group=${WANDB_GROUP}}"
+log "  gkd divergence=${DIVERGENCE}${DIVERGENCE:+, jsd_beta=${JSD_BETA}}"
 
 # Shared-vLLM attach path currently expects the student server to expose
 # unsharded weights. Keep the student on TP=1 and the trainer on the same GPU set.
@@ -260,7 +265,7 @@ TRAINER_CMD=(
   "$PYTHON_BIN"
   -u
   -m
-  example_trainer.grpo
+  example_trainer.gkd
   --model-name "$STUDENT_MODEL"
   --weight-bridge-mode shared_vllm
   --device cuda:0
@@ -273,11 +278,11 @@ TRAINER_CMD=(
   --gradient-accumulation-steps "$GRAD_ACCUM"
   --warmup-steps "$WARMUP_STEPS"
   --lr "$LR"
-  --clip-eps "$CLIP_EPS"
   --seq-len "$TRAINER_SEQ_LEN"
-  --distill-enabled
   --distill-coef "$DISTILL_COEF"
   --distill-temperature "$DISTILL_TEMPERATURE"
+  --divergence "$DIVERGENCE"
+  --jsd-beta "$JSD_BETA"
   --use-wandb
   --wandb-project "$WANDB_PROJECT"
 )

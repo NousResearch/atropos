@@ -42,6 +42,13 @@ def main():
     print(f"Mode: {config.weight_bridge_mode}")
     print(f"Training steps: {config.training_steps}")
     print(f"GRPO: clip_eps={config.clip_eps}")
+    if config.distill_enabled:
+        print(
+            "Distill: "
+            f"enabled coef={config.distill_coef} temp={config.distill_temperature} "
+            f"type={config.distill_loss_type}"
+            + (" (distill-only)" if config.distill_only else "")
+        )
     print(f"{'='*60}\n")
 
     if config.weight_bridge_mode == "shared_vllm":

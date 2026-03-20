@@ -69,6 +69,41 @@ class TrainingConfig(BaseModel):
             "Prevents large policy updates that could destabilize training."
         ),
     )
+    distill_enabled: bool = Field(
+        False,
+        description=(
+            "Enable on-policy teacher distillation using distill_token_ids and "
+            "distill_logprobs attached to Atropos batches."
+        ),
+    )
+    distill_coef: float = Field(
+        1.0,
+        description="Coefficient applied to the distillation loss term.",
+    )
+    distill_temperature: float = Field(
+        1.0,
+        description="Temperature used when computing the student distillation loss.",
+    )
+    distill_loss_type: Literal[
+        "kl", "forward_kl", "reverse_kl", "jsd", "cross_entropy", "mse"
+    ] = Field(
+        "forward_kl",
+        description="Distillation loss type applied to teacher supervision.",
+    )
+    distill_jsd_beta: float = Field(
+        0.5,
+        description=(
+            "Beta parameter for generalized JSD. Smaller values are more "
+            "forward-KL-like; larger values are more reverse-KL-like."
+        ),
+    )
+    distill_only: bool = Field(
+        False,
+        description=(
+            "If true, optimize only the distillation term and skip GRPO ratio loss. "
+            "Useful for pure on-policy distillation experiments."
+        ),
+    )
     # === Device & Storage ===
     device: str = Field(
         "cuda" if torch.cuda.is_available() else "cpu", description="Device to train on"

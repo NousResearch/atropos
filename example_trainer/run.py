@@ -103,6 +103,12 @@ def main():
     print(f"Training steps: {args.training_steps}")
     print(f"Optimizer: {args.optimizer}")
     print(f"GRPO: clip_eps={args.clip_eps}")
+    if getattr(args, "distill_enabled", False):
+        print(
+            "Distill: "
+            f"enabled coef={args.distill_coef} temp={args.distill_temperature} "
+            f"type={args.distill_loss_type}"
+        )
     print("=" * 60 + "\n")
 
     # Get the path to vllm_api_server.py
@@ -201,6 +207,11 @@ def main():
         checkpoint_interval=args.checkpoint_interval,
         # GRPO hyperparameters
         clip_eps=args.clip_eps,
+        distill_enabled=getattr(args, "distill_enabled", False),
+        distill_coef=getattr(args, "distill_coef", 1.0),
+        distill_temperature=getattr(args, "distill_temperature", 1.0),
+        distill_loss_type=getattr(args, "distill_loss_type", "kl"),
+        distill_only=getattr(args, "distill_only", False),
         # vLLM settings
         vllm_port=args.vllm_port,
         vllm_gpu_memory_utilization=args.gpu_memory_utilization,
