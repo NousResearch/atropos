@@ -24,12 +24,12 @@ set -euo pipefail
 #   API_PORT=8002
 #   STUDENT_PORT=9001
 #   TEACHER_PORT=9003
-#   TRAINING_STEPS=100
+#   TRAINING_STEPS=10
 #   DISTILL_COEF=0.2
 #   DISTILL_TEMPERATURE=1.0
 #   DIVERGENCE=forward_kl
 #   JSD_BETA=0.1
-#   TEACHER_TOP_K=8
+#   TEACHER_TOP_K=4
 #   DRY_RUN=1
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -51,23 +51,23 @@ API_PORT="${API_PORT:-8002}"
 STUDENT_PORT="${STUDENT_PORT:-9001}"
 TEACHER_PORT="${TEACHER_PORT:-9003}"
 
-TRAINING_STEPS="${TRAINING_STEPS:-20}"
+TRAINING_STEPS="${TRAINING_STEPS:-10}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
 GRAD_ACCUM="${GRAD_ACCUM:-4}"
 LR="${LR:-1e-5}"
 WARMUP_STEPS="${WARMUP_STEPS:-0}"
 CLIP_EPS="${CLIP_EPS:-0.2}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-16384}"
-TEACHER_MAX_MODEL_LEN="${TEACHER_MAX_MODEL_LEN:-32768}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
+TEACHER_MAX_MODEL_LEN="${TEACHER_MAX_MODEL_LEN:-4096}"
 # Trainer seq_len must be larger than ENV_MAX_TOKEN_LENGTH to accommodate
 # chat template overhead (~400-800 tokens for Qwen3 thinking format).
-TRAINER_SEQ_LEN="${TRAINER_SEQ_LEN:-20480}"
-ENV_MAX_TOKEN_LENGTH="${ENV_MAX_TOKEN_LENGTH:-16384}"
+TRAINER_SEQ_LEN="${TRAINER_SEQ_LEN:-3072}"
+ENV_MAX_TOKEN_LENGTH="${ENV_MAX_TOKEN_LENGTH:-2048}"
 DISTILL_COEF="${DISTILL_COEF:-0.2}"
 DISTILL_TEMPERATURE="${DISTILL_TEMPERATURE:-1.0}"
 DIVERGENCE="${DIVERGENCE:-forward_kl}"
 JSD_BETA="${JSD_BETA:-0.1}"
-TEACHER_TOP_K="${TEACHER_TOP_K:-8}"
+TEACHER_TOP_K="${TEACHER_TOP_K:-4}"
 
 WANDB_PROJECT="${WANDB_PROJECT:-gsm8k-teacher-distill}"
 WANDB_GROUP="${WANDB_GROUP:-}"
@@ -80,12 +80,12 @@ LOG_DIR="${LOG_DIR:-${LAUNCH_DIR}/logs/gsm8k_teacher_distill}"
 BRIDGE_DIR="${BRIDGE_DIR:-${LOG_DIR}/bridge}"
 DRY_RUN="${DRY_RUN:-0}"
 
-ENV_GROUP_SIZE="${ENV_GROUP_SIZE:-4}"
-ENV_BATCH_SIZE="${ENV_BATCH_SIZE:-8}"
-ENV_TOTAL_STEPS="${ENV_TOTAL_STEPS:-200}"
-ENV_STEPS_PER_EVAL="${ENV_STEPS_PER_EVAL:-50}"
+ENV_GROUP_SIZE="${ENV_GROUP_SIZE:-2}"
+ENV_BATCH_SIZE="${ENV_BATCH_SIZE:-1}"
+ENV_TOTAL_STEPS="${ENV_TOTAL_STEPS:-20}"
+ENV_STEPS_PER_EVAL="${ENV_STEPS_PER_EVAL:-10}"
 ENV_MAX_WORKERS_PER_NODE="${ENV_MAX_WORKERS_PER_NODE:-1}"
-ENV_WORKER_TIMEOUT="${ENV_WORKER_TIMEOUT:-1800}"
+ENV_WORKER_TIMEOUT="${ENV_WORKER_TIMEOUT:-3600}"
 
 RUN_PIDS=()
 RUN_PORTS=()
@@ -228,6 +228,7 @@ fi
 # 4) Teacher-distill GSM8K env
 start_process "gsm8k_teacher_env" "${LOG_DIR}/env.log" \
   "$PYTHON_BIN" environments/gsm8k_server_teacher_distill.py serve \
+    --env.tokenizer_name "$STUDENT_MODEL" \
     --env.group_size "$ENV_GROUP_SIZE" \
     --env.batch_size "$ENV_BATCH_SIZE" \
     --env.total_steps "$ENV_TOTAL_STEPS" \
@@ -241,6 +242,7 @@ start_process "gsm8k_teacher_env" "${LOG_DIR}/env.log" \
     --env.teacher_enabled true \
     --teacher.base_url "http://localhost:${TEACHER_PORT}/v1" \
     --teacher.model_name "$TEACHER_MODEL" \
+    --teacher.tokenizer_name "$STUDENT_MODEL" \
     --teacher.server_type vllm \
     --env.teacher_top_k "$TEACHER_TOP_K" \
     --env.ensure_scores_are_not_same false \
