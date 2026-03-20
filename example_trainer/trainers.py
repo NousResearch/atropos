@@ -159,6 +159,10 @@ def train_legacy(config: TrainingConfig):
         # Fetch data (with inference logprobs for proper GRPO)
         data_fetch_start = time.time()
         if len(batches) == 0:
+            print(
+                f"  [Trainer] Requesting data from Atropos "
+                f"(distill_enabled={config.distill_enabled})"
+            )
             batches, _ = get_data(
                 config.batch_size,
                 config.seq_len,
@@ -174,6 +178,12 @@ def train_legacy(config: TrainingConfig):
         distill_token_id_batches = batch_data[5] if len(batch_data) > 5 else None
         distill_logprob_batches = batch_data[6] if len(batch_data) > 6 else None
         data_fetch_time = time.time() - data_fetch_start
+        print(
+            "  [Trainer] Data fetch complete: "
+            f"{data_fetch_time:.2f}s, microbatches={len(token_batches)}, "
+            f"has_inference_logprobs={inference_logprob_batches is not None}, "
+            f"has_distill={distill_logprob_batches is not None}"
+        )
         benchmark_stats["data_fetch_times"].append(data_fetch_time)
 
         # Check if we should sync (save checkpoint + restart vLLM)

@@ -317,11 +317,20 @@ def get_data(
     """
     batches = []
     _logged_logprob_warning = False
+    wait_start = time.time()
+    last_wait_log = wait_start
+    poll_count = 0
 
     while True:
+        poll_count += 1
         data = get_batch(url=atropos_url)
 
         if data["batch"] is not None:
+            elapsed = time.time() - wait_start
+            print(
+                f"    [Data] ✓ batch received from Atropos after {elapsed:.1f}s "
+                f"({len(data['batch'])} group(s), polls={poll_count})"
+            )
             # DEBUG: Check if inference_logprobs exists in the data
             if not _logged_logprob_warning:
                 has_logprobs = any(
@@ -391,4 +400,11 @@ def get_data(
             return batches, None
         else:
             # Wait for data
+            now = time.time()
+            if now - last_wait_log >= 30:
+                print(
+                    f"    [Data] waiting for first batch from Atropos... "
+                    f"{now - wait_start:.1f}s elapsed (polls={poll_count})"
+                )
+                last_wait_log = now
             time.sleep(1)

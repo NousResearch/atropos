@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from abc import ABC
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -360,11 +361,23 @@ class TeacherDistillationEnv(BaseEnv, ABC):
         self, token_ids: List[int], top_k: int
     ) -> Tuple[List[List[int]], List[List[float]]]:
         assert self.teacher_server is not None
+        start = time.time()
+        print(
+            f"[TeacherDistill] requesting teacher logprobs: "
+            f"seq_len={len(token_ids)} top_k={top_k}",
+            flush=True,
+        )
         payload = await self.teacher_server.get_logprobs(
             input_ids=token_ids,
             top_k=top_k,
             max_tokens=1,
             split="train",
+        )
+        elapsed = time.time() - start
+        print(
+            f"[TeacherDistill] received teacher logprobs: "
+            f"seq_len={len(token_ids)} top_k={top_k} elapsed={elapsed:.2f}s",
+            flush=True,
         )
         return payload["prompt_topk_token_ids"], payload["prompt_topk_logprobs"]
 
@@ -396,6 +409,13 @@ class TeacherDistillationEnv(BaseEnv, ABC):
             group["distill_logprobs"] = None
             return group
 
+        seq_lengths = [len(seq) for seq in seqs]
+        attach_start = time.time()
+        print(
+            f"[TeacherDistill] attaching teacher payload for "
+            f"{len(seqs)} sequence(s), lengths={seq_lengths}, top_k={top_k}",
+            flush=True,
+        )
         tasks = [self._fetch_teacher_for_sequence(seq, top_k) for seq in seqs]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -429,6 +449,11 @@ class TeacherDistillationEnv(BaseEnv, ABC):
 
         group["distill_token_ids"] = distill_token_ids
         group["distill_logprobs"] = distill_logprobs
+        print(
+            f"[TeacherDistill] attached teacher payload in "
+            f"{time.time() - attach_start:.2f}s",
+            flush=True,
+        )
         return group
 
     async def handle_send_to_api(
