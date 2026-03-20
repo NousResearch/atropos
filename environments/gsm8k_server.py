@@ -230,6 +230,13 @@ class GSM8kEnv(BaseEnv):
         gold_answer = (
             "\\boxed{" + item["answer"].split("#")[-1].strip().replace(",", "") + "}"
         )
+        rollout_start = time.time()
+        print(
+            "[GSM8K] collect_trajectories start "
+            f"group_size={self.config.group_size} max_tokens={self.config.max_token_length} "
+            f"question_len={len(item['question'])}",
+            flush=True,
+        )
 
         async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
 
@@ -238,6 +245,12 @@ class GSM8kEnv(BaseEnv):
                 n=self.config.group_size,
                 max_tokens=self.config.max_token_length,
                 temperature=1.0,
+            )
+            print(
+                "[GSM8K] managed.chat_completion done "
+                f"elapsed={time.time() - generation_start:.2f}s "
+                f"choices={len(chat_completions.choices)}",
+                flush=True,
             )
 
             state = managed.get_state()
@@ -262,11 +275,22 @@ class GSM8kEnv(BaseEnv):
                 }
             )
         to_postprocess = await self.score(to_score)
+        print(
+            "[GSM8K] collect_trajectories done "
+            f"elapsed={time.time() - rollout_start:.2f}s "
+            f"has_postprocess={to_postprocess is not None}",
+            flush=True,
+        )
         return to_postprocess, to_backlog
 
     async def score(
         self, rollout_group_data
     ) -> Union[Optional[ScoredDataGroup], List[Optional[ScoredDataGroup]]]:
+        score_start = time.time()
+        print(
+            f"[GSM8K] score start candidates={len(rollout_group_data)}",
+            flush=True,
+        )
         scores = ScoredDataGroup()
         scores["tokens"] = list()
         scores["masks"] = list()
@@ -356,6 +380,10 @@ class GSM8kEnv(BaseEnv):
             return scores
         else:
             # If the gold solution is not parseable, we return None
+            print(
+                "[GSM8K] score returning None because gold answer was not parseable",
+                flush=True,
+            )
             return None
 
     async def get_next_item(self) -> GSM8kRow:

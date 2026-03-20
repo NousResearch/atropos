@@ -964,9 +964,22 @@ class BaseEnv(ABC):
             return None
         start_time = time.time()
         logger.debug(f"handle_env: Starting with item: {item}")
+        print(
+            f"[EnvWorker {item_uuid}] start handle_env",
+            flush=True,
+        )
         # do a rollout with item
         try:
+            print(
+                f"[EnvWorker {item_uuid}] collect_trajectories start",
+                flush=True,
+            )
             to_postprocess, to_backlog = await self.collect_trajectories(item)
+            print(
+                f"[EnvWorker {item_uuid}] collect_trajectories done "
+                f"(has_data={to_postprocess is not None})",
+                flush=True,
+            )
         except Exception as e:
             logging.error(f"Error in collect_trajectories: {e}")
             to_postprocess = None
@@ -978,7 +991,15 @@ class BaseEnv(ABC):
             if (to_postprocess is None) or (len(to_postprocess) == 0):
                 pass
             else:
+                print(
+                    f"[EnvWorker {item_uuid}] postprocess_histories start",
+                    flush=True,
+                )
                 to_postprocess = await self.postprocess_histories(to_postprocess)
+                print(
+                    f"[EnvWorker {item_uuid}] postprocess_histories done",
+                    flush=True,
+                )
         except Exception as e:
             logger.error(f"Error in scoring: {item}")
             logger.error("Scoring exception: %s", e)
@@ -991,7 +1012,15 @@ class BaseEnv(ABC):
             self.succeeded_task_duration.append(duration)
             logger.debug(f"handle_env: Collected {len(to_postprocess)} trajectories")
             try:
+                print(
+                    f"[EnvWorker {item_uuid}] handle_send_to_api start",
+                    flush=True,
+                )
                 await self.handle_send_to_api(to_postprocess, item)
+                print(
+                    f"[EnvWorker {item_uuid}] handle_send_to_api done",
+                    flush=True,
+                )
             except Exception as e:
                 logger.error(f"Error in handle_send_to_api: {e}")
         else:
@@ -999,6 +1028,11 @@ class BaseEnv(ABC):
             self.failed_task_duration.append(duration)
             logger.debug("handle_env: No trajectories collected")
         # Finally pop it
+        print(
+            f"[EnvWorker {item_uuid}] finish handle_env duration={duration:.2f}s "
+            f"success={to_postprocess is not None}",
+            flush=True,
+        )
         await self.cleanup()
         return to_postprocess
 
