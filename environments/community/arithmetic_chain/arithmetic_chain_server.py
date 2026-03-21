@@ -7,10 +7,6 @@ import random
 import time
 from typing import List, Optional, Tuple, TypedDict, Union
 
-from latex2sympy2_extended import NormalizationConfig
-from math_verify import LatexExtractionConfig, parse, verify
-from tqdm.asyncio import tqdm_asyncio
-
 from atroposlib.envs.base import (
     APIServerConfig,
     BaseEnv,
@@ -19,6 +15,9 @@ from atroposlib.envs.base import (
     ServerBaseline,
 )
 from atroposlib.type_definitions import Item
+from latex2sympy2_extended import NormalizationConfig
+from math_verify import LatexExtractionConfig, parse, verify
+from tqdm.asyncio import tqdm_asyncio
 
 system_prompt = (
     "You solve short arithmetic word problems. Think step by step if helpful, "
