@@ -1,21 +1,21 @@
 """
-Graph of Tiered Experts Architecture — Atropos RL for Same-Family Expert
+Graph of Tiered Experts Architecture — Atropos RL for Hermes-Series Expert
 Routing.
 
 Trains a language model to act as a routing policy for a Graph of Tiered
-Experts Architecture built from frozen Qwen3.5 model tiers. The model learns
-which expert tier handles which query type — purely from reward signals.
+Experts Architecture built from frozen Hermes-series expert tiers. The model
+learns which expert tier handles which query type purely from reward signals.
 
 Architecture:
-  - 7 experts at different scales (0.8B → 35B parameters)
-  - Experts are frozen pre-trained Qwen3.5 models (no fine-tuning)
+  - 7 experts distributed across Hermes-series 3B, 8B, and 70B tiers
+  - Experts are frozen pre-trained Hermes-series models (no fine-tuning)
   - Only the routing policy learns, via RL reward
   - Router sees: query + expert descriptions
   - Router outputs: JSON array of expert IDs (top-k selection)
   - Reward: ideal_match + capability_alignment + cost_efficiency
 
 Unlike standard MoE, this environment learns post-hoc routing across frozen
-same-family model tiers. The router is tiny, so its training could be
+Hermes-series expert tiers. The router is tiny, so its training could be
 distributed via DisTrO across edge nodes.
 
 Author: Thomas Perry
@@ -40,23 +40,23 @@ EXPERTS = [
     {
         "id": "g0",
         "name": "triage",
-        "model": "Qwen3.5-0.8B",
-        "size_gb": 0.5,
+        "model": "DeepHermes 3 3B tier",
+        "size_gb": 2.0,
         "cost": 0.1,
         "capabilities": ["triage", "routing", "intent"],
     },
     {
         "id": "g1",
         "name": "classifier",
-        "model": "Qwen3.5-2B",
-        "size_gb": 1.2,
+        "model": "DeepHermes 3 3B tier",
+        "size_gb": 2.0,
         "cost": 0.2,
         "capabilities": ["classify", "annotate", "mediate"],
     },
     {
         "id": "a0",
         "name": "synthesizer",
-        "model": "Qwen3.5-9B",
+        "model": "DeepHermes 3 8B tier",
         "size_gb": 5.5,
         "cost": 0.5,
         "capabilities": ["synthesize", "reason", "assemble"],
@@ -64,7 +64,7 @@ EXPERTS = [
     {
         "id": "a1",
         "name": "challenger",
-        "model": "Qwen3.5-9B",
+        "model": "DeepHermes 3 8B tier",
         "size_gb": 5.5,
         "cost": 0.5,
         "capabilities": ["refute", "challenge", "adversarial"],
@@ -72,23 +72,23 @@ EXPERTS = [
     {
         "id": "v0",
         "name": "validator",
-        "model": "Qwen3.5-27B",
-        "size_gb": 15.0,
+        "model": "Hermes 3 70B tier",
+        "size_gb": 40.0,
         "cost": 0.8,
         "capabilities": ["validate", "critique", "verify"],
     },
     {
         "id": "b0",
         "name": "executor",
-        "model": "Qwen3.5-35B",
-        "size_gb": 20.0,
+        "model": "Hermes 3 70B tier",
+        "size_gb": 40.0,
         "cost": 1.0,
         "capabilities": ["execute", "distill", "plan"],
     },
     {
         "id": "q0",
         "name": "quorum",
-        "model": "Qwen3.5-9B",
+        "model": "DeepHermes 3 8B tier",
         "size_gb": 5.5,
         "cost": 0.5,
         "capabilities": ["simulate", "quorum", "generate"],
@@ -201,7 +201,7 @@ class GraphOfTieredExpertsArchitectureEnv(BaseEnv):
               and cost efficiency
 
     This environment demonstrates that routing decisions over frozen experts
-    can be learned via RL across same-family model tiers.
+    can be learned via RL across Hermes-series tiers.
     """
 
     name = "graph_of_tiered_experts_architecture"
@@ -387,7 +387,7 @@ class GraphOfTieredExpertsArchitectureEnv(BaseEnv):
         """Default configuration for CLI usage."""
         return (
             GraphOfTieredExpertsArchitectureConfig(
-                tokenizer_name="Qwen/Qwen3-8B",
+                tokenizer_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                 group_size=4,
                 max_num_workers=2,
                 steps_per_eval=50,
@@ -398,7 +398,7 @@ class GraphOfTieredExpertsArchitectureEnv(BaseEnv):
             ),
             [
                 APIServerConfig(
-                    model_name="Qwen/Qwen3-8B",
+                    model_name="NousResearch/DeepHermes-3-Llama-3-8B-Preview",
                     base_url="http://127.0.0.1:8378/v1",
                     api_key="local",  # pragma: allowlist secret
                 )

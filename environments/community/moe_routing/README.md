@@ -1,10 +1,10 @@
 # Graph of Tiered Experts Architecture
 
-Train a language model to act as a routing policy for a Graph of Tiered Experts Architecture built from frozen Qwen3.5 model tiers.
+Train a language model to act as a routing policy for a Graph of Tiered Experts Architecture built from frozen Hermes-series expert tiers.
 
 ## Motivation
 
-Standard MoE trains experts and gates jointly during pre-training — requiring massive compute. This environment instead learns post-hoc routing across frozen same-family model tiers. The experts are pre-trained Qwen3.5 variants at different scales (0.8B to 35B parameters). Only the routing policy learns, from RL reward signals.
+Standard MoE trains experts and gates jointly during pre-training, requiring massive compute. This environment instead learns post-hoc routing across frozen Hermes-series tiers. The experts are role-specialized tiers spanning 3B, 8B, and 70B-class Hermes checkpoints. Only the routing policy learns, from RL reward signals.
 
 The model learns to be a router: given a query and expert descriptions, it selects which experts should handle the request. Reward is based on whether it picked the right experts for the query's intent, whether those experts have relevant capabilities, and whether it chose cost-efficient options.
 
@@ -16,17 +16,17 @@ Query + Expert Descriptions → LM (routing policy) → Expert Selection → Rew
                                     └──────── REINFORCE update ──────────┘
 ```
 
-**7 tiered experts from one model family:**
+**7 tiered experts across the Hermes series:**
 
 | ID | Role | Model | Size | Cost |
 |----|------|-------|------|------|
-| g0 | Triage | Qwen3.5-0.8B | 0.5 GB | 0.1 |
-| g1 | Classifier | Qwen3.5-2B | 1.2 GB | 0.2 |
-| a0 | Synthesizer | Qwen3.5-9B | 5.5 GB | 0.5 |
-| a1 | Challenger | Qwen3.5-9B | 5.5 GB | 0.5 |
-| v0 | Validator | Qwen3.5-27B | 15 GB | 0.8 |
-| b0 | Executor | Qwen3.5-35B | 20 GB | 1.0 |
-| q0 | Quorum | Qwen3.5-9B | 5.5 GB | 0.5 |
+| g0 | Triage | DeepHermes 3 3B tier | 2 GB | 0.1 |
+| g1 | Classifier | DeepHermes 3 3B tier | 2 GB | 0.2 |
+| a0 | Synthesizer | DeepHermes 3 8B tier | 5.5 GB | 0.5 |
+| a1 | Challenger | DeepHermes 3 8B tier | 5.5 GB | 0.5 |
+| v0 | Validator | Hermes 3 70B tier | 40 GB | 0.8 |
+| b0 | Executor | Hermes 3 70B tier | 40 GB | 1.0 |
+| q0 | Quorum | DeepHermes 3 8B tier | 5.5 GB | 0.5 |
 
 ## Reward Function
 
@@ -53,8 +53,8 @@ pip install -r requirements.txt
 ### Run with a local model server
 
 ```bash
-# Start a vLLM or mlx_lm server on port 8378
-mlx_lm.server --model Qwen/Qwen3-8B --port 8378
+# Start a vLLM-compatible server on port 8378
+vllm serve NousResearch/DeepHermes-3-Llama-3-8B-Preview --port 8378
 
 # Run the environment
 python environments/community/moe_routing/moe_routing_env.py serve
@@ -76,7 +76,7 @@ The environment accepts standard Atropos configuration plus:
 
 ## Research Applications
 
-- **Tiered expert graphs**: Study routing across same-family experts at different parameter scales
+- **Tiered expert graphs**: Study routing across Hermes-series expert tiers at different parameter scales
 - **Post-hoc routing**: Train routing policies over frozen pre-trained models
 - **Cost-aware inference**: Learn to balance quality vs. compute cost
 - **Distributed routing**: The learned gate is tiny — could be shared via federated learning across edge nodes
