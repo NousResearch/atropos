@@ -1,20 +1,21 @@
 """
-MoE Routing Environment — Atropos RL for Heterogeneous Expert Selection.
+Graph of Tiered Experts Architecture — Atropos RL for Same-Family Expert
+Routing.
 
-Trains a language model to act as a gating network for a heterogeneous
-Mixture-of-Experts inference mesh. The model learns which frozen expert
-handles which query type — purely from reward signals.
+Trains a language model to act as a routing policy for a Graph of Tiered
+Experts Architecture built from frozen Qwen3.5 model tiers. The model learns
+which expert tier handles which query type — purely from reward signals.
 
 Architecture:
   - 7 experts at different scales (0.8B → 35B parameters)
-  - Experts are frozen pre-trained models (no fine-tuning)
+  - Experts are frozen pre-trained Qwen3.5 models (no fine-tuning)
   - Only the routing policy learns, via RL reward
-  - Gate sees: query + expert descriptions
-  - Gate outputs: JSON array of expert IDs (top-k selection)
+  - Router sees: query + expert descriptions
+  - Router outputs: JSON array of expert IDs (top-k selection)
   - Reward: ideal_match + capability_alignment + cost_efficiency
 
-This makes MoE practical on consumer hardware where you can't afford
-to train experts jointly. The gate is tiny — its training could be
+Unlike standard MoE, this environment learns post-hoc routing across frozen
+same-family model tiers. The router is tiny, so its training could be
 distributed via DisTrO across edge nodes.
 
 Author: Thomas Perry
@@ -155,9 +156,9 @@ TOPICS = [
     "distributed training with DisTrO",
     "self-hosted inference on consumer hardware",
     "agent skill acquisition via reinforcement learning",
-    "heterogeneous model routing",
+    "tiered model routing",
     "perimeter-based safety constraints",
-    "post-hoc routing in MoE architectures",
+    "post-hoc routing in tiered expert graphs",
     "federated learning of routing policies",
     "open source vs closed AI development",
     "MLX optimization on Apple Silicon",
@@ -170,8 +171,8 @@ TOPICS = [
 # ─── Config ──────────────────────────────────────────────────
 
 
-class MoERoutingConfig(BaseEnvConfig):
-    """Configuration for the MoE Routing environment."""
+class GraphOfTieredExpertsArchitectureConfig(BaseEnvConfig):
+    """Configuration for the Graph of Tiered Experts Architecture environment."""
 
     top_k: int = Field(default=2, description="Number of experts to select per query")
     cost_weight: float = Field(
@@ -188,25 +189,27 @@ class MoERoutingConfig(BaseEnvConfig):
 # ─── Environment ─────────────────────────────────────────────
 
 
-class MoERoutingEnv(BaseEnv):
+class GraphOfTieredExpertsArchitectureEnv(BaseEnv):
     """
     Trains a language model to route queries to the right experts in a
-    heterogeneous MoE mesh.
+    graph of tiered experts.
 
-    The model acts as a gating network:
+    The model acts as a routing policy:
       Input:  query text + expert descriptions
       Output: JSON array of expert IDs (top-k)
       Reward: weighted combination of ideal match, capability alignment,
               and cost efficiency
 
     This environment demonstrates that routing decisions over frozen experts
-    can be learned via RL — making MoE practical on consumer hardware.
+    can be learned via RL across same-family model tiers.
     """
 
-    name = "moe_routing"
-    env_config_cls = MoERoutingConfig
+    name = "graph_of_tiered_experts_architecture"
+    env_config_cls = GraphOfTieredExpertsArchitectureConfig
 
-    def __init__(self, config: MoERoutingConfig, server_configs, **kwargs):
+    def __init__(
+        self, config: GraphOfTieredExpertsArchitectureConfig, server_configs, **kwargs
+    ):
         super().__init__(config, server_configs, **kwargs)
         self._items: List[Dict] = []
         self._item_idx = 0
@@ -240,7 +243,8 @@ class MoERoutingEnv(BaseEnv):
     def _build_prompt(self, item: Dict) -> List[Dict[str, str]]:
         """Build the routing prompt for the model."""
         system = (
-            "You are a routing controller for a Mixture-of-Experts inference mesh. "
+            "You are a routing controller for a Graph of Tiered Experts "
+            "Architecture. "
             "Select the best experts to handle a given query based on intent, "
             "capabilities, and cost efficiency.\n\n"
             f"Available experts:\n{EXPERT_DESC}\n\n"
@@ -374,14 +378,15 @@ class MoERoutingEnv(BaseEnv):
         if self._episode_count > 0:
             avg = self._reward_sum / self._episode_count
             print(
-                f"[MoE Routing] Episodes: {self._episode_count}, Avg Reward: {avg:.4f}"
+                "[Graph of Tiered Experts] "
+                f"Episodes: {self._episode_count}, Avg Reward: {avg:.4f}"
             )
 
     @classmethod
     def config_init(cls):
         """Default configuration for CLI usage."""
         return (
-            MoERoutingConfig(
+            GraphOfTieredExpertsArchitectureConfig(
                 tokenizer_name="Qwen/Qwen3-8B",
                 group_size=4,
                 max_num_workers=2,
@@ -402,4 +407,4 @@ class MoERoutingEnv(BaseEnv):
 
 
 if __name__ == "__main__":
-    MoERoutingEnv.cli()
+    GraphOfTieredExpertsArchitectureEnv.cli()

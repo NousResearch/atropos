@@ -1,22 +1,22 @@
-# MoE Routing Environment
+# Graph of Tiered Experts Architecture
 
-Train a language model to act as a gating network for a heterogeneous Mixture-of-Experts inference mesh.
+Train a language model to act as a routing policy for a Graph of Tiered Experts Architecture built from frozen Qwen3.5 model tiers.
 
 ## Motivation
 
-Standard MoE trains experts and gates jointly during pre-training — requiring massive compute. This environment takes a different approach: **frozen experts, learnable gate**. The experts are pre-trained models at different scales (0.8B to 35B parameters). Only the routing policy learns, from RL reward signals. This makes MoE practical on consumer hardware.
+Standard MoE trains experts and gates jointly during pre-training — requiring massive compute. This environment instead learns post-hoc routing across frozen same-family model tiers. The experts are pre-trained Qwen3.5 variants at different scales (0.8B to 35B parameters). Only the routing policy learns, from RL reward signals.
 
 The model learns to be a router: given a query and expert descriptions, it selects which experts should handle the request. Reward is based on whether it picked the right experts for the query's intent, whether those experts have relevant capabilities, and whether it chose cost-efficient options.
 
 ## Architecture
 
 ```
-Query + Expert Descriptions → LM (gating network) → Expert Selection → Reward
-                                     ↑                                    │
-                                     └──────── REINFORCE update ──────────┘
+Query + Expert Descriptions → LM (routing policy) → Expert Selection → Reward
+                                    ↑                                    │
+                                    └──────── REINFORCE update ──────────┘
 ```
 
-**7 heterogeneous experts:**
+**7 tiered experts from one model family:**
 
 | ID | Role | Model | Size | Cost |
 |----|------|-------|------|------|
@@ -40,7 +40,7 @@ Final score is normalized to [-1, 1].
 
 ## Dataset
 
-120 items generated from 8 query templates x 15 topics. Query templates span intent types: triage, synthesis, challenge, validation, execution, simulation, classification, and research. Topics cover AI/ML domains including MoE, distributed training, RLHF, and inference optimization.
+120 items generated from 8 query templates x 15 topics. Query templates span intent types: triage, synthesis, challenge, validation, execution, simulation, classification, and research. Topics cover AI/ML domains including model scaling, distributed training, RLHF, and inference optimization.
 
 ## Quickstart
 
@@ -76,14 +76,14 @@ The environment accepts standard Atropos configuration plus:
 
 ## Research Applications
 
-- **Heterogeneous MoE**: Study routing across experts of different scales/architectures
+- **Tiered expert graphs**: Study routing across same-family experts at different parameter scales
 - **Post-hoc routing**: Train routing policies over frozen pre-trained models
 - **Cost-aware inference**: Learn to balance quality vs. compute cost
 - **Distributed routing**: The learned gate is tiny — could be shared via federated learning across edge nodes
 
 ## Generalization
 
-The routing-over-frozen-experts pattern generalizes beyond LLMs. The same reward structure applies to any domain with multiple specialized classifiers and a feedback signal: RF signal detection, medical triage, content moderation, network security.
+The routing-over-frozen-experts pattern generalizes beyond LLMs. The same reward structure applies to any domain with multiple specialized classifiers and a feedback signal: RF signal detection, medical triage, content moderation, and network security.
 
 ## License
 
