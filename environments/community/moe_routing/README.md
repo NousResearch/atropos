@@ -79,7 +79,7 @@ The environment accepts standard Atropos configuration plus:
 - **Tiered expert graphs**: Study routing across Hermes-series expert tiers at different parameter scales
 - **Post-hoc routing**: Train routing policies over frozen pre-trained models
 - **Cost-aware inference**: Learn to balance quality vs. compute cost
-- **Distributed routing**: The learned gate is tiny — could be shared via federated learning across edge nodes
+- **Distributed routing**: The learned router is tiny — could be shared via federated learning across edge nodes
 
 ## Generalization
 
