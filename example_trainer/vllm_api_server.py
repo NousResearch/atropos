@@ -260,11 +260,13 @@ class RequestMonitor:
 
         logger.info(
             "[RequestMonitor] request_id=%s status=%s elapsed=%.2fs "
-            "prompt_length=%s max_tokens=%s output_tokens=%s tokens_per_second=%.2f "
-            "stream=%s finish_reasons=%s error=%s",
+            "path=%s kind=%s prompt_length=%s max_tokens=%s output_tokens=%s "
+            "tokens_per_second=%.2f stream=%s finish_reasons=%s error=%s",
             request_id,
             status,
             elapsed_s,
+            request.get("path"),
+            request.get("request_kind"),
             request.get("prompt_length"),
             request.get("max_tokens"),
             output_tokens,
@@ -285,6 +287,8 @@ class RequestMonitor:
                 active.append(
                     {
                         "request_id": request_id,
+                        "path": request.get("path"),
+                        "request_kind": request.get("request_kind"),
                         "elapsed_s": round(elapsed_s, 2),
                         "prompt_length": request.get("prompt_length"),
                         "max_tokens": request.get("max_tokens"),
@@ -296,6 +300,11 @@ class RequestMonitor:
                 )
 
             active.sort(key=lambda item: item["elapsed_s"], reverse=True)
+
+            active_by_path: Dict[str, int] = {}
+            for request in active:
+                path = request.get("path") or "unknown"
+                active_by_path[path] = active_by_path.get(path, 0) + 1
 
             stuck = [
                 request for request in active if request["elapsed_s"] >= stuck_threshold_s
@@ -323,6 +332,7 @@ class RequestMonitor:
                 "aggregate_active_tokens_per_second": (
                     aggregate_active_tokens_per_second
                 ),
+                "active_by_path": active_by_path,
                 "oldest_active_request_s": round(oldest_active_s, 2),
                 "stuck_threshold_s": stuck_threshold_s,
                 "stuck_request_count": len(stuck),
@@ -332,6 +342,123 @@ class RequestMonitor:
 
 
 request_monitor = RequestMonitor()
+
+
+def _infer_prompt_length(prompt: Any) -> Optional[int]:
+    if isinstance(prompt, dict):
+        prompt_token_ids = prompt.get("prompt_token_ids")
+        if isinstance(prompt_token_ids, list):
+            return len(prompt_token_ids)
+        return None
+    if isinstance(prompt, list):
+        return len(prompt)
+    if isinstance(prompt, str):
+        return len(prompt)
+    return None
+
+
+def _extract_monitor_metadata(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    max_tokens = body.get("max_tokens")
+    if max_tokens is None:
+        max_tokens = body.get("max_new_tokens")
+    if max_tokens is None:
+        max_tokens = body.get("max_completion_tokens")
+
+    stream = bool(body.get("stream", False))
+    prompt = body.get("prompt")
+    if prompt is None:
+        prompt = body.get("messages")
+
+    request_kind = "chat_completions" if path.endswith("/chat/completions") else "generate"
+    return {
+        "path": path,
+        "request_kind": request_kind,
+        "prompt_length": _infer_prompt_length(prompt),
+        "max_tokens": max_tokens,
+        "stream": stream,
+    }
+
+
+def _extract_response_metrics(response: Response) -> Dict[str, Any]:
+    metrics: Dict[str, Any] = {}
+    body = getattr(response, "body", None)
+    if not body:
+        return metrics
+
+    try:
+        payload = json.loads(body)
+    except Exception:
+        return metrics
+
+    usage = payload.get("usage")
+    if isinstance(usage, dict):
+        completion_tokens = usage.get("completion_tokens")
+        if isinstance(completion_tokens, int):
+            metrics["output_tokens"] = completion_tokens
+
+    choices = payload.get("choices")
+    if isinstance(choices, list):
+        finish_reasons = []
+        for choice in choices:
+            if isinstance(choice, dict):
+                finish_reasons.append(choice.get("finish_reason"))
+        if finish_reasons:
+            metrics["finish_reasons"] = finish_reasons
+
+    return metrics
+
+
+@app.middleware("http")
+async def monitor_request_middleware(request: Request, call_next):
+    path = request.url.path
+    if path not in {"/generate", "/v1/chat/completions"}:
+        return await call_next(request)
+
+    metadata = {
+        "path": path,
+        "request_kind": "unknown",
+        "prompt_length": None,
+        "max_tokens": None,
+        "stream": False,
+    }
+    try:
+        body_bytes = await request.body()
+        if body_bytes:
+            body = json.loads(body_bytes)
+            if isinstance(body, dict):
+                metadata = _extract_monitor_metadata(path, body)
+    except Exception:
+        pass
+
+    request_id = random_uuid()
+    request.state.monitor_request_id = request_id
+    request_monitor.start(request_id, metadata)
+
+    try:
+        response = await call_next(request)
+    except asyncio.CancelledError:
+        request_monitor.finish(request_id, "cancelled")
+        raise
+    except Exception as exc:
+        request_monitor.finish(request_id, "failed", error=str(exc))
+        raise
+
+    response_metrics = _extract_response_metrics(response)
+    if getattr(response, "status_code", 500) >= 400:
+        request_monitor.finish(
+            request_id,
+            "failed",
+            error=f"http_status={response.status_code}",
+            output_tokens=response_metrics.get("output_tokens"),
+        )
+    else:
+        request_monitor.finish(
+            request_id,
+            "completed",
+            finish_reasons=response_metrics.get("finish_reasons"),
+            output_tokens=response_metrics.get("output_tokens"),
+        )
+    return response
 
 
 def _get_lora_request() -> Optional["LoRARequest"]:
@@ -452,18 +579,24 @@ async def _generate(request_dict: dict, raw_request: Request) -> Response:
 
     request_dict["output_kind"] = RequestOutputKind.FINAL_ONLY
     sampling_params = SamplingParams(**request_dict)
-    request_id = random_uuid()
-    request_monitor.start(
-        request_id,
-        {
-            "prompt_length": prompt_length,
-            "max_tokens": max_tokens,
-            "stream": stream,
-        },
-    )
+    request_id = getattr(raw_request.state, "monitor_request_id", None)
+    if request_id is None:
+        request_id = random_uuid()
+        request_monitor.start(
+            request_id,
+            {
+                "path": "/generate",
+                "request_kind": "generate",
+                "prompt_length": prompt_length,
+                "max_tokens": max_tokens,
+                "stream": stream,
+            },
+        )
     logger.info(
-        "[RequestMonitor] request_id=%s started prompt_length=%s max_tokens=%s stream=%s",
+        "[RequestMonitor] request_id=%s started path=%s kind=%s prompt_length=%s max_tokens=%s stream=%s",
         request_id,
+        "/generate",
+        "generate",
         prompt_length,
         max_tokens,
         stream,
