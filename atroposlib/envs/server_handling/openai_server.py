@@ -240,5 +240,5 @@ def resolve_openai_configs(
                 f"Proceeding with single OpenAI server configuration based on merged settings."
             )
             server_configs = [final_openai_config]
-            
+
     return server_configs
