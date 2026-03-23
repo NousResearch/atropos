@@ -30,6 +30,10 @@ set -euo pipefail
 #   DIVERGENCE=forward_kl
 #   JSD_BETA=0.1
 #   TEACHER_TOP_K=4
+#   REUSE_SERVERS=1              # Reuse healthy API + student + teacher servers
+#   REUSE_API=1                  # Override reuse per service
+#   REUSE_STUDENT=1
+#   REUSE_TEACHER=1
 #   DRY_RUN=1
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -57,12 +61,12 @@ GRAD_ACCUM="${GRAD_ACCUM:-4}"
 LR="${LR:-1e-5}"
 WARMUP_STEPS="${WARMUP_STEPS:-0}"
 CLIP_EPS="${CLIP_EPS:-0.2}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
-TEACHER_MAX_MODEL_LEN="${TEACHER_MAX_MODEL_LEN:-4096}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-12288}"
+TEACHER_MAX_MODEL_LEN="${TEACHER_MAX_MODEL_LEN:-12288}"
 # Trainer seq_len must be larger than ENV_MAX_TOKEN_LENGTH to accommodate
 # chat template overhead (~400-800 tokens for Qwen3 thinking format).
-TRAINER_SEQ_LEN="${TRAINER_SEQ_LEN:-3072}"
-ENV_MAX_TOKEN_LENGTH="${ENV_MAX_TOKEN_LENGTH:-2048}"
+TRAINER_SEQ_LEN="${TRAINER_SEQ_LEN:-9216}"
+ENV_MAX_TOKEN_LENGTH="${ENV_MAX_TOKEN_LENGTH:-8192}"
 DISTILL_COEF="${DISTILL_COEF:-0.2}"
 DISTILL_TEMPERATURE="${DISTILL_TEMPERATURE:-1.0}"
 DIVERGENCE="${DIVERGENCE:-forward_kl}"
@@ -79,6 +83,10 @@ SAVE_DIR="${SAVE_DIR:-${LAUNCH_DIR}/saves/gsm8k_teacher_distill}"
 LOG_DIR="${LOG_DIR:-${LAUNCH_DIR}/logs/gsm8k_teacher_distill}"
 BRIDGE_DIR="${BRIDGE_DIR:-${LOG_DIR}/bridge}"
 DRY_RUN="${DRY_RUN:-0}"
+REUSE_SERVERS="${REUSE_SERVERS:-0}"
+REUSE_API="${REUSE_API:-$REUSE_SERVERS}"
+REUSE_STUDENT="${REUSE_STUDENT:-$REUSE_SERVERS}"
+REUSE_TEACHER="${REUSE_TEACHER:-$REUSE_SERVERS}"
 
 ENV_GROUP_SIZE="${ENV_GROUP_SIZE:-2}"
 ENV_BATCH_SIZE="${ENV_BATCH_SIZE:-1}"
@@ -89,9 +97,36 @@ ENV_WORKER_TIMEOUT="${ENV_WORKER_TIMEOUT:-3600}"
 
 RUN_PIDS=()
 RUN_PORTS=()
+PID_DIR=""
 
 log() {
   echo "[$(date '+%H:%M:%S')] $*"
+}
+
+pid_file_for() {
+  local name="$1"
+  printf '%s/%s.pid' "$PID_DIR" "$name"
+}
+
+write_pid_file() {
+  local name="$1"
+  local pid="$2"
+  printf '%s\n' "$pid" >"$(pid_file_for "$name")"
+}
+
+remove_pid_file() {
+  local name="$1"
+  rm -f "$(pid_file_for "$name")"
+}
+
+pid_is_running() {
+  local pid="${1:-}"
+  [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1
+}
+
+is_http_ready() {
+  local url="$1"
+  curl -fsS "$url" >/dev/null 2>&1
 }
 
 kill_port() {
@@ -139,7 +174,57 @@ start_process() {
   "$@" >"$logfile" 2>&1 &
   local pid=$!
   RUN_PIDS+=("$pid")
+  write_pid_file "$name" "$pid"
   log "${name} PID=${pid}"
+}
+
+stop_named_process() {
+  local name="$1"
+  local pid_file
+  pid_file="$(pid_file_for "$name")"
+  if [[ ! -f "$pid_file" ]]; then
+    return 0
+  fi
+
+  local pid
+  pid="$(<"$pid_file")"
+  if pid_is_running "$pid"; then
+    log "Stopping ${name} PID=${pid}"
+    kill "$pid" >/dev/null 2>&1 || true
+    sleep 1
+    if pid_is_running "$pid"; then
+      kill -9 "$pid" >/dev/null 2>&1 || true
+    fi
+  fi
+  remove_pid_file "$name"
+}
+
+stop_processes_matching() {
+  local name="$1"
+  local pattern="$2"
+  if [[ "$DRY_RUN" == "1" ]]; then
+    log "[DRY RUN] skip process cleanup for ${name} pattern=${pattern}"
+    return 0
+  fi
+
+  local pids
+  pids="$(pgrep -f -- "$pattern" || true)"
+  if [[ -z "$pids" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r pid; do
+    [[ -z "$pid" ]] && continue
+    if [[ "$pid" == "$$" ]]; then
+      continue
+    fi
+    log "Stopping stale ${name} PID=${pid}"
+    kill "$pid" >/dev/null 2>&1 || true
+    sleep 1
+    if pid_is_running "$pid"; then
+      kill -9 "$pid" >/dev/null 2>&1 || true
+    fi
+  done <<<"$pids"
 }
 
 cleanup_all() {
@@ -158,11 +243,8 @@ cleanup_all() {
 
 trap cleanup_all EXIT INT TERM
 
-mkdir -p "$LOG_DIR" "$SAVE_DIR" "$BRIDGE_DIR"
-RUN_PORTS+=("$API_PORT" "$STUDENT_PORT" "$TEACHER_PORT")
-kill_port "$API_PORT"
-kill_port "$STUDENT_PORT"
-kill_port "$TEACHER_PORT"
+PID_DIR="${LOG_DIR}/pids"
+mkdir -p "$LOG_DIR" "$SAVE_DIR" "$BRIDGE_DIR" "$PID_DIR"
 
 log "Config:"
 log "  student=${STUDENT_MODEL}"
@@ -172,6 +254,7 @@ log "  ports api=${API_PORT}, student=${STUDENT_PORT}, teacher=${TEACHER_PORT}"
 log "  logs=${LOG_DIR}"
 log "  saves=${SAVE_DIR}"
 log "  bridge=${BRIDGE_DIR}"
+log "  reuse api=${REUSE_API}, student=${REUSE_STUDENT}, teacher=${REUSE_TEACHER}"
 log "  env max_token_length=${ENV_MAX_TOKEN_LENGTH}, env workers=${ENV_MAX_WORKERS_PER_NODE}, env worker_timeout=${ENV_WORKER_TIMEOUT}"
 log "  wandb project=${WANDB_PROJECT}${WANDB_GROUP:+, group=${WANDB_GROUP}}"
 log "  gkd divergence=${DIVERGENCE}${DIVERGENCE:+, jsd_beta=${JSD_BETA}}"
@@ -191,41 +274,64 @@ if [[ "$TRAINER_GPUS" != "$STUDENT_GPUS" ]]; then
 fi
 
 # 1) Atropos API
-start_process "run_api" "${LOG_DIR}/run_api.log" \
-  run-api --port "$API_PORT"
-if [[ "$DRY_RUN" == "0" ]]; then
-  wait_for_http "http://localhost:${API_PORT}/info" 180 "run-api"
+if [[ "$REUSE_API" == "1" && "$DRY_RUN" == "0" ]] && is_http_ready "http://localhost:${API_PORT}/info"; then
+  log "Reusing existing run-api on :${API_PORT}"
+else
+  stop_named_process "run_api"
+  RUN_PORTS+=("$API_PORT")
+  kill_port "$API_PORT"
+  start_process "run_api" "${LOG_DIR}/run_api.log" \
+    run-api --port "$API_PORT"
+  if [[ "$DRY_RUN" == "0" ]]; then
+    wait_for_http "http://localhost:${API_PORT}/info" 180 "run-api"
+  fi
 fi
 
 # 2) Student vLLM server
-start_process "student_vllm" "${LOG_DIR}/student_vllm.log" \
-  env CUDA_VISIBLE_DEVICES="$STUDENT_GPUS" VLLM_ENABLE_SHARED_WEIGHTS=1 LOGDIR="$BRIDGE_DIR" \
-  "$PYTHON_BIN" -m example_trainer.vllm_api_server \
-    --model "$STUDENT_MODEL" \
-    --port "$STUDENT_PORT" \
-    --tensor-parallel-size "$STUDENT_TP" \
-    --gpu-memory-utilization "$STUDENT_GPU_MEMORY_UTILIZATION" \
-    --max-model-len "$MAX_MODEL_LEN" \
-    --dtype "$DTYPE"
-if [[ "$DRY_RUN" == "0" ]]; then
-  wait_for_http "http://localhost:${STUDENT_PORT}/health" 420 "student vLLM"
+if [[ "$REUSE_STUDENT" == "1" && "$DRY_RUN" == "0" ]] && is_http_ready "http://localhost:${STUDENT_PORT}/health"; then
+  log "Reusing existing student vLLM on :${STUDENT_PORT}"
+else
+  stop_named_process "student_vllm"
+  RUN_PORTS+=("$STUDENT_PORT")
+  kill_port "$STUDENT_PORT"
+  start_process "student_vllm" "${LOG_DIR}/student_vllm.log" \
+    env CUDA_VISIBLE_DEVICES="$STUDENT_GPUS" VLLM_ENABLE_SHARED_WEIGHTS=1 LOGDIR="$BRIDGE_DIR" \
+    "$PYTHON_BIN" -m example_trainer.vllm_api_server \
+      --model "$STUDENT_MODEL" \
+      --port "$STUDENT_PORT" \
+      --tensor-parallel-size "$STUDENT_TP" \
+      --gpu-memory-utilization "$STUDENT_GPU_MEMORY_UTILIZATION" \
+      --max-model-len "$MAX_MODEL_LEN" \
+      --dtype "$DTYPE"
+  if [[ "$DRY_RUN" == "0" ]]; then
+    wait_for_http "http://localhost:${STUDENT_PORT}/health" 420 "student vLLM"
+  fi
 fi
 
 # 3) Teacher vLLM server
-start_process "teacher_vllm" "${LOG_DIR}/teacher_vllm.log" \
-  env CUDA_VISIBLE_DEVICES="$TEACHER_GPUS" \
-  "$PYTHON_BIN" -m example_trainer.vllm_api_server \
-    --model "$TEACHER_MODEL" \
-    --port "$TEACHER_PORT" \
-    --tensor-parallel-size "$TEACHER_TP" \
-    --gpu-memory-utilization "$TEACHER_GPU_MEMORY_UTILIZATION" \
-    --max-model-len "$TEACHER_MAX_MODEL_LEN" \
-    --dtype "$DTYPE"
-if [[ "$DRY_RUN" == "0" ]]; then
-  wait_for_http "http://localhost:${TEACHER_PORT}/health" 1800 "teacher vLLM"
+if [[ "$REUSE_TEACHER" == "1" && "$DRY_RUN" == "0" ]] && is_http_ready "http://localhost:${TEACHER_PORT}/health"; then
+  log "Reusing existing teacher vLLM on :${TEACHER_PORT}"
+else
+  stop_named_process "teacher_vllm"
+  RUN_PORTS+=("$TEACHER_PORT")
+  kill_port "$TEACHER_PORT"
+  start_process "teacher_vllm" "${LOG_DIR}/teacher_vllm.log" \
+    env CUDA_VISIBLE_DEVICES="$TEACHER_GPUS" \
+    "$PYTHON_BIN" -m example_trainer.vllm_api_server \
+      --model "$TEACHER_MODEL" \
+      --port "$TEACHER_PORT" \
+      --tensor-parallel-size "$TEACHER_TP" \
+      --gpu-memory-utilization "$TEACHER_GPU_MEMORY_UTILIZATION" \
+      --max-model-len "$TEACHER_MAX_MODEL_LEN" \
+      --dtype "$DTYPE"
+  if [[ "$DRY_RUN" == "0" ]]; then
+    wait_for_http "http://localhost:${TEACHER_PORT}/health" 1800 "teacher vLLM"
+  fi
 fi
 
 # 4) Teacher-distill GSM8K env
+stop_named_process "gsm8k_teacher_env"
+stop_processes_matching "gsm8k_teacher_env" "environments/gsm8k_server_teacher_distill.py serve"
 start_process "gsm8k_teacher_env" "${LOG_DIR}/env.log" \
   "$PYTHON_BIN" environments/gsm8k_server_teacher_distill.py serve \
     --env.tokenizer_name "$STUDENT_MODEL" \
@@ -300,6 +406,8 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
+stop_named_process "trainer"
+stop_processes_matching "trainer" "example_trainer.gkd"
 start_process "trainer" "${LOG_DIR}/trainer.log" "${TRAINER_CMD[@]}"
 
 log "All processes running in background."
@@ -315,6 +423,10 @@ log "  curl -s http://localhost:${STUDENT_PORT}/health"
 log "  curl -s http://localhost:${TEACHER_PORT}/health"
 log "  curl -s http://localhost:${STUDENT_PORT}/bridge/is_paused | jq ."
 log ""
-log "To stop all processes:"
+log "Reuse tip:"
+log "  REUSE_SERVERS=1 ./example_trainer/run_gsm8k_teacher_distill_single_terminal.sh"
+log "  This keeps healthy API/student/teacher servers and only restarts env + trainer."
+log ""
+log "To stop processes started by this invocation:"
 log "  kill ${RUN_PIDS[*]:-} 2>/dev/null; sleep 1; kill -9 ${RUN_PIDS[*]:-} 2>/dev/null"
 trap - EXIT INT TERM
