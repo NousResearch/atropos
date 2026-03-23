@@ -99,11 +99,7 @@ def get_batch(url: str = "http://localhost:8000"):
     Raises:
         RuntimeError: If trainer is not registered or other API error
     """
-    response = requests.get(
-        f"{url}/batch",
-        timeout=10,
-    )
-    data = response.json()
+    data = requests.get(f"{url}/batch", timeout=10).json()
 
     # Check if there was an error (trainer not registered)
     if data.get("status") == "error":

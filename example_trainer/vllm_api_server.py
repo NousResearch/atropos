@@ -325,7 +325,6 @@ async def _generate(request_dict: dict, raw_request: Request) -> Response:
         async for request_output in results_generator:
             final_output = request_output
     except asyncio.CancelledError:
-        logger.warning("POST /generate cancelled request_id=%s", request_id)
         return Response(status_code=499)
 
     assert final_output is not None
