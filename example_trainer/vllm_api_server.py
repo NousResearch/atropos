@@ -40,11 +40,12 @@ import multiprocessing
 import os
 import ssl
 import threading
+import time
 from argparse import Namespace
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 # Default to v0 engine to avoid CUDA fork issues with v1 engine
 # Users can override with VLLM_USE_V1=1 if needed
@@ -197,6 +198,142 @@ class BridgeState:
 bridge_state = BridgeState()
 
 
+@dataclass
+class RequestMonitor:
+    """Tracks active generate requests, progress, and throughput."""
+
+    total_started: int = 0
+    total_completed: int = 0
+    total_failed: int = 0
+    total_cancelled: int = 0
+    total_output_tokens_completed: int = 0
+    total_completed_elapsed_s: float = 0.0
+    active_requests: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def start(self, request_id: str, metadata: Dict[str, Any]) -> None:
+        with self.lock:
+            self.total_started += 1
+            self.active_requests[request_id] = {
+                **metadata,
+                "request_id": request_id,
+                "start_time": time.time(),
+                "status": "active",
+                "output_tokens": 0,
+            }
+
+    def update_progress(self, request_id: str, output_tokens: int) -> None:
+        with self.lock:
+            request = self.active_requests.get(request_id)
+            if request is None:
+                return
+            request["output_tokens"] = max(int(output_tokens), 0)
+
+    def finish(
+        self,
+        request_id: str,
+        status: str,
+        finish_reasons: Optional[List[Any]] = None,
+        error: Optional[str] = None,
+        output_tokens: Optional[int] = None,
+    ) -> None:
+        with self.lock:
+            request = self.active_requests.pop(request_id, None)
+            if request is None:
+                return
+
+            if output_tokens is None:
+                output_tokens = int(request.get("output_tokens", 0))
+
+            if status == "completed":
+                self.total_completed += 1
+                self.total_output_tokens_completed += output_tokens
+            elif status == "cancelled":
+                self.total_cancelled += 1
+            else:
+                self.total_failed += 1
+
+            elapsed_s = time.time() - request["start_time"]
+            if status == "completed":
+                self.total_completed_elapsed_s += elapsed_s
+            tokens_per_second = output_tokens / max(elapsed_s, 1e-6)
+
+        logger.info(
+            "[RequestMonitor] request_id=%s status=%s elapsed=%.2fs "
+            "prompt_length=%s max_tokens=%s output_tokens=%s tokens_per_second=%.2f "
+            "stream=%s finish_reasons=%s error=%s",
+            request_id,
+            status,
+            elapsed_s,
+            request.get("prompt_length"),
+            request.get("max_tokens"),
+            output_tokens,
+            tokens_per_second,
+            request.get("stream"),
+            finish_reasons,
+            error,
+        )
+
+    def snapshot(self, stuck_threshold_s: float = 60.0) -> Dict[str, Any]:
+        now = time.time()
+        with self.lock:
+            active = []
+            for request_id, request in self.active_requests.items():
+                elapsed_s = now - request["start_time"]
+                output_tokens = int(request.get("output_tokens", 0))
+                tokens_per_second = output_tokens / max(elapsed_s, 1e-6)
+                active.append(
+                    {
+                        "request_id": request_id,
+                        "elapsed_s": round(elapsed_s, 2),
+                        "prompt_length": request.get("prompt_length"),
+                        "max_tokens": request.get("max_tokens"),
+                        "output_tokens": output_tokens,
+                        "tokens_per_second": round(tokens_per_second, 2),
+                        "stream": request.get("stream"),
+                        "start_time": request.get("start_time"),
+                    }
+                )
+
+            active.sort(key=lambda item: item["elapsed_s"], reverse=True)
+
+            stuck = [
+                request for request in active if request["elapsed_s"] >= stuck_threshold_s
+            ]
+            oldest_active_s = active[0]["elapsed_s"] if active else 0.0
+            aggregate_active_tokens_per_second = round(
+                sum(request["tokens_per_second"] for request in active), 2
+            )
+            average_completed_tokens_per_second = 0.0
+            if self.total_completed_elapsed_s > 0:
+                average_completed_tokens_per_second = round(
+                    self.total_output_tokens_completed / self.total_completed_elapsed_s, 2
+                )
+
+            return {
+                "active_request_count": len(active),
+                "total_started": self.total_started,
+                "total_completed": self.total_completed,
+                "total_failed": self.total_failed,
+                "total_cancelled": self.total_cancelled,
+                "total_output_tokens_completed": self.total_output_tokens_completed,
+                "average_completed_tokens_per_second": (
+                    average_completed_tokens_per_second
+                ),
+                "aggregate_active_tokens_per_second": (
+                    aggregate_active_tokens_per_second
+                ),
+                "oldest_active_request_s": round(oldest_active_s, 2),
+                "stuck_threshold_s": stuck_threshold_s,
+                "stuck_request_count": len(stuck),
+                "active_requests": active,
+                "stuck_requests": stuck,
+            }
+
+
+request_monitor = RequestMonitor()
+
+
 def _get_lora_request() -> Optional["LoRARequest"]:
     """Get the current LoRA request if an adapter is active."""
     if not LORA_AVAILABLE:
@@ -298,9 +435,39 @@ async def _generate(request_dict: dict, raw_request: Request) -> Response:
 
     prompt = request_dict.pop("prompt")
     stream = request_dict.pop("stream", False)
+    max_tokens = request_dict.get("max_tokens")
+    if max_tokens is None:
+        max_tokens = request_dict.get("max_new_tokens")
+    if max_tokens is None:
+        max_tokens = request_dict.get("max_completion_tokens")
+
+    if isinstance(prompt, dict):
+        prompt_length = len(prompt.get("prompt_token_ids", []))
+    elif isinstance(prompt, list):
+        prompt_length = len(prompt)
+    elif isinstance(prompt, str):
+        prompt_length = len(prompt)
+    else:
+        prompt_length = None
+
     request_dict["output_kind"] = RequestOutputKind.FINAL_ONLY
     sampling_params = SamplingParams(**request_dict)
     request_id = random_uuid()
+    request_monitor.start(
+        request_id,
+        {
+            "prompt_length": prompt_length,
+            "max_tokens": max_tokens,
+            "stream": stream,
+        },
+    )
+    logger.info(
+        "[RequestMonitor] request_id=%s started prompt_length=%s max_tokens=%s stream=%s",
+        request_id,
+        prompt_length,
+        max_tokens,
+        stream,
+    )
 
     # Get active LoRA adapter if any
     lora_request = _get_lora_request()
@@ -310,22 +477,54 @@ async def _generate(request_dict: dict, raw_request: Request) -> Response:
     )
 
     async def stream_results() -> AsyncGenerator[bytes, None]:
-        async for request_output in results_generator:
-            prompt = request_output.prompt
-            assert prompt is not None
-            text_outputs = [prompt + output.text for output in request_output.outputs]
-            ret = {"text": text_outputs}
-            yield (json.dumps(ret) + "\n").encode("utf-8")
+        finish_reasons: Optional[List[Any]] = None
+        output_tokens = 0
+        try:
+            async for request_output in results_generator:
+                prompt = request_output.prompt
+                assert prompt is not None
+                output_tokens = sum(
+                    len(getattr(output, "token_ids", []) or [])
+                    for output in request_output.outputs
+                )
+                request_monitor.update_progress(request_id, output_tokens)
+                text_outputs = [prompt + output.text for output in request_output.outputs]
+                finish_reasons = [output.finish_reason for output in request_output.outputs]
+                ret = {"text": text_outputs}
+                yield (json.dumps(ret) + "\n").encode("utf-8")
+        except asyncio.CancelledError:
+            request_monitor.finish(request_id, "cancelled")
+            raise
+        except Exception as exc:
+            request_monitor.finish(request_id, "failed", error=str(exc))
+            raise
+        else:
+            request_monitor.finish(
+                request_id,
+                "completed",
+                finish_reasons=finish_reasons,
+                output_tokens=output_tokens,
+            )
 
     if stream:
         return StreamingResponse(stream_results())
 
     final_output = None
+    output_tokens = 0
     try:
         async for request_output in results_generator:
             final_output = request_output
+            output_tokens = sum(
+                len(getattr(output, "token_ids", []) or [])
+                for output in request_output.outputs
+            )
+            request_monitor.update_progress(request_id, output_tokens)
     except asyncio.CancelledError:
+        request_monitor.finish(request_id, "cancelled")
         return Response(status_code=499)
+    except Exception as exc:
+        request_monitor.finish(request_id, "failed", error=str(exc))
+        raise
 
     assert final_output is not None
     prompt = final_output.prompt or engine.tokenizer.decode(
@@ -334,6 +533,15 @@ async def _generate(request_dict: dict, raw_request: Request) -> Response:
 
     text_outputs = [output.text for output in final_output.outputs]
     finish_reasons = [output.finish_reason for output in final_output.outputs]
+    output_tokens = sum(
+        len(getattr(output, "token_ids", []) or []) for output in final_output.outputs
+    )
+    request_monitor.finish(
+        request_id,
+        "completed",
+        finish_reasons=finish_reasons,
+        output_tokens=output_tokens,
+    )
     ret = {"text": text_outputs, "prompt": prompt, "finish_reasons": finish_reasons}
 
     if sampling_params.logprobs is not None:
@@ -521,6 +729,12 @@ async def bridge_debug() -> JSONResponse:
             pass
 
     return JSONResponse(debug_info)
+
+
+@app.get("/debug/request_stats")
+async def request_stats(stuck_threshold_s: float = 60.0) -> JSONResponse:
+    """Inspect active generate requests and flag slow/stuck ones."""
+    return JSONResponse(request_monitor.snapshot(stuck_threshold_s=stuck_threshold_s))
 
 
 @app.get("/bridge/list_endpoints")
