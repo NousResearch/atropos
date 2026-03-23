@@ -232,6 +232,7 @@ class GSM8kEnv(BaseEnv):
         )
 
         async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
+
             chat_completions = await managed.chat_completion(
                 messages=[{"role": "system", "content": system_prompt}, user_message],
                 n=self.config.group_size,
@@ -351,7 +352,7 @@ class GSM8kEnv(BaseEnv):
                         # Apply linear penalty scaling from 1.0 down to 0.0
                         scores["scores"].append(1.0 - percentage_of_range)
             if all([scores["scores"][0] == score for score in scores["scores"]]):
-                return None
+                return None  # If all the same, we return None
             return scores
         else:
             # If the gold solution is not parseable, we return None
