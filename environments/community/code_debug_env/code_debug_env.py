@@ -398,12 +398,24 @@ class CodeDebugEnv(BaseEnv):
             reward, is_partial = self._score_fix(generated_code, item)
             self.partial_fix_buffer.append(1 if is_partial else 0)
 
+            # Debug logging
+            extracted_preview = (
+                generated_code[:80] + "..." if generated_code else "(none)"
+            )
+            print(
+                f"  [{item['entry_point']}] extracted={bool(generated_code)}, "
+                f"score={reward:.2f}, partial={is_partial}, "
+                f"code_preview={extracted_preview}"
+            )
+
             tokens = rollout["tokens"]
             masks = rollout["masks"]
             logprobs = rollout["logprobs"]
 
             # Remove obviously bad examples (too short responses)
-            if len([1 for m in masks if m != -100]) < 10:
+            non_masked = len([1 for m in masks if m != -100])
+            if non_masked < 10:
+                print(f"    Skipping: only {non_masked} non-masked tokens")
                 continue
 
             scores["tokens"].append(tokens)
@@ -414,12 +426,16 @@ class CodeDebugEnv(BaseEnv):
             if len(scores["tokens"]) >= self.config.group_size:
                 break
 
+        if not scores["scores"]:
+            print(f"  WARNING: No valid rollouts for {item['entry_point']}")
+            return None
+
         for score in scores["scores"]:
             self.percent_correct_buffer.append(1.0 if score >= 1.0 else 0.0)
             self.raw_score_buffer.append(max(score, 0.0))
 
         # Apply length penalty when all scores are perfect
-        if scores["scores"] and all(score == 1.0 for score in scores["scores"]):
+        if all(score == 1.0 for score in scores["scores"]):
             token_lengths = [len(t) for t in scores["tokens"]]
             if max(token_lengths) == 0:
                 return None
@@ -438,11 +454,17 @@ class CodeDebugEnv(BaseEnv):
                     pct = min(pct, 1.0)
                     scores["scores"].append(1.0 - pct)
 
-        # If all scores are same, return None (GRPO needs variance)
-        if scores["scores"] and all(
-            scores["scores"][0] == s for s in scores["scores"]
-        ):
-            return None
+        # If all scores are same, add small noise to break ties
+        # This prevents infinite retry loops in process mode while
+        # maintaining meaningful relative ordering for training
+        if all(scores["scores"][0] == s for s in scores["scores"]):
+            print(
+                f"  All {len(scores['scores'])} scores identical "
+                f"({scores['scores'][0]:.2f}), adding noise"
+            )
+            scores["scores"] = [
+                s + random.uniform(-0.01, 0.01) for s in scores["scores"]
+            ]
 
         return scores
 
