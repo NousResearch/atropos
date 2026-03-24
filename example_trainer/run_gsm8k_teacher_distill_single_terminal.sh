@@ -34,6 +34,9 @@ set -euo pipefail
 #   REUSE_API=1                  # Override reuse per service
 #   REUSE_STUDENT=1
 #   REUSE_TEACHER=1
+#   STUDENT_SERVER_TYPE=vllm
+#   TEACHER_SERVER_TYPE=vllm
+#   SMOKE_TEST_GENERATE=1
 #   DRY_RUN=1
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -50,6 +53,8 @@ TRAINER_GPUS="${TRAINER_GPUS:-$STUDENT_GPUS}"
 
 STUDENT_TP="${STUDENT_TP:-1}"
 TEACHER_TP="${TEACHER_TP:-4}"
+STUDENT_SERVER_TYPE="${STUDENT_SERVER_TYPE:-vllm}"
+TEACHER_SERVER_TYPE="${TEACHER_SERVER_TYPE:-vllm}"
 
 API_PORT="${API_PORT:-8002}"
 STUDENT_PORT="${STUDENT_PORT:-9001}"
@@ -87,6 +92,7 @@ REUSE_SERVERS="${REUSE_SERVERS:-0}"
 REUSE_API="${REUSE_API:-$REUSE_SERVERS}"
 REUSE_STUDENT="${REUSE_STUDENT:-$REUSE_SERVERS}"
 REUSE_TEACHER="${REUSE_TEACHER:-$REUSE_SERVERS}"
+SMOKE_TEST_GENERATE="${SMOKE_TEST_GENERATE:-1}"
 
 ENV_GROUP_SIZE="${ENV_GROUP_SIZE:-2}"
 ENV_BATCH_SIZE="${ENV_BATCH_SIZE:-1}"
@@ -153,6 +159,38 @@ wait_for_http() {
     fi
     if (( "$(date +%s)" - start > timeout )); then
       log "Timeout waiting for ${name}: ${url}"
+      return 1
+    fi
+    sleep 2
+  done
+}
+
+smoke_test_generate() {
+  local port="$1"
+  local name="$2"
+  local timeout="${3:-120}"
+  if [[ "$DRY_RUN" == "1" ]]; then
+    log "[DRY RUN] skip /generate smoke test for ${name}"
+    return 0
+  fi
+
+  local start
+  start="$(date +%s)"
+  while true; do
+    if curl -fsS "http://localhost:${port}/generate" \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "prompt": "Reply with OK.",
+        "max_tokens": 4,
+        "temperature": 0.0,
+        "n": 1,
+        "logprobs": 0
+      }' >/dev/null 2>&1; then
+      log "Ready: ${name} /generate smoke test"
+      return 0
+    fi
+    if (( "$(date +%s)" - start > timeout )); then
+      log "Timeout waiting for ${name} /generate smoke test"
       return 1
     fi
     sleep 2
@@ -251,6 +289,7 @@ log "  student=${STUDENT_MODEL}"
 log "  teacher=${TEACHER_MODEL}"
 log "  gpus student=${STUDENT_GPUS}, teacher=${TEACHER_GPUS}, trainer=${TRAINER_GPUS}"
 log "  ports api=${API_PORT}, student=${STUDENT_PORT}, teacher=${TEACHER_PORT}"
+log "  server types student=${STUDENT_SERVER_TYPE}, teacher=${TEACHER_SERVER_TYPE}"
 log "  logs=${LOG_DIR}"
 log "  saves=${SAVE_DIR}"
 log "  bridge=${BRIDGE_DIR}"
@@ -270,6 +309,16 @@ fi
 if [[ "$TRAINER_GPUS" != "$STUDENT_GPUS" ]]; then
   log "ERROR: TRAINER_GPUS must match STUDENT_GPUS for shared_vllm mode."
   log "       Got student=${STUDENT_GPUS}, trainer=${TRAINER_GPUS}"
+  exit 2
+fi
+
+if [[ "$STUDENT_SERVER_TYPE" != "vllm" ]]; then
+  log "ERROR: STUDENT_SERVER_TYPE must be vllm for GSM8K teacher-distill runner."
+  exit 2
+fi
+
+if [[ "$TEACHER_SERVER_TYPE" != "vllm" ]]; then
+  log "ERROR: TEACHER_SERVER_TYPE must be vllm for teacher logprob fetching."
   exit 2
 fi
 
@@ -305,6 +354,9 @@ else
       --dtype "$DTYPE"
   if [[ "$DRY_RUN" == "0" ]]; then
     wait_for_http "http://localhost:${STUDENT_PORT}/health" 420 "student vLLM"
+    if [[ "$SMOKE_TEST_GENERATE" == "1" ]]; then
+      smoke_test_generate "$STUDENT_PORT" "student vLLM" 240
+    fi
   fi
 fi
 
@@ -326,6 +378,9 @@ else
       --dtype "$DTYPE"
   if [[ "$DRY_RUN" == "0" ]]; then
     wait_for_http "http://localhost:${TEACHER_PORT}/health" 1800 "teacher vLLM"
+    if [[ "$SMOKE_TEST_GENERATE" == "1" ]]; then
+      smoke_test_generate "$TEACHER_PORT" "teacher vLLM" 300
+    fi
   fi
 fi
 
@@ -349,14 +404,14 @@ start_process "gsm8k_teacher_env" "${LOG_DIR}/env.log" \
     --teacher.base_url "http://localhost:${TEACHER_PORT}/v1" \
     --teacher.model_name "$TEACHER_MODEL" \
     --teacher.tokenizer_name "$STUDENT_MODEL" \
-    --teacher.server_type vllm \
+    --teacher.server_type "$TEACHER_SERVER_TYPE" \
     --env.teacher_top_k "$TEACHER_TOP_K" \
     --env.ensure_scores_are_not_same false \
     --openai.api_key "dummy" \
     --openai.base_url "http://localhost:${STUDENT_PORT}/v1" \
     --openai.model_name "$STUDENT_MODEL" \
     --openai.tokenizer_name "$STUDENT_MODEL" \
-    --openai.server_type vllm
+    --openai.server_type "$STUDENT_SERVER_TYPE"
 
 log "All services launched."
 log "Run logs:"
@@ -424,8 +479,10 @@ log "  curl -s http://localhost:${TEACHER_PORT}/health"
 log "  curl -s http://localhost:${STUDENT_PORT}/bridge/is_paused | jq ."
 log "  curl -s http://localhost:${STUDENT_PORT}/debug/request_stats | jq ."
 log "  curl -s \"http://localhost:${STUDENT_PORT}/debug/request_stats?stuck_threshold_s=120\" | jq ."
+log "  curl -s http://localhost:${STUDENT_PORT}/generate -H 'Content-Type: application/json' -d '{\"prompt\":\"Reply with OK.\",\"max_tokens\":4,\"temperature\":0.0,\"n\":1,\"logprobs\":0}' | jq ."
 log "  curl -s http://localhost:${TEACHER_PORT}/debug/request_stats | jq ."
 log "  curl -s \"http://localhost:${TEACHER_PORT}/debug/request_stats?stuck_threshold_s=120\" | jq ."
+log "  curl -s http://localhost:${TEACHER_PORT}/generate -H 'Content-Type: application/json' -d '{\"prompt\":\"Reply with OK.\",\"max_tokens\":4,\"temperature\":0.0,\"n\":1,\"logprobs\":0}' | jq ."
 log ""
 log "Reuse tip:"
 log "  REUSE_SERVERS=1 ./example_trainer/run_gsm8k_teacher_distill_single_terminal.sh"

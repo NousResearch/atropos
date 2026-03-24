@@ -72,6 +72,7 @@ class GSM8kEnv(BaseEnv):
             model_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
             base_url="http://localhost:9001/v1",
             api_key="x",
+            server_type="vllm",
             num_requests_for_eval=256,
         )
 
@@ -237,6 +238,7 @@ class GSM8kEnv(BaseEnv):
             f"question_len={len(item['question'])}",
             flush=True,
         )
+        generation_start = time.time()
 
         async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
 

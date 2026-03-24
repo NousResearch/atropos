@@ -38,6 +38,7 @@ class GSM8kTeacherDistillEnv(TeacherDistillationEnv, GSM8kEnv):
             model_name="NousResearch/DeepHermes-3-Llama-3-3B-Preview",
             base_url="http://localhost:9001/v1",
             api_key="x",
+            server_type="vllm",
             num_requests_for_eval=256,
         )
         return env_config, server_config
