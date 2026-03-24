@@ -2,7 +2,7 @@
 Code Debug Environment for Atropos
 
 Trains LLMs to debug and fix buggy Python functions.
-Uses the HumanEvalFix dataset with execution-based verification
+Uses the HumanEvalPack dataset (HumanEvalFix subset) with execution-based verification
 against ground-truth test cases.
 
 Environment pattern follows sql_query_env for consistency.
@@ -162,11 +162,11 @@ class CodeDebugEnv(BaseEnv):
         await super().wandb_log(wandb_metrics)
 
     async def setup(self):
-        """Load the HumanEvalFix dataset and prepare train/test splits."""
+        """Load the HumanEvalPack dataset (HumanEvalFix) and prepare train/test splits."""
         from datasets import load_dataset
 
-        print("Loading HumanEvalFix dataset...")
-        dataset = load_dataset("bigcode/humanevalfix-python", split="test")
+        print("Loading HumanEvalPack (python) dataset...")
+        dataset = load_dataset("bigcode/humanevalpack", "python", split="test")
 
         all_items: List[CodeDebugItem] = []
         for row in dataset:

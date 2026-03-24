@@ -4,7 +4,7 @@ An Atropos RL environment for training LLMs to debug and fix buggy Python code.
 
 ## Overview
 
-This environment uses the [HumanEvalFix](https://huggingface.co/datasets/bigcode/humanevalfix-python) dataset, which contains 164 buggy Python functions with associated test suites. The model receives a buggy function and must output the corrected version inside `\boxed{}`. Scoring is done by executing the fixed code against the original test cases.
+This environment uses the [HumanEvalPack](https://huggingface.co/datasets/bigcode/humanevalpack) dataset (Python subset, HumanEvalFix task), which contains 164 buggy Python functions with associated test suites. The model receives a buggy function and must output the corrected version inside `\boxed{}`. Scoring is done by executing the fixed code against the original test cases.
 
 ## Architecture
 
@@ -69,7 +69,7 @@ python code_debug_env.py evaluate \
 
 ## Dataset
 
-- **Source**: [bigcode/humanevalfix-python](https://huggingface.co/datasets/bigcode/humanevalfix-python)
+- **Source**: [bigcode/humanevalpack](https://huggingface.co/datasets/bigcode/humanevalpack) (Python subset)
 - **License**: Apache 2.0
 - **Size**: 164 problems
 - **Split**: 80% train / 20% test
