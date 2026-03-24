@@ -398,24 +398,12 @@ class CodeDebugEnv(BaseEnv):
             reward, is_partial = self._score_fix(generated_code, item)
             self.partial_fix_buffer.append(1 if is_partial else 0)
 
-            # Debug logging
-            extracted_preview = (
-                generated_code[:80] + "..." if generated_code else "(none)"
-            )
-            print(
-                f"  [{item['entry_point']}] extracted={bool(generated_code)}, "
-                f"score={reward:.2f}, partial={is_partial}, "
-                f"code_preview={extracted_preview}"
-            )
-
             tokens = rollout["tokens"]
             masks = rollout["masks"]
             logprobs = rollout["logprobs"]
 
             # Remove obviously bad examples (too short responses)
-            non_masked = len([1 for m in masks if m != -100])
-            if non_masked < 10:
-                print(f"    Skipping: only {non_masked} non-masked tokens")
+            if len([1 for m in masks if m != -100]) < 10:
                 continue
 
             scores["tokens"].append(tokens)
@@ -427,7 +415,6 @@ class CodeDebugEnv(BaseEnv):
                 break
 
         if not scores["scores"]:
-            print(f"  WARNING: No valid rollouts for {item['entry_point']}")
             return None
 
         for score in scores["scores"]:
@@ -458,10 +445,6 @@ class CodeDebugEnv(BaseEnv):
         # This prevents infinite retry loops in process mode while
         # maintaining meaningful relative ordering for training
         if all(scores["scores"][0] == s for s in scores["scores"]):
-            print(
-                f"  All {len(scores['scores'])} scores identical "
-                f"({scores['scores'][0]:.2f}), adding noise"
-            )
             scores["scores"] = [
                 s + random.uniform(-0.01, 0.01) for s in scores["scores"]
             ]
