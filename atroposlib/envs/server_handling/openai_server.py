@@ -68,7 +68,7 @@ class OpenAIServer(APIServer):
             kwargs.get("messages", None) is not None
         ), "Messages are required for chat completion!"
         # DEBUG: Print the request being sent to vLLM
-        # print(f"\n🚀 DEBUG: OpenAI Request Keywords: {kwargs}")
+        # OpenAI request keywords for completion
         
         try:
             if self.config.n_kwarg_is_ignored:
@@ -106,13 +106,8 @@ class OpenAIServer(APIServer):
                             completions.choices.extend(c.choices)
             return completions
         except Exception as e:
-            print(f"\n❌ DEBUG: OpenAI API Error: {type(e).__name__}: {e}")
-            if hasattr(e, "response"):
-                try:
-                    print(f"DEBUG: Response Body: {e.response.text}")
-                except:
-                    pass
-            raise e
+            self.logger.error("OpenAI API Error: %s: %s", type(e).__name__, e)
+            raise
 
     async def _completion_wrapper(self, **kwargs) -> Completion:
         """

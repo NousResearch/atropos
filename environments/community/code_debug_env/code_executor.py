@@ -143,7 +143,7 @@ def _counting_check(candidate):
     try:
         src = inspect.getsource(_orig_check)
     except (TypeError, OSError):
-        # Can't inspect — just run it
+        # Can't inspect - just run it
         try:
             _orig_check(candidate)
             print("1/1")
@@ -155,12 +155,12 @@ def _counting_check(candidate):
     assert_lines = [l.strip() for l in src.split('\\n') if l.strip().startswith('assert')]
     _total = max(len(assert_lines), 1)
 
-    # Run the full check — if it passes, all assertions passed
+    # Run the full check - if it passes, all assertions passed
     try:
         _orig_check(candidate)
         _passed = _total
     except AssertionError:
-        # Some failed — try to count
+        # Some failed - try to count
         _passed = 0
         for line in assert_lines:
             try:
