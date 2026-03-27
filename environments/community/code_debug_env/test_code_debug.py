@@ -6,9 +6,11 @@ without requiring a running inference server.
 """
 
 import pytest
-
-from code_executor import count_test_results, execute_code_with_tests, extract_boxed_code
-
+from code_executor import (
+    count_test_results,
+    execute_code_with_tests,
+    extract_boxed_code,
+)
 
 # ============================================================================
 # Tests for extract_boxed_code

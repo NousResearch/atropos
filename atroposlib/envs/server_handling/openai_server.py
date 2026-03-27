@@ -69,7 +69,7 @@ class OpenAIServer(APIServer):
         ), "Messages are required for chat completion!"
         # DEBUG: Print the request being sent to vLLM
         # OpenAI request keywords for completion
-        
+
         try:
             if self.config.n_kwarg_is_ignored:
                 n = kwargs.pop("n", 1)

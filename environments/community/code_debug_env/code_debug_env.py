@@ -8,8 +8,8 @@ against ground-truth test cases.
 Environment pattern follows sql_query_env for consistency.
 """
 
-import random
 import logging
+import random
 from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
 
 from code_executor import (
@@ -190,9 +190,7 @@ class CodeDebugEnv(BaseEnv):
         verified = 0
         for item in all_items[:10]:
             code = item["prompt"] + item["canonical_solution"]
-            passed, _ = execute_code_with_tests(
-                code, item["test"], item["entry_point"]
-            )
+            passed, _ = execute_code_with_tests(code, item["test"], item["entry_point"])
             if passed:
                 verified += 1
         logger.info("Verified %d/10 canonical solutions execute correctly", verified)
@@ -213,7 +211,9 @@ class CodeDebugEnv(BaseEnv):
         data["iter"] = self.iter
         super().save_checkpoint(step, data)
 
-    def _score_fix(self, generated_code: str, item: CodeDebugItem) -> Tuple[float, bool]:
+    def _score_fix(
+        self, generated_code: str, item: CodeDebugItem
+    ) -> Tuple[float, bool]:
         """
         Score a generated fix by execution against test cases.
 
