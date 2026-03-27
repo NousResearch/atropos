@@ -262,6 +262,10 @@ class BaseEnv(ABC):
         self.max_token_len = -1
         self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
         self.completion_lengths = []
+        # Initialize API performance tracker for trainer-inference latency monitoring
+        from atroposlib.utils.api_perf import APIPerformanceTracker
+
+        self.api_perf_tracker = APIPerformanceTracker()
         self.max_num_workers = config.max_num_workers
         if self.max_num_workers == -1:
             self.max_num_workers = config.max_num_workers_per_node * len(
@@ -674,6 +678,8 @@ class BaseEnv(ABC):
             wandb_metrics["train/completion_lengths_p95"] = (
                 np.array(self.completion_lengths) > (0.95 * self.max_token_len)
             ).mean()
+        # Log API performance metrics
+        wandb_metrics.update(self.api_perf_tracker.metrics_dict())
         wandb_metrics = await self.create_rollout_table(wandb_metrics)
         wandb_metrics = self.perf_stats(wandb_metrics)
         self.rollouts_for_wandb = []
@@ -798,32 +804,46 @@ class BaseEnv(ABC):
     async def _send_scored_data_to_api(self, scored_data):
         """
         Send scored data to the API with retry logic for timeouts and server errors.
+        Tracks latency and payload metrics via APIPerformanceTracker.
         """
         # Add env_id to the data
         if isinstance(scored_data, list):
             for item in scored_data:
                 item["env_id"] = getattr(self, "env_id", None)
+            n_items = sum(
+                len(item.get("tokens", [])) for item in scored_data
+            )
         else:
             scored_data["env_id"] = getattr(self, "env_id", None)
+            n_items = len(scored_data.get("tokens", []))
 
         url = (
             f"{self.config.rollout_server_url}/scored_data_list"
             if isinstance(scored_data, list)
             else f"{self.config.rollout_server_url}/scored_data"
         )
+
+        # Serialize to compute payload size for tracking
+        serialized = json.dumps(scored_data).encode("utf-8")
+        payload_bytes = len(serialized)
+
         async with aiohttp.ClientSession() as session:
-            async with self._post_json_with_compression(
-                session,
-                url,
-                scored_data,
-            ) as resp:
-                if resp.status >= 500:
-                    logging.debug(f"Server error: {resp.status}, retrying...")
-                    raise Exception(f"Server error: {resp.status}")
-                elif resp.status >= 400:
-                    logging.error(f"Client error: {resp.status}, not retrying")
-                    return
-                logger.debug(await resp.text())
+            with self.api_perf_tracker.track_request(
+                n_items=n_items,
+                payload_bytes=payload_bytes,
+            ):
+                async with self._post_json_with_compression(
+                    session,
+                    url,
+                    scored_data,
+                ) as resp:
+                    if resp.status >= 500:
+                        logging.debug(f"Server error: {resp.status}, retrying...")
+                        raise Exception(f"Server error: {resp.status}")
+                    elif resp.status >= 400:
+                        logging.error(f"Client error: {resp.status}, not retrying")
+                        return
+                    logger.debug(await resp.text())
 
     def _post_json_with_compression(
         self,
