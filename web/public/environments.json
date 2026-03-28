@@ -1,0 +1,560 @@
+[
+  {
+    "id": "answer_format_environment",
+    "slug": "answer_format_environment",
+    "name": "Answer Format Environment",
+    "description": "A comprehensive environment for teaching language models to generate responses in specific structured formats. This environment focuses on **format adherence** rather than answer correctness, using randomized format requirements and corresponding parsers to evaluate models on structured response generation.",
+    "tags": [
+      "coding"
+    ],
+    "fileCount": 2,
+    "totalSize": 221803,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "code_execution_server",
+    "slug": "code_execution_server",
+    "name": "Code Execution Environment",
+    "description": "A comprehensive environment for training language models to solve coding problems through **code generation and execution**. This environment evaluates models on their ability to generate correct Python code that passes test cases using a Modal endpoint to validate LLM-generated code.",
+    "tags": [
+      "coding"
+    ],
+    "fileCount": 5,
+    "totalSize": 65123,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/accessibility_env",
+    "slug": "community--accessibility_env",
+    "name": "Accessibility Auto-Fixer Environment for Atropos",
+    "description": "**Team/Author:** Accessibility Bot / Josh Garza",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 4,
+    "totalSize": 23819,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/bleuberi",
+    "slug": "community--bleuberi",
+    "name": "BLEUBERI Environment for Atropos",
+    "description": "This environment implements the BLEUBERI approach for instruction-following using BLEU scores as rewards. BLEUBERI (BLEU-Based Enhanced Utility for Better Evaluating Reward in Instruction-following) demonstrates that BLEU scores, when paired with high-quality references from strong LLMs, can be highly effective rewards for training models to follow instructions.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 6,
+    "totalSize": 41987,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/cat_behavior_env",
+    "slug": "community--cat_behavior_env",
+    "name": "Cat Behavior Communication Environment",
+    "description": "**Author**: [krishpop](https://github.com/krishpop)",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 3,
+    "totalSize": 35209,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/cybersecurity_sigma",
+    "slug": "community--cybersecurity_sigma",
+    "name": "Cybersecurity Sigma Rule Generation Environment",
+    "description": "This environment trains LLMs to generate semantically correct Sigma detection rules from threat-hunting prompts. It provides two different reward mechanisms for evaluating generated rules.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 3,
+    "totalSize": 31295,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/dynastai",
+    "slug": "community--dynastai",
+    "name": "DynastAI",
+    "description": "A medieval kingdom management game with an adaptive reinforcement learning environment.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 59,
+    "totalSize": 84253988,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/ethereum_virtual_machine",
+    "slug": "community--ethereum_virtual_machine",
+    "name": "Ethereum Virtual Machine (EVM) Transaction Agent Environment",
+    "description": "Atropos environment for training language models to generate and execute profitable Ethereum transactions.  An active forked version of the blockchain is created using Anvil (https://getfoundry.sh/guides/forking-mainnet-with-cast-anvil) to allow for execution and state inspection to verify transactions execute and perform the desired action.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 8,
+    "totalSize": 80498,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/examcraft",
+    "slug": "community--examcraft",
+    "name": "\ud83c\udf93 ExamCraft: Adaptive LLM Teacher Training Environment",
+    "description": "**Hackathon Submission**: Train language models to become adaptive teachers through reinforcement learning.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 4,
+    "totalSize": 52096,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/goofy_math",
+    "slug": "community--goofy_math",
+    "name": "GoofyMath \ud83d\ude02\u2797",
+    "description": "A reinforcement learning environment that trains math models to be both *accurate* and *entertaining*.",
+    "tags": [
+      "community",
+      "math"
+    ],
+    "fileCount": 3,
+    "totalSize": 22516,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/helpful_doctors",
+    "slug": "community--helpful_doctors",
+    "name": "Persona-Aware MedQA Benchmarking",
+    "description": "",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 3,
+    "totalSize": 14318,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/humor_generation",
+    "slug": "community--humor_generation",
+    "name": "Humor Generation Environment",
+    "description": "A reinforcement learning environment for training language models to generate humor in the style of specific comedians and formats. The environment uses a multi-dimensional scoring rubric to evaluate joke quality across relevance, style consistency, creativity, humor effectiveness, virality, and cognitive coherence.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 3,
+    "totalSize": 9668,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/lean_proof_env",
+    "slug": "community--lean_proof_env",
+    "name": "Overview",
+    "description": "The `LeanEnv` class implements an environment specifically designed for training and evaluating language models on Lean theorem proving tasks. Its primary motivation is to facilitate research in automated reasoning and to develop LLMs capable of formal mathematical deduction. The environment orchestrates the interaction between an LLM, which generates proof attempts for given theorem statements, and a Lean code checker (currently mocked as `PyPantograph`), which validates these proofs. This inte",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 4,
+    "totalSize": 57201,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/mcp_tool_calling",
+    "slug": "community--mcp_tool_calling",
+    "name": "Readme",
+    "description": "Watch the demo on YouTube",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 9,
+    "totalSize": 49471,
+    "readmePath": "GRPO_README.md"
+  },
+  {
+    "id": "community/meteorology_forecast",
+    "slug": "community--meteorology_forecast",
+    "name": "MeteorologyForecastRL",
+    "description": "**MeteorologyForecastRL** is a reinforcement learning environment designed to train LLMs on interpreting numerical weather prediction (NWP) model sounding data and making informed forecast assessments. The core idea is to move beyond static graphical outputs (e.g., SHARPpy-style skew-Ts or hodographs) and into a **text-structured, LLM-readable format** that enables programmatic reasoning and analysis.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 4,
+    "totalSize": 1424114,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/metric_card_generator",
+    "slug": "community--metric_card_generator",
+    "name": "Metric Card Generator Environment",
+    "description": "This environment generates structured JSON configurations for Metric Card UI components for AI model evaluation dashboards. It demonstrates a closed-loop generation, evaluation, and visualization pipeline using Atropos.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 10,
+    "totalSize": 731446,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/options_iv_prediction",
+    "slug": "community--options_iv_prediction",
+    "name": "Options Implied Volatility Prediction Environment",
+    "description": "**Location:** `environments/community/options_iv_prediction/`",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 5,
+    "totalSize": 464268,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/padres_spatial",
+    "slug": "community--padres_spatial",
+    "name": "Padres: Spatial RL Environment",
+    "description": "[Watch the demo video](https://youtu.be/uuSur31U1Pc)",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 9,
+    "totalSize": 49262,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/pay_to_play",
+    "slug": "community--pay_to_play",
+    "name": "Pay-to-Play Environment with Mixture of Judges",
+    "description": "A reinforcement learning environment where an AI agent must strategically select and pay specialized agent cards before each evaluation, implementing economic constraints and strategic decision-making in AI training.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 5,
+    "totalSize": 74396,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/physical_space_stl",
+    "slug": "community--physical_space_stl",
+    "name": "Physical Environment",
+    "description": "Our project is a physical environment to train LLMs to generate STL files, the same files used in physical CAD designs.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 15,
+    "totalSize": 152600,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/pokemon-showdown",
+    "slug": "community--pokemon-showdown",
+    "name": "Pokemon Showdown Environment",
+    "description": "This is a Pokemon Showdown environment that allows you to play Pokemon battles with the Pokemon Showdown Battle Simulator.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 6,
+    "totalSize": 42867,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/poker_holdem",
+    "slug": "community--poker_holdem",
+    "name": "Six-Seat No-Limit Hold'em Poker Environment",
+    "description": "Atropos environment for improving an LLM's ability to make optimal decisions in No-Limit Hold'em Poker situations through reinforcement learning on expert hand history data.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 6,
+    "totalSize": 39071,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/protein_design",
+    "slug": "community--protein_design",
+    "name": "\ud83e\uddec LLM-Guided De Novo Protein Design Environment",
+    "description": "**De novo protein binder design** is one of the hardest problems in bioengineering: you're tasked with inventing an amino acid sequence that folds into a 3D structure that binds to a given target protein. This environment lets **Large Language Models (LLMs)** tackle that problem using reinforcement learning (RL) \u2014 not by predicting sequences blindly, but by *learning to use the right tools in the right order* to produce functioning binders.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 15,
+    "totalSize": 148102,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/punchline_vrcli",
+    "slug": "community--punchline_vrcli",
+    "name": "Punchline VR-CLI Environment",
+    "description": "This environment trains an LLM to generate humorous punchlines for jokes, utilizing a Reinforcement Learning (RL) technique called Verifiable Rewards via Completion Likelihood Improvement (VR-CLI), from the paper \"Learning to Reason for Long-Form Story Generation\" (Gurung & Lapata, 2025) [https://arxiv.org/html/2503.22828v1](https://arxiv.org/html/2503.22828v1).",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 3,
+    "totalSize": 14670,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/pytorch_optimizer_coding/FOB/examples/neps",
+    "slug": "community--pytorch_optimizer_coding--FOB--examples--neps",
+    "name": "Using FOB with NePS for HPO",
+    "description": "Run all commands from the root of the FOB repository.",
+    "tags": [
+      "community",
+      "coding"
+    ],
+    "fileCount": 3,
+    "totalSize": 7475,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/pytorch_optimizer_coding/FOB/examples/smac",
+    "slug": "community--pytorch_optimizer_coding--FOB--examples--smac",
+    "name": "Smac",
+    "description": "",
+    "tags": [
+      "community",
+      "coding"
+    ],
+    "fileCount": 7,
+    "totalSize": 0,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/pytorch_optimizer_coding/FOB/pytorch_fob/evaluation",
+    "slug": "community--pytorch_optimizer_coding--FOB--pytorch_fob--evaluation",
+    "name": "Evaluation",
+    "description": "During training you can monitor your experiments with [Tensorboard](https://www.tensorflow.org/tensorboard).",
+    "tags": [
+      "community",
+      "coding"
+    ],
+    "fileCount": 5,
+    "totalSize": 36737,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/pytorch_optimizer_coding/FOB/pytorch_fob/optimizers",
+    "slug": "community--pytorch_optimizer_coding--FOB--pytorch_fob--optimizers",
+    "name": "Optimizers",
+    "description": "We currently have the following optimizers:",
+    "tags": [
+      "community",
+      "coding"
+    ],
+    "fileCount": 3,
+    "totalSize": 3925,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/pytorch_optimizer_coding/FOB/pytorch_fob/tasks",
+    "slug": "community--pytorch_optimizer_coding--FOB--pytorch_fob--tasks",
+    "name": "Tasks",
+    "description": "We provide a set of tasks to train and evaluate models. A task consists of a model and a dataset.",
+    "tags": [
+      "community",
+      "coding"
+    ],
+    "fileCount": 3,
+    "totalSize": 11444,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/quantum_hybrid",
+    "slug": "community--quantum_hybrid",
+    "name": "Quantum-Classical Hybrid Language Model Environment",
+    "description": "",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 4,
+    "totalSize": 54400,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/regex_generation",
+    "slug": "community--regex_generation",
+    "name": "Regex Generation Environment",
+    "description": "An RL environment that trains language models to generate correct Python-compatible regular expressions from natural language descriptions and example test cases.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 4,
+    "totalSize": 27306,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/router_env/engine/tools/mcp",
+    "slug": "community--router_env--engine--tools--mcp",
+    "name": "MCP Servers Directory",
+    "description": "This directory contains all Model Context Protocol (MCP) servers used by the Stone AIOS engine.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 23,
+    "totalSize": 1010895,
+    "readmePath": "google-maps/README.md"
+  },
+  {
+    "id": "community/selcube",
+    "slug": "community--selcube",
+    "name": "Rubik's Cube Environment for LLM Training",
+    "description": "[![Watch the Demonstration Video](../../../banner-image.jpg)](https://youtu.be/fi4lhIyF_5M)",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 12,
+    "totalSize": 2924133,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/solitaire_winning_probability",
+    "slug": "community--solitaire_winning_probability",
+    "name": "Solitaire Winning Probability Environment",
+    "description": "This environment is designed to analyze and predict winning probabilities in various solitaire-style games using both theoretical mathematical analysis and empirical simulation.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 6,
+    "totalSize": 48724,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/sql_query_env",
+    "slug": "community--sql_query_env",
+    "name": "SQL Query Generation Environment",
+    "description": "Train LLMs to generate correct SQL queries from natural language questions.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 6,
+    "totalSize": 45166,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/ufc_prediction_env",
+    "slug": "community--ufc_prediction_env",
+    "name": "UFC Fight Prediction Environment",
+    "description": "This environment provides a framework for training and evaluating AI models on UFC fight prediction tasks, with a unique twist: instead of traditional analytical predictions, it generates entertaining fight commentary that can be directly used with Text-to-Speech (TTS) models like DIA. The environment includes two main components: a text-based predictor and an image-based predictor, both designed to create engaging, broadcast-style fight commentary.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 18,
+    "totalSize": 3308568,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/wikipedia_research",
+    "slug": "community--wikipedia_research",
+    "name": "Wikipedia Article Research Environment",
+    "description": "This environment trains LLMs to research and create Wikipedia-style articles on arbitrary topics using web search and content extraction tools.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 13,
+    "totalSize": 213951,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "community/word_hunt",
+    "slug": "community--word_hunt",
+    "name": "Word Hunt Environment",
+    "description": "This Atropos environment is designed to train language models to play **Word Hunt**, a game where the goal is to trace through a 4x4 grid of letters to create as many words as possible within the time limit.",
+    "tags": [
+      "community"
+    ],
+    "fileCount": 7,
+    "totalSize": 43888,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "dataset_environment",
+    "slug": "dataset_environment",
+    "name": "Quick Start",
+    "description": "```bash",
+    "tags": [],
+    "fileCount": 9,
+    "totalSize": 51078,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "game_environments/diplomacy_environment",
+    "slug": "game_environments--diplomacy_environment",
+    "name": "Minimal Diplomacy Environment",
+    "description": "A simplified Diplomacy RL training environment for Atropos that integrates with AI_Diplomacy.",
+    "tags": [
+      "games"
+    ],
+    "fileCount": 7,
+    "totalSize": 45591,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "game_environments/gymnasium/blackjack",
+    "slug": "game_environments--gymnasium--blackjack",
+    "name": "Understanding the `blackjack_env_thinking` Environment",
+    "description": "This document explains the design philosophy behind the `blackjack_env_thinking.py` environment, particularly why its approach to trajectory collection and scoring is necessary for reinforcement learning agents that generate very long sequences, such as those incorporating extensive \"thinking\" or chain-of-thought reasoning.",
+    "tags": [
+      "games"
+    ],
+    "fileCount": 6,
+    "totalSize": 80588,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "infinimath",
+    "slug": "infinimath",
+    "name": "InfiniteMath Environment",
+    "description": "This environment provides procedurally generated math problems with curriculum-based advancement. It allows an agent to solve increasingly difficult math problems, with the difficulty level adapting based on performance.",
+    "tags": [
+      "math"
+    ],
+    "fileCount": 7,
+    "totalSize": 61869,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "intern_bootcamp",
+    "slug": "intern_bootcamp",
+    "name": "InternBootcamp RL Training Environment",
+    "description": "The InternBootcamp RL Training Environment is a flexible and extensible framework for training large reasoning models using reinforcement learning on verifiable reasoning tasks. Based on the [InternBootcamp](https://github.com/InternLM/InternBootcamp) library, this environment provides a seamless integration between InternBootcamp's comprehensive collection of reasoning tasks and the Atropos RL training infrastructure.",
+    "tags": [],
+    "fileCount": 6,
+    "totalSize": 43857,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "kernelbench_env",
+    "slug": "kernelbench_env",
+    "name": "KernelBench Environment Setup Instructions",
+    "description": "Before running `kernelbench_env.py`, you need to install KernelBench:",
+    "tags": [],
+    "fileCount": 2,
+    "totalSize": 9788,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "pydantic_schema_following_environment",
+    "slug": "pydantic_schema_following_environment",
+    "name": "Pydantic Schema Following Environment",
+    "description": "This environment trains language models to both generate JSON objects that conform to Pydantic schemas and edit erroneous JSON to fix validation errors. The environment supports two task types: **generation** (creating valid JSON from scratch) and **editing** (correcting invalid JSON). Schemas are loaded dynamically from a dataset instead of using hardcoded schemas.",
+    "tags": [],
+    "fileCount": 3,
+    "totalSize": 147883,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "reasoning_gym_environment",
+    "slug": "reasoning_gym_environment",
+    "name": "ReasoningGym Environment",
+    "description": "A reinforcement learning environment for training language models on diverse reasoning tasks using the [reasoning-gym](https://github.com/reasoning-gym/reasoning-gym) library.",
+    "tags": [],
+    "fileCount": 3,
+    "totalSize": 117878,
+    "readmePath": "README.md"
+  },
+  {
+    "id": "smolagents_integration",
+    "slug": "smolagents_integration",
+    "name": "Atropos-SmolaGents Integration",
+    "description": "This integration enables the use of SmolaGents' agent capabilities with Atropos' server-based LLM architecture for high-quality training data generation.",
+    "tags": [],
+    "fileCount": 13,
+    "totalSize": 102780,
+    "readmePath": "README.md"
+  }
+]

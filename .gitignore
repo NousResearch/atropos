@@ -16,8 +16,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -175,6 +175,10 @@ cython_debug/
 # data
 *.json
 *.jsonl
+!web/public/environments.json
+!web/package.json
+!web/package-lock.json
+!web/tsconfig.json
 
 # wandb
 wandb

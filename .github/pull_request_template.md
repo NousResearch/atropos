@@ -55,6 +55,28 @@
 
 </details>
 
+## 🗂️ Environment Manifest Checklist
+<!-- For RL Environment PRs only — the manifest powers the Environments Hub web UI -->
+- [ ] Environment directory is under `environments/community/` (or appropriate category subfolder)
+- [ ] `README.md` is present with a `#` heading (used as the display name) and a short description paragraph below it
+- [ ] At least one `.py` file exists in the environment directory (required for discovery)
+- [ ] Ran `python scripts/build_env_manifest.py` from the repo root to rebuild the manifest
+- [ ] Committed the updated `web/public/environments.json` and the new `web/public/env-data/<slug>.json` file(s)
+- [ ] Committed the copied environment files under `web/public/env-files/<slug>/`
+
+---
+
+## 🌐 Web Checklist
+<!-- For PRs that touch anything under web/ — delete this section otherwise -->
+- [ ] `cd web && npm run build` completes with no errors
+- [ ] `cd web && npm run lint` passes (ESLint clean)
+- [ ] `cd web && npx tsc --noEmit` reports no type errors
+- [ ] UI tested in both light and dark mode
+- [ ] UI tested at mobile (< 768px) and desktop (≥ 1280px) widths
+- [ ] No hardcoded `localhost` URLs or dev-only values left in code
+- [ ] If adding/modifying environments: ran `python scripts/build_env_manifest.py` to rebuild `web/public/environments.json`
+- [ ] New environment variables documented (added to `web/.env.example` or equivalent)
+
 ---
 
 ## ✅ Developer & Reviewer Checklist

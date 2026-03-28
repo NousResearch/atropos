@@ -26,6 +26,8 @@ dependencies = [
     "jsonlines",
     "pydantic-cli",
     "hf_transfer",
+    "requests",
+    "typer",
 ]
 
 [project.scripts]
@@ -37,6 +39,7 @@ atropos-sft-gen = "atroposlib.cli.sft:main"
 atropos-dpo-gen = "atroposlib.cli.dpo:main"
 atropos-grpo = "example_trainer.grpo:main"
 atropos-grpo-run = "example_trainer.run:main"
+atropos = "atroposlib.cli.env_hub:main"
 
 [project.optional-dependencies]
 all = [
