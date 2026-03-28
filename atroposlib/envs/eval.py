@@ -104,6 +104,13 @@ def evaluate_log(
                 writer.write(sample)
         print(f"Evaluation samples saved to {samples_filepath}")
 
+        try:
+            from atroposlib.frontend.jsonl2html import generate_eval_html
+
+            generate_eval_html(samples_filepath)
+        except Exception as e:
+            print(f"Warning: Failed to generate eval HTML viewer: {e}")
+
 
 class EvalBase(ABC):
     """ """

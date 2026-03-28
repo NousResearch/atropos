@@ -189,17 +189,18 @@ class GSM8kEnv(BaseEnv):
     async def evaluate(self, *args, **kwargs):
         start_time = time.time()
 
-        eval_tasks = []
-        for item in self.test:
-            eval_tasks.append(
-                self.rollout_and_score_eval(item["question"], item["gold_answer"])
+        async def rollout_and_log(item):
+            result = await self.rollout_and_score_eval(
+                item["question"], item["gold_answer"]
             )
+            if result is not None:
+                self.log_eval_sample(result.get("sample", result))
+            return result
+
+        eval_tasks = [rollout_and_log(item) for item in self.test]
         results = await tqdm_asyncio.gather(*eval_tasks)
 
-        # Extract scores and samples
         scores = [result["score"] for result in results]
-        samples = [result["sample"] for result in results]
-
         percent_correct = sum(scores) / len(scores)
 
         end_time = time.time()
@@ -207,14 +208,8 @@ class GSM8kEnv(BaseEnv):
         # Add to existing metrics for wandb
         self.eval_metrics.append(("eval/percent_correct", percent_correct))
 
-        # Log evaluation results
-        eval_metrics = {
-            "eval/percent_correct": percent_correct,
-        }
-
         await self.evaluate_log(
-            metrics=eval_metrics,
-            samples=samples,
+            metrics={"eval/percent_correct": percent_correct},
             start_time=start_time,
             end_time=end_time,
             generation_parameters={
