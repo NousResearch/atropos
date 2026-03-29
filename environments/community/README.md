@@ -64,7 +64,7 @@ A comprehensive environment for evaluating LLMs on formal mathematical reasoning
 
 A sophisticated environment for testing agent routing and coordination capabilities. Includes:
 - Multiple specialized agents (calendar, contact, Gmail, telephony, etc.)
-- Model Contextualized Protocol (MCP) tools integration
+- Model Context Protocol (MCP) tools integration
 - Spotify, Google Maps, and Perplexity integrations
 - Complex multi-turn conversation handling
 
@@ -460,7 +460,7 @@ A specialized environment for training LLMs to adopt more engaging, empathetic, 
    - Focus on emotional support, explanations, excitement sharing, and help-seeking
    - Immediate training readiness without LLM dependencies
 
-2. **Dynamic GSM8K-Style Environment** (`gsmk8k_conversational_style_dpo_env.py`):
+2. **Dynamic GSM8K-Style Environment** (`gsm8k_conversational_style_dpo_env.py`):
    - LLM-generated conversational prompts for diverse training data
    - Real-time chosen/rejected response generation with different system prompts
    - Scalable dataset creation with fallback to static prompts
@@ -950,7 +950,7 @@ The environment includes two complementary implementations:
 - **Training Loop**: Direct optimization of quantum parameters via gradient descent
 - **Evaluation**: Entropy-based comparison of hybrid vs classical predictions
 
-**2. Dataset-Driven Training (`atopos_quant.py`)**:
+**2. Dataset-Driven Training (`atropos_quant.py`)**:
 - **Real Data Processing**: Uses WikiText dataset with HuggingFace integration
 - **Quantum Text Analysis**: Standalone quantum analyzer for text coherence measurement
 - **Server Integration**: Compatible with Atropos server infrastructure
@@ -1079,7 +1079,7 @@ python environments/community/quantum_hybrid/atropos.py process \
     --env.quantum_weight 0.3
 
 # Run dataset-driven training
-python environments/community/quantum_hybrid/atopos_quant.py process \
+python environments/community/quantum_hybrid/atropos_quant.py process \
     --env.dataset_name wikitext \
     --env.dataset_config wikitext-2-raw-v1 \
     --env.n_qubits 8
@@ -1093,7 +1093,7 @@ python environments/community/quantum_hybrid/atopos_quant.py process \
 ```
 environments/community/quantum_hybrid/
 ├── atropos.py                    # Optimized hybrid model implementation
-├── atopos_quant.py              # Dataset-driven quantum training
+├── atropos_quant.py              # Dataset-driven quantum training
 ├── requirements.txt             # Python dependencies
 ├── README.md                    # Detailed documentation
 ├── quantum_hybrid_artifacts.tar.gz  # Training artifacts
@@ -1119,7 +1119,7 @@ A comprehensive RL environment that enables language models to explore the optim
 
 **Core Components**:
 
-**1. Code Generation Interface (`optimizer_benchmark_environmenr.py`)**:
+**1. Code Generation Interface (`optimizer_benchmark_environment.py`)**:
 - **BaseEnv Integration**: Full compatibility with Atropos framework
 - **Architecture Selection**: Configurable target architectures (mnist, classification_small, tabular)
 - **Evaluation Pipeline**: Automated scoring through wrapper functions
@@ -1317,7 +1317,7 @@ python environments/community/pytorch_optimizer_coding/wrapper.py
 
 **Example Usage**:
 ```python
-from environments.community.pytorch_optimizer_coding.optimizer_benchmark_environmenr import OptimizerBenchmarkEnvironment
+from environments.community.pytorch_optimizer_coding.optimizer_benchmark_environment import OptimizerBenchmarkEnvironment
 
 # Initialize environment
 env = OptimizerBenchmarkEnvironment(config=config)
@@ -1342,7 +1342,7 @@ print(f"Total reward: {reward}")
 **Repository Structure**:
 ```
 environments/community/pytorch_optimizer_coding/
-├── optimizer_benchmark_environmenr.py  # Main environment interface
+├── optimizer_benchmark_environment.py  # Main environment interface
 ├── wrapper.py                          # Evaluation orchestration
 ├── evaluator.py                        # Grok-based assessment
 ├── deploy.py                           # Modal Labs deployment
