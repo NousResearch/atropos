@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Numerical verification utilities for RL reward and advantage computation.
 
@@ -225,9 +226,7 @@ def verify_advantage_stability(
     std_val = float(np.std(finite))
 
     if max_mag > max_magnitude:
-        issues.append(
-            f"Max magnitude {max_mag:.4f} exceeds limit {max_magnitude:.4f}"
-        )
+        issues.append(f"Max magnitude {max_mag:.4f} exceeds limit {max_magnitude:.4f}")
 
     if max_mag > warn_threshold and max_mag <= max_magnitude:
         logger.warning(

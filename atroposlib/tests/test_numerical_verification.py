@@ -11,7 +11,6 @@ Tests cover:
 
 import math
 
-
 import numpy as np
 
 from atroposlib.utils.numerical_verification import (
@@ -20,7 +19,6 @@ from atroposlib.utils.numerical_verification import (
     verify_reward_determinism,
     verify_score_distribution,
 )
-
 
 # ---------------------------------------------------------------------------
 # Reward determinism tests
@@ -154,9 +152,7 @@ class TestFPPrecisionComparison:
         def identity(inputs, **kwargs):
             return inputs
 
-        report = compare_fp_precision(
-            identity, [1.0, 2.0], precisions=["float32"]
-        )
+        report = compare_fp_precision(identity, [1.0, 2.0], precisions=["float32"])
         assert report.reference_precision == "float64"
         assert "float32" in report.compared_precisions
         assert isinstance(report.max_divergence, float)
