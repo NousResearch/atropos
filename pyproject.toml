@@ -26,6 +26,7 @@ dependencies = [
     "jsonlines",
     "pydantic-cli",
     "hf_transfer",
+    "antlr4-python3-runtime==4.9.3",
 ]
 
 [project.scripts]

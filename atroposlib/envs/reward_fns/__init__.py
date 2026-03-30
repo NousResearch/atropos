@@ -24,7 +24,8 @@ Usage:
 """
 
 from .combined_reward import CombinedReward
+from .ensemble_reward import EnsembleReward
 from .registry import registry
 from .reward_function import RewardFunction
 
-__all__ = ["RewardFunction", "registry", "CombinedReward"]
+__all__ = ["RewardFunction", "registry", "CombinedReward", "EnsembleReward"]

@@ -166,6 +166,10 @@ class ServerHarness:
         except KeyError as e:
             raise KeyError(f"KeyError: {e} for prompt:\n{prompt}")
 
+    async def wandb_metrics(self, metrics_dict: dict, server_name: str) -> dict:
+        """Mock implementation of wandb_metrics."""
+        return metrics_dict
+
 
 if __name__ == "__main__":
 
