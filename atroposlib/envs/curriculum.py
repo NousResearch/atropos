@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Curriculum learning scheduler for sample-efficient RL training.
 
@@ -259,7 +260,7 @@ class CurriculumScheduler:
         for i in range(self.n_bins):
             # Gaussian-like probability centered on frontier bin
             distance = abs(i - frontier_bin)
-            prob = math.exp(-0.5 * (distance ** 2))
+            prob = math.exp(-0.5 * (distance**2))
             probs.append(prob)
 
         total = sum(probs)
@@ -272,9 +273,7 @@ class CurriculumScheduler:
             return
 
         # Sort scores descending (highest reward = easiest = bin 0)
-        scores = sorted(
-            [ema for ema, _ in self._item_scores.values()], reverse=True
-        )
+        scores = sorted([ema for ema, _ in self._item_scores.values()], reverse=True)
 
         if len(scores) < self.n_bins:
             # Not enough items to properly bin, use equal spacing
@@ -284,9 +283,7 @@ class CurriculumScheduler:
                 self._bin_boundaries = [min_s] * self.n_bins
             else:
                 step = (max_s - min_s) / self.n_bins
-                self._bin_boundaries = [
-                    max_s - i * step for i in range(self.n_bins)
-                ]
+                self._bin_boundaries = [max_s - i * step for i in range(self.n_bins)]
             return
 
         # Quantile-based boundaries
@@ -352,8 +349,6 @@ class CurriculumScheduler:
         self.temperature = state["temperature"]
         self.ema_alpha = state["ema_alpha"]
         self.competence_threshold = state["competence_threshold"]
-        self._item_scores = {
-            k: tuple(v) for k, v in state["item_scores"].items()
-        }
+        self._item_scores = {k: tuple(v) for k, v in state["item_scores"].items()}
         self._bin_boundaries = state["bin_boundaries"]
         self._last_rebin_count = state["last_rebin_count"]

@@ -18,7 +18,6 @@ import pytest
 
 from atroposlib.envs.curriculum import CurriculumScheduler, CurriculumStrategy
 
-
 # ---------------------------------------------------------------------------
 # Strategy tests
 # ---------------------------------------------------------------------------
@@ -130,7 +129,9 @@ class TestDifficultyTracking:
         scheduler.update("medium", 0.5)
 
         assert scheduler.n_items_tracked == 3
-        assert scheduler.get_item_difficulty("easy") > scheduler.get_item_difficulty("hard")
+        assert scheduler.get_item_difficulty("easy") > scheduler.get_item_difficulty(
+            "hard"
+        )
 
 
 # ---------------------------------------------------------------------------
