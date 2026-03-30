@@ -876,9 +876,7 @@ class BaseEnv(ABC):
         if isinstance(scored_data, list):
             for item in scored_data:
                 item["env_id"] = getattr(self, "env_id", None)
-            n_items = sum(
-                len(item.get("tokens", [])) for item in scored_data
-            )
+            n_items = sum(len(item.get("tokens", [])) for item in scored_data)
         else:
             scored_data["env_id"] = getattr(self, "env_id", None)
             n_items = len(scored_data.get("tokens", []))

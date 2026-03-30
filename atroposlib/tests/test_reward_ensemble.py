@@ -22,7 +22,6 @@ from atroposlib.envs.reward_fns.ensemble_reward import (
 from atroposlib.envs.reward_fns.registry import RewardRegistry
 from atroposlib.envs.reward_fns.reward_function import RewardFunction
 
-
 # ---------------------------------------------------------------------------
 # Test fixtures -- simple reward functions for composing ensembles
 # ---------------------------------------------------------------------------
@@ -51,8 +50,7 @@ class BinaryReward(RewardFunction):
 
     def compute(self, completions: List[Any], **kwargs) -> List[float]:
         return [
-            1.0 if "good" in self.get_content(c).lower() else 0.0
-            for c in completions
+            1.0 if "good" in self.get_content(c).lower() else 0.0 for c in completions
         ]
 
 
@@ -95,19 +93,25 @@ def completions():
 
 class TestMeanAggregation:
     def test_mean_of_identical_scores(self, completions):
-        ensemble = _make_ensemble("mean", [
-            ConstantReward(value=2.0),
-            ConstantReward(value=2.0),
-        ])
+        ensemble = _make_ensemble(
+            "mean",
+            [
+                ConstantReward(value=2.0),
+                ConstantReward(value=2.0),
+            ],
+        )
         scores = ensemble.compute(completions)
         assert len(scores) == 3
         assert all(math.isclose(s, 2.0, rel_tol=1e-9) for s in scores)
 
     def test_mean_of_different_scores(self, completions):
-        ensemble = _make_ensemble("mean", [
-            ConstantReward(value=1.0),
-            ConstantReward(value=3.0),
-        ])
+        ensemble = _make_ensemble(
+            "mean",
+            [
+                ConstantReward(value=1.0),
+                ConstantReward(value=3.0),
+            ],
+        )
         scores = ensemble.compute(completions)
         assert all(math.isclose(s, 2.0, rel_tol=1e-9) for s in scores)
 
@@ -115,50 +119,65 @@ class TestMeanAggregation:
 class TestMedianAggregation:
     def test_median_rejects_outlier(self, completions):
         """Median should be robust to a single outlier reward function."""
-        ensemble = _make_ensemble("median", [
-            ConstantReward(value=1.0),
-            ConstantReward(value=1.0),
-            ConstantReward(value=100.0),
-        ])
+        ensemble = _make_ensemble(
+            "median",
+            [
+                ConstantReward(value=1.0),
+                ConstantReward(value=1.0),
+                ConstantReward(value=100.0),
+            ],
+        )
         scores = ensemble.compute(completions)
         assert all(math.isclose(s, 1.0, rel_tol=1e-9) for s in scores)
 
 
 class TestMinAggregation:
     def test_min_is_conservative(self, completions):
-        ensemble = _make_ensemble("min", [
-            ConstantReward(value=0.5),
-            ConstantReward(value=0.8),
-            ConstantReward(value=1.0),
-        ])
+        ensemble = _make_ensemble(
+            "min",
+            [
+                ConstantReward(value=0.5),
+                ConstantReward(value=0.8),
+                ConstantReward(value=1.0),
+            ],
+        )
         scores = ensemble.compute(completions)
         assert all(math.isclose(s, 0.5, rel_tol=1e-9) for s in scores)
 
 
 class TestMajorityVoteAggregation:
     def test_majority_positive(self, completions):
-        ensemble = _make_ensemble("majority_vote", [
-            ConstantReward(value=1.0),
-            ConstantReward(value=1.0),
-            ConstantReward(value=-1.0),
-        ])
+        ensemble = _make_ensemble(
+            "majority_vote",
+            [
+                ConstantReward(value=1.0),
+                ConstantReward(value=1.0),
+                ConstantReward(value=-1.0),
+            ],
+        )
         scores = ensemble.compute(completions)
         assert all(math.isclose(s, 1.0) for s in scores)
 
     def test_majority_negative(self, completions):
-        ensemble = _make_ensemble("majority_vote", [
-            ConstantReward(value=-1.0),
-            ConstantReward(value=-1.0),
-            ConstantReward(value=1.0),
-        ])
+        ensemble = _make_ensemble(
+            "majority_vote",
+            [
+                ConstantReward(value=-1.0),
+                ConstantReward(value=-1.0),
+                ConstantReward(value=1.0),
+            ],
+        )
         scores = ensemble.compute(completions)
         assert all(math.isclose(s, 0.0) for s in scores)
 
     def test_tie_goes_positive(self, completions):
-        ensemble = _make_ensemble("majority_vote", [
-            ConstantReward(value=1.0),
-            ConstantReward(value=-1.0),
-        ])
+        ensemble = _make_ensemble(
+            "majority_vote",
+            [
+                ConstantReward(value=1.0),
+                ConstantReward(value=-1.0),
+            ],
+        )
         scores = ensemble.compute(completions)
         assert all(math.isclose(s, 1.0) for s in scores)
 
@@ -170,19 +189,23 @@ class TestMajorityVoteAggregation:
 
 class TestKrippendorffAlpha:
     def test_perfect_agreement(self):
-        ratings = np.array([
-            [1.0, 2.0, 3.0, 4.0],
-            [1.0, 2.0, 3.0, 4.0],
-            [1.0, 2.0, 3.0, 4.0],
-        ])
+        ratings = np.array(
+            [
+                [1.0, 2.0, 3.0, 4.0],
+                [1.0, 2.0, 3.0, 4.0],
+                [1.0, 2.0, 3.0, 4.0],
+            ]
+        )
         alpha = _krippendorff_alpha(ratings)
         assert math.isclose(alpha, 1.0, rel_tol=1e-9)
 
     def test_no_agreement(self):
-        ratings = np.array([
-            [1.0, 0.0, 1.0, 0.0],
-            [0.0, 1.0, 0.0, 1.0],
-        ])
+        ratings = np.array(
+            [
+                [1.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 1.0],
+            ]
+        )
         alpha = _krippendorff_alpha(ratings)
         assert alpha < 0.0
 
@@ -202,20 +225,26 @@ class TestKrippendorffAlpha:
 
 class TestReliabilityMetrics:
     def test_reliability_computed_after_scoring(self, completions):
-        ensemble = _make_ensemble("mean", [
-            ConstantReward(value=1.0),
-            ConstantReward(value=1.0),
-        ])
+        ensemble = _make_ensemble(
+            "mean",
+            [
+                ConstantReward(value=1.0),
+                ConstantReward(value=1.0),
+            ],
+        )
         ensemble.compute(completions)
         metrics = ensemble.reliability_metrics()
         assert "alpha" in metrics
         assert math.isclose(metrics["alpha"], 1.0, rel_tol=1e-9)
 
     def test_disagreement_tracked(self, completions):
-        ensemble = _make_ensemble("mean", [
-            ConstantReward(value=0.0),
-            ConstantReward(value=10.0),
-        ])
+        ensemble = _make_ensemble(
+            "mean",
+            [
+                ConstantReward(value=0.0),
+                ConstantReward(value=10.0),
+            ],
+        )
         ensemble.compute(completions)
         assert ensemble.last_disagreement_scores is not None
         assert len(ensemble.last_disagreement_scores) == len(completions)
@@ -240,11 +269,13 @@ class TestRegistryIntegration:
         global_registry.register(name="test_constant")(ConstantReward)
         test_registry.register(name="ensemble")(EnsembleReward)
 
-        ensemble = test_registry.create({
-            "type": "ensemble",
-            "rewards": ["test_constant", "test_constant"],
-            "strategy": "median",
-        })
+        ensemble = test_registry.create(
+            {
+                "type": "ensemble",
+                "rewards": ["test_constant", "test_constant"],
+                "strategy": "median",
+            }
+        )
         assert isinstance(ensemble, EnsembleReward)
         assert ensemble.strategy == "median"
         assert len(ensemble.reward_functions) == 2
@@ -266,10 +297,13 @@ class TestEdgeCases:
             EnsembleReward(rewards=[], strategy="nonexistent")
 
     def test_name_format(self):
-        ensemble = _make_ensemble("median", [
-            ConstantReward(value=1.0),
-            LengthReward(),
-        ])
+        ensemble = _make_ensemble(
+            "median",
+            [
+                ConstantReward(value=1.0),
+                LengthReward(),
+            ],
+        )
         name = ensemble.name
         assert "ensemble_median" in name
         assert "constantreward" in name

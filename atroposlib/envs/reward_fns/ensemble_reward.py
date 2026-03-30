@@ -247,9 +247,7 @@ class EnsembleReward(RewardFunction):
 
         # Track per-item disagreement
         if self.track_disagreement:
-            self.last_disagreement_scores = np.var(
-                reward_matrix, axis=0
-            ).tolist()
+            self.last_disagreement_scores = np.var(reward_matrix, axis=0).tolist()
 
         return aggregated.tolist()
 
@@ -284,9 +282,7 @@ class EnsembleReward(RewardFunction):
 
         if self.last_disagreement_scores is not None:
             scores = self.last_disagreement_scores
-            metrics["mean_disagreement"] = (
-                sum(scores) / len(scores) if scores else 0.0
-            )
+            metrics["mean_disagreement"] = sum(scores) / len(scores) if scores else 0.0
             metrics["max_disagreement"] = max(scores) if scores else 0.0
 
         return metrics

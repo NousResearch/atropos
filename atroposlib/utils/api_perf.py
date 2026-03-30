@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 API performance tracker for trainer-inference communication optimization.
 
@@ -107,7 +108,9 @@ class APIPerformanceTracker:
                 latency_ms=elapsed_ms,
                 n_items=n_items,
                 payload_bytes=payload_bytes,
-                compressed_bytes=compressed_bytes if compressed_bytes > 0 else payload_bytes,
+                compressed_bytes=(
+                    compressed_bytes if compressed_bytes > 0 else payload_bytes
+                ),
                 timestamp=time.time(),
                 success=success,
             )
@@ -149,7 +152,9 @@ class APIPerformanceTracker:
             latency_ms=latency_ms,
             n_items=n_items,
             payload_bytes=payload_bytes,
-            compressed_bytes=compressed_bytes if compressed_bytes > 0 else payload_bytes,
+            compressed_bytes=(
+                compressed_bytes if compressed_bytes > 0 else payload_bytes
+            ),
             timestamp=time.time(),
             success=success,
         )
@@ -279,8 +284,8 @@ class APIPerformanceTracker:
         metrics["api_perf/total_requests"] = float(self._total_requests)
         metrics["api_perf/total_items"] = float(self._total_items)
         metrics["api_perf/failed_requests"] = float(self._failed_requests)
-        metrics["api_perf/error_rate"] = (
-            self._failed_requests / max(1, self._total_requests)
+        metrics["api_perf/error_rate"] = self._failed_requests / max(
+            1, self._total_requests
         )
 
         return metrics

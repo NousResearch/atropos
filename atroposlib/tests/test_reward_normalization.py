@@ -13,12 +13,10 @@ Tests cover:
 
 import math
 
-
 import numpy as np
 import pytest
 
 from atroposlib.envs.reward_normalization import RewardNormalizer, WelfordAccumulator
-
 
 # ---------------------------------------------------------------------------
 # WelfordAccumulator tests
