@@ -794,3 +794,17 @@ python text_reversal_environment.py serve \
 
 **Evaluation Metric:**
 - `eval/percent_correct`: strict exact-match accuracy on the eval set.
+### Pidgin English Q&A Environment (`pidgin_qa_environment.py`)
+
+A training environment that evaluates language models on Nigerian Pidgin English comprehension and generation. This environment trains models to understand and respond correctly in Pidgin English, a widely spoken creole language across West Africa.
+
+Task: Given a question in Pidgin English, the model must generate a correct and natural-sounding response.
+
+Example:
+- Input: "Wetin be the capital of Nigeria?"
+- Expected Output: "The capital of Nigeria na Abuja."
+
+Reward Function: Responses are scored based on factual correctness and natural Pidgin English fluency.
+
+Evaluation Metric:
+- eval/percent_correct: Exact-match accuracy on a held-out Pidgin English Q&A dataset.
