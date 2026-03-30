@@ -11,10 +11,9 @@ Tests cover:
 - WandB metrics dictionary formatting
 """
 
-import time
 import unittest
 from unittest.mock import patch
-import numpy as np
+
 from atroposlib.utils.api_perf import APIPerformanceTracker
 
 class TestAPIPerformanceTracker(unittest.TestCase):

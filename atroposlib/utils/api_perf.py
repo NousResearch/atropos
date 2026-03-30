@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 API performance tracker for trainer-inference communication optimization.
 
@@ -27,8 +28,8 @@ import logging
 import time
 from collections import deque
 from contextlib import contextmanager
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Dict
 
 import numpy as np
 

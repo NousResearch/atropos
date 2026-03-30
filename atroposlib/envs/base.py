@@ -211,6 +211,41 @@ class BaseEnvConfig(BaseModel):
         "no thinking prompt is injected. Use HERMES_REASONING_PROMPT from "
         "eval_helpers for the standard Hermes reasoning prompt.",
     )
+    reward_normalization: str = Field(
+        default="none",
+        description="Reward normalization mode. 'none' = disabled (default), "
+        "'zscore' = z-score normalization, 'minmax' = min-max to [0,1]. "
+        "Uses Welford's online algorithm for running statistics.",
+    )
+    reward_clip: float = Field(
+        default=5.0,
+        description="Maximum absolute reward value after normalization. "
+        "Only applies when reward_normalization is not 'none'. "
+        "Set to 0 to disable clipping.",
+    )
+    reward_normalization_warmup: int = Field(
+        default=10,
+        description="Number of scored batches to observe before activating "
+        "reward normalization. During warmup, raw scores are used.",
+    )
+    curriculum_strategy: str = Field(
+        default="uniform",
+        description="Curriculum learning strategy. 'uniform' = no curriculum (default), "
+        "'easy_first' = oversample easy items early then anneal, "
+        "'competence_based' = sample at competence frontier. "
+        "See Platanios et al. 2019 for competence-based curriculum.",
+    )
+    curriculum_bins: int = Field(
+        default=5,
+        ge=1,
+        description="Number of difficulty bins for curriculum scheduling.",
+    )
+    curriculum_temperature: float = Field(
+        default=1.0,
+        gt=0,
+        description="Temperature for curriculum bin sampling. Higher = more uniform, "
+        "lower = more concentrated on target difficulty.",
+    )
 
 
 class BaseEnv(ABC):
@@ -262,6 +297,30 @@ class BaseEnv(ABC):
         self.max_token_len = -1
         self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
         self.completion_lengths = []
+        # Initialize reward normalizer (opt-in via config)
+        if config.reward_normalization != "none":
+            from atroposlib.envs.reward_normalization import RewardNormalizer
+
+            self.reward_normalizer = RewardNormalizer(
+                mode=config.reward_normalization,
+                clip=config.reward_clip,
+                warmup=config.reward_normalization_warmup,
+            )
+        else:
+            self.reward_normalizer = None
+
+        # Initialize curriculum scheduler (opt-in via config)
+        if config.curriculum_strategy != "uniform":
+            from atroposlib.envs.curriculum import CurriculumScheduler
+
+            self.curriculum = CurriculumScheduler(
+                strategy=config.curriculum_strategy,
+                n_bins=config.curriculum_bins,
+                temperature=config.curriculum_temperature,
+            )
+        else:
+            self.curriculum = None
+
         # Initialize API performance tracker for trainer-inference latency monitoring
         from atroposlib.utils.api_perf import APIPerformanceTracker
 
@@ -660,8 +719,9 @@ class BaseEnv(ABC):
         """
         if wandb_metrics is None:
             wandb_metrics = dict()
+        server_wandb_metrics = {}
         for i, server in enumerate(self.server.servers):
-            server_wandb_metrics = await server.wandb_metrics({}, f"server_{i}")
+            server_wandb_metrics.update(await server.wandb_metrics({}, f"server_{i}"))
         if len(self.completion_lengths) > 0:
             wandb_metrics["train/completion_lengths"] = sum(
                 self.completion_lengths
@@ -678,6 +738,12 @@ class BaseEnv(ABC):
             wandb_metrics["train/completion_lengths_p95"] = (
                 np.array(self.completion_lengths) > (0.95 * self.max_token_len)
             ).mean()
+        # Log reward normalization metrics if active
+        if self.reward_normalizer is not None:
+            wandb_metrics.update(self.reward_normalizer.metrics_dict())
+        # Log curriculum metrics if active
+        if self.curriculum is not None:
+            wandb_metrics.update(self.curriculum.metrics_dict())
         # Log API performance metrics
         wandb_metrics.update(self.api_perf_tracker.metrics_dict())
         wandb_metrics = await self.create_rollout_table(wandb_metrics)
@@ -911,6 +977,16 @@ class BaseEnv(ABC):
             ):
                 logger.warning("Scores are the same in a group, skipping...")
                 continue
+
+            # Apply reward normalization if enabled (opt-in via config)
+            if self.reward_normalizer is not None:
+                group["scores"] = self.reward_normalizer.normalize(group["scores"])
+                # Re-check after normalization: if all scores collapsed, skip
+                if len(set(group["scores"])) == 1:
+                    logger.debug(
+                        "Scores collapsed to same value after normalization, skipping"
+                    )
+                    continue
 
             group.setdefault("ref_logprobs", None)
             group.setdefault("overrides", None)
