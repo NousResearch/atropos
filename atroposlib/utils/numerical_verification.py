@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Numerical verification utilities for RL reward and advantage computation.
 
@@ -25,7 +26,6 @@ Usage:
 """
 
 import logging
-import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -139,8 +139,8 @@ def verify_reward_determinism(
         try:
             scores = reward_fn(inputs, **kwargs)
             results.append(scores)
-        except Exception as e:
-            logger.error("Run %d failed with error: %s", i, e)
+        except Exception:
+            logger.error("Run %d failed", i)
             return False
 
     # Compare all runs to the first
@@ -291,7 +291,7 @@ def compare_fp_precision(
     try:
         ref_outputs = fn(ref_inputs, **kwargs)
         ref_arr = np.array(ref_outputs, dtype=np.float64)
-    except Exception as e:
+    except Exception:
         return PrecisionReport(
             max_divergence=float("inf"),
             mean_divergence=float("inf"),
@@ -412,7 +412,6 @@ def verify_score_distribution(
 
     # Check for bias (nearly all at one extreme)
     exp_min, exp_max = expected_range
-    exp_mid = (exp_min + exp_max) / 2
     if len(arr) > 1:
         at_min = float(np.mean(arr <= exp_min + (exp_max - exp_min) * 0.1))
         at_max = float(np.mean(arr >= exp_max - (exp_max - exp_min) * 0.1))

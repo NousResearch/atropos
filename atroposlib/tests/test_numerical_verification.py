@@ -10,10 +10,9 @@ Tests cover:
 """
 
 import math
-from typing import Any, List
+
 
 import numpy as np
-import pytest
 
 from atroposlib.utils.numerical_verification import (
     compare_fp_precision,
