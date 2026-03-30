@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Curriculum learning scheduler for sample-efficient RL training.
 
