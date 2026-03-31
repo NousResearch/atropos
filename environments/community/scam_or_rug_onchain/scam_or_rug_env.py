@@ -300,8 +300,8 @@ class ScamOrRugEnv(BaseEnv):
                 add_generation_prompt=True,
             )
             tokens = full_text
-             prompt_len = len(prompt_text)
-             masks = [-100] * prompt_len + [1] * (len(full_text) - prompt_len)
+            prompt_len = len(prompt_text)
+            masks = [-100] * prompt_len + [1] * (len(full_text) - prompt_len)
 
             scored["tokens"].append(tokens)
             scored["masks"].append(masks)
