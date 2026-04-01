@@ -7,6 +7,7 @@ from atroposlib.envs.base import BaseEnv, BaseEnvConfig, ScoredDataGroup
 from atroposlib.envs.server_handling.server_baseline import ServerBaseline
 from atroposlib.type_definitions import Item
 
+
 VALID_BURN_ADDRESSES = {
     "0x0000000000000000000000000000000000000000",
     "0x000000000000000000000000000000000000dead",
@@ -21,23 +22,25 @@ class ScamOrRugConfig(BaseEnvConfig):
     num_rollouts_to_keep: int = 32
     total_steps: int = 1000
 
+
 # System prompt enforces structured output format for consistent scoring
-SYSTEM_PROMPT = """You are an on-chain analyst from the perspective of an average Web3 user trying to protect themselves from scams and rug pulls.
-
-You will be given on-chain token data. Analyze it across these dimensions:
-1. Cluster holdings — connected wallets holding large % of supply
-2. Liquidity pool — status, holder type, locked or burned
-3. Mint authority — can new tokens be created?
-4. Tax — buy/sell tax percentage
-5. Burn validity — is the burn address legitimate and irreversible?
-6. Honeypot — can holders actually sell?
-7. Wash trading — is volume artificially inflated?
-
-Respond in this exact format:
-CLASSIFICATION: <SCAM|RUG_RISK|LEGITIMATE>
-REASONING: <explain which factors led to your classification>
-DUMP IMPACT: <X>% price drop if cluster dumps entire holding (or N/A if LEGITIMATE)
-CALCULATION: <show your math>"""
+SYSTEM_PROMPT = (
+    "You are an on-chain analyst from the perspective of an average Web3 user trying to "
+    "protect themselves from scams and rug pulls.\n\n"
+    "You will be given on-chain token data. Analyze it across these dimensions:\n"
+    "1. Cluster holdings — connected wallets holding large % of supply\n"
+    "2. Liquidity pool — status, holder type, locked or burned\n"
+    "3. Mint authority — can new tokens be created?\n"
+    "4. Tax — buy/sell tax percentage\n"
+    "5. Burn validity — is the burn address legitimate and irreversible?\n"
+    "6. Honeypot — can holders actually sell?\n"
+    "7. Wash trading — is volume artificially inflated?\n\n"
+    "Respond in this exact format:\n"
+    "CLASSIFICATION: <SCAM|RUG_RISK|LEGITIMATE>\n"
+    "REASONING: <explain which factors led to your classification>\n"
+    "DUMP IMPACT: <X>% price drop if cluster dumps entire holding (or N/A if LEGITIMATE)\n"
+    "CALCULATION: <show your math>"
+)
 
 
 def calculate_dump_impact(supply: int, lp_value_usd: float, cluster_pct: float) -> float:
@@ -69,10 +72,11 @@ def generate_fake_burn_address() -> str:
         "0x00000000000000000000000000000000000dead1",
         "0x0000000000000000000000000000000000dead22",
         "0xdead000000000000000000000000000000000001",
-        "0x" + "".join(random.choices("0123456789abcdef", k=40)),   # ini yang diperbaiki
+        "0x" + "".join(random.choices("0123456789abcdef", k=40)),
         "0x" + "0" * 20 + "dead" + "0" * 16,
     ]
     return random.choice(fake_patterns)
+
 
 # Synthetic token data generator — values are randomized but grounded in real-world scam patterns
 def generate_token_data(label: str) -> dict:
@@ -205,7 +209,8 @@ Unique Buyers: {data['unique_buyers_24h']}
 Unique Sellers: {data['unique_sellers_24h']}
 Buy/Sell Ratio: {buy_sell_ratio}
 
-Classify this token, explain your reasoning across all dimensions, and calculate the estimated price drop if the cluster dumps their entire holding into the LP."""
+Classify this token, explain your reasoning across all dimensions, 
+and calculate the estimated price drop if the cluster dumps their entire holding into the LP."""
 
 
 def score_response(response: str, data: dict, true_label: str) -> float:
@@ -215,6 +220,7 @@ def score_response(response: str, data: dict, true_label: str) -> float:
     # 1. Classification (0.4)
     classification = None
     for label in ["SCAM", "RUG_RISK", "LEGITIMATE"]:
+        # Check if the exact classification format is present
         if f"CLASSIFICATION: {label}" in response_upper:
             classification = label
             break
@@ -243,7 +249,6 @@ def score_response(response: str, data: dict, true_label: str) -> float:
     # 3. Math accuracy (0.3)
     if true_label in ["SCAM", "RUG_RISK"]:
         true_impact = data["true_dump_impact"]
-        # Lebih robust: tangkap angka di depan % setelah "DUMP IMPACT"
         match = re.search(r"DUMP IMPACT[:\s]*([\d.]+)\s*%", response, re.IGNORECASE)
         if match:
             try:
