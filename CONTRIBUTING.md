@@ -154,3 +154,12 @@ When in doubt about the appropriateness of an environment, please open an issue 
 Please note that this project is released with a [Contributor Code of Conduct](CODE_OF_CONDUCT.md). By participating in this project you agree to abide by its terms.
 
 Thank you again for your contribution!
+
+## Beginner-Friendly Contribution Ideas
+
+- Fix typos or improve English in documentation files
+- Add more examples in README.md
+- Improve this CONTRIBUTING guide itself
+- Help update installation instructions for Windows users
+
+Every small PR helps the project grow! 🚀
