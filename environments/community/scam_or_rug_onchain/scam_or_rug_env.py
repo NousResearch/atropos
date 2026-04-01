@@ -41,11 +41,14 @@ CALCULATION: <show your math>"""
 
 
 def calculate_dump_impact(supply: int, lp_value_usd: float, cluster_pct: float) -> float:
-    tokens_dumped = supply * (cluster_pct / 100)
-    current_price = lp_value_usd / supply
-    new_price = lp_value_usd / (supply + tokens_dumped)
-    price_drop_pct = ((current_price - new_price) / current_price) * 100
-    return round(price_drop_pct, 2)
+    if supply == 0 or lp_value_usd == 0:
+        return 0.0
+    tokens_dumped = supply * (cluster_pct / 100.0)
+    # token side of LP ≈ half of total LP value
+    token_reserve = lp_value_usd / 2
+    current_price = token_reserve / supply
+    price_impact = tokens_dumped / (tokens_dumped + (token_reserve / current_price))
+    return round(price_impact * 100, 2)
 
 
 def generate_fake_burn_address() -> str:
