@@ -7,7 +7,6 @@ from atroposlib.envs.base import BaseEnv, BaseEnvConfig, ScoredDataGroup
 from atroposlib.envs.server_handling.server_baseline import ServerBaseline
 from atroposlib.type_definitions import Item
 
-
 VALID_BURN_ADDRESSES = {
     "0x0000000000000000000000000000000000000000",
     "0x000000000000000000000000000000000000dead",
@@ -43,7 +42,9 @@ SYSTEM_PROMPT = (
 )
 
 
-def calculate_dump_impact(supply: int, lp_value_usd: float, cluster_pct: float) -> float:
+def calculate_dump_impact(
+    supply: int, lp_value_usd: float, cluster_pct: float
+) -> float:
     """
     Approximate price impact if a cluster dumps their entire holding into the LP.
     Menggunakan simplified constant product approximation (token side ≈ 50% of LP value).
@@ -58,7 +59,9 @@ def calculate_dump_impact(supply: int, lp_value_usd: float, cluster_pct: float) 
     current_price = token_reserve_usd / supply
 
     # Current token amount in the pool (rough)
-    current_token_reserve = token_reserve_usd / current_price if current_price > 0 else 0.0
+    current_token_reserve = (
+        token_reserve_usd / current_price if current_price > 0 else 0.0
+    )
 
     # Price impact formula (simplified slippage)
     price_impact = tokens_dumped / (tokens_dumped + current_token_reserve)
@@ -128,10 +131,12 @@ def generate_token_data(label: str) -> dict:
             "buy_tax_pct": round(random.uniform(0, 5), 2),
             "sell_tax_pct": sell_tax,
             "can_sell": True,
-            "burn_address": random.choice([
-                generate_fake_burn_address(),
-                "0x0000000000000000000000000000000000000000",
-            ]),
+            "burn_address": random.choice(
+                [
+                    generate_fake_burn_address(),
+                    "0x0000000000000000000000000000000000000000",
+                ]
+            ),
             "has_recover_function": random.choice([True, False]),
             "has_mint_function": random.choice([True, False]),
             "is_upgradeable_contract": random.choice([True, False]),
@@ -152,7 +157,9 @@ def generate_token_data(label: str) -> dict:
             "lp_status": random.choice(["burned", "locked_365days", "locked_180days"]),
             "lp_holder_type": random.choice(["dex_contract", "burned"]),
             "cluster_holding_pct": cluster_pct,
-            "cluster_wallet_count": random.randint(0, max(2, int(cluster_pct))) if cluster_pct > 0 else 0,
+            "cluster_wallet_count": (
+                random.randint(0, max(2, int(cluster_pct))) if cluster_pct > 0 else 0
+            ),
             "cluster_funded_from_same_source": False,
             "unique_holders": random.randint(1000, 100_000),
             "token_age_days": random.randint(60, 1000),
@@ -209,7 +216,7 @@ Unique Buyers: {data['unique_buyers_24h']}
 Unique Sellers: {data['unique_sellers_24h']}
 Buy/Sell Ratio: {buy_sell_ratio}
 
-Classify this token, explain your reasoning across all dimensions, 
+Classify this token, explain your reasoning across all dimensions,
 and calculate the estimated price drop if the cluster dumps their entire holding into the LP."""
 
 
@@ -230,17 +237,35 @@ def score_response(response: str, data: dict, true_label: str) -> float:
 
     if classification == true_label:
         score += 0.4
-    elif (
-        (true_label == "SCAM" and classification == "RUG_RISK")
-        or (true_label == "RUG_RISK" and classification == "SCAM")
+    elif (true_label == "SCAM" and classification == "RUG_RISK") or (
+        true_label == "RUG_RISK" and classification == "SCAM"
     ):
         score += 0.2
 
     # 2. Reasoning quality (0.3)
     keywords = {
-        "SCAM": ["cluster", "mint", "tax", "sell", "honeypot", "burn", "wash", "fake", "recover"],
+        "SCAM": [
+            "cluster",
+            "mint",
+            "tax",
+            "sell",
+            "honeypot",
+            "burn",
+            "wash",
+            "fake",
+            "recover",
+        ],
         "RUG_RISK": ["cluster", "lp", "lock", "tax", "risk", "upgrade", "dev"],
-        "LEGITIMATE": ["renounced", "burned", "locked", "dex", "distributed", "healthy", "low", "tax"],
+        "LEGITIMATE": [
+            "renounced",
+            "burned",
+            "locked",
+            "dex",
+            "distributed",
+            "healthy",
+            "low",
+            "tax",
+        ],
     }
     kws = keywords.get(true_label, [])
     matched = sum(1 for kw in kws if kw in response.lower())
@@ -275,6 +300,7 @@ class ScamOrRugEnv(BaseEnv):
     Uses synthetic token data across 3 labels: SCAM, RUG_RISK, LEGITIMATE.
     Reward based on correct classification + reasoning keywords + dump impact math.
     """
+
     name = "scam_or_rug_onchain"
 
     def __init__(self, config: ScamOrRugConfig, **kwargs):
