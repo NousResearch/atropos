@@ -21,7 +21,7 @@ class ScamOrRugConfig(BaseEnvConfig):
     num_rollouts_to_keep: int = 32
     total_steps: int = 1000
 
-
+# System prompt enforces structured output format for consistent scoring
 SYSTEM_PROMPT = """You are an on-chain analyst from the perspective of an average Web3 user trying to protect themselves from scams and rug pulls.
 
 You will be given on-chain token data. Analyze it across these dimensions:
@@ -55,7 +55,7 @@ def calculate_dump_impact(supply: int, lp_value_usd: float, cluster_pct: float) 
     current_price = token_reserve_usd / supply
 
     # Current token amount in the pool (rough)
-    current_token_reserve = token_reserve_usd / current_price if current_price > 0 else supply
+    current_token_reserve = token_reserve_usd / current_price if current_price > 0 else 0.0
 
     # Price impact formula (simplified slippage)
     price_impact = tokens_dumped / (tokens_dumped + current_token_reserve)
@@ -69,12 +69,12 @@ def generate_fake_burn_address() -> str:
         "0x00000000000000000000000000000000000dead1",
         "0x0000000000000000000000000000000000dead22",
         "0xdead000000000000000000000000000000000001",
-        "0x" + "".join(random.choices("0123456789abcdef", k=40)),
+        "0x" + "".join(random.choices("0123456789abcdef", k=40)),   # ini yang diperbaiki
         "0x" + "0" * 20 + "dead" + "0" * 16,
     ]
     return random.choice(fake_patterns)
 
-
+# Synthetic token data generator — values are randomized but grounded in real-world scam patterns
 def generate_token_data(label: str) -> dict:
     if label == "SCAM":
         supply = random.randint(1_000_000, 1_000_000_000_000)
@@ -96,7 +96,7 @@ def generate_token_data(label: str) -> dict:
             "sell_tax_pct": sell_tax,
             "can_sell": sell_tax < 95,
             "burn_address": generate_fake_burn_address(),
-            "has_recover_function": random.choice([True, True, False]),
+            "has_recover_function": random.choice([True, False]),
             "has_mint_function": True,
             "is_upgradeable_contract": random.choice([True, False]),
             "volume_24h_usd": round(random.uniform(50_000, 500_000), 2),
@@ -148,7 +148,7 @@ def generate_token_data(label: str) -> dict:
             "lp_status": random.choice(["burned", "locked_365days", "locked_180days"]),
             "lp_holder_type": random.choice(["dex_contract", "burned"]),
             "cluster_holding_pct": cluster_pct,
-            "cluster_wallet_count": random.randint(0, max(3, int(cluster_pct * 0.5))) if cluster_pct > 0 else 0,
+            "cluster_wallet_count": random.randint(0, max(2, int(cluster_pct))) if cluster_pct > 0 else 0,
             "cluster_funded_from_same_source": False,
             "unique_holders": random.randint(1000, 100_000),
             "token_age_days": random.randint(60, 1000),
@@ -243,7 +243,8 @@ def score_response(response: str, data: dict, true_label: str) -> float:
     # 3. Math accuracy (0.3)
     if true_label in ["SCAM", "RUG_RISK"]:
         true_impact = data["true_dump_impact"]
-        match = re.search(r"DUMP IMPACT:\s*([\d.]+)%", response, re.IGNORECASE)
+        # Lebih robust: tangkap angka di depan % setelah "DUMP IMPACT"
+        match = re.search(r"DUMP IMPACT[:\s]*([\d.]+)\s*%", response, re.IGNORECASE)
         if match:
             try:
                 ai_impact = float(match.group(1))
@@ -256,7 +257,7 @@ def score_response(response: str, data: dict, true_label: str) -> float:
                     score += 0.05
             except ValueError:
                 pass
-    else:
+    else:  # LEGITIMATE
         if "n/a" in response.lower() or "not applicable" in response.lower():
             score += 0.3
 
@@ -264,6 +265,11 @@ def score_response(response: str, data: dict, true_label: str) -> float:
 
 
 class ScamOrRugEnv(BaseEnv):
+    """
+    Environment for training on-chain scam/rug pull detection.
+    Uses synthetic token data across 3 labels: SCAM, RUG_RISK, LEGITIMATE.
+    Reward based on correct classification + reasoning keywords + dump impact math.
+    """
     name = "scam_or_rug_onchain"
 
     def __init__(self, config: ScamOrRugConfig, **kwargs):
