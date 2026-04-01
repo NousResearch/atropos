@@ -203,19 +203,22 @@ def score_response(response: str, data: dict, true_label: str) -> float:
             classification = label
             break
 
+    if classification is None:
+        return 0.0
+
     if classification == true_label:
         score += 0.4
     elif (
         (true_label == "SCAM" and classification == "RUG_RISK")
         or (true_label == "RUG_RISK" and classification == "SCAM")
     ):
-        score += 0.1
+        score += 0.2
 
     # 2. Reasoning quality (0.3)
     keywords = {
         "SCAM": ["cluster", "mint", "tax", "sell", "honeypot", "burn", "wash", "fake", "recover"],
         "RUG_RISK": ["cluster", "lp", "lock", "tax", "risk", "upgrade", "dev"],
-        "LEGITIMATE": ["renounced", "burned", "locked", "dex", "distributed", "healthy", "low tax"],
+        "LEGITIMATE": ["renounced", "burned", "locked", "dex", "distributed", "healthy", "low", "tax"],
     }
     kws = keywords.get(true_label, [])
     matched = sum(1 for kw in kws if kw in response.lower())
