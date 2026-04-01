@@ -41,23 +41,36 @@ CALCULATION: <show your math>"""
 
 
 def calculate_dump_impact(supply: int, lp_value_usd: float, cluster_pct: float) -> float:
-    if supply == 0 or lp_value_usd == 0:
+    """
+    Approximate price impact if a cluster dumps their entire holding into the LP.
+    Menggunakan simplified constant product approximation (token side ≈ 50% of LP value).
+    """
+    if supply <= 0 or lp_value_usd <= 0:
         return 0.0
+
     tokens_dumped = supply * (cluster_pct / 100.0)
-    # token side of LP ≈ half of total LP value
-    token_reserve = lp_value_usd / 2
-    current_price = token_reserve / supply
-    price_impact = tokens_dumped / (tokens_dumped + (token_reserve / current_price))
+
+    # Token reserve in USD ≈ setengah dari total LP value (assumption pool balanced)
+    token_reserve_usd = lp_value_usd / 2.0
+    current_price = token_reserve_usd / supply
+
+    # Current token amount in the pool (rough)
+    current_token_reserve = token_reserve_usd / current_price if current_price > 0 else supply
+
+    # Price impact formula (simplified slippage)
+    price_impact = tokens_dumped / (tokens_dumped + current_token_reserve)
+
     return round(price_impact * 100, 2)
 
 
 def generate_fake_burn_address() -> str:
+    """Generate fake burn address that looks suspicious but not too obvious."""
     fake_patterns = [
-        "0x7a9f3c000000000000000000000000000dead1234",
-        "0x000000000000000000000000000000000001dead",
+        "0x00000000000000000000000000000000000dead1",
+        "0x0000000000000000000000000000000000dead22",
         "0xdead000000000000000000000000000000000001",
-        "0x" + "0" * 38 + "01",
-        "0x" + "dead" + "0" * 36,
+        "0x" + "".join(random.choices("0123456789abcdef", k=40)),
+        "0x" + "0" * 20 + "dead" + "0" * 16,
     ]
     return random.choice(fake_patterns)
 
@@ -135,7 +148,7 @@ def generate_token_data(label: str) -> dict:
             "lp_status": random.choice(["burned", "locked_365days", "locked_180days"]),
             "lp_holder_type": random.choice(["dex_contract", "burned"]),
             "cluster_holding_pct": cluster_pct,
-            "cluster_wallet_count": random.randint(0, 8),
+            "cluster_wallet_count": random.randint(0, max(3, int(cluster_pct * 0.5))) if cluster_pct > 0 else 0,
             "cluster_funded_from_same_source": False,
             "unique_holders": random.randint(1000, 100_000),
             "token_age_days": random.randint(60, 1000),
