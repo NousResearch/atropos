@@ -3,6 +3,7 @@ import requests
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 import logging
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,15 @@ class MetricsCollector:
         self.server_url = server_url.rstrip("/")
         self.last_metrics: Optional[WorkloadMetrics] = None
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((requests.exceptions.RequestException,)),
+        reraise=False
+    )
     def poll(self) -> Optional[WorkloadMetrics]:
         """
-        Polls the Atropos server for global metrics.
+        Polls the Atropos server for global metrics with retries.
         """
         try:
             response = requests.get(f"{self.server_url}/global-status", timeout=5)
