@@ -3095,6 +3095,38 @@ python environments/community/meteorology_forecast/meteorology_env.py serve \
 
 ---
 
+
+### 31. Crypto DeFi Reasoning Environment (`crypto_defi_reasoning/`)
+**Author**: [Investorquab](https://github.com/Investorquab)
+**Purpose**: Train LLMs to analyze DeFi protocol health, tokenomics, liquidity metrics, and on-chain data using structured mathematical reasoning
+
+A focused environment that challenges models to reason through real-world style DeFi scenarios and produce a categorical verdict — HEALTHY, OVERVALUED, UNDERVALUED, or RISKY — with mathematical justification.
+
+**Scenario Types**:
+- **Tokenomics Health**: FDV/MCap ratio, circulating supply pressure, volume analysis
+- **Liquidity Analysis**: TVL/MCap ratio, protocol revenue, real yield, inflation rate
+- **DeFi Yield**: APY sustainability vs token emission pressure on TVL
+- **On-Chain Activity**: Active wallets, transaction volume vs market cap
+
+**Reward Signal**:
+| Component | Score |
+|---|---|
+| Correct verdict (HEALTHY/OVERVALUED/UNDERVALUED/RISKY) | 0.5 |
+| Has `<reasoning>` block | 0.2 |
+| Reasoning contains numerical calculations | 0.1 |
+| Reasoning depth (>100 chars) | 0.1 |
+| Has `<verdict>` block | 0.1 |
+
+**Why It Matters**: Nous Research is building on Solana and the Psyche network is crypto-native. Training Hermes to reason correctly about DeFi metrics directly supports the mission of open, decentralized AI for the crypto ecosystem.
+
+**Usage**:
+```bash
+python environments/community/crypto_defi_reasoning/crypto_defi_reasoning_server.py serve   --openai.model_name NousResearch/Hermes-3-Llama-3.1-8B   --slurm false
+```
+
+**Requirements**: Standard Atropos dependencies (no additional installs needed)
+
+---
 ## Support
 
 For questions or issues with community environments:
