@@ -233,6 +233,8 @@ def _process_scored_data(scored_data: ScoredData) -> Dict[str, Any]:
 
     app.state.queue.append(data_dict)
     app.state.latest = data_dict
+    if hasattr(app.state, "total_rollouts_processed"):
+        app.state.total_rollouts_processed += 1
     return {"status": "received"}
 
 
@@ -253,6 +255,19 @@ class Info(BaseModel):
     batch_size: int = -1
 
 
+class GlobalStatus(BaseModel):
+    """
+    Basemodel for global orchestration metrics
+    """
+
+    current_step: int
+    queue_size: int
+    total_rollouts_processed: int
+    unallocated_fraction: float
+    num_connected_envs: int
+    batch_size: int
+
+
 @app.post("/register")
 async def register(registration: Registration):
     # Initialize app state if not already done
@@ -270,6 +285,7 @@ async def register(registration: Registration):
         app.state.started = False
         app.state.envs = []
         app.state.buffer = {}  # Buffer for mixed-size groups per environment
+        app.state.total_rollouts_processed = 0
 
     # Initialize requesters list if not already done
     if not hasattr(app.state, "requesters"):
@@ -466,6 +482,42 @@ async def get_status():
         }
     except AttributeError:
         return {"current_step": 0, "queue_size": 0}
+
+
+@app.get("/global-status", response_model=GlobalStatus)
+async def get_global_status():
+    """
+    Returns global metrics for the Elastic Orchestrator to monitor workload pressure.
+    """
+    try:
+        # Calculate total unallocated fraction
+        total_min_allocation = 0.0
+        connected_envs = 0
+        for env_config in getattr(app.state, "envs", []):
+            if env_config.get("connected", False):
+                connected_envs += 1
+                if env_config.get("min_batch_allocation") is not None:
+                    total_min_allocation += env_config["min_batch_allocation"]
+
+        unallocated_fraction = 1.0 - min(total_min_allocation, 1.0)
+
+        return {
+            "current_step": getattr(app.state, "status_dict", {}).get("step", 0),
+            "queue_size": len(getattr(app.state, "queue", [])),
+            "total_rollouts_processed": getattr(app.state, "total_rollouts_processed", 0),
+            "unallocated_fraction": unallocated_fraction,
+            "num_connected_envs": connected_envs,
+            "batch_size": getattr(app.state, "batchsize", -1),
+        }
+    except AttributeError:
+        return {
+            "current_step": 0,
+            "queue_size": 0,
+            "total_rollouts_processed": 0,
+            "unallocated_fraction": 1.0,
+            "num_connected_envs": 0,
+            "batch_size": -1,
+        }
 
 
 @app.get("/status-env")
