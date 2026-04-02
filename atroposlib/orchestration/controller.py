@@ -38,22 +38,24 @@ class ScalingController:
         
         # 1. Check cooldown
         if now - self.last_action_timestamp < self.cooldown_seconds:
+            remaining = int(self.cooldown_seconds - (now - self.last_action_timestamp))
+            logger.debug(f"Controller: In cooldown ({remaining}s remaining). Holding at {self.current_desired} actors.")
             return self.current_desired
 
         # 2. Sensitivity check (Hysteresis)
         # If work is roughly satisfying target, don't change anything.
         if abs(pressure - self.target_pressure) < self.scaling_threshold:
+            logger.debug(f"Controller: Pressure {pressure:.2f} within threshold of {self.target_pressure}. No action.")
             return self.current_desired
 
         # 3. Calculate target
         # Target = Current * (Current_Pressure / Ideal_Pressure)
-        # This is a dampened proportional controller.
         raw_target = math.ceil(current_actors * (pressure / self.target_pressure))
         
         # 4. Apply step constraints (Rate Limiting)
-        # Don't add/remove more than max_step_change in a single move.
         diff = raw_target - current_actors
         if abs(diff) > self.max_step_change:
+            logger.info(f"Controller: Step change {diff} exceeds max_step_change ({self.max_step_change}). Capping.")
             raw_target = current_actors + (self.max_step_change if diff > 0 else -self.max_step_change)
 
         # 5. Apply world bounds
@@ -62,6 +64,7 @@ class ScalingController:
         if final_target != current_actors:
             self.last_action_timestamp = now
             self.current_desired = final_target
-            logger.info(f"Controller DECISION: Scale {current_actors} -> {final_target} (Pressure: {pressure:.2f})")
+            direction = "UP" if final_target > current_actors else "DOWN"
+            logger.info(f"Controller DECISION: Scale {direction} {current_actors} -> {final_target} (Pressure: {pressure:.2f})")
         
         return final_target
