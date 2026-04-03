@@ -1,6 +1,6 @@
 # Atropos DEO: Production Deployment Guide
 
-This guide detail-specs the deployment of the Atropos Dynamic Environment Orchestrator (DEO) in mission-critical LLM training environments (A100/H100 clusters).
+Technical specification for deploying the Atropos Dynamic Environment Orchestrator (DEO) in GPU-accelerated training clusters.
 
 ## Cluster-Scale Deployment
 

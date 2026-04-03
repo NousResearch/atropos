@@ -121,13 +121,13 @@ class LocalActor(ScalingStrategy):
             to_add = target_count - current_count
             logger.info(f"LocalActor: Scaling UP by {to_add} (Gpus/Actor: {gpus_per_actor})")
             for _ in range(to_add):
-                # 1. CrashLoop Protection
+                # Backoff protection
                 now = time.time()
                 if len([f for f in self.failure_history if now - f < 60]) >= 3:
                     logger.error("LocalActor: CrashLoopBackOff. Scaling halted.")
                     break
 
-                # 2. Port + GPU Availability Check
+                # Resource availability check
                 if not self.free_ports:
                     logger.error("LocalActor: Out of Port capacity.")
                     break
@@ -160,7 +160,7 @@ class LocalActor(ScalingStrategy):
                         self.available_gpus.extend(assigned_gpus) 
                         continue
 
-                # 4. Launch with Isolation
+                # Process isolation launch
                 instance_command = [c.replace("$PORT", str(port)) for c in self.command]
                 env = os.environ.copy()
                 if assigned_gpus:

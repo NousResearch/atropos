@@ -25,9 +25,7 @@ def test_resilience_features():
     threading.Thread(target=run_mock_server, daemon=True).start()
     time.sleep(1)
 
-    # --- 1. CrashLoopBackOff Test ---
-    print("\n[1] Testing CrashLoopBackOff...")
-    # Command that fails immediately
+    # Immediate failure command
     bad_cmd = [
         sys.executable, "-m", "atroposlib.cli.orchestrate",
         "--server-url", "http://localhost:8988",
@@ -40,13 +38,12 @@ def test_resilience_features():
     
     # Wait for 3-4 failures
     time.sleep(10)
-    print("Checking logs for CrashLoopBackOff message...")
+    print("Verifying recovery logs...")
     # We'll kill the proc and check output if we were capturing, but here we just check if it's still alive/trying
     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
     print("CrashLoop test initialized. (Manual log verification recommended: look for 'Scaling halted')")
 
-    # --- 2. VRAM Awareness Test ---
-    print("\n[2] Testing VRAM-Aware Selection...")
+    print("\n[Resilience] Testing Hardware-Aware Selection...")
     # Set threshold to something very high (e.g. 80GB) to force a skip
     vram_cmd = [
         sys.executable, "-m", "atroposlib.cli.orchestrate",

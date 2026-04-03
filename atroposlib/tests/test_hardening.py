@@ -6,19 +6,19 @@ import sys
 from atroposlib.orchestration.strategy import LocalActor
 
 def test_maintainer_standard():
-    print("Final Hardening Test...")
+    print("Running hardening verification...")
     
     # --- 1. Adopt Existing Processes ---
-    print("\n[1] Testing Adoption...")
+    print("\n[1] Testing process adoption...")
     orphan = subprocess.Popen(["sleep", "300"], preexec_fn=os.setpgrp)
     actor = LocalActor(["sleep", "300"])
     
     pids = [p.pid for p in actor.processes]
-    print(f"Adopted PIDs: {pids}")
+    print(f"Associated PIDs: {pids}")
     success_adopt = orphan.pid in pids
     
     # --- 2. Graceful Drain ---
-    print("\n[2] Testing Graceful Drain...")
+    print("\n[2] Testing graceful drain...")
     script = "/tmp/drain_worker.py"
     with open(script, "w") as f:
         f.write('''

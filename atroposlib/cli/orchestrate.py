@@ -61,10 +61,8 @@ def main():
         logger.setLevel(logging.DEBUG)
         logging.getLogger("atroposlib.orchestration").setLevel(logging.DEBUG)
 
-    # 1. Initialize metrics collector
     collector = MetricsCollector(args.server_url)
     
-    # 2. Initialize Scaling Controller
     controller = ScalingController(
         min_actors=args.min_actors,
         max_actors=args.max_actors,
@@ -73,7 +71,6 @@ def main():
         max_step_change=args.max_step
     )
     
-    # 3. Initialize Strategy (LocalActor)
     env_command_list = shlex.split(args.env_command)
     actor = LocalActor(env_command_list, port_range=args.port_range)
     
@@ -89,7 +86,6 @@ def main():
         print("--------------------------\n")
         sys.exit(0)
 
-    # 4. Initialize WandB if requested
     if args.wandb:
         wb_info = fetch_wandb_info(args.server_url)
         if wb_info.get("project") and wb_info.get("group"):
@@ -134,7 +130,7 @@ def main():
                 )
                 
                 if target_actors > connected_actors:
-                    # Scaling UP: Pre-flight VRAM check
+                    # Scaling UP: verify VRAM headroom
                     free_vram = check_vram()
                     if free_vram < args.vram_threshold:
                         logger.warning(

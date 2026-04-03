@@ -1,14 +1,14 @@
 # Atropos DEO: Architecture & Scaling State Machine
 
-The **Dynamic Environment Orchestrator (DEO)** is a resilient, latency-aware scaling engine designed to manage environment performers (workers) for RL training at scale.
+The **Dynamic Environment Orchestrator (DEO)** is a resilient scaling engine for managing environment workers in large-scale RL training.
 
 ## Core Components
 
-1.  **ScalingController**: The "Brain". Uses a dampened PID-like calculation with hysteresis to decide the `target_actors` based on "Rollout Pressure" (Queue/BatchSize).
-2.  **ScalingStrategy**: The "Hands". 
-    - `LocalActor`: Manages subprocesses on the local node with port isolation.
-    - `RemoteActor`: Manages processes on remote nodes via SSH.
-3.  **MetricsCollector**: The "Sensors". Polls the Atropos API server for global workload telemetry. Includes a 3-poll grace period for network resilience.
+1.  **ScalingController**: Implements a dampened PID-style loop with hysteresis to determine the `target_actors` based on "Rollout Pressure" (Queue/BatchSize).
+2.  **ScalingStrategy**: The execution layer.
+    - `LocalActor`: Manages subprocesses on the local node with port/GPU isolation.
+    - `RemoteActor`: Manages remote processes via SSH.
+3.  **MetricsCollector**: Telemetry interface. Polls the Atropos API server for global workload metrics, including a multi-poll grace period for network resilience.
 
 ## The Scaling State Machine
 

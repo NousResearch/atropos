@@ -84,7 +84,7 @@ class GZipRequestMiddleware:
 
         sent = False
 
-        # needed some odd logic here to handle gzip stream so just returning an empty body
+        # Handle gzip stream by returning empty body after first send
         async def new_receive():
             nonlocal sent
             if sent:
@@ -286,7 +286,7 @@ async def register(registration: Registration):
         app.state.curr_batch = []
         app.state.started = False
         app.state.envs = []
-        app.state.buffer = {}  # Buffer for mixed-size groups per environment
+        app.state.buffer = {}  # Mixed-size group buffer
         app.state.total_rollouts_processed = 0
 
     # Initialize requesters list if not already done

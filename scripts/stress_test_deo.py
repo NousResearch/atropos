@@ -68,19 +68,19 @@ def run_chaos_test():
     
     try:
         # A. Test Rapid Scale UP
-        print("\n[Chaos] Rapid Scale UP (Target 10)...")
+        print("\n[Chaos] Scaling UP (Target: 10)...")
         MockAtroposHandler.data["queue_size"] = 100 # Pressure 10.0
         time.sleep(8)
         
         # B. Random Killing (KILL -9)
-        print("\n[Chaos] Randomly Killing 2 Workers...")
+        print("\n[Chaos] Injecting process failures...")
         # Get managed PIDs from ps
         try:
             out = subprocess.check_output(["pgrep", "-f", "sleep 1000"]).decode().split()
             if out:
                 to_kill = random.sample(out, min(2, len(out)))
                 for pid in to_kill:
-                    print(f"BAM! SIGKILL on {pid}")
+                    print(f"ChaosMonkey: Sending SIGKILL to PID {pid}")
                     os.kill(int(pid), signal.SIGKILL)
         except: pass
         time.sleep(10)
