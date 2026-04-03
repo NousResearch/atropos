@@ -20,7 +20,7 @@ def run_mock_server():
     server = HTTPServer(("localhost", 8988), MockAtroposHandler)
     server.serve_forever()
 
-def test_divine_features():
+def test_resilience_features():
     print("Starting Atropos Verification...")
     threading.Thread(target=run_mock_server, daemon=True).start()
     time.sleep(1)
@@ -70,11 +70,11 @@ def test_divine_features():
     if "VRAM limited" in out:
         print("SUCCESS: VRAM check blocked scale-up as expected.")
     else:
-        print("❌ FAILED: VRAM check did not block scale-up.")
+        print("FAILED: VRAM check did not block scale-up.")
         # print(out[:1000]) # Print first 1000 chars for debug
 
     print("\nVERIFICATION PASSED")
 
 if __name__ == "__main__":
     import signal
-    test_divine_features()
+    test_resilience_features()
