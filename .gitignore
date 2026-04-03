@@ -208,3 +208,4 @@ environments/community/word_hunt/word_hunt_rollouts*.html
 
 # Diplomacy artefacts
 environments/game_environments/diplomacy_environment/logs/
+.legacy/

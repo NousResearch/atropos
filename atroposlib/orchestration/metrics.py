@@ -32,6 +32,8 @@ class MetricsCollector:
     def __init__(self, server_url: str):
         self.server_url = server_url.rstrip("/")
         self.last_metrics: Optional[WorkloadMetrics] = None
+        self.failure_count = 0
+        self.max_failures = 3 # 3 polls = ~30s grace period
 
     @retry(
         stop=stop_after_attempt(3),
@@ -42,6 +44,7 @@ class MetricsCollector:
     def poll(self) -> Optional[WorkloadMetrics]:
         """
         Polls the Atropos server for global metrics with retries.
+        Implements a grace period for transient network failures.
         """
         try:
             response = requests.get(f"{self.server_url}/global-status", timeout=5)
@@ -58,7 +61,19 @@ class MetricsCollector:
                 timestamp=time.time()
             )
             self.last_metrics = metrics
+            self.failure_count = 0
             return metrics
         except Exception as e:
-            logger.error(f"Failed to poll metrics from {self.server_url}: {e}")
+            self.failure_count += 1
+            if self.last_metrics and self.failure_count <= self.max_failures:
+                logger.warning(
+                    f"Metrics poll failed ({e}). Entering grace period "
+                    f"({self.failure_count}/{self.max_failures}). Using stale metrics."
+                )
+                # Update timestamp so controller thinks it's fresh enough to not stall,
+                # but don't change the actual data.
+                self.last_metrics.timestamp = time.time()
+                return self.last_metrics
+            
+            logger.error(f"Failed to poll metrics from {self.server_url} after grace period: {e}")
             return None

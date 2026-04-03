@@ -1,4 +1,5 @@
 import asyncio
+import signal
 import gzip
 import json
 import logging
@@ -225,6 +226,7 @@ class BaseEnv(ABC):
         slurm=False,
         testing=False,
     ):
+        self._is_draining = False
         self.items_sent_this_step = 0
         self.eval_runner = None  # type: Optional[asyncio.Task]
         self.workers_added_list = list()
@@ -1185,7 +1187,7 @@ class BaseEnv(ABC):
         await self.get_server_info()
         # Wait for other instances to get setup :)
         await asyncio.sleep(5)
-        while True:
+        while not self._is_draining:
             if self.last_loop_time is not None:
                 self.mainloop_timings.append(
                     max(0.0, time.time() - self.last_loop_time)
@@ -1259,6 +1261,11 @@ class BaseEnv(ABC):
                         # Do we want to retry? probably not...
                         # self.backlog.append(item["item"])
             await asyncio.sleep(0.1)
+        
+        logger.info("Env draining: Waiting for remaining workers to finish...")
+        while self.workers:
+            await asyncio.sleep(1)
+        logger.info("Env drain complete. Exiting.")
 
     async def process_manager(self):
         """
@@ -1549,6 +1556,17 @@ class BaseEnv(ABC):
                     slurm=server_manager_config.slurm,
                     testing=server_manager_config.testing,
                 )
+                
+                def handle_drain(sig, frame):
+                    logger.info("Drain signal (SIGUSR1) received. Shifting to drain mode...")
+                    env._is_draining = True
+                
+                try:
+                    signal.signal(signal.SIGUSR1, handle_drain)
+                except:
+                    # Some systems don't support SIGUSR1
+                    pass
+                
                 rprint(env_config)
                 rprint(openai_configs)
 
