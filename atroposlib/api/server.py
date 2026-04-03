@@ -299,10 +299,10 @@ async def register(registration: Registration):
 
 @app.post("/register-env")
 async def register_env_url(register_env: RegisterEnv):
-    # Check if trainer has started
-    if not hasattr(app.state, "started") or not app.state.started:
+    # Check if trainer has registered
+    if not hasattr(app.state, "queue"):
         return {
-            "status": "wait for trainer to start",
+            "status": "wait for trainer to register",
         }
 
     # Initialize envs list if not already done
