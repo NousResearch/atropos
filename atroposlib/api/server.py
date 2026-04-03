@@ -506,7 +506,9 @@ async def get_global_status():
         return {
             "current_step": getattr(app.state, "status_dict", {}).get("step", 0),
             "queue_size": len(getattr(app.state, "queue", [])),
-            "total_rollouts_processed": getattr(app.state, "total_rollouts_processed", 0),
+            "total_rollouts_processed": getattr(
+                app.state, "total_rollouts_processed", 0
+            ),
             "unallocated_fraction": unallocated_fraction,
             "num_connected_envs": connected_envs,
             "batch_size": getattr(app.state, "batchsize", -1),

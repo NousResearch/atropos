@@ -20,7 +20,7 @@ state_chart
     Pending --> Connected : Registered with API Server
     Connected --> Draining : SIGUSR1 (Scale Down Triggered)
     Draining --> [*] : Rollout Finished (Process Exit)
-    
+
     Pending --> [*] : Boot Timeout / Failure
     Connected --> [*] : Crash / Termination
 ```

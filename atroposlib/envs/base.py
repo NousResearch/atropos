@@ -1,11 +1,11 @@
 import asyncio
-import signal
 import gzip
 import json
 import logging
 import math
 import os
 import random
+import signal
 import string
 import time
 import uuid
@@ -1257,7 +1257,7 @@ class BaseEnv(ABC):
                         # Do we want to retry? probably not...
                         # self.backlog.append(item["item"])
             await asyncio.sleep(0.1)
-        
+
         logger.info("Env draining: Waiting for remaining workers to finish...")
         while self.workers:
             await asyncio.sleep(1)
@@ -1552,17 +1552,19 @@ class BaseEnv(ABC):
                     slurm=server_manager_config.slurm,
                     testing=server_manager_config.testing,
                 )
-                
+
                 def handle_drain(sig, frame):
-                    logger.info("Drain signal (SIGUSR1) received. Shifting to drain mode...")
+                    logger.info(
+                        "Drain signal (SIGUSR1) received. Shifting to drain mode..."
+                    )
                     env._is_draining = True
-                
+
                 try:
                     signal.signal(signal.SIGUSR1, handle_drain)
                 except:
                     # Some systems don't support SIGUSR1
                     pass
-                
+
                 rprint(env_config)
                 rprint(openai_configs)
 

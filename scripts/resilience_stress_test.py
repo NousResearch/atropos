@@ -1,24 +1,34 @@
-import subprocess
+import json
 import os
-import time
+import subprocess
 import sys
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import json
+import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 
 # --- Mock Server ---
 class MockAtroposHandler(BaseHTTPRequestHandler):
-    data = {"current_step": 1, "queue_size": 100, "total_rollouts_processed": 0, 
-            "unallocated_fraction": 0, "num_connected_envs": 0, "batch_size": 10}
+    data = {
+        "current_step": 1,
+        "queue_size": 100,
+        "total_rollouts_processed": 0,
+        "unallocated_fraction": 0,
+        "num_connected_envs": 0,
+        "batch_size": 10,
+    }
+
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-type", "application/json")
         self.end_headers()
         self.wfile.write(json.dumps(MockAtroposHandler.data).encode())
 
+
 def run_mock_server():
     server = HTTPServer(("localhost", 8988), MockAtroposHandler)
     server.serve_forever()
+
 
 def test_resilience_features():
     print("Starting Atropos Verification...")
@@ -27,43 +37,69 @@ def test_resilience_features():
 
     # Immediate failure command
     bad_cmd = [
-        sys.executable, "-m", "atroposlib.cli.orchestrate",
-        "--server-url", "http://localhost:8988",
-        "--env-command", "python -c 'import sys; sys.exit(1)'", # Crash immediately
-        "--poll-interval", "2",
-        "--cooldown", "1",
-        "--verbose"
+        sys.executable,
+        "-m",
+        "atroposlib.cli.orchestrate",
+        "--server-url",
+        "http://localhost:8988",
+        "--env-command",
+        "python -c 'import sys; sys.exit(1)'",  # Crash immediately
+        "--poll-interval",
+        "2",
+        "--cooldown",
+        "1",
+        "--verbose",
     ]
     proc = subprocess.Popen(bad_cmd, preexec_fn=os.setpgrp)
-    
+
     # Wait for 3-4 failures
     time.sleep(10)
     print("Verifying recovery logs...")
     # We'll kill the proc and check output if we were capturing, but here we just check if it's still alive/trying
     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-    print("CrashLoop test initialized. (Manual log verification recommended: look for 'Scaling halted')")
+    print(
+        "CrashLoop test initialized. (Manual log verification recommended: look for 'Scaling halted')"
+    )
 
     print("\n[Resilience] Testing Hardware-Aware Selection...")
     # Set threshold to something very high (e.g. 80GB) to force a skip
     vram_cmd = [
-        sys.executable, "-m", "atroposlib.cli.orchestrate",
-        "--server-url", "http://localhost:8988",
-        "--env-command", "sleep 100",
-        "--vram-threshold", "80000", # 80GB (Will always trigger skip)
-        "--poll-interval", "2",
-        "--status" # Just check status first
+        sys.executable,
+        "-m",
+        "atroposlib.cli.orchestrate",
+        "--server-url",
+        "http://localhost:8988",
+        "--env-command",
+        "sleep 100",
+        "--vram-threshold",
+        "80000",  # 80GB (Will always trigger skip)
+        "--poll-interval",
+        "2",
+        "--status",  # Just check status first
     ]
     # We'll run it for one loop and check output
     try:
         out = subprocess.check_output(
-            [sys.executable, "-m", "atroposlib.cli.orchestrate", 
-             "--server-url", "http://localhost:8988", "--env-command", "sleep 100", 
-             "--vram-threshold", "80000", "--poll-interval", "1", "--verbose"],
-            timeout=15, stderr=subprocess.STDOUT
+            [
+                sys.executable,
+                "-m",
+                "atroposlib.cli.orchestrate",
+                "--server-url",
+                "http://localhost:8988",
+                "--env-command",
+                "sleep 100",
+                "--vram-threshold",
+                "80000",
+                "--poll-interval",
+                "1",
+                "--verbose",
+            ],
+            timeout=15,
+            stderr=subprocess.STDOUT,
         ).decode()
     except subprocess.TimeoutExpired as e:
         out = e.output.decode()
-    
+
     if "VRAM limited" in out:
         print("SUCCESS: VRAM check blocked scale-up as expected.")
     else:
@@ -72,6 +108,8 @@ def test_resilience_features():
 
     print("\nVERIFICATION PASSED")
 
+
 if __name__ == "__main__":
     import signal
+
     test_resilience_features()

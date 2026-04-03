@@ -39,7 +39,7 @@ To prevent "Launch Storms" (rapidly failing workers consuming CPU/IO), the DEO t
 - **Action**: Scale-up is **HALTED** until the cooldown period expires or the operator intervenes.
 
 ### 3. Graceful Draining (Zero Data Loss)
-During scale-down (e.g., training efficiency adjustment or node maintenance), the DEO sends `SIGUSR1`. 
+During scale-down (e.g., training efficiency adjustment or node maintenance), the DEO sends `SIGUSR1`.
 - Workers finish the current rollout.
 - Checkpoints are saved.
 - Data is securely synchronized before process exit.
