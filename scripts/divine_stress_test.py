@@ -21,7 +21,7 @@ def run_mock_server():
     server.serve_forever()
 
 def test_divine_features():
-    print("🌌 Starting Atropos DIVINE-TIER Verification...")
+    print("Starting Atropos Verification...")
     threading.Thread(target=run_mock_server, daemon=True).start()
     time.sleep(1)
 
@@ -43,7 +43,7 @@ def test_divine_features():
     print("Checking logs for CrashLoopBackOff message...")
     # We'll kill the proc and check output if we were capturing, but here we just check if it's still alive/trying
     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-    print("✅ CrashLoop test initialized. (Manual log verification recommended: look for 'Scaling halted')")
+    print("CrashLoop test initialized. (Manual log verification recommended: look for 'Scaling halted')")
 
     # --- 2. VRAM Awareness Test ---
     print("\n[2] Testing VRAM-Aware Selection...")
@@ -68,12 +68,12 @@ def test_divine_features():
         out = e.output.decode()
     
     if "VRAM limited" in out:
-        print("✅ SUCCESS: VRAM check blocked scale-up as expected.")
+        print("SUCCESS: VRAM check blocked scale-up as expected.")
     else:
         print("❌ FAILED: VRAM check did not block scale-up.")
         # print(out[:1000]) # Print first 1000 chars for debug
 
-    print("\n🌟 DIVINE TIER VERIFIED 🌟")
+    print("\nVERIFICATION PASSED")
 
 if __name__ == "__main__":
     import signal

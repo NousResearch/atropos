@@ -1,8 +1,8 @@
-# Atropos DEO: Production Deployment Guide (Legendary Tier)
+# Atropos DEO: Production Deployment Guide
 
 This guide detail-specs the deployment of the Atropos Dynamic Environment Orchestrator (DEO) in mission-critical LLM training environments (A100/H100 clusters).
 
-## 🚀 Cluster-Scale Deployment
+## Cluster-Scale Deployment
 
 ### 1. Scaling LLM Workers (GPU Isolation)
 The DEO leverages `CUDA_VISIBLE_DEVICES` to ensure that each worker has dedicated, non-overlapping access to GPUs.
@@ -25,7 +25,7 @@ Use the `RemoteActor` strategy to manage a distributed fleet from a single contr
 
 ---
 
-## 🛡️ Production Resilience Patterns
+## Production Resilience Patterns
 
 ### 1. Hardware Cordoning (Thermal Guard)
 The DEO continuously monitors GPU health via NVML/SMI. If a GPU enters a `ThermalThrottled` or `HardwareFault` state (`0x0000000000000008`), the DEO will:
@@ -46,7 +46,7 @@ During scale-down (e.g., training efficiency adjustment or node maintenance), th
 
 ---
 
-## 📊 Maintenance & Observability
+## Maintenance & Observability
 
 ### Diagnostic Audit
 Run the status command to audit the current resource allocation:
@@ -62,6 +62,6 @@ All orchestration metadata is synchronized to WandB, allowing infra teams to mon
 
 ---
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 - **Zombie Processes**: If the DEO is killed via `SIGKILL`, some CUDA kernels may remain active. Restart the DEO; its **Warm Startup** logic will automatically adopt these orphans and reclaim them gracefully.
 - **Port Hijacking**: The DEO performs a socket-level pre-flight check before every launch to prevent conflicts with unmanaged system processes.

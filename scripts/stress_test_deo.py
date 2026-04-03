@@ -43,7 +43,7 @@ def run_mock_server():
 
 # --- Chaos Monkey Logic ---
 def run_chaos_test():
-    print("🦍 Starting DEO Chaos Monkey Stress Test (Grandmaster Tier)...")
+    print("Starting DEO Chaos Monkey Stress Test...")
     
     # 1. Start Mock Server
     threading.Thread(target=run_mock_server, daemon=True).start()
@@ -112,9 +112,9 @@ def run_chaos_test():
                 print(f"❌ FAILED: Leaked Processes: {leaked}")
                 sys.exit(1)
         except subprocess.CalledProcessError:
-            print("✅ SUCCESS: No leaked processes.")
+            print("SUCCESS: No leaked processes.")
         
-        print("\n🌟 DEO STRESS TEST PASSED: GRANDMASTER TIER 🌟")
+        print("\nDEO STRESS TEST PASSED")
 
 if __name__ == "__main__":
     run_chaos_test()

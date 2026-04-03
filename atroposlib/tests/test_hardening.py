@@ -6,7 +6,7 @@ import sys
 from atroposlib.orchestration.strategy import LocalActor
 
 def test_maintainer_standard():
-    print("🚀 Final Maintainer-Hardening Test...")
+    print("Final Hardening Test...")
     
     # --- 1. Adopt Existing Processes ---
     print("\n[1] Testing Adoption...")
@@ -48,10 +48,10 @@ while True: time.sleep(1)
     worker_actor.cleanup()
     
     if success_adopt and success_drain:
-        print("\n✅ MAINTAINER HARDENING VERIFIED")
+        print("\nHARDENING VERIFIED")
         sys.exit(0)
     else:
-        print("\n❌ VERIFICATION FAILED")
+        print("\nVERIFICATION FAILED")
         print(f"Adopt: {success_adopt}, Drain: {success_drain}")
         sys.exit(1)
 

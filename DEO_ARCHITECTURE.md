@@ -2,7 +2,7 @@
 
 The **Dynamic Environment Orchestrator (DEO)** is a resilient, latency-aware scaling engine designed to manage environment performers (workers) for RL training at scale.
 
-## 🏗️ Core Components
+## Core Components
 
 1.  **ScalingController**: The "Brain". Uses a dampened PID-like calculation with hysteresis to decide the `target_actors` based on "Rollout Pressure" (Queue/BatchSize).
 2.  **ScalingStrategy**: The "Hands". 
@@ -10,7 +10,7 @@ The **Dynamic Environment Orchestrator (DEO)** is a resilient, latency-aware sca
     - `RemoteActor`: Manages processes on remote nodes via SSH.
 3.  **MetricsCollector**: The "Sensors". Polls the Atropos API server for global workload telemetry. Includes a 3-poll grace period for network resilience.
 
-## 🔄 The Scaling State Machine
+## The Scaling State Machine
 
 Workers transition through four distinct phases to ensure zero data loss and cluster stability.
 
@@ -43,7 +43,7 @@ state_chart
 - Upon restart, the DEO scans the process table for orphans matching the environment command.
 - It "adopts" these workers into its management loop, preventing duplicate launches and port conflicts.
 
-## 🛡️ Resilience Features
+## Resilience Features
 - **Port Isolation**: Dedicated port pools (`8001:8020`) for multi-instance scaling on a single IP.
 - **Heartbeat Grace Period**: 3-poll window (~30s) where stale metrics are used during network flaps to prevent accidental mass scale-down.
 - **Process Group Isolation**: `os.killpg` ensures that even a worker's sub-processes (e.g., a CUDA kernel launcher) are reaped correctly.

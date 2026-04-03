@@ -57,12 +57,12 @@ class LocalActor(ScalingStrategy):
         
         self.pid_to_port: Dict[int, int] = {}
         
-        # GPU management (Legendary Tier)
+        # GPU management
         self.pid_to_gpus: Dict[int, List[int]] = {}
         self.gpu_pool: List[int] = self._discover_gpus()
         self.available_gpus: List[int] = list(self.gpu_pool)
         
-        # Adopt any existing processes on startup (Professional standard)
+        # Adopt any existing processes on startup
         self._adopt_existing_processes()
 
     def _discover_gpus(self) -> List[int]:
@@ -75,7 +75,7 @@ class LocalActor(ScalingStrategy):
             return []
 
     def _check_gpu_health(self, gpu_id: int) -> bool:
-        """Professional Cordoning: Check if a GPU is thermally throttled."""
+        """Resource Cordoning: Check if a GPU is thermally throttled."""
         try:
             cmd = ["nvidia-smi", "-i", str(gpu_id), "--query-gpu=clocks_throttle_reasons.active", "--format=csv,noheader,nounits"]
             reason = subprocess.check_output(cmd).decode().strip()
