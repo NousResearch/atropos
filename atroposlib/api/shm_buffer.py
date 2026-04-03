@@ -17,8 +17,8 @@ class SHMBufferConfig:
     Control block for Shared Memory Buffer.
     Stored at the beginning of the SHM segment.
     """
-    # [Magic (4B) | Version (2B) | ReadIdx (4B) | WriteIdx (4B) | MaxSize (4B) | EntrySize (4B)]
-    FORMAT = "4sHIIII"
+    # [Magic (4B) | Version (4B) | ReadIdx (4B) | WriteIdx (4B) | MaxSize (4B) | EntrySize (4B)]
+    FORMAT = "4sIIIII"
     SIZE = struct.calcsize(FORMAT)
     MAGIC = b"ATRP"
     VERSION = 1
@@ -41,8 +41,10 @@ class ZeroCopySHMBuffer:
         self.max_size = size
         self.entry_size = entry_size
         
+        self.slot_size = 8 + 4 + (entry_size * 4) # Score (8) + Len (4) + Tokens (Size*4)
+        
         # Total size = Control Block + Data Segment
-        self.total_size = SHMBufferConfig.SIZE + (size * entry_size * 4) # 4 bytes per int32 token
+        self.total_size = SHMBufferConfig.SIZE + (size * self.slot_size)
         
         try:
             if create:
@@ -54,13 +56,13 @@ class ZeroCopySHMBuffer:
                     pass
                 
                 self.shm = shared_memory.SharedMemory(name=name, create=True, size=self.total_size)
+                self.buf = self.shm.buf
                 self._init_control_block()
                 logger.info(f"Created SHM buffer '{name}' with size {self.total_size} bytes")
             else:
                 self.shm = shared_memory.SharedMemory(name=name)
+                self.buf = self.shm.buf
                 logger.debug(f"Attached to SHM buffer '{name}'")
-                
-            self.buf = self.shm.buf
         except Exception as e:
             logger.error(f"Failed to initialize SHM buffer: {e}")
             raise
@@ -87,8 +89,8 @@ class ZeroCopySHMBuffer:
         return read_idx, write_idx, max_size, entry_size
 
     def _set_indices(self, read_idx: int, write_idx: int):
-        # We only update these two fields
-        struct.pack_into("II", self.buf, 6, read_idx, write_idx)
+        # We only update these two fields (Offsets: ReadIdx=8, WriteIdx=12)
+        struct.pack_into("II", self.buf, 8, read_idx, write_idx)
 
     def write_trajectory(self, tokens: List[int], score: float, metadata: Dict[str, Any] = None):
         """
@@ -104,8 +106,7 @@ class ZeroCopySHMBuffer:
             return False
 
         # Calculate offset in data segment
-        slot_size = 8 + 4 + (entry_size * 4)
-        offset = SHMBufferConfig.SIZE + (write_idx * slot_size)
+        offset = SHMBufferConfig.SIZE + (write_idx * self.slot_size)
         
         # 1. Write Score (float64, 8 bytes)
         struct.pack_into("d", self.buf, offset, float(score))
@@ -137,8 +138,7 @@ class ZeroCopySHMBuffer:
         if read_idx == write_idx:
             return None # Buffer empty
             
-        slot_size = 8 + 4 + (entry_size * 4)
-        offset = SHMBufferConfig.SIZE + (read_idx * slot_size)
+        offset = SHMBufferConfig.SIZE + (read_idx * self.slot_size)
         
         # 1. Read Score (float64)
         score = struct.unpack_from("d", self.buf, offset)[0]
