@@ -55,13 +55,5 @@ class SkyRLServerEnv(SkyRLAdapter):
         await super().setup()
         logger.info("SkyRL environment setup complete.")
 
-    async def evaluate(self) -> Dict[str, float]:
-        """
-        Reasoning-specific evaluation logic.
-        """
-        logger.info("Running SkyRL Reasoning Evaluation...")
-        return {"reasoning_acc": 0.0} # Placeholder for Phase 1
-
-
 if __name__ == "__main__":
     SkyRLServerEnv.cli()

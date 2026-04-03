@@ -81,3 +81,25 @@ class SkyRLAdapter(BaseEnv):
                 group["env_metrics"]["prm_supported"] = True
 
         return base_groups
+
+    async def get_next_item(self) -> Item:
+        """
+        SkyRL-gym manages its own task queue/dataset internally.
+        This provides a dummy item to satisfy the BaseEnv contract.
+        """
+        return Item(
+            tokens=[],
+            masks=[],
+            scores=0.0,
+            advantages=None,
+            ref_logprobs=None,
+            messages=None,
+            meta={"source": "skyrl_dummy"}
+        )
+
+    async def evaluate(self, *args, **kwargs) -> Dict[str, float]:
+        """
+        SkyRL-specific evaluation logic.
+        """
+        logger.info("Running SkyRL Reasoning Evaluation...")
+        return {"reasoning_acc": 0.0}
