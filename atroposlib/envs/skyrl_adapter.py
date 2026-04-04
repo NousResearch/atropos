@@ -56,7 +56,7 @@ class SkyRLAdapter(BaseEnv):
             if "env_metrics" not in group:
                 group["env_metrics"] = {}
 
-            # Phase 1: Reasoning Trace Extraction
+            # Reasoning Trace Extraction
             for rollout_idx, messages in enumerate(group["messages"]):
                 if not messages:
                     continue
@@ -76,7 +76,7 @@ class SkyRLAdapter(BaseEnv):
                             group["env_metrics"]["reasoning_traces"] = []
                         group["env_metrics"]["reasoning_traces"].append(thinking_trace)
 
-            # Phase 2: Process Reward Mapping
+            # Process Reward Mapping
             if self.config.enable_process_rewards:
                 group["env_metrics"]["prm_supported"] = True
 

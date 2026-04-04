@@ -108,14 +108,14 @@ class ZeroCopySHMBuffer:
         # Calculate offset in data segment
         offset = SHMBufferConfig.SIZE + (write_idx * self.slot_size)
         
-        # 1. Write Score (float64, 8 bytes)
+        # Write Score
         struct.pack_into("d", self.buf, offset, float(score))
         
-        # 2. Write Token Length (int32, 4 bytes)
+        # Write Token Length
         token_len = min(len(tokens), entry_size)
         struct.pack_into("i", self.buf, offset + 8, token_len)
         
-        # 3. Write Tokens (int32 array, EntrySize * 4 bytes)
+        # Write Tokens (Numpy View)
         token_offset = offset + 8 + 4
         token_arr = np.array(tokens, dtype=np.int32)
         
@@ -140,14 +140,12 @@ class ZeroCopySHMBuffer:
             
         offset = SHMBufferConfig.SIZE + (read_idx * self.slot_size)
         
-        # 1. Read Score (float64)
+        # Read Score and Token Length
         score = struct.unpack_from("d", self.buf, offset)[0]
-        
-        # 2. Read Token Length (int32)
         token_len = struct.unpack_from("i", self.buf, offset + 8)[0]
         token_len = min(token_len, entry_size)
         
-        # 3. Read Tokens (Numpy View)
+        # Read Tokens (Numpy View)
         token_offset = offset + 8 + 4
         tokens_view = np.ndarray((token_len,), dtype=np.int32, buffer=self.buf, offset=token_offset)
         

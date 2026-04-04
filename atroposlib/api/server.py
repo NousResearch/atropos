@@ -211,13 +211,11 @@ def _process_scored_data(scored_data: ScoredData) -> Dict[str, Any]:
         actual_group_size = len(scored_data.tokens)
 
         if actual_group_size != expected_group_size:
-            # buffering logic...
+            # Buffer mixed-size groups if necessary (TBD)
             buffer = app.state.buffer.setdefault(env_id, [])
             buffer.append(data_dict)
-            # ... (truncated for brevity in actual call)
             pass
         
-        # Write to SHM if buffer exists
         if hasattr(app.state, "shm_buffer") and app.state.shm_buffer:
             for i in range(len(scored_data.tokens)):
                 app.state.shm_buffer.write_trajectory(
@@ -266,7 +264,6 @@ async def register(registration: Registration):
         app.state.envs = []
         app.state.buffer = {}  # Buffer for mixed-size groups per environment
 
-    # Initialize requesters list if not already done
     if not hasattr(app.state, "requesters"):
         app.state.requesters = []
 

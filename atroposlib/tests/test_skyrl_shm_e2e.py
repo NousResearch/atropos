@@ -51,7 +51,7 @@ def run_e2e_benchmark():
     barrier = mp.Barrier(NUM_ENV_WORKERS + 1)
     stop_event = mp.Event()
     
-    # --- PHASE 1: CONCURRENCY TEST ---
+    # Concurrency Test
     print(f"🚀 Starting {NUM_ENV_WORKERS} Environment Workers (Concurrency Test)...")
     workers = []
     for i in range(NUM_ENV_WORKERS):
@@ -61,7 +61,7 @@ def run_e2e_benchmark():
         
     barrier.wait() # Start the race
     
-    # --- PHASE 2: THROUGHPUT BENCHMARK (SHM) ---
+    # Throughput Benchmark (SHM)
     print("📈 Measuring SHM Throughput...")
     start_shm = time.perf_counter()
     received = 0
@@ -78,7 +78,7 @@ def run_e2e_benchmark():
     shm_tps = TOTAL_TRAJECTORIES / shm_time
     print(f"   [SHM] Received {received} trajectories in {shm_time:.4f}s ({shm_tps:.2f} traj/s)")
 
-    # --- PHASE 3: HTTP BASELINE SIMULATION ---
+    # HTTP Baseline Simulation
     print("📉 Measuring HTTP Baseline Simulation (JSON Tax)...")
     start_http = time.perf_counter()
     for _ in range(TOTAL_TRAJECTORIES):

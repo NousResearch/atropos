@@ -1,9 +1,8 @@
 """
 SkyRL Training Environment for Atropos
 
-Unified environment for reasoning-heavy RL training (Project 11).
 Integrates Berkeley SkyRL-gym with Atropos orchestration.
-Supports Step-wise Process Rewards (PRM) and Zero-Copy SHM transport (Project 9).
+Supports Step-wise Process Rewards (PRM) and Zero-Copy SHM transport.
 
 Usage:
   python environments/skyrl_server.py serve \
