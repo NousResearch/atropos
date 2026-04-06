@@ -211,10 +211,8 @@ def _process_scored_data(scored_data: ScoredData) -> Dict[str, Any]:
         actual_group_size = len(scored_data.tokens)
 
         if actual_group_size != expected_group_size:
-            # Buffer mixed-size groups if necessary (TBD)
             buffer = app.state.buffer.setdefault(env_id, [])
             buffer.append(data_dict)
-            pass
         
         if hasattr(app.state, "shm_buffer") and app.state.shm_buffer:
             for i in range(len(scored_data.tokens)):
@@ -269,18 +267,17 @@ async def register(registration: Registration):
 
     app.state.requesters.append(uuid.uuid4().int)
     
-    # Initialize Pinhole SHM Buffer
+    # Pin-hole SHM initialization
     shm_name = f"atropos_shm_{app.state.group}"
     try:
         app.state.shm_buffer = ZeroCopySHMBuffer(
             name=shm_name,
-            size=app.state.batchsize * 10, # Keep 10 batches in flight
+            size=app.state.batchsize * 10,
             entry_size=app.state.max_token_len,
             create=True
         )
-        logger.info(f"Initialized Zero-Copy SHM Pinhole: {shm_name}")
     except Exception as e:
-        logger.error(f"Failed to initialize SHM Pinhole: {e}")
+        logger.error(f"SHM Buffer Init Failed: {e}")
         app.state.shm_buffer = None
 
     return {

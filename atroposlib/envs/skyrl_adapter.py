@@ -31,10 +31,8 @@ class SkyRLConfig(BaseEnvConfig):
 
 class SkyRLAdapter(BaseEnv):
     """
-    Atropos Adapter for Berkeley's SkyRL (NovaSky-AI) environments.
-    
-    This adapter bridges the SkyRL-gym trajectory format (Thinking Traces + PRM)
-    into the Atropos orchestration layer.
+    Atropos Adapter for SkyRL (NovaSky-AI) environments.
+    Bridges reasoning traces and step-wise rewards into the Atropos layer.
     """
     name = "skyrl"
     env_config_cls = SkyRLConfig
