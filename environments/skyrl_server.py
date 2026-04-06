@@ -13,8 +13,8 @@ Usage:
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from atroposlib.envs.skyrl_adapter import SkyRLAdapter, SkyRLConfig
 from atroposlib.envs.server_handling.server_baseline import APIServerConfig
+from atroposlib.envs.skyrl_adapter import SkyRLAdapter, SkyRLConfig
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class SkyRLServerEnv(SkyRLAdapter):
     """
     User-facing environment for SkyRL reasoning tasks.
     """
-    
+
     @classmethod
     def config_init(cls) -> Tuple[SkyRLConfig, List[APIServerConfig]]:
         env_config = SkyRLConfig(
@@ -53,6 +53,7 @@ class SkyRLServerEnv(SkyRLAdapter):
         """
         await super().setup()
         logger.info("SkyRL environment setup complete.")
+
 
 if __name__ == "__main__":
     SkyRLServerEnv.cli()

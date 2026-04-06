@@ -8,10 +8,12 @@ from .base import BaseEnv, BaseEnvConfig, ScoredDataGroup
 
 logger = logging.getLogger(__name__)
 
+
 class SkyRLConfig(BaseEnvConfig):
     """
     Configuration for the Berkeley SkyRL adapter.
     """
+
     skyrl_repo_id: str = Field(
         default="NovaSky-AI/Sky-AIME-5K",
         description="The SkyRL-gym repository ID or local path to the reasoning environment.",
@@ -29,11 +31,13 @@ class SkyRLConfig(BaseEnvConfig):
         description="The closing tag for reasoning/thinking traces.",
     )
 
+
 class SkyRLAdapter(BaseEnv):
     """
     Atropos Adapter for SkyRL (NovaSky-AI) environments.
     Bridges reasoning traces and step-wise rewards into the Atropos layer.
     """
+
     name = "skyrl"
     env_config_cls = SkyRLConfig
 
@@ -67,7 +71,7 @@ class SkyRLAdapter(BaseEnv):
                         self.config.thought_start_tag
                     )
                     end_idx = content.find(self.config.thought_end_tag)
-                    
+
                     if end_idx != -1:
                         thinking_trace = content[start_idx:end_idx].strip()
                         if "reasoning_traces" not in group["env_metrics"]:
@@ -92,7 +96,7 @@ class SkyRLAdapter(BaseEnv):
             advantages=None,
             ref_logprobs=None,
             messages=None,
-            meta={"source": "skyrl_dummy"}
+            meta={"source": "skyrl_dummy"},
         )
 
     async def evaluate(self, *args, **kwargs) -> Dict[str, float]:

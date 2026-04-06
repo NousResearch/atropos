@@ -213,13 +213,13 @@ def _process_scored_data(scored_data: ScoredData) -> Dict[str, Any]:
         if actual_group_size != expected_group_size:
             buffer = app.state.buffer.setdefault(env_id, [])
             buffer.append(data_dict)
-        
+
         if hasattr(app.state, "shm_buffer") and app.state.shm_buffer:
             for i in range(len(scored_data.tokens)):
                 app.state.shm_buffer.write_trajectory(
                     tokens=scored_data.tokens[i],
                     score=scored_data.scores[i],
-                    metadata={"env_id": env_id}
+                    metadata={"env_id": env_id},
                 )
 
     app.state.queue.append(data_dict)
@@ -266,7 +266,7 @@ async def register(registration: Registration):
         app.state.requesters = []
 
     app.state.requesters.append(uuid.uuid4().int)
-    
+
     # Pin-hole SHM initialization
     shm_name = f"atropos_shm_{app.state.group}"
     try:
@@ -274,7 +274,7 @@ async def register(registration: Registration):
             name=shm_name,
             size=app.state.batchsize * 10,
             entry_size=app.state.max_token_len,
-            create=True
+            create=True,
         )
     except Exception as e:
         logger.error(f"SHM Buffer Init Failed: {e}")
@@ -282,7 +282,7 @@ async def register(registration: Registration):
 
     return {
         "uuid": app.state.requesters[-1],
-        "shm_handle": shm_name if app.state.shm_buffer else None
+        "shm_handle": shm_name if app.state.shm_buffer else None,
     }
 
 
