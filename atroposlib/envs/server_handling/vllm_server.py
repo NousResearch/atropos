@@ -68,7 +68,9 @@ class VLLMServer(APIServer):
                 Exception,
             ) as e:
                 if getattr(self, "_last_error_count", 0) % 60 == 0:
-                    logger.warning(f"💔 VLLM Server Health Check Failed at {self.config.base_url}: {e}")
+                    logger.warning(
+                        f"💔 VLLM Server Health Check Failed at {self.config.base_url}: {e}"
+                    )
                 self._last_error_count = getattr(self, "_last_error_count", 0) + 1
                 self.server_healthy = False
             await asyncio.sleep(1)

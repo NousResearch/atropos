@@ -871,12 +871,36 @@ class BaseEnv(ABC):
                     metadata = {
                         "env": self.name,
                         "env_id": env_id,
-                        "logprobs": group.get("logprobs") if group.get("logprobs") is not None else None,
-                        "ref_logprobs": group.get("ref_logprobs") if group.get("ref_logprobs") is not None else None,
-                        "distill_token_ids": group.get("distill_token_ids") if group.get("distill_token_ids") is not None else None,
-                        "distill_logprobs": group.get("distill_logprobs") if group.get("distill_logprobs") is not None else None,
-                        "overrides": group.get("overrides") if group.get("overrides") is not None else None,
-                        "group_overrides": group.get("group_overrides") if group.get("group_overrides") is not None else None,
+                        "logprobs": (
+                            group.get("logprobs")
+                            if group.get("logprobs") is not None
+                            else None
+                        ),
+                        "ref_logprobs": (
+                            group.get("ref_logprobs")
+                            if group.get("ref_logprobs") is not None
+                            else None
+                        ),
+                        "distill_token_ids": (
+                            group.get("distill_token_ids")
+                            if group.get("distill_token_ids") is not None
+                            else None
+                        ),
+                        "distill_logprobs": (
+                            group.get("distill_logprobs")
+                            if group.get("distill_logprobs") is not None
+                            else None
+                        ),
+                        "overrides": (
+                            group.get("overrides")
+                            if group.get("overrides") is not None
+                            else None
+                        ),
+                        "group_overrides": (
+                            group.get("group_overrides")
+                            if group.get("group_overrides") is not None
+                            else None
+                        ),
                     }
                     self.shm_buffer.write_trajectory(
                         tokens=group["tokens"][i],
