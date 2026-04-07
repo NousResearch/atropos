@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from pydantic import Field
 
-from ..type_definitions import Message
+from ..type_definitions import Item, Message
 from .base import BaseEnv, BaseEnvConfig, ScoredDataGroup
 
 logger = logging.getLogger(__name__)
@@ -89,15 +89,12 @@ class SkyRLAdapter(BaseEnv):
         SkyRL-gym manages its own task queue/dataset internally.
         This provides a dummy item to satisfy the BaseEnv contract.
         """
-        return Item(
-            tokens=[],
-            masks=[],
-            scores=0.0,
-            advantages=None,
-            ref_logprobs=None,
-            messages=None,
-            meta={"source": "skyrl_dummy"},
-        )
+        return {
+            "tokens": [],
+            "masks": [],
+            "scores": 0.0,
+            "meta": {"source": "skyrl_dummy"},
+        }
 
     async def evaluate(self, *args, **kwargs) -> Dict[str, float]:
         """

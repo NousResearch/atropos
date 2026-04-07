@@ -1,19 +1,19 @@
 # SkyRL Integration (SHM Transport)
 
-This directory contains the `skyrl_adapter.py`, which enables Atropos to act as a high-performance reasoning environment provider for the SkyRL training framework.
+This directory contains `skyrl_adapter.py`, enabling Atropos to provide reasoning environments for the SkyRL training framework.
 
 ## Architecture
 
-The integration utilizes a **Zero-Copy Shared Memory (SHM)** transport to eliminate the "JSON Tax" during reasoning-dense RL collection.
+The integration uses a **Zero-Copy Shared Memory (SHM)** transport to reduce serialization overhead during reasoning-dense RL collection.
 
 * **Transport**: `atroposlib.api.shm_buffer.ZeroCopySHMBuffer`
 * **Adapter**: `atroposlib.envs.skyrl_adapter.SkyRLAdapter`
 
 ## Performance
 
-Benchmarks on RTX 3090 hardware show an **~8x throughput gain** compared to standard HTTP/JSON transport:
+Benchmarks on RTX 3090 hardware:
 - **Baseline (HTTP)**: ~2,000 trajectories/sec
-- **Hardened (SHM)**: **16,500+ trajectories/sec**
+- **Hardened (SHM)**: **16,500+ trajectories/sec** (~8x throughput gain)
 
 ## Usage
 
@@ -35,7 +35,7 @@ env = SkyRLAdapter(
 A dedicated end-to-end verification script for the SHM bridge is available in the root directory:
 
 ```bash
-bash test_shm.sh
+pytest -v atroposlib/tests/test_skyrl_shm_e2e.py
 ```
 
 This script verifies the atomic index synchronization and data integrity without requiring a full GPU cluster.

@@ -132,7 +132,15 @@ from vllm.logger import init_logger  # noqa: E402
 from vllm.sampling_params import RequestOutputKind, SamplingParams  # noqa: E402
 from vllm.usage.usage_lib import UsageContext  # noqa: E402
 from vllm.utils import random_uuid  # noqa: E402
-from vllm.v1.engine.async_llm import AsyncLLM  # noqa: E402
+# Handle vLLM engine version differences (v0 vs v1)
+if os.environ.get("VLLM_USE_V1", "0") == "1":
+    from vllm.v1.engine.async_llm import AsyncLLM  # noqa: E402
+else:
+    try:
+        from vllm.engine.async_llm_engine import AsyncLLMEngine as AsyncLLM  # noqa: E402
+    except ImportError:
+        # Fallback for older v0 versions
+        from vllm.engine.async_llm import AsyncLLM  # noqa: E402
 
 # Handle vLLM version differences - FlexibleArgumentParser was removed/renamed
 try:

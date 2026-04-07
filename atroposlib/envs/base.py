@@ -867,12 +867,23 @@ class BaseEnv(ABC):
                 # Use the provided instance_id (Task ID) if available, fallback to env_id
                 inst_id = str(group.get("instance_id") or env_id or "unknown")
                 for i in range(len(group["tokens"])):
+                    # Collect all possible metadata from the group
+                    metadata = {
+                        "env": self.name,
+                        "env_id": env_id,
+                        "logprobs": group.get("logprobs") if group.get("logprobs") is not None else None,
+                        "ref_logprobs": group.get("ref_logprobs") if group.get("ref_logprobs") is not None else None,
+                        "distill_token_ids": group.get("distill_token_ids") if group.get("distill_token_ids") is not None else None,
+                        "distill_logprobs": group.get("distill_logprobs") if group.get("distill_logprobs") is not None else None,
+                        "overrides": group.get("overrides") if group.get("overrides") is not None else None,
+                        "group_overrides": group.get("group_overrides") if group.get("group_overrides") is not None else None,
+                    }
                     self.shm_buffer.write_trajectory(
                         tokens=group["tokens"][i],
                         score=group["scores"][i] if i < len(group["scores"]) else 0.0,
                         instance_id=inst_id,
                         repetition_id=i,
-                        metadata={"env": self.name, "env_id": env_id},
+                        metadata=metadata,
                     )
             return
 
@@ -1078,8 +1089,8 @@ class BaseEnv(ABC):
         Optional: Cleanup the environment
         """
         if self.shm_buffer:
-            logger.info("Cleaning up Universal SHM transport: %s", self.config.shm_name)
-            self.shm_buffer.close(unlink=True)
+            logger.info("Closing Universal SHM transport: %s", self.config.shm_name)
+            self.shm_buffer.close(unlink=False)
 
     @retry(
         stop=stop_after_attempt(3), wait=wait_random_exponential(multiplier=1, max=10)

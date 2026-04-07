@@ -58,12 +58,18 @@ class VLLMServer(APIServer):
                     ) as response:
                         response.raise_for_status()
                 self.server_healthy = True
+                if getattr(self, "_last_health_count", 0) % 60 == 0:
+                    logger.info(f"❤️ VLLM Server is Healthy at {self.config.base_url}")
+                self._last_health_count = getattr(self, "_last_health_count", 0) + 1
             except (
                 aiohttp.ClientError,
                 openai.OpenAIError,
                 openai.APITimeoutError,
                 Exception,
-            ):
+            ) as e:
+                if getattr(self, "_last_error_count", 0) % 60 == 0:
+                    logger.warning(f"💔 VLLM Server Health Check Failed at {self.config.base_url}: {e}")
+                self._last_error_count = getattr(self, "_last_error_count", 0) + 1
                 self.server_healthy = False
             await asyncio.sleep(1)
 
