@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Literal, Optional
 
+from dotenv import load_dotenv
 from pydantic import Field
 
 from atroposlib.envs import StatefulToolEpisodeEnv, StatefulToolEpisodeEnvConfig
@@ -72,6 +73,7 @@ class BrowserbaseEnv(StatefulToolEpisodeEnv):
     env_config_cls = BrowserbaseEnvConfig
 
     def __init__(self, config: BrowserbaseEnvConfig, *args: Any, **kwargs: Any):
+        load_dotenv()
         super().__init__(config, *args, **kwargs)
         self.browserbase_api_key = os.getenv(config.browserbase_api_key_var)
         self.project_id = config.project_id or os.getenv("BROWSERBASE_PROJECT_ID")
