@@ -1,0 +1,24 @@
+env:
+  mode: "dom"
+  dataset_path: "/Users/filipmichalsky/Odyssey/clients/browserbase/atropos/webvoyager_smoke.jsonl"
+  num_examples: 1
+  tokenizer_name: "NousResearch/Hermes-3-Llama-3.1-8B"
+  group_size: 1
+  batch_size: 1
+  total_steps: 1
+  steps_per_eval: 1
+  max_turns: 6
+  include_messages: true
+  use_wandb: false
+  rollout_server_url: "http://localhost:8002"
+  tool_parser: "hermes"
+  proxy_model_to_stagehand: false
+
+openai:
+  - model_name: "NousResearch/Hermes-3-Llama-3.1-8B"
+    base_url: "http://localhost:9001/v1"
+    api_key: "x"
+    server_type: "sglang"
+
+slurm: false
+testing: false
