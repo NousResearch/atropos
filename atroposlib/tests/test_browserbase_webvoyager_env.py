@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
+from atroposlib.envs.base import APIServerConfig
 from environments.browserbase.webvoyager_env import (
     WebVoyagerBrowserbaseEnv,
     WebVoyagerBrowserbaseEnvConfig,
 )
-from atroposlib.envs.base import APIServerConfig
 
 
 class DummyTokenizer:
@@ -42,7 +42,9 @@ class FakeStagehandClient:
 
 
 @pytest.mark.asyncio
-async def test_webvoyager_env_loads_filtered_tasks_and_scores(monkeypatch, tmp_path: Path):
+async def test_webvoyager_env_loads_filtered_tasks_and_scores(
+    monkeypatch, tmp_path: Path
+):
     monkeypatch.setattr(
         "atroposlib.envs.base.AutoTokenizer.from_pretrained",
         lambda _: DummyTokenizer(),
