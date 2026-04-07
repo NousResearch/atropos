@@ -12,6 +12,7 @@ from pydantic import BaseModel, field_validator
 from starlette.datastructures import MutableHeaders
 from starlette.types import Receive, Scope, Send
 
+from atroposlib.api.shm_buffer import ZeroCopySHMBuffer
 from atroposlib.api.utils import (
     find_groups_summing_to_target,
     grab_batch_with_minimum_allocations,
@@ -213,23 +214,13 @@ def _process_scored_data(scored_data: ScoredData) -> Dict[str, Any]:
             buffer = app.state.buffer.setdefault(env_id, [])
             buffer.append(data_dict)
 
-            indices = find_groups_summing_to_target(buffer, expected_group_size)
-
-            if indices:
-                groups_to_add = []
-                for idx in sorted(indices, reverse=True):
-                    groups_to_add.append(buffer.pop(idx))
-
-                for group in reversed(groups_to_add):
-                    app.state.queue.append(group)
-                    app.state.latest = group
-
-            return {
-                "status": "buffered",
-                "buffer_size": sum(
-                    len(group["tokens"]) for group in app.state.buffer.get(env_id, [])
-                ),
-            }
+        if hasattr(app.state, "shm_buffer") and app.state.shm_buffer:
+            for i in range(len(scored_data.tokens)):
+                app.state.shm_buffer.write_trajectory(
+                    tokens=scored_data.tokens[i],
+                    score=scored_data.scores[i],
+                    metadata={"env_id": env_id},
+                )
 
     app.state.queue.append(data_dict)
     app.state.latest = data_dict
@@ -271,12 +262,28 @@ async def register(registration: Registration):
         app.state.envs = []
         app.state.buffer = {}  # Buffer for mixed-size groups per environment
 
-    # Initialize requesters list if not already done
     if not hasattr(app.state, "requesters"):
         app.state.requesters = []
 
     app.state.requesters.append(uuid.uuid4().int)
-    return {"uuid": app.state.requesters[-1]}
+
+    # Pin-hole SHM initialization
+    shm_name = f"atropos_shm_{app.state.group}"
+    try:
+        app.state.shm_buffer = ZeroCopySHMBuffer(
+            name=shm_name,
+            size=app.state.batchsize * 10,
+            entry_size=app.state.max_token_len,
+            create=True,
+        )
+    except Exception as e:
+        logger.error(f"SHM Buffer Init Failed: {e}")
+        app.state.shm_buffer = None
+
+    return {
+        "uuid": app.state.requesters[-1],
+        "shm_handle": shm_name if app.state.shm_buffer else None,
+    }
 
 
 @app.post("/register-env")
