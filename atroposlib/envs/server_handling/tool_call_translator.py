@@ -11,10 +11,26 @@ Inbound (client → model): OpenAI messages with tool roles → raw text for cha
 
 import json
 import logging
+import re
+import uuid
 import warnings
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class FallbackFunctionCall:
+    name: str
+    arguments: str
+
+
+@dataclass
+class FallbackToolCall:
+    id: str
+    function: FallbackFunctionCall
+
 
 # vLLM is optional — tool call parsing degrades gracefully without it
 try:
@@ -71,11 +87,9 @@ class ToolCallTranslator:
 
         if not VLLM_AVAILABLE:
             warnings.warn(
-                "vLLM is not installed — tool call parsing is disabled. "
-                "Install vllm to enable structured tool call extraction from "
-                "model output (pip install vllm). The translator will still "
-                "handle message conversion and template rendering, but "
-                "parse_model_output() will return raw text without parsing.",
+                "vLLM is not installed. Falling back to built-in parsing for "
+                "supported formats like hermes <tool_call> tags. Install vllm "
+                "for broader tool parser coverage.",
                 stacklevel=2,
             )
         else:
@@ -92,7 +106,7 @@ class ToolCallTranslator:
         raw_text: str,
         tool_choice: Optional[str] = None,
         tools: Optional[List[dict]] = None,
-    ) -> Tuple[Optional[str], Optional[List[ToolCall]], str]:
+    ) -> Tuple[Optional[str], Optional[List[Any]], str]:
         """Parse raw model output into OpenAI response fields.
 
         Args:
@@ -111,9 +125,9 @@ class ToolCallTranslator:
         if tool_choice == "none" or not tools:
             return raw_text, None, "stop"
 
-        # If vLLM isn't available, can't parse — return raw text
+        # If vLLM isn't available, try the built-in fallback parser
         if self.parser is None:
-            return raw_text, None, "stop"
+            return self._parse_model_output_fallback(raw_text)
 
         # Build a minimal ChatCompletionRequest for the parser
         request = ChatCompletionRequest(
@@ -135,6 +149,64 @@ class ToolCallTranslator:
             return result.content, result.tool_calls, "tool_calls"
         else:
             return raw_text, None, "stop"
+
+    def _parse_model_output_fallback(
+        self,
+        raw_text: str,
+    ) -> Tuple[Optional[str], Optional[List[FallbackToolCall]], str]:
+        if self.parser_name != "hermes":
+            return raw_text, None, "stop"
+
+        raw_text = raw_text.strip()
+        start_idx = raw_text.find("<tool_call>")
+        if start_idx == -1:
+            return raw_text, None, "stop"
+
+        content_prefix = raw_text[:start_idx].strip() or None
+        body = raw_text[start_idx:]
+        payloads = re.findall(
+            r"<tool_call>\s*(.*?)\s*</tool_call>", body, flags=re.DOTALL
+        )
+
+        # Hermes commonly emits an unclosed final tag on truncation or when
+        # special tokens follow immediately after the JSON payload.
+        if not payloads:
+            match = re.search(
+                r"<tool_call>\s*(.*?)(?:<\|im_end\|>|$)", body, flags=re.DOTALL
+            )
+            if match:
+                payloads = [match.group(1).strip()]
+
+        if not payloads:
+            return raw_text, None, "stop"
+
+        tool_calls: List[FallbackToolCall] = []
+        for payload in payloads:
+            try:
+                data = json.loads(payload)
+            except json.JSONDecodeError:
+                return raw_text, None, "stop"
+
+            if not isinstance(data, dict) or not data.get("name"):
+                return raw_text, None, "stop"
+
+            arguments = data.get("arguments", {})
+            if isinstance(arguments, str):
+                arguments_json = arguments
+            else:
+                arguments_json = json.dumps(arguments)
+
+            tool_call = FallbackToolCall(
+                id=f"call_{uuid.uuid4().hex[:24]}",
+                function=FallbackFunctionCall(
+                    name=str(data["name"]),
+                    arguments=arguments_json,
+                ),
+            )
+            tool_calls.append(tool_call)
+            self.call_id_to_raw_text[tool_call.id] = raw_text
+
+        return content_prefix, tool_calls, "tool_calls"
 
     def reconstruct_raw_text_from_tool_calls(self, tool_calls: List[dict]) -> str:
         """Reconstruct raw model text from OpenAI-format tool_calls.

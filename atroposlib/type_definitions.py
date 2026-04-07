@@ -9,10 +9,13 @@ number = int | float
 UUID = str
 
 
-class Message(TypedDict):
+class Message(TypedDict, total=False):
     role: Literal["system", "user", "assistant", "tool"]
-    content: Content
+    content: Optional[Content]
     reward: Optional[float]
+    tool_calls: List[Dict[str, Any]]
+    tool_call_id: str
+    name: str
 
 
 class AgentStep(TypedDict, total=False):

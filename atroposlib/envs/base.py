@@ -79,6 +79,7 @@ class ScoredDataItem(TypedDict):
     advantages: Optional[List[float]]
     ref_logprobs: Optional[List[float]]
     messages: Optional[List[Message]]
+    inference_logprobs: Optional[List[float]]
     group_overrides: Optional[Dict]
     overrides: Optional[Dict]
     images: Optional[Any]
@@ -360,6 +361,7 @@ class BaseEnv(ABC):
         to_postprocess["scores"] = []
         to_postprocess["advantages"] = []
         to_postprocess["ref_logprobs"] = []
+        to_postprocess["inference_logprobs"] = []
         to_postprocess["messages"] = []
         to_postprocess["group_overrides"] = {}
         to_postprocess["overrides"] = []
@@ -373,6 +375,10 @@ class BaseEnv(ABC):
                 to_postprocess["advantages"].append(result[0]["advantages"])
             if result[0].get("ref_logprobs", None) is not None:
                 to_postprocess["ref_logprobs"].append(result[0]["ref_logprobs"])
+            if result[0].get("inference_logprobs", None) is not None:
+                to_postprocess["inference_logprobs"].append(
+                    result[0]["inference_logprobs"]
+                )
             if result[0].get("messages", None) is not None:
                 to_postprocess["messages"].append(result[0]["messages"])
             if result[0].get("group_overrides", None) is not None:

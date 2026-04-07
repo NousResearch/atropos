@@ -40,7 +40,7 @@ atropos-grpo-run = "example_trainer.run:main"
 
 [project.optional-dependencies]
 all = [
-    "atroposlib[dev,examples,example_trainer]"
+    "atroposlib[dev,examples,example_trainer,browser]"
 ]
 rewardfns = [
     "torch"
@@ -52,7 +52,7 @@ example_trainer = [
     "requests",
 ]
 openai_endpoint = [
-    "vllm",
+    "vllm; sys_platform == 'linux'",
 ]
 dev = [
     "pytest",
@@ -69,9 +69,17 @@ examples = [
     "atroposlib[rewardfns]",
     "langdetect"
 ]
+browser = [
+    "stagehand>=3.0.0",
+    "python-dotenv>=1.0.0",
+    "prime-sandboxes>=0.2.19",
+]
 verifiers = [
     "verifiers==0.1.9.post2"
 ]
+
+[tool.uv]
+no-build-package = ["vllm"]
 
 [build-system]
 requires = ["hatchling"]
