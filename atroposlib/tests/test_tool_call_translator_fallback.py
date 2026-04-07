@@ -16,7 +16,7 @@ def test_hermes_fallback_parses_tool_call_without_vllm():
     translator.parser = None
 
     raw = (
-        '<tool_call>\n'
+        "<tool_call>\n"
         '{"name": "navigate", "arguments": {"url": "https://browserbase.com"}}\n'
         "</tool_call><|im_end|>"
     )

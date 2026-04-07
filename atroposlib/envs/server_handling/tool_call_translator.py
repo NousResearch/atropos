@@ -31,6 +31,7 @@ class FallbackToolCall:
     id: str
     function: FallbackFunctionCall
 
+
 # vLLM is optional — tool call parsing degrades gracefully without it
 try:
     from vllm.entrypoints.openai.chat_completion.protocol import (
@@ -163,12 +164,16 @@ class ToolCallTranslator:
 
         content_prefix = raw_text[:start_idx].strip() or None
         body = raw_text[start_idx:]
-        payloads = re.findall(r"<tool_call>\s*(.*?)\s*</tool_call>", body, flags=re.DOTALL)
+        payloads = re.findall(
+            r"<tool_call>\s*(.*?)\s*</tool_call>", body, flags=re.DOTALL
+        )
 
         # Hermes commonly emits an unclosed final tag on truncation or when
         # special tokens follow immediately after the JSON payload.
         if not payloads:
-            match = re.search(r"<tool_call>\s*(.*?)(?:<\|im_end\|>|$)", body, flags=re.DOTALL)
+            match = re.search(
+                r"<tool_call>\s*(.*?)(?:<\|im_end\|>|$)", body, flags=re.DOTALL
+            )
             if match:
                 payloads = [match.group(1).strip()]
 
