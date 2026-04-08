@@ -3,8 +3,8 @@ import warnings
 
 import aiohttp
 
-from atroposlib.envs.server_handling.sglang_server import SGLangServer
 from atroposlib.envs.server_handling.server_baseline import APIServerConfig
+from atroposlib.envs.server_handling.sglang_server import SGLangServer
 
 
 class StatefulSGLangServer(SGLangServer):
@@ -14,7 +14,6 @@ class StatefulSGLangServer(SGLangServer):
     Includes auto-rebuild for cache-miss resilience.
     """
 
-    
     def __init__(self, config: APIServerConfig, reasoning_config=None):
         super().__init__(config, reasoning_config=reasoning_config)
         self._session = None
@@ -26,12 +25,19 @@ class StatefulSGLangServer(SGLangServer):
             )
         return self._session
 
-    async def _tokens_and_logprobs_completion_wrapper(self, **kwargs) -> tuple[list, list, list, list]:
+    async def _tokens_and_logprobs_completion_wrapper(
+        self, **kwargs
+    ) -> tuple[list, list, list, list]:
         """
         Interacts with SGLang /generate via raw HTTP, optimized for stateful deltas.
         """
-        assert kwargs.get("model", None) is not None, "Model is required for completion!"
-        assert kwargs.get("prompt", None) is not None or kwargs.get("input_ids", None) is not None, "Prompt or input_ids is required!"
+        assert (
+            kwargs.get("model", None) is not None
+        ), "Model is required for completion!"
+        assert (
+            kwargs.get("prompt", None) is not None
+            or kwargs.get("input_ids", None) is not None
+        ), "Prompt or input_ids is required!"
 
         if "input_ids" in kwargs:
             prompt_tokens_full = kwargs.pop("input_ids")
@@ -40,14 +46,19 @@ class StatefulSGLangServer(SGLangServer):
             prompt_tokens_full = self.tokenizer.encode(kwargs.pop("prompt"))
 
         # Clean double BOS if needed
-        if len(prompt_tokens_full) >= 2 and prompt_tokens_full[0] == self.tokenizer.bos_token_id == prompt_tokens_full[1]:
+        if (
+            len(prompt_tokens_full) >= 2
+            and prompt_tokens_full[0]
+            == self.tokenizer.bos_token_id
+            == prompt_tokens_full[1]
+        ):
             prompt_tokens_full = prompt_tokens_full[1:]
 
         if "max_tokens" in kwargs:
             kwargs["max_new_tokens"] = kwargs.pop("max_tokens")
         if "model" in kwargs:
             kwargs.pop("model")
-            
+
         # Extract new tokens (delta) if this is a continuation.
         is_delta_request = False
         if "delta_input_ids" in kwargs:
@@ -68,7 +79,11 @@ class StatefulSGLangServer(SGLangServer):
             async with session.post(
                 f"{self.config.base_url.replace('/v1', '')}/generate",
                 json=payload,
-                headers={"Authorization": f"Bearer {self.config.api_key}"} if self.config.api_key else {},
+                headers=(
+                    {"Authorization": f"Bearer {self.config.api_key}"}
+                    if self.config.api_key
+                    else {}
+                ),
             ) as response:
                 response.raise_for_status()
                 return await response.json()
@@ -77,12 +92,13 @@ class StatefulSGLangServer(SGLangServer):
             results = await fetch_generate(request_data)
         except Exception as e:
             if is_delta_request:
-                warnings.warn(f"Stateful request backfired ({e}). Attempting stateless fallback...")
+                warnings.warn(
+                    f"Stateful request backfired ({e}). Attempting stateless fallback..."
+                )
                 request_data["input_ids"] = prompt_tokens_full
                 results = await fetch_generate(request_data)
             else:
                 raise e
-
 
         if not isinstance(results, list):
             results = [results]
@@ -102,4 +118,9 @@ class StatefulSGLangServer(SGLangServer):
             output_logprobs_list.append(logprobs)
             finish_reasons_list.append(finish_reason)
 
-        return (prompt_tokens_full, output_tokens_list, output_logprobs_list, finish_reasons_list)
+        return (
+            prompt_tokens_full,
+            output_tokens_list,
+            output_logprobs_list,
+            finish_reasons_list,
+        )

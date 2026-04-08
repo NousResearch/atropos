@@ -54,7 +54,6 @@ class SGLangServer(APIServer):
                 self.server_healthy = False
             await asyncio.sleep(2)  # Check every 2 seconds
 
-
     async def _chat_completion_wrapper(self, **kwargs) -> ChatCompletion:
         """
         Wrapper for the chat completion using the openai client.

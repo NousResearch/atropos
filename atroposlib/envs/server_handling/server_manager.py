@@ -14,6 +14,7 @@ from atroposlib.envs.server_handling.managed_server import (
     ManagedServer,
 )
 from atroposlib.envs.server_handling.openai_server import OpenAIServer
+from atroposlib.envs.server_handling.routing_utils import get_consistent_worker_index
 from atroposlib.envs.server_handling.server_baseline import (
     APIServer,
     APIServerConfig,
@@ -25,7 +26,6 @@ from atroposlib.envs.server_handling.sglang_server import SGLangServer
 from atroposlib.envs.server_handling.sglang_stateful_server import StatefulSGLangServer
 from atroposlib.envs.server_handling.trl_vllm_server import TrlVllmServer
 from atroposlib.envs.server_handling.vllm_server import VLLMServer
-from atroposlib.envs.server_handling.routing_utils import get_consistent_worker_index
 
 
 class ServerManagerConfig(BaseModel):
@@ -491,14 +491,14 @@ class ServerManager:
         # -- In-process path (existing logic) --
         # -- In-process path (existing logic + pinning fix) --
         selected_server = None
-        
+
         # Resolve base_url from session_id
         if session_id and not base_url and self.servers:
             import hashlib
-            hash_str = hashlib.md5(session_id.encode('utf-8')).hexdigest()
+
+            hash_str = hashlib.md5(session_id.encode("utf-8")).hexdigest()
             idx = get_consistent_worker_index(hash_str, len(self.servers))
             base_url = self.servers[idx].config.base_url
-
 
         # Attempt to pin to base_url with retries
         if base_url:
@@ -509,21 +509,18 @@ class ServerManager:
                             selected_server = server
                             break
                         break
-                
+
                 if selected_server:
                     break
-                    
+
                 if attempt < 2:
                     await asyncio.sleep(0.1)
 
-
-            
             if selected_server is None:
                 warnings.warn(
                     f"Requested pinned base_url '{base_url}' is not healthy or not found "
                     "after 3 attempts. Falling back to most available server."
                 )
-
 
         # 2. Fallback to most available if no pin or pin failed
         if selected_server is None:
@@ -535,13 +532,12 @@ class ServerManager:
                 if server.sem._value > most_available_server_num_slots:
                     most_available_server = i
                     most_available_server_num_slots = server.sem._value
-            
+
             if most_available_server_num_slots != -1:
                 selected_server = self.servers[most_available_server]
             else:
                 # Edge case: No healthy servers
                 selected_server = self.servers[0]
-
 
         # Handle OpenAI servers separately - they don't support token IDs/logprobs
         if isinstance(selected_server, OpenAIServer):
