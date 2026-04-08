@@ -506,16 +506,32 @@ class ServerManager:
 
         # 1. Attempt to pin to requested base_url
         if base_url:
-            for server in self.servers:
-                if server.server_healthy and server.config.base_url == base_url:
-                    selected_server = server
+            # We add a small retry loop for pinning health checks to avoid "flapping" fallbacks
+            # especially during high load where a background health check might briefly fail.
+            for attempt in range(3):
+                # Optimization: Check if target server is healthy immediately
+                for server in self.servers:
+                    if server.config.base_url == base_url:
+                        if server.server_healthy:
+                            selected_server = server
+                            break
+                        # If we found it but it's not healthy, we'll try again after sleep
+                        break
+                
+                if selected_server:
                     break
+                    
+                # Only sleep if we actually need to wait for a health loop update
+                if attempt < 2:
+                    await asyncio.sleep(0.1)  # Reduce sleep to 100ms
+
             
             if selected_server is None:
                 warnings.warn(
-                    f"Requested pinned base_url '{base_url}' is not healthy or not found. "
-                    "Falling back to most available server."
+                    f"Requested pinned base_url '{base_url}' is not healthy or not found "
+                    "after 3 attempts. Falling back to most available server."
                 )
+
 
         # 2. Fallback to most available if no pin or pin failed
         if selected_server is None:

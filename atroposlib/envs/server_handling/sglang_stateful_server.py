@@ -19,7 +19,15 @@ class StatefulSGLangServer(SGLangServer):
     
     def __init__(self, config: APIServerConfig, reasoning_config=None):
         super().__init__(config, reasoning_config=reasoning_config)
-    
+        self._session = None
+
+    async def _get_session(self):
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self.config.timeout)
+            )
+        return self._session
+
     async def _tokens_and_logprobs_completion_wrapper(self, **kwargs) -> tuple[list, list, list, list]:
         """
         Interacts with SGLang /generate via raw HTTP, optimized for stateful deltas.
@@ -43,8 +51,6 @@ class StatefulSGLangServer(SGLangServer):
             kwargs.pop("model")
             
         # Extract new tokens (delta) if this is a continuation.
-        # If 'delta_input_ids' is in kwargs (set by ManagedServer), use that.
-        # Otherwise, fall back to the full prompt.
         is_delta_request = False
         if "delta_input_ids" in kwargs:
             payload_input_ids = kwargs.pop("delta_input_ids")
@@ -60,29 +66,25 @@ class StatefulSGLangServer(SGLangServer):
         }
 
         async def fetch_generate(payload):
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.config.base_url.replace('/v1', '')}/generate",
-                    json=payload,
-                    headers={"Authorization": f"Bearer {self.config.api_key}"} if self.config.api_key else {},
-                    timeout=aiohttp.ClientTimeout(total=self.config.timeout),
-                ) as response:
-                    # If it's a 4xx error (like cache miss on a stateful extension), 
-                    # we want to raise so we can catch it.
-                    response.raise_for_status()
-                    return await response.json()
+            session = await self._get_session()
+            async with session.post(
+                f"{self.config.base_url.replace('/v1', '')}/generate",
+                json=payload,
+                headers={"Authorization": f"Bearer {self.config.api_key}"} if self.config.api_key else {},
+            ) as response:
+                response.raise_for_status()
+                return await response.json()
 
         try:
             results = await fetch_generate(request_data)
         except Exception as e:
             if is_delta_request:
-                warnings.warn(f"Stateful request to SGLang failed ({e}). Attempting stateless fallback rebuild...")
-                # Stateless Rebuild: Send the full history because the worker cache was evicted or unavailable.
+                warnings.warn(f"Stateful request backfired ({e}). Attempting stateless fallback...")
                 request_data["input_ids"] = prompt_tokens_full
                 results = await fetch_generate(request_data)
             else:
-                # If it wasn't a delta request and it failed, throw it up.
                 raise e
+
 
         if not isinstance(results, list):
             results = [results]

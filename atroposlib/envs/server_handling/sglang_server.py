@@ -40,29 +40,20 @@ class SGLangServer(APIServer):
         super().__init__(config, reasoning_config=reasoning_config)
 
     async def check_server_status_task(self, chat_completion: bool = True):
+        # Use a lightweight HTTP GET for health instead of a full inference call.
+        health_url = f"{self.config.base_url.replace('/v1', '')}/health"
         while True:
             try:
-                if chat_completion:
-                    await self.openai.chat.completions.create(
-                        model=self.config.model_name,
-                        messages=[{"role": "user", "content": "hi"}],
-                        max_tokens=1,
-                    )
-                else:
-                    await self.openai.completions.create(
-                        model=self.config.model_name,
-                        prompt="hi",
-                        max_tokens=1,
-                    )
-                self.server_healthy = True
-            except (
-                aiohttp.ClientError,
-                openai.OpenAIError,
-                openai.APITimeoutError,
-                Exception,
-            ):
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(health_url, timeout=5) as response:
+                        if response.status == 200:
+                            self.server_healthy = True
+                        else:
+                            self.server_healthy = False
+            except Exception:
                 self.server_healthy = False
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)  # Check every 2 seconds
+
 
     async def _chat_completion_wrapper(self, **kwargs) -> ChatCompletion:
         """
