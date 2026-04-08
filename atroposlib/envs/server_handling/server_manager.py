@@ -485,16 +485,39 @@ class ServerManager:
             return
 
         # -- In-process path (existing logic) --
-        most_available_server = 0
-        most_available_server_num_slots = -1
-        for i, server in enumerate(self.servers):
-            if not server.server_healthy:
-                continue
-            if server.sem._value > most_available_server_num_slots:
-                most_available_server = i
-                most_available_server_num_slots = server.sem._value
+        # -- In-process path (existing logic + pinning fix) --
+        selected_server = None
+        
+        # 1. Attempt to pin to requested base_url
+        if base_url:
+            for server in self.servers:
+                if server.server_healthy and server.config.base_url == base_url:
+                    selected_server = server
+                    break
+            
+            if selected_server is None:
+                warnings.warn(
+                    f"Requested pinned base_url '{base_url}' is not healthy or not found. "
+                    "Falling back to most available server."
+                )
 
-        selected_server = self.servers[most_available_server]
+        # 2. Fallback to most available if no pin or pin failed
+        if selected_server is None:
+            most_available_server = 0
+            most_available_server_num_slots = -1
+            for i, server in enumerate(self.servers):
+                if not server.server_healthy:
+                    continue
+                if server.sem._value > most_available_server_num_slots:
+                    most_available_server = i
+                    most_available_server_num_slots = server.sem._value
+            
+            if most_available_server_num_slots != -1:
+                selected_server = self.servers[most_available_server]
+            else:
+                # Edge case: No healthy servers
+                selected_server = self.servers[0]
+
 
         # Handle OpenAI servers separately - they don't support token IDs/logprobs
         if isinstance(selected_server, OpenAIServer):
