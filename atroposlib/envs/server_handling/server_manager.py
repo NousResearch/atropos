@@ -22,8 +22,10 @@ from atroposlib.envs.server_handling.server_baseline import (
 )
 from atroposlib.envs.server_handling.server_harness import ServerHarness
 from atroposlib.envs.server_handling.sglang_server import SGLangServer
+from atroposlib.envs.server_handling.sglang_stateful_server import StatefulSGLangServer
 from atroposlib.envs.server_handling.trl_vllm_server import TrlVllmServer
 from atroposlib.envs.server_handling.vllm_server import VLLMServer
+from atroposlib.envs.server_handling.routing_utils import get_consistent_worker_index
 
 
 class ServerManagerConfig(BaseModel):
@@ -82,7 +84,7 @@ class ServerManager:
                 elif configs.server_type == "trl":
                     server_class = TrlVllmServer
                 elif configs.server_type == "sglang":
-                    server_class = SGLangServer
+                    server_class = StatefulSGLangServer
                 elif configs.server_type == "vllm":
                     server_class = VLLMServer
                 else:
@@ -93,7 +95,7 @@ class ServerManager:
                 elif configs[0].server_type == "trl":
                     server_class = TrlVllmServer
                 elif configs[0].server_type == "sglang":
-                    server_class = SGLangServer
+                    server_class = StatefulSGLangServer
                 elif configs[0].server_type == "vllm":
                     server_class = VLLMServer
                 else:
@@ -410,6 +412,7 @@ class ServerManager:
         self,
         tokenizer=None,
         base_url: Optional[str] = None,
+        session_id: Optional[str] = None,
         preserve_think_blocks: bool = False,
     ):
         """
@@ -427,6 +430,9 @@ class ServerManager:
                         extract from server or create from model name.
             base_url: Pin the session to a specific backend server by its base_url.
                         In production, this comes from the atropos API's server allocation.
+            session_id: A unique identifier or prefix hash for the conversation. 
+                        If provided (and base_url is not), applies consistent hashing to 
+                        automatically resolve to a specific worker.
             preserve_think_blocks: If True, preserves <think> blocks in assistant messages,
                         which are sometimes stripped by chat templates. Defaults to False.
                         Usually not needed, since the chat template should be configured
@@ -488,6 +494,16 @@ class ServerManager:
         # -- In-process path (existing logic + pinning fix) --
         selected_server = None
         
+        # 0. Automatically resolve base_url from session_id if provided
+        if session_id and not base_url and self.servers:
+            import hashlib
+            
+            # Simple MD5 integer representation for consistent hashing
+            hash_str = hashlib.md5(session_id.encode('utf-8')).hexdigest()
+            # We already imported get_consistent_worker_index at the top
+            idx = get_consistent_worker_index(hash_str, len(self.servers))
+            base_url = self.servers[idx].config.base_url
+
         # 1. Attempt to pin to requested base_url
         if base_url:
             for server in self.servers:
