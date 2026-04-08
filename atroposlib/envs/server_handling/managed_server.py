@@ -447,6 +447,13 @@ class ManagedServer:
         if not self.track_tree and self.tokenizer is not None:
             input_ids = self._compute_input_ids(prompt, extending_node)
             completion_kwargs["input_ids"] = input_ids
+            
+            # If we are extending an existing node, pass the delta tokens so stateful
+            # servers can optimize the network payload (Delta-Sync).
+            if extending_node is not None:
+                existing_len = len(extending_node.tokens)
+                completion_kwargs["delta_input_ids"] = input_ids[existing_len:]
+
 
         # Call the tokens and logprobs wrapper directly
         (
