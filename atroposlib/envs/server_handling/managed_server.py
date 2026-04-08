@@ -443,10 +443,14 @@ class ManagedServer:
         if "model" not in completion_kwargs:
             completion_kwargs["model"] = self.server.config.model_name
 
-        # Compute input_ids (using existing tokens if extending)
+        # State-aware input_ids computation
         if not self.track_tree and self.tokenizer is not None:
             input_ids = self._compute_input_ids(prompt, extending_node)
             completion_kwargs["input_ids"] = input_ids
+
+            if extending_node is not None:
+                existing_len = len(extending_node.tokens)
+                completion_kwargs["delta_input_ids"] = input_ids[existing_len:]
 
         # Call the tokens and logprobs wrapper directly
         (

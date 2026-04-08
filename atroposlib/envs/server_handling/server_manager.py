@@ -14,6 +14,7 @@ from atroposlib.envs.server_handling.managed_server import (
     ManagedServer,
 )
 from atroposlib.envs.server_handling.openai_server import OpenAIServer
+from atroposlib.envs.server_handling.routing_utils import get_consistent_worker_index
 from atroposlib.envs.server_handling.server_baseline import (
     APIServer,
     APIServerConfig,
@@ -22,6 +23,7 @@ from atroposlib.envs.server_handling.server_baseline import (
 )
 from atroposlib.envs.server_handling.server_harness import ServerHarness
 from atroposlib.envs.server_handling.sglang_server import SGLangServer
+from atroposlib.envs.server_handling.sglang_stateful_server import StatefulSGLangServer
 from atroposlib.envs.server_handling.trl_vllm_server import TrlVllmServer
 from atroposlib.envs.server_handling.vllm_server import VLLMServer
 
@@ -72,17 +74,16 @@ class ServerManager:
         self.use_proxy = use_proxy or bool(self.proxy_url)
         # Tool parser — passed to ManagedServer for tool call support
         self.tool_parser = tool_parser
-        # First we check to see if it's the base server class, and if so, we need to select the appropriate server class
-        # You can't use type() to check if it's the base server class, because it's an abstract class, it'll appear as
-        # an ABCMeta, not what you're expecting.
+        # Select appropriate server class if not explicitly provided
         if inspect.isabstract(server_class):
+
             if not isinstance(configs, list):
                 if configs.server_type == "openai":
                     server_class = OpenAIServer
                 elif configs.server_type == "trl":
                     server_class = TrlVllmServer
                 elif configs.server_type == "sglang":
-                    server_class = SGLangServer
+                    server_class = StatefulSGLangServer
                 elif configs.server_type == "vllm":
                     server_class = VLLMServer
                 else:
@@ -93,7 +94,7 @@ class ServerManager:
                 elif configs[0].server_type == "trl":
                     server_class = TrlVllmServer
                 elif configs[0].server_type == "sglang":
-                    server_class = SGLangServer
+                    server_class = StatefulSGLangServer
                 elif configs[0].server_type == "vllm":
                     server_class = VLLMServer
                 else:
@@ -410,6 +411,7 @@ class ServerManager:
         self,
         tokenizer=None,
         base_url: Optional[str] = None,
+        session_id: Optional[str] = None,
         preserve_think_blocks: bool = False,
     ):
         """
@@ -427,6 +429,8 @@ class ServerManager:
                         extract from server or create from model name.
             base_url: Pin the session to a specific backend server by its base_url.
                         In production, this comes from the atropos API's server allocation.
+            session_id: Session ID or prefix hash for pinning.
+
             preserve_think_blocks: If True, preserves <think> blocks in assistant messages,
                         which are sometimes stripped by chat templates. Defaults to False.
                         Usually not needed, since the chat template should be configured
@@ -485,16 +489,55 @@ class ServerManager:
             return
 
         # -- In-process path (existing logic) --
-        most_available_server = 0
-        most_available_server_num_slots = -1
-        for i, server in enumerate(self.servers):
-            if not server.server_healthy:
-                continue
-            if server.sem._value > most_available_server_num_slots:
-                most_available_server = i
-                most_available_server_num_slots = server.sem._value
+        # -- In-process path (existing logic + pinning fix) --
+        selected_server = None
 
-        selected_server = self.servers[most_available_server]
+        # Resolve base_url from session_id
+        if session_id and not base_url and self.servers:
+            import hashlib
+
+            hash_str = hashlib.md5(session_id.encode("utf-8")).hexdigest()
+            idx = get_consistent_worker_index(hash_str, len(self.servers))
+            base_url = self.servers[idx].config.base_url
+
+        # Attempt to pin to base_url with retries
+        if base_url:
+            for attempt in range(3):
+                for server in self.servers:
+                    if server.config.base_url == base_url:
+                        if server.server_healthy:
+                            selected_server = server
+                            break
+                        break
+
+                if selected_server:
+                    break
+
+                if attempt < 2:
+                    await asyncio.sleep(0.1)
+
+            if selected_server is None:
+                warnings.warn(
+                    f"Requested pinned base_url '{base_url}' is not healthy or not found "
+                    "after 3 attempts. Falling back to most available server."
+                )
+
+        # 2. Fallback to most available if no pin or pin failed
+        if selected_server is None:
+            most_available_server = 0
+            most_available_server_num_slots = -1
+            for i, server in enumerate(self.servers):
+                if not server.server_healthy:
+                    continue
+                if server.sem._value > most_available_server_num_slots:
+                    most_available_server = i
+                    most_available_server_num_slots = server.sem._value
+
+            if most_available_server_num_slots != -1:
+                selected_server = self.servers[most_available_server]
+            else:
+                # Edge case: No healthy servers
+                selected_server = self.servers[0]
 
         # Handle OpenAI servers separately - they don't support token IDs/logprobs
         if isinstance(selected_server, OpenAIServer):
