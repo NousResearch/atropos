@@ -40,7 +40,7 @@ class SGLangServer(APIServer):
         super().__init__(config, reasoning_config=reasoning_config)
 
     async def check_server_status_task(self, chat_completion: bool = True):
-        # Use a lightweight HTTP GET for health instead of a full inference call.
+
         health_url = f"{self.config.base_url.replace('/v1', '')}/health"
         while True:
             try:

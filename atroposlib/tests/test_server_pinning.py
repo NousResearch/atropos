@@ -14,7 +14,8 @@ from atroposlib.envs.server_handling.server_baseline import APIServer
 class MockConfig(APIServerConfig):
     base_url: str = "http://localhost:1111"
     model_name: str = "test-model"
-    server_type: str = "sglang" # Use sglang to bypass OpenAI restrictions
+    server_type: str = "sglang"
+
 
 class MockServer(APIServer):
     def __init__(self, config, reasoning_config=None):
@@ -37,22 +38,22 @@ class TestServerPinning(unittest.IsolatedAsyncioTestCase):
         self.config2 = MockConfig(base_url="http://worker-2:8000", server_type="openai")
         self.config3 = MockConfig(base_url="http://worker-3:8000", server_type="openai")
         
-        # Test ServerManager initialization
         self.manager = ServerManager(
             configs=[self.config1, self.config2, self.config3],
-            server_class=MockServer,
-            testing=False,
-            slurm=False
+            server_class=MockServer
         )
 
+
     async def test_managed_server_pinning_respects_base_url(self):
-        """Verify that managed_server strictly follows a base_url pin."""
+        """Verify managed_server follows base_url pin."""
+
         # Make worker-2 very busy (fewest slots available)
         self.manager.servers[0].sem = asyncio.Semaphore(10)
         self.manager.servers[1].sem = asyncio.Semaphore(1)  # worker-2
         self.manager.servers[2].sem = asyncio.Semaphore(10)
 
-        # Attempt to pin to worker-2
+        # Pin to worker-2
+
         target_url = "http://worker-2:8000"
         async with self.manager.managed_server(base_url=target_url, tokenizer=DummyTokenizer()) as managed:
             self.assertEqual(
@@ -62,7 +63,8 @@ class TestServerPinning(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_managed_server_pinning_fallback(self):
-        """Verify fallback behavior when pinned base_url is unhealthy/invalid."""
+        """Verify fallback when pin is invalid."""
+
         self.manager.servers[0].sem = asyncio.Semaphore(5)
         self.manager.servers[1].sem = asyncio.Semaphore(10) # worker-2 (most available)
         self.manager.servers[2].sem = asyncio.Semaphore(2)
@@ -78,7 +80,8 @@ class TestServerPinning(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_managed_server_session_id_mapping(self):
-        """Verify that session_id accurately maps to a specific server over most available."""
+        """Verify deterministic session_id hashing."""
+
         # Make all servers equally available so we can trust the hash determinism
         self.manager.servers[0].sem = asyncio.Semaphore(10)
         self.manager.servers[1].sem = asyncio.Semaphore(10)
@@ -98,7 +101,8 @@ class TestServerPinning(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(url_1, url_2, "Session ID mapping should be deterministic.")
 
     async def test_managed_server_unhealthy_fallback(self):
-        """Verify fallback behavior when pinned base_url is unhealthy."""
+        """Verify fallback when pinned worker is unhealthy."""
+
         # Make worker-1 targetted but unhealthy
         self.manager.servers[0].server_healthy = False
         

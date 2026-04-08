@@ -74,10 +74,9 @@ class ServerManager:
         self.use_proxy = use_proxy or bool(self.proxy_url)
         # Tool parser — passed to ManagedServer for tool call support
         self.tool_parser = tool_parser
-        # First we check to see if it's the base server class, and if so, we need to select the appropriate server class
-        # You can't use type() to check if it's the base server class, because it's an abstract class, it'll appear as
-        # an ABCMeta, not what you're expecting.
+        # Select appropriate server class if not explicitly provided
         if inspect.isabstract(server_class):
+
             if not isinstance(configs, list):
                 if configs.server_type == "openai":
                     server_class = OpenAIServer
@@ -430,9 +429,8 @@ class ServerManager:
                         extract from server or create from model name.
             base_url: Pin the session to a specific backend server by its base_url.
                         In production, this comes from the atropos API's server allocation.
-            session_id: A unique identifier or prefix hash for the conversation. 
-                        If provided (and base_url is not), applies consistent hashing to 
-                        automatically resolve to a specific worker.
+            session_id: Session ID or prefix hash for pinning.
+
             preserve_think_blocks: If True, preserves <think> blocks in assistant messages,
                         which are sometimes stripped by chat templates. Defaults to False.
                         Usually not needed, since the chat template should be configured
@@ -494,36 +492,30 @@ class ServerManager:
         # -- In-process path (existing logic + pinning fix) --
         selected_server = None
         
-        # 0. Automatically resolve base_url from session_id if provided
+        # Resolve base_url from session_id
         if session_id and not base_url and self.servers:
             import hashlib
-            
-            # Simple MD5 integer representation for consistent hashing
             hash_str = hashlib.md5(session_id.encode('utf-8')).hexdigest()
-            # We already imported get_consistent_worker_index at the top
             idx = get_consistent_worker_index(hash_str, len(self.servers))
             base_url = self.servers[idx].config.base_url
 
-        # 1. Attempt to pin to requested base_url
+
+        # Attempt to pin to base_url with retries
         if base_url:
-            # We add a small retry loop for pinning health checks to avoid "flapping" fallbacks
-            # especially during high load where a background health check might briefly fail.
             for attempt in range(3):
-                # Optimization: Check if target server is healthy immediately
                 for server in self.servers:
                     if server.config.base_url == base_url:
                         if server.server_healthy:
                             selected_server = server
                             break
-                        # If we found it but it's not healthy, we'll try again after sleep
                         break
                 
                 if selected_server:
                     break
                     
-                # Only sleep if we actually need to wait for a health loop update
                 if attempt < 2:
-                    await asyncio.sleep(0.1)  # Reduce sleep to 100ms
+                    await asyncio.sleep(0.1)
+
 
             
             if selected_server is None:

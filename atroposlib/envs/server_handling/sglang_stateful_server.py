@@ -9,13 +9,11 @@ from atroposlib.envs.server_handling.server_baseline import APIServerConfig
 
 class StatefulSGLangServer(SGLangServer):
     """
-    Stateful extension of SGLangServer.
-    
-    Implements a Delta-Sync protocol where only the *new* tokens are sent to the
-    backend worker, assuming the worker's RadixAttention cache retains the history.
-    It includes an Auto-Rebuild handler to transparently catch cache-misses and
-    reconstruct the server-side state.
+    SGLangServer extension for stateful Delta-Sync protocol.
+    Optimizes network payload by sending only token deltas.
+    Includes auto-rebuild for cache-miss resilience.
     """
+
     
     def __init__(self, config: APIServerConfig, reasoning_config=None):
         super().__init__(config, reasoning_config=reasoning_config)
