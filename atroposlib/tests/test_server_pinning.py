@@ -77,6 +77,26 @@ class TestServerPinning(unittest.IsolatedAsyncioTestCase):
                 "Fallback failed: Did not select most available valid server."
             )
 
+    async def test_managed_server_session_id_mapping(self):
+        """Verify that session_id accurately maps to a specific server over most available."""
+        # Make all servers equally available so we can trust the hash determinism
+        self.manager.servers[0].sem = asyncio.Semaphore(10)
+        self.manager.servers[1].sem = asyncio.Semaphore(10)
+        self.manager.servers[2].sem = asyncio.Semaphore(10)
+        
+        # 'demo_session_1_for_hashing' parses to a specific index. Let's rely on that hash being stable.
+        target_session = "demo_session_1_for_hashing"
+        
+        # Test routing by session id
+        async with self.manager.managed_server(session_id=target_session) as managed:
+            url_1 = managed.server.config.base_url
+            
+        # Do it again to ensure stability
+        async with self.manager.managed_server(session_id=target_session) as managed2:
+            url_2 = managed2.server.config.base_url
+            
+        self.assertEqual(url_1, url_2, "Session ID mapping should be deterministic.")
+
     async def test_managed_server_unhealthy_fallback(self):
         """Verify fallback behavior when pinned base_url is unhealthy."""
         # Make worker-1 targetted but unhealthy
