@@ -234,7 +234,7 @@ class BaseEnv(ABC):
         self.failed_task_duration = list()
         self.task_duration = list()
         self.mainloop_timings = list()
-        self.successful_tasks = list()
+        self.task_successful = list()
         self.last_loop_time = None
         self.last_completed_item = None
         self.config = config
