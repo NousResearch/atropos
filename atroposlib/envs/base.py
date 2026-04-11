@@ -276,6 +276,10 @@ class BaseEnv(ABC):
             Path(self.config.data_path_to_save_groups).parent.mkdir(
                 parents=True, exist_ok=True
             )
+            # Find a suitable filename by appending _1, _2, etc. if the file already exists
+            original_path = self.config.data_path_to_save_groups
+            counter = 1
+            path_changed = False
             while os.path.exists(self.config.data_path_to_save_groups):
                 path_obj = Path(original_path)
                 self.config.data_path_to_save_groups = str(
