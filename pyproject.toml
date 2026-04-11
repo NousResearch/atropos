@@ -35,6 +35,7 @@ view-run = "atroposlib.cli.view_run:main"
 view-run-multimodal = "atroposlib.cli.view_run_multimodal:main"
 atropos-sft-gen = "atroposlib.cli.sft:main"
 atropos-dpo-gen = "atroposlib.cli.dpo:main"
+atropos-orchestrate = "atroposlib.cli.orchestrate:main"
 atropos-grpo = "example_trainer.grpo:main"
 atropos-grpo-run = "example_trainer.run:main"
 

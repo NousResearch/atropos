@@ -84,7 +84,7 @@ class GZipRequestMiddleware:
 
         sent = False
 
-        # needed some odd logic here to handle gzip stream so just returning an empty body
+        # Handle gzip stream by returning empty body after first send
         async def new_receive():
             nonlocal sent
             if sent:
@@ -200,6 +200,8 @@ def _process_scored_data(scored_data: ScoredData) -> Dict[str, Any]:
         app.state.queue = []
     if not hasattr(app.state, "buffer"):
         app.state.buffer = {}
+    if not hasattr(app.state, "total_rollouts_processed"):
+        app.state.total_rollouts_processed = 0
 
     data_dict = _scored_data_to_dict(scored_data)
     env_id = data_dict.get("env_id")
@@ -233,6 +235,8 @@ def _process_scored_data(scored_data: ScoredData) -> Dict[str, Any]:
 
     app.state.queue.append(data_dict)
     app.state.latest = data_dict
+    if hasattr(app.state, "total_rollouts_processed"):
+        app.state.total_rollouts_processed += 1
     return {"status": "received"}
 
 
@@ -253,6 +257,19 @@ class Info(BaseModel):
     batch_size: int = -1
 
 
+class GlobalStatus(BaseModel):
+    """
+    Basemodel for global orchestration metrics
+    """
+
+    current_step: int
+    queue_size: int
+    total_rollouts_processed: int
+    unallocated_fraction: float
+    num_connected_envs: int
+    batch_size: int
+
+
 @app.post("/register")
 async def register(registration: Registration):
     # Initialize app state if not already done
@@ -269,7 +286,8 @@ async def register(registration: Registration):
         app.state.curr_batch = []
         app.state.started = False
         app.state.envs = []
-        app.state.buffer = {}  # Buffer for mixed-size groups per environment
+        app.state.buffer = {}  # Mixed-size group buffer
+        app.state.total_rollouts_processed = 0
 
     # Initialize requesters list if not already done
     if not hasattr(app.state, "requesters"):
@@ -281,10 +299,10 @@ async def register(registration: Registration):
 
 @app.post("/register-env")
 async def register_env_url(register_env: RegisterEnv):
-    # Check if trainer has started
-    if not hasattr(app.state, "started") or not app.state.started:
+    # Check if trainer has registered
+    if not hasattr(app.state, "queue"):
         return {
-            "status": "wait for trainer to start",
+            "status": "wait for trainer to register",
         }
 
     # Initialize envs list if not already done
@@ -461,11 +479,49 @@ async def scored_data_list(scored_data_list: List[ScoredData]):
 async def get_status():
     try:
         return {
-            "current_step": app.state.status_dict["step"],
+            "current_step": app.state.status_dict.get("step", 0),
             "queue_size": len(app.state.queue),
         }
     except AttributeError:
         return {"current_step": 0, "queue_size": 0}
+
+
+@app.get("/global-status", response_model=GlobalStatus)
+async def get_global_status():
+    """
+    Returns global metrics for the Elastic Orchestrator to monitor workload pressure.
+    """
+    try:
+        # Calculate total unallocated fraction
+        total_min_allocation = 0.0
+        connected_envs = 0
+        for env_config in getattr(app.state, "envs", []):
+            if env_config.get("connected", False):
+                connected_envs += 1
+                if env_config.get("min_batch_allocation") is not None:
+                    total_min_allocation += env_config["min_batch_allocation"]
+
+        unallocated_fraction = 1.0 - min(total_min_allocation, 1.0)
+
+        return {
+            "current_step": getattr(app.state, "status_dict", {}).get("step", 0),
+            "queue_size": len(getattr(app.state, "queue", [])),
+            "total_rollouts_processed": getattr(
+                app.state, "total_rollouts_processed", 0
+            ),
+            "unallocated_fraction": unallocated_fraction,
+            "num_connected_envs": connected_envs,
+            "batch_size": getattr(app.state, "batchsize", -1),
+        }
+    except AttributeError:
+        return {
+            "current_step": 0,
+            "queue_size": 0,
+            "total_rollouts_processed": 0,
+            "unallocated_fraction": 1.0,
+            "num_connected_envs": 0,
+            "batch_size": -1,
+        }
 
 
 @app.get("/status-env")
@@ -489,7 +545,8 @@ async def get_status_env(env: EnvIdentifier):
 
     # Calculate total minimum allocations
     total_min_allocation = 0.0
-    for env_config in app.state.envs:
+    envs = getattr(app.state, "envs", [])
+    for env_config in envs:
         if (
             env_config.get("connected", False)
             and env_config.get("min_batch_allocation") is not None
