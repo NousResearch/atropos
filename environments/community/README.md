@@ -47,16 +47,30 @@ Once your environment is ready, please follow the guidelines in our main [CONTRI
 ## Available Environments
 
 ### 1. Lean Proof Environment (`lean_proof_env/`)
-**Author**: [GabinFay](https://github.com/GabinFay)
-**Purpose**: Testing Language Learning Models (LLMs) on Lean theorem proving tasks
+**Authors**: [GabinFay](https://github.com/GabinFay), [justin5764](https://github.com/justin5764)
+**Purpose**: Train LLMs on formal mathematical reasoning using the Lean 4 theorem prover
 
-A comprehensive environment for evaluating LLMs on formal mathematical reasoning using the Lean theorem prover. Features include:
-- Support for custom problem datasets or MiniF2F benchmark
-- Integration with Lean 4 theorem prover
-- Configurable difficulty levels and problem sets
-- Automated proof validation
+A comprehensive environment for training and evaluating LLMs on formal mathematical reasoning through Lean theorem proving. Models learn to complete theorem statements by replacing `sorry` placeholders with valid proof steps, receiving immediate feedback through Lean compilation checks.
 
-**Requirements**: Lean 4 installation, OpenAI API key
+**Features**:
+- **Formal Proof Completion**: LLMs complete theorem statements by replacing `sorry` with valid proofs
+- **Lean 4 Integration**: Uses the modern Lean 4 theorem proving language and Mathlib
+- **Compilation Feedback**: Real-time validation through Lean compiler integration (PyPantograph)
+- **Mathematical Dataset**: Support for custom problem datasets or `brando/minif2f-lean4` (MiniF2F benchmark)
+- **Configurable Difficulty**: Configurable difficulty levels and problem sets
+- **Mock Compilation**: Simulation framework for development without full Lean setup
+- **Reward System**: Binary rewards (1.0 for compilation success, -1.0 for failure)
+
+**Command Line Usage**:
+```bash
+# Connect to Atropos trainer
+python environments/community/lean_proof_env/lean_env.py serve
+
+# Local testing and development
+python environments/community/lean_proof_env/lean_env.py process
+```
+
+**Requirements**: Lean 4 installation, PyPantograph, `datasets`, `tqdm`, `wandb`, OpenAI API key
 
 ### 2. Router Environment (`router_env/`)
 **Author**: [GabinFay](https://github.com/GabinFay)
@@ -582,102 +596,7 @@ Reward: High (excellent theoretical-empirical match)
 
 **Requirements**: asyncio, openai, asteval, csv, datasets, math_verify, latex2sympy2_extended
 
-### 15. Lean Theorem Proving Environment (`lean_proof_env/`)
-**Author**: [justin5764](https://github.com/justin5764)
-**Purpose**: Train LLMs to complete formal mathematical proofs in the Lean theorem proving language using compilation feedback
-
-A comprehensive environment for training language models on formal mathematical reasoning through Lean theorem proving. Models learn to complete theorem statements by replacing `sorry` placeholders with valid proof steps, receiving immediate feedback through Lean compilation checks.
-
-**Features**:
-- **Formal Proof Completion**: LLMs complete theorem statements by replacing `sorry` with valid proofs
-- **Lean 4 Integration**: Uses the modern Lean 4 theorem proving language and Mathlib
-- **Compilation Feedback**: Real-time validation through Lean compiler integration (PyPantograph)
-- **Mathematical Dataset**: Built on `brando/minif2f-lean4` Hugging Face dataset
-- **Structured Training**: Separate validation/test splits for robust evaluation
-- **Mock Compilation**: Includes simulation framework for development without full Lean setup
-
-**Training Components**:
-- **Problem Structure**: Import statements + formal theorem statement with `sorry`
-- **Proof Generation**: LLM generates complete theorem blocks with proof steps
-- **Compilation Validation**: Lean compiler checks proof correctness and syntax
-- **Reward System**: Binary rewards (1.0 for compilation success, -1.0 for failure)
-- **Progress Tracking**: Compilation success rates and detailed attempt logging
-
-**Lean Integration**:
-- **PyPantograph Interface**: Async integration with Lean theorem prover
-- **Import Management**: Handles Mathlib imports and namespace declarations
-- **Syntax Validation**: Ensures generated proofs follow Lean syntax rules
-- **Error Reporting**: Detailed compilation error messages for debugging
-
-**Dataset Features**:
-- **MiniF2F-Lean4**: Curated collection of formal mathematics problems
-- **Problem Diversity**: Covers various mathematical domains and difficulty levels
-- **Structured Format**: Consistent header + formal statement organization
-- **Train/Test Splits**: Uses validation split for training, test split for evaluation
-
-**Example Training Flow**:
-```
-Input: "import Mathlib.Data.Nat.Basic\nopen Nat\n\ntheorem add_comm (a b : nat) : a + b = b + a := sorry"
-LLM Output: "theorem add_comm (a b : nat) : a + b = b + a := by rw [Nat.add_comm]"
-Compilation: Success ✓
-Reward: 1.0
-```
-
-**Mock Development Mode**:
-- **Simulation Framework**: Allows development without full Lean installation
-- **Keyword-Based Validation**: Basic proof structure and content checks
-- **Random Compilation**: Configurable success rates for testing
-- **Error Simulation**: Realistic error messages for training
-
-**WandB Integration**:
-- **Compilation Metrics**: Track success rates during training and evaluation
-- **Proof Attempt Tables**: Detailed logs of problem statements, generated proofs, and outcomes
-- **Progress Visualization**: Training curves and performance analytics
-- **Custom Metrics**: `train/batch_avg_percent_compiled` and `eval/percent_compiled`
-
-**Training Applications**:
-- **Formal Verification**: Training models for software and hardware verification
-- **Mathematical Education**: AI tutoring systems for formal mathematics
-- **Proof Assistant Development**: Improving automated theorem proving tools
-- **Research Acceleration**: Automating routine mathematical proofs
-
-**Technical Implementation**:
-- **Async Architecture**: Non-blocking proof compilation and validation
-- **Temperature Control**: Different settings for training diversity vs evaluation consistency
-- **Token Management**: Configurable proof length limits and generation parameters
-- **Error Handling**: Robust handling of compilation failures and edge cases
-
-**Configuration Options**:
-- **Model Selection**: Configurable LLM for proof generation (default: Qwen/Qwen3-235B-A22B)
-- **Group Size**: Number of proof attempts per problem (default: 4)
-- **Evaluation Frequency**: Steps between evaluation runs (default: 50)
-- **Token Limits**: Maximum proof length (default: 1024 tokens)
-- **Testing Mode**: Reduced dataset size for development
-
-**Quality Metrics**:
-- **Compilation Success Rate**: Primary measure of proof correctness
-- **Proof Efficiency**: Token usage and proof length analysis
-- **Error Pattern Analysis**: Common failure modes and improvement areas
-- **Mathematical Coverage**: Breadth of successfully proven theorems
-
-**Setup Requirements**:
-1. Lean 4 installation with Mathlib
-2. PyPantograph for Python-Lean integration
-3. `brando/minif2f-lean4` dataset access
-4. OpenAI-compatible LLM server
-
-**Command Line Usage**:
-```bash
-# Connect to Atropos trainer
-python environments/community/lean_proof_env/lean_env.py serve
-
-# Local testing and development
-python environments/community/lean_proof_env/lean_env.py process
-```
-
-**Requirements**: datasets, tqdm, wandb, PyPantograph (for full Lean integration), asyncio
-
-### 16. DeepSacrifice - Human-in-the-Loop Chess RL Environment (`deepsacrifice_chess/`)
+### 15. DeepSacrifice - Human-in-the-Loop Chess RL Environment (`deepsacrifice_chess/`)
 **Author**: [metonym](https://github.com/metonym)
 **Purpose**: Train chess agents to play aggressive, sacrificial chess through human-in-the-loop reinforcement learning with LLM-based reward modeling
 
@@ -786,7 +705,7 @@ bun dev:server
 
 **Requirements**: Bun runtime, OpenAI API, React, TypeScript, chess.js, Vite
 
-### 17. Caput Mundi - Six-Seat No-Limit Hold'em Poker Environment (`poker_holdem/`)
+### 16. Caput Mundi - Six-Seat No-Limit Hold'em Poker Environment (`poker_holdem/`)
 **Author**: [yoniebans](https://github.com/yoniebans)
 **Purpose**: Train language models to make optimal poker decisions through reinforcement learning on expert hand history data
 
@@ -918,7 +837,7 @@ python environments/community/poker_holdem/poker_env.py process \
 
 **Requirements**: datasets, transformers, wandb, atroposlib
 
-### 18. Quantum-Classical Hybrid Language Model Environment (`quantum_hybrid/`)
+### 17. Quantum-Classical Hybrid Language Model Environment (`quantum_hybrid/`)
 **Author**: [jeannemtl](https://github.com/jeannemtl)
 **Purpose**: Train quantum-enhanced language models by combining classical transformers with quantum circuits using PennyLane and PyTorch
 
@@ -1102,7 +1021,7 @@ environments/community/quantum_hybrid/
 
 **Requirements**: pennylane, torch, transformers, datasets, numpy, pydantic, atroposlib
 
-### 19. PyTorch Optimizer Coding Environment (`pytorch_optimizer_coding/`)
+### 18. PyTorch Optimizer Coding Environment (`pytorch_optimizer_coding/`)
 **Author**: [arihanv](https://github.com/arihanv)
 **Purpose**: Train code-generating agents to design and evaluate custom PyTorch optimizers through automated compilation, novelty assessment, and performance benchmarking
 
@@ -1373,7 +1292,7 @@ environments/community/pytorch_optimizer_coding/
 
 **Requirements**: modal, verdict, torch, lightning, transformers, datasets, pydantic, atroposlib
 
-### 20. Helpful Doctors - Persona-Aware Medical QA Environment (`helpful_doctors/`)
+### 19. Helpful Doctors - Persona-Aware Medical QA Environment (`helpful_doctors/`)
 **Author**: [tsadpbb](https://github.com/tsadpbb) with [AlxSp](https://github.com/AlxSp)
 **Purpose**: Train LLMs to diagnose patients through multi-turn conversations while adapting to different patient communication styles and personalities
 
@@ -1538,7 +1457,7 @@ python environments/community/helpful_doctors/doctor.py process \
 
 **Requirements**: datasets, openai, atroposlib, wandb
 
-### 21. DynastAI - Medieval Kingdom Management RL Environment with Adaptive Rewards (`dynastai/`)
+### 20. DynastAI - Medieval Kingdom Management RL Environment with Adaptive Rewards (`dynastai/`)
 **Author**: [Slyracoon23](https://github.com/Slyracoon23) with [davidvvliet](https://github.com/davidvvliet)
 **Purpose**: Train LLMs to rule medieval kingdoms through strategic decision-making with an adaptive reward system that evolves based on player choices and outcomes
 
@@ -1807,7 +1726,7 @@ Access the game at `http://localhost:3000` when running the server.
 
 ---
 
-### 22. Physical Space STL CAD RL Environment (`physical_space_stl/`)
+### 21. Physical Space STL CAD RL Environment (`physical_space_stl/`)
 
 **Contributors**: ecsbeats, venkatacrc
 **PR**: [#76](https://github.com/NousResearch/atropos/pull/76)
@@ -2040,7 +1959,7 @@ python test_stl_env.py
 
 ---
 
-### 23. Protein Design Environment (`protein_design/`)
+### 22. Protein Design Environment (`protein_design/`)
 
 **Contributors**: hallerite, promachina
 **PR**: [#70](https://github.com/NousResearch/atropos/pull/70)
@@ -2099,7 +2018,7 @@ python test_stl_env.py
 
 ---
 
-### 24. MCP Tool Calling Environment (`mcp_tool_calling/`)
+### 23. MCP Tool Calling Environment (`mcp_tool_calling/`)
 
 **Contributors**: ODAncona, ady-bhai, way2key, pranceraz
 **PR**: [#80](https://github.com/NousResearch/atropos/pull/80)
@@ -2179,7 +2098,7 @@ python test_stl_env.py
 
 ---
 
-### 25. Sanskrit Poetry Environment (`sanskrit_poetry/`)
+### 24. Sanskrit Poetry Environment (`sanskrit_poetry/`)
 
 **Contributors**: KhoomeiK
 **PR**: [#71](https://github.com/NousResearch/atropos/pull/71)
@@ -2271,7 +2190,7 @@ config = SanskritPoetryEnvConfig(
 
 ---
 
-### 26. OpenVLA Robotics Environment (`openvla_robotics/`)
+### 25. OpenVLA Robotics Environment (`openvla_robotics/`)
 
 **Contributors**: RahulSChand
 **PR**: [#65](https://github.com/NousResearch/atropos/pull/65)
@@ -2453,7 +2372,7 @@ for episode in range(num_episodes):
 
 ---
 
-### 27. StarMapCompression Environment (`starmap_compression/`)
+### 26. StarMapCompression Environment (`starmap_compression/`)
 
 **Contributors**: caradmico
 **PR**: [#66](https://github.com/NousResearch/atropos/pull/66)
@@ -2675,7 +2594,7 @@ python environments/community/starmap_compression/visualize_starmap.py
 
 ---
 
-### 28. Padres Spatial RL Environment (`padres_spatial/`)
+### 27. Padres Spatial RL Environment (`padres_spatial/`)
 
 **Contributors**: basedlsg
 **PR**: [#75](https://github.com/NousResearch/atropos/pull/75)
@@ -2727,7 +2646,7 @@ python environments/community/starmap_compression/visualize_starmap.py
 
 ---
 
-### 29. Humor Generation Environment (`humor_generation/`)
+### 28. Humor Generation Environment (`humor_generation/`)
 
 **Contributors**: kirilligum
 **PR**: [#87](https://github.com/NousResearch/atropos/pull/87)
@@ -2894,7 +2813,7 @@ python generate_humor_dataset.py
 
 ---
 
-### 30. Meteorology Forecast RL Environment (`meteorology_forecast/`)
+### 29. Meteorology Forecast RL Environment (`meteorology_forecast/`)
 
 **Contributors**: FahrenheitResearch, drewsny
 **PR**: [#68](https://github.com/NousResearch/atropos/pull/68)
