@@ -3095,6 +3095,277 @@ python environments/community/meteorology_forecast/meteorology_env.py serve \
 
 ---
 
+### 31. BLEUBERI Environment (`bleuberi/`)
+
+**Contributor**: [aniemerg](https://github.com/aniemerg)
+**PR**: [#175](https://github.com/NousResearch/atropos/pull/175)
+**Integration Status**: ✅ Integrated
+
+**Description**: BLEUBERI (BLEU-Based Enhanced Utility for Better Evaluating Reward in Instruction-following) demonstrates that BLEU scores, when paired with high-quality reference responses from strong LLMs, can serve as effective rewards for training instruction-following models via Group Relative Policy Optimization (GRPO).
+
+**Core Features**:
+- **BLEU-Based Reward Signal**: Uses n-gram matching (BLEU scores) as direct reinforcement learning rewards
+- **High-Quality References**: Collects reference responses from top LLMs (Claude, Gemini, etc.) for comparison
+- **GRPO Training**: Full integration with Group Relative Policy Optimization framework
+- **Dual Training Mode**: Supports both SFT (supervised fine-tuning) and GRPO training approaches
+- **Minimal Dependencies**: Lightweight reward computation with no heavy external judge models
+
+**How It Works**:
+1. Collects high-quality reference responses from frontier LLMs
+2. Computes BLEU scores by comparing model outputs against these references
+3. Uses the BLEU scores as reward signals in GRPO training
+
+**Requirements**: `nltk` (for BLEU computation), `atroposlib`
+
+---
+
+### 32. Cybersecurity Sigma Rule Generation Environment (`cybersecurity_sigma/`)
+
+**Contributor**: [subrahmanyam](https://github.com/subrahmanyam) (integrated by [shannonsands](https://github.com/shannonsands))
+**PR**: [#142](https://github.com/NousResearch/atropos/pull/142)
+**Integration Status**: ✅ Integrated
+
+**Description**: An environment that trains LLMs to generate semantically correct Sigma detection rules from threat-hunting prompts. Sigma rules are YAML-formatted detection signatures used in security information and event management (SIEM) systems.
+
+**Core Features**:
+- **Dual Reward Mechanisms**: Two separate implementations with different reward functions
+  - `jaccard_reward_env.py`: Token-based Jaccard similarity scoring
+  - `llm_judge_env.py`: LLM-based semantic evaluation for richer feedback
+- **Real Security Dataset**: Uses the `mmaisel1/nous-rl-hackathon-sigma` dataset from Hugging Face
+- **Structured Output Enforcement**: Requires `<think>...</think>` reasoning tags before the Sigma YAML output
+- **Schema Validation**: Generated rules are validated against the Sigma detection rule schema
+
+**Use Case**: Trains models to understand threat-hunting concepts and produce valid, structured YAML detection rules — a highly specialized skill combining cybersecurity domain knowledge with structured generation.
+
+**Requirements**: `pyyaml`, `datasets`, `atroposlib`
+
+---
+
+### 33. Ethereum Virtual Machine (EVM) Transaction Agent Environment (`ethereum_virtual_machine/`)
+
+**Contributor**: [jamelvin](https://github.com/jamelvin)
+**PR**: [#187](https://github.com/NousResearch/atropos/pull/187)
+**Integration Status**: ✅ Integrated
+
+**Description**: An environment for training language models to generate and execute profitable Ethereum blockchain transactions. Uses a forked local blockchain (via Anvil from Foundry) for safe, sandboxed transaction execution and state verification.
+
+**Core Features**:
+- **Live Blockchain Simulation**: Creates a forked Ethereum mainnet using Anvil for safe testing
+- **Multi-Token Support**: Handles ETH, USDC, USDT, DAI, WETH, and CRV token transactions
+- **Dynamic Question Generation**: LLM-powered generation of realistic transaction requests in natural language
+- **Multi-Dimensional Scoring**: Evaluates transaction correctness across multiple criteria
+- **Adaptive Curriculum**: Performance-based question type selection to focus training on weak areas
+- **Graceful Cleanup**: Proper resource management and interrupt handling
+
+**Supported Transaction Types**:
+- ETH transfers
+- ERC-20 token transfers
+- Complex DeFi interactions
+
+**Requirements**: Foundry (Anvil), `web3`, `atroposlib`
+
+---
+
+### 34. GoofyMath Environment (`goofy_math/`)
+
+**Contributor**: [chinguun101](https://github.com/chinguun101) (integrated by [shannonsands](https://github.com/shannonsands))
+**PR**: [#145](https://github.com/NousResearch/atropos/pull/145)
+**Integration Status**: ✅ Integrated
+
+**Description**: An RL environment that trains math models to be both *accurate* and *entertaining*. Takes standard GSM8K math problems and rewards solutions that are mathematically correct while also being humorous and engaging.
+
+**Core Features**:
+- **Two-Stage Judging**: First filters for mathematical correctness, then ranks by "goofiness"
+- **GSM8K Dataset**: Built on the widely-used grade school math benchmark
+- **RLAIF + Objective Verification**: Combines AI-based humor feedback with deterministic correctness checking
+- **Humor Scoring**: Uses an LLM judge to evaluate entertainment value and creative explanations
+
+**Design Philosophy**: Tests whether humor can improve learning outcomes — models learn that being funny is only rewarded when the math is right first.
+
+**Requirements**: `datasets`, `atroposlib`
+
+---
+
+### 35. Options Implied Volatility Prediction Environment (`options_iv_prediction/`)
+
+**Contributor**: [michaelwaves](https://github.com/michaelwaves) (integrated by [shannonsands](https://github.com/shannonsands))
+**PR**: [#144](https://github.com/NousResearch/atropos/pull/144)
+**Integration Status**: ✅ Integrated
+
+**Description**: Trains language models to predict implied volatility (IV) for stock options using real market data. The model analyzes option pricing parameters and must reason step-by-step to arrive at an IV estimate.
+
+**Core Features**:
+- **Live Market Data**: Fetches real options data via Yahoo Finance API (`yahooquery`)
+- **Financial Reasoning**: Trains models on options pricing relationships (Black-Scholes intuition)
+- **Chain-of-Thought**: Encourages step-by-step reasoning with `<think>` tags
+- **Accuracy Scoring**: Evaluates predictions on magnitude accuracy and percentage correctness
+- **WandB Integration**: Comprehensive logging and visualization of training metrics
+
+**Input Features**: Option price, stock price, strike price, time to expiry, risk-free rate
+
+**Requirements**: `yahooquery`, `wandb`, `atroposlib`
+
+---
+
+### 36. Pay-to-Play Environment with Mixture of Judges (`pay_to_play/`)
+
+**Contributor**: [tejpalv](https://github.com/tejpalv)
+**PR**: [#167](https://github.com/NousResearch/atropos/pull/167)
+**Integration Status**: ✅ Integrated
+
+**Description**: An RL environment where an agent must strategically select and pay for specialized evaluator "agent cards" before each evaluation round. Combines economic constraints, budget management, and multi-agent evaluation in a novel training paradigm.
+
+**Core Features**:
+- **Economic Constraints**: Real USDC payments on Base blockchain (or simulated mode)
+- **Strategic Card Selection**: Agent chooses from multiple specialized judge cards with different expertise and costs
+- **Budget Management**: Agent must balance evaluation quality vs. cost across training iterations
+- **Mixture of Judges**: Implements RLHF with multiple AI feedback sources ([Xu et al., 2024](https://arxiv.org/abs/2409.20370))
+- **Historical Tracking**: Past performance data informs future card selection decisions
+- **Separated Configuration**: Clean separation between environment config and agent card definitions
+
+**Research Basis**: Builds on RLHF with AI feedback ([Lee et al., 2023](https://arxiv.org/abs/2309.00267)) extended with economic incentives.
+
+**Requirements**: `web3` (optional for on-chain mode), `atroposlib`
+
+---
+
+### 37. Regex Generation Environment (`regex_generation/`)
+
+**Contributor**: [johnh4098](https://github.com/johnh4098)
+**PR**: [#378](https://github.com/NousResearch/atropos/pull/378)
+**Integration Status**: ✅ Integrated
+
+**Description**: Trains language models to generate correct Python-compatible regular expressions from natural language descriptions and example test cases. Rewards are based on how many test cases (positive and negative) the generated regex passes.
+
+**Core Features**:
+- **Natural Language to Regex**: Models receive a description plus example strings to match/reject
+- **Executable Validation**: Uses `re.fullmatch()` to test each pattern against all examples
+- **Fractional Reward**: Reward = fraction of test cases passed (0.0–1.0)
+- **28 Hand-Crafted Problems**: Problems span three difficulty levels (easy, medium, hard)
+- **Degenerate Group Filtering**: Discards groups where all rollouts score identically (no learning signal)
+
+**Problem Format**: Each problem includes a natural language description, a set of positive examples (must match), and a set of negative examples (must not match).
+
+**Requirements**: Python standard library only (`re`), `atroposlib`
+
+---
+
+### 38. SQL Query Generation Environment (`sql_query_env/`)
+
+**Contributor**: [PLippmann](https://github.com/PLippmann)
+**PR**: [#301](https://github.com/NousResearch/atropos/pull/301)
+**Integration Status**: ✅ Integrated
+
+**Description**: Trains LLMs to generate correct SQL queries from natural language questions using the WikiSQL dataset. Queries are verified by *executing* the generated SQL against in-memory SQLite databases and comparing results to ground truth.
+
+**Core Features**:
+- **Execution-Based Evaluation**: SQL is run against real SQLite databases — no string matching
+- **WikiSQL Dataset**: 80,654 examples from the [Salesforce/WikiSQL](https://huggingface.co/datasets/Salesforce/wikisql) dataset
+- **Schema-Aware Prompts**: Models receive full table schemas to inform query generation
+- **Result Comparison**: Compares query output rows against ground truth for correctness scoring
+- **Train/Process Modes**: Supports both live training with API server and offline data generation
+
+**Why Execution-Based?**: Unlike string-similarity rewards, running the SQL catches semantically equivalent queries that differ syntactically — rewarding correctness rather than surface form.
+
+**Requirements**: `datasets`, `sqlite3` (stdlib), `atroposlib`
+
+---
+
+### 39. Tutor RL Agent Environment (`tutor_rl_agent/`)
+
+**Integration Status**: ✅ Integrated
+
+**Description**: An LLM-based interactive teacher-student tutoring environment. A `TeacherAgent` interacts with a simulated student profile, and rewards are based on measurable improvements in student learning outcomes across a tutoring session.
+
+**Core Features**:
+- **Teacher-Student Interaction**: Models a realistic tutoring loop between teacher and student agents
+- **Student Profile System**: Initializes with a JSON student profile capturing prior knowledge and learning state
+- **Gymnasium Interface**: Implements the standard `gym.Env` interface for compatibility
+- **Learning Outcome Rewards**: Reward signal derived from student metric improvements over the session
+- **Multi-Turn Sessions**: Supports extended tutoring conversations tracked across steps
+
+**Architecture**:
+- `envs/tutor_env.py`: Core Gymnasium environment managing teacher-student interaction
+- `agents/`: Teacher and student agent implementations
+- `runner/`: Training runner utilities
+
+**Requirements**: `gymnasium`, `atroposlib`
+
+---
+
+### 40. Wikipedia Article Research Environment (`wikipedia_research/`)
+
+**Contributor**: [aniemerg](https://github.com/aniemerg) (integrated by [shannonsands](https://github.com/shannonsands))
+**PR**: [#143](https://github.com/NousResearch/atropos/pull/143)
+**Integration Status**: ✅ Integrated
+
+**Description**: Trains LLMs to research and write high-quality Wikipedia-style articles on arbitrary topics using multi-step web search and content extraction. Wikipedia itself is blocked to encourage diverse sourcing.
+
+**Core Features**:
+- **Multi-Step Research**: Models search the web, extract content, and track discovered facts before writing
+- **Tavily Search Integration**: Uses Tavily API for comprehensive web search capabilities
+- **Wikipedia Blocking**: Prevents direct Wikipedia access to force models to use diverse sources
+- **Research Fact Tracking**: Automatically stores important facts found during the research phase
+- **Multi-Dimensional Scoring**:
+  - **Structure Score**: Article organization, section headings, and references
+  - **Comprehensiveness Score**: Coverage of the topic's important aspects
+  - **Fact Usage Score**: How well researched facts are incorporated
+
+**Training Paradigm**: Tests multi-step tool use and synthesis — models must plan a research strategy, gather information, and compose it into a structured article.
+
+**Requirements**: `tavily-python`, `atroposlib`
+
+---
+
+### 41. Word Hunt Environment (`word_hunt/`)
+
+**Contributor**: [Aboozle1](https://github.com/Aboozle1)
+**PR**: [#220](https://github.com/NousResearch/atropos/pull/220)
+**Integration Status**: ✅ Integrated
+
+**Description**: Trains language models to play Word Hunt, a 4×4 grid word game where the goal is to trace through adjacent letters to form as many valid English words as possible. Combines spatial reasoning, vocabulary knowledge, and strategic optimization.
+
+**Core Features**:
+- **4×4 Letter Grid**: Random board generation with adjacency-constrained word tracing
+- **Trie-Based Validation**: Fast word lookup using a prefix trie (`trie.py`) for efficient valid-word checking
+- **Scoring by Length**: Longer words are worth more points, incentivizing multi-letter planning
+- **Strict Rules**: Words ≥3 letters, adjacency required (including diagonal), no board wrapping, no letter reuse per word
+- **Solver Included**: `word_hunt_solver.py` provides an optimal solver for reference/evaluation
+- **Custom Config**: `word_hunt_config.py` and `example_config.yaml` for easy setup
+
+**Cognitive Challenges Tested**:
+- Spatial path reasoning through the grid
+- Vocabulary breadth and recall
+- Strategic prioritization of longer over shorter words within token budget
+
+**Requirements**: English word list, `atroposlib`
+
+---
+
+### 42. Xitter Social Media Agent Environment (`xitter_env/`)
+
+**Integration Status**: ✅ Integrated
+
+**Description**: A simulated social media platform environment ("Xitter") where an LLM agent acts as a social media user. The agent reads a feed of posts with trending topics and mock social state, then generates posts and interactions to maximize engagement metrics.
+
+**Core Features**:
+- **Simulated Social Feed**: Mock trending topics and posts from other agents for contextual awareness
+- **Agent Identity**: Each agent has a configurable `agent_id` and persona via system prompt template
+- **Engagement Rewards**: Reward signal based on quality and relevance of generated social content
+- **Atropos BaseEnv Integration**: Full implementation of the `BaseEnv` interface
+- **Extensible Design**: Mock social state is designed to be replaced with real API integrations
+
+**Architecture** (`xitter_env.py`):
+- `XitterEnvConfig`: Pydantic config dataclass for environment parameters
+- `XitterEnv`: Main environment class extending `BaseEnv`
+- Mock trending topics and social feed as starting points for real-world extension
+
+**Use Case**: Tests model ability to generate contextually appropriate, engaging social content given a simulated platform state — a social intelligence benchmark.
+
+**Requirements**: `atroposlib`
+
+---
+
 ## Support
 
 For questions or issues with community environments:
