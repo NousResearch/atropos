@@ -10,7 +10,12 @@ from typing import List, Optional, Tuple
 from PIL import Image
 from pydantic import Field
 
-from atroposlib.envs.base import BaseEnv, BaseEnvConfig, OpenaiConfig, ScoredDataGroup
+from atroposlib.envs.base import (
+    APIServerConfig,
+    BaseEnv,
+    BaseEnvConfig,
+    ScoredDataGroup,
+)
 from atroposlib.type_definitions import GameHistory, Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
@@ -44,7 +49,7 @@ class UFCImageEnv(BaseEnv):
     def __init__(
         self,
         config: UFCImageEnvConfig,
-        server_configs: List[OpenaiConfig],
+        server_configs: List[APIServerConfig],
         slurm=True,
         testing=False,
     ):
@@ -323,7 +328,7 @@ class UFCImageEnv(BaseEnv):
         return
 
     @classmethod
-    def config_init(cls) -> Tuple[BaseEnvConfig, List[OpenaiConfig]]:
+    def config_init(cls) -> Tuple[BaseEnvConfig, List[APIServerConfig]]:
         """Initialize configuration for the environment"""
         if not os.environ.get("OPENAI_API_KEY"):
             print("ERROR: OPENAI_API_KEY environment variable is not set!")
@@ -343,7 +348,7 @@ class UFCImageEnv(BaseEnv):
         )
 
         server_configs = [
-            OpenaiConfig(
+            APIServerConfig(
                 model_name="gpt-4o",
                 base_url=None,
                 api_key=os.environ.get("OPENAI_API_KEY"),
