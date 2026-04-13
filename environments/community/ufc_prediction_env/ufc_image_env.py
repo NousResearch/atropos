@@ -10,7 +10,12 @@ from typing import List, Optional, Tuple
 from PIL import Image
 from pydantic import Field
 
-from atroposlib.envs.base import BaseEnv, BaseEnvConfig, APIServerConfig, ScoredDataGroup
+from atroposlib.envs.base import (
+    APIServerConfig,
+    BaseEnv,
+    BaseEnvConfig,
+    ScoredDataGroup,
+)
 from atroposlib.type_definitions import GameHistory, Item
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
