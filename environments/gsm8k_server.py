@@ -1,3 +1,4 @@
+import asyncio
 import random
 import time
 from typing import Dict, List, Optional, Tuple, TypedDict, Union
@@ -5,7 +6,6 @@ from typing import Dict, List, Optional, Tuple, TypedDict, Union
 from datasets import load_dataset
 from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
-from tqdm.asyncio import tqdm_asyncio
 
 from atroposlib.envs.base import (
     APIServerConfig,
@@ -140,6 +140,7 @@ class GSM8kEnv(BaseEnv):
             "\\boxed{" + answer + "}",
             extraction_mode="first_match",
             extraction_config=[LatexExtractionConfig()],
+            parsing_timeout=None,
         )
 
         # Parse model answer
@@ -156,10 +157,11 @@ class GSM8kEnv(BaseEnv):
                         units=True,
                     ),
                     boxed_match_priority=0,
-                    try_extract_without_anchor=False,
+                    try_extract_without_anchor=True,
                 )
             ],
             extraction_mode="first_match",
+            parsing_timeout=None,
         )
 
         score = 1 if verify(answer_parsed, gold_parsed) else 0
@@ -194,7 +196,7 @@ class GSM8kEnv(BaseEnv):
             eval_tasks.append(
                 self.rollout_and_score_eval(item["question"], item["gold_answer"])
             )
-        results = await tqdm_asyncio.gather(*eval_tasks)
+        results = await asyncio.gather(*eval_tasks)
 
         # Extract scores and samples
         scores = [result["score"] for result in results]
@@ -276,6 +278,7 @@ class GSM8kEnv(BaseEnv):
             rollout_group_data[0]["gold_answer"],
             extraction_mode="first_match",
             extraction_config=[LatexExtractionConfig()],
+            parsing_timeout=None,
         )
         if len(gold_parsed) != 0:
             # We require the answer to be provided in correct latex (no malformed operators)
@@ -296,13 +299,14 @@ class GSM8kEnv(BaseEnv):
                             ),
                             # Ensures that boxed is tried first
                             boxed_match_priority=0,
-                            try_extract_without_anchor=False,
+                            try_extract_without_anchor=True,
                         )
                     ],
                     extraction_mode="first_match",
+                    parsing_timeout=None,
                 )
                 # Reward 1 if the content is the same as the ground truth, 0 otherwise
-                reward = verify(answer_parsed, gold_parsed)
+                reward = 1.0 if verify(answer_parsed, gold_parsed) else 0.0
 
                 tokens = item["tokens"]
                 masks = item["masks"]
@@ -351,8 +355,11 @@ class GSM8kEnv(BaseEnv):
                         percentage_of_range = min(percentage_of_range, 1.0)
                         # Apply linear penalty scaling from 1.0 down to 0.0
                         scores["scores"].append(1.0 - percentage_of_range)
-            if all([scores["scores"][0] == score for score in scores["scores"]]):
-                return None  # If all the same, we return None
+
+            # CRITICAL: We comment out the 'all the same' discard filter to allow GRPO
+            # to learn from relative process-rewards provided in the ROLL bridge.
+            # if all([scores["scores"][0] == score for score in scores["scores"]]):
+            #     return None  # If all the same, we return None
             return scores
         else:
             # If the gold solution is not parseable, we return None
