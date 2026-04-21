@@ -355,8 +355,8 @@ class GSM8kEnv(BaseEnv):
                         percentage_of_range = min(percentage_of_range, 1.0)
                         # Apply linear penalty scaling from 1.0 down to 0.0
                         scores["scores"].append(1.0 - percentage_of_range)
-            
-            # CRITICAL: We comment out the 'all the same' discard filter to allow GRPO 
+
+            # CRITICAL: We comment out the 'all the same' discard filter to allow GRPO
             # to learn from relative process-rewards provided in the ROLL bridge.
             # if all([scores["scores"][0] == score for score in scores["scores"]]):
             #     return None  # If all the same, we return None
