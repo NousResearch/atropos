@@ -52,6 +52,7 @@ The framework supports collecting, distributing and evaluating LLM trajectories 
 | 🔄 Multi-Turn RL          | deepresearch, internal tool calling        | Train LLMs on complex multi-step interactions      |
 | 💻 Code Execution         | MBPP, HumanEval (via `coding_server.py`)   | Train LLMs to generate and execute code            |
 | 🖼️ Multimodal             | OCR VQA, Clevr (via `multimodal_dpo/`)     | Train LLMs on tasks involving vision and language  |
+| 🛡️ Sandboxed OS / Web     | EndlessTerminals (via OpenReward)          | Train agents in secure, decentralized environments |
 
 </div>
 
@@ -168,6 +169,7 @@ pip install -e .                # for using
 pip install -e .[dev]           # for development
 pip install -e .[examples]      # for running examples
 pip install -e .[verifiers]     # for verifiers integration
+pip install -e .[openreward]    # for openreward integration
 pip install -e .[all]           # for everything
 ```
 

@@ -1,25 +1,23 @@
-# OpenReward Environment Configuration
-# Use this config with openreward_server.py
+# OpenReward environment configuration
+# Usage: python environments/openreward_server.py serve --config environments/configs/openreward.yaml
 
 env:
   or_env_name: "kanishk/EndlessTerminals"
-  max_steps: 16
-  reward_reduction: "sum" # options: sum, mean, max, min
   split: "train"
+  max_steps: 16
   group_size: 4
-  total_steps: 100
   use_wandb: true
-  wandb_name: "openreward"
-  tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+  wandb_name: "openreward_atropos"
+  total_steps: 1000
+  batch_size: 4
   max_token_length: 8192
+  tokenizer_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
 
 openai:
-  model_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
-  base_url: "http://localhost:9001/v1"
-  api_key: "x"
-  num_requests_for_eval: 256
-  server_type: "sglang"
+  - model_name: "NousResearch/DeepHermes-3-Llama-3-8B-Preview"
+    base_url: "http://localhost:9001/v1"
+    api_key: "x"
+    server_type: "sglang"
 
-server_manager:
-  slurm: false
-  testing: false
+slurm: false
+testing: false

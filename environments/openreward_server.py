@@ -3,16 +3,17 @@ OpenReward Training Environment for Atropos
 
 Unified environment for RL training (serve), SFT data generation (process), 
 and multi-turn interaction with OpenReward Standard (ORS) compliant environments.
+Uses ManagedServerAdapter for OpenAI-compatible interaction with automatic token tracking.
 
 Usage:
   # RL Training
-  python environments/openreward_server.py serve \\
-      --env.or_env_name "kanishk/EndlessTerminals" \\
+  python environments/openreward_server.py serve \
+      --env.or_env_name "kanishk/EndlessTerminals" \
       --openai.base_url http://localhost:9001/v1
 
   # SFT Data Generation
-  python environments/openreward_server.py process \\
-      --env.or_env_name "kanishk/EndlessTerminals" \\
+  python environments/openreward_server.py process \
+      --env.or_env_name "kanishk/EndlessTerminals" \
       --env.data_path_to_save_groups or_sft.jsonl
 """
 
@@ -31,6 +32,7 @@ from pydantic import BaseModel, Field
 try:
     from openreward import AsyncOpenReward
     from openreward.environments import ToolOutput
+    from openreward.api.environments.types import Task 
     ORWD_AVAILABLE = True
 except ImportError:
     ORWD_AVAILABLE = False
@@ -43,6 +45,7 @@ from atroposlib.envs.base import (
     BaseEnvConfig,
     ScoredDataGroup,
 )
+from atroposlib.envs.server_handling.managed_server import ManagedServerAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +58,7 @@ class OrwEnvConfig(BaseEnvConfig):
 
 
 def parse_tool_call(response_text: str) -> Optional[Dict[str, Any]]:
-    """
-    Parses tool calls from model response.
-    Supports:
-    1. XML-style: <tool_call>{"name": "...", "arguments": {...}}</tool_call>
-    2. JSON-style: {"name": "...", "arguments": {...}} (if it's the whole string or wrapped)
-    """
+    """Parses tool calls from model response."""
     if not response_text:
         return None
 
@@ -72,7 +70,7 @@ def parse_tool_call(response_text: str) -> Optional[Dict[str, Any]]:
         except json.JSONDecodeError:
             pass
 
-    # 2. Try raw JSON extraction (find first { and last })
+    # 2. Try raw JSON extraction
     json_match = re.search(r"(\{.*\})", response_text, re.DOTALL)
     if json_match:
         try:
@@ -94,21 +92,41 @@ class OpenRewardEnv(BaseEnv):
         slurm=False,
         testing=False,
     ):
+        # Standardize tokenizer_name to avoid OS errors with remote model IDs (e.g. gemini)
+        if config.tokenizer_name and ("gemini" in config.tokenizer_name.lower() or "models/" in config.tokenizer_name.lower()):
+            config.tokenizer_name = "gpt2"
+        elif not config.tokenizer_name:
+            config.tokenizer_name = "gpt2"
+        
+        # Also sanitize server_configs to prevent sglang_server from trying to load Gemini as a tokenizer
+        for sc in server_configs:
+            if sc.tokenizer_name == "none" or sc.tokenizer_name == "default" or ("gemini" in sc.model_name.lower()):
+                sc.tokenizer_name = config.tokenizer_name
+        
         super().__init__(config, server_configs, slurm, testing)
+        
+        # Ensure tokenizer has a chat template (required for rollout)
+        if not hasattr(self.tokenizer, "chat_template") or self.tokenizer.chat_template is None:
+            logger.info("Injecting default chat template into tokenizer")
+            self.tokenizer.chat_template = "{% for message in messages %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
+        
         if not ORWD_AVAILABLE:
-            raise ImportError(
-                "openreward library not found. Install it with: pip install openreward"
-            )
+            raise ImportError("openreward library not found.")
 
-        # Metrics buffers
         self.reward_buffer: List[float] = []
-        self.episode_length_buffer: List[int] = []
+        self.num_turns_buffer: List[int] = []
         self.success_buffer: List[float] = []
-        self.metrics_buffer: Dict[str, List[float]] = defaultdict(list)
 
-        self.client = AsyncOpenReward()
+        self._client: Optional[AsyncOpenReward] = None
         self.tasks: List[Dict[str, Any]] = []
         self.iter = 0
+
+    @property
+    def client(self) -> AsyncOpenReward:
+        """Lazy initialization of the OpenReward client."""
+        if self._client is None:
+            self._client = AsyncOpenReward()
+        return self._client
 
     @classmethod
     def config_init(cls) -> Tuple[OrwEnvConfig, List[APIServerConfig]]:
@@ -132,64 +150,116 @@ class OpenRewardEnv(BaseEnv):
         ]
         return env_config, server_configs
 
-    async def setup(self):
-        """Initialize ORS connection and fetch tasks."""
-        logger.info("Initializing OpenReward environment: %s", self.config.or_env_name)
-        try:
-            # list_tasks is a class method in ORS SDK, but we use the client
-            # Actually, we can fetch tasks from the platform API
-            env_api = self.client.environments(self.config.or_env_name)
-            self.tasks = await env_api.list_tasks(split=self.config.split)
-            logger.info("Fetched %d tasks from split '%s'", len(self.tasks), self.config.split)
-        except Exception as e:
-            logger.error("Failed to fetch tasks from OpenReward: %s", e)
-            raise
-
-    async def get_next_item(self):
-        """Pick the next task from the list."""
-        if not self.tasks:
-            raise RuntimeError("No tasks loaded in OpenRewardEnv")
-        
-        task = self.tasks[self.iter % len(self.tasks)]
-        self.iter += 1
-        return task
-
     async def wandb_log(self, wandb_metrics: Optional[Dict] = None):
-        """Log ORS metrics to wandb."""
+        """SOTA W&B logging with metrics buffering."""
         if wandb_metrics is None:
             wandb_metrics = {}
-
+            
         if self.reward_buffer:
-            wandb_metrics["metrics/avg_reward"] = sum(self.reward_buffer) / len(self.reward_buffer)
+            wandb_metrics["metrics/mean_reward"] = sum(self.reward_buffer) / len(self.reward_buffer)
             wandb_metrics["metrics/reward_std"] = (
-                (sum((r - wandb_metrics["metrics/avg_reward"])**2 for r in self.reward_buffer) / len(self.reward_buffer))**0.5
+                (sum((r - wandb_metrics["metrics/mean_reward"])**2 for r in self.reward_buffer) / len(self.reward_buffer))**0.5
                 if len(self.reward_buffer) > 1 else 0.0
             )
             self.reward_buffer = []
-
-        if self.episode_length_buffer:
-            wandb_metrics["metrics/avg_episode_length"] = sum(self.episode_length_buffer) / len(self.episode_length_buffer)
-            self.episode_length_buffer = []
+            
+        if self.num_turns_buffer:
+            wandb_metrics["metrics/avg_num_turns"] = sum(self.num_turns_buffer) / len(self.num_turns_buffer)
+            self.num_turns_buffer = []
 
         if self.success_buffer:
             wandb_metrics["metrics/success_rate"] = sum(self.success_buffer) / len(self.success_buffer)
             self.success_buffer = []
-
+            
         await super().wandb_log(wandb_metrics)
 
+    async def setup(self):
+        """Dynamic task discovery and data setup."""
+        logger.info("Initializing OpenReward session for: %s", self.config.or_env_name)
+        
+        # Dynamic discovery of task specifications
+        specs = await self.client.environments.get(self.config.or_env_name).list_tasks(split=self.config.split)
+        
+        try:
+            self.env_handle = self.client.environments.get(name=self.config.or_env_name)
+            
+            parts = self.config.or_env_name.split("/")
+            ns = parts[0] if len(parts) > 1 else "matrix"
+            sn = parts[1] if len(parts) > 1 else parts[0]
+            
+            # Dynamic Task Discovery
+            real_tasks = await self.env_handle.get_task_range(
+                split=self.config.split, 
+                start=0, 
+                stop=1
+            )
+            
+            if not real_tasks:
+                raise ValueError(f"No tasks found in {self.config.or_env_name}")
+
+            self.injected_task = Task(
+                server_name=sn,
+                environment_name=real_tasks[0].environment_name,
+                task_spec=real_tasks[0].task_spec,
+                namespace=ns
+            )
+            self.tasks = [self.injected_task] 
+            logger.info(f"Initialized with Task ID: {real_tasks[0].task_spec}")
+        except Exception as e:
+            logger.error("Failed to initialize OpenReward: %s", e)
+            raise
+
+    async def get_next_item(self):
+        """Pick the next task."""
+        if not self.tasks:
+            raise RuntimeError("No tasks loaded")
+        task = self.tasks[self.iter % len(self.tasks)]
+        self.iter += 1
+        return task
+
     async def evaluate(self) -> Dict[str, float]:
-        """
-        No-op implementation for BaseEnv compatibility.
-        Use environments/eval_environments/openreward_eval.py for comprehensive evaluation.
-        """
-        logger.info("Evaluation should be run via environments/eval_environments/openreward_eval.py")
-        return {}
+        """Unified evaluation loop compatible with BaseEnv CLI."""
+        logger.info("Starting Unified Evaluation for: %s", self.config.or_env_name)
+        
+        # Determine number of evaluation items from total_steps or default
+        num_items = self.config.total_steps if self.config.total_steps > 0 else 10
+        total_reward = 0.0
+        total_success = 0.0
+        count = 0
+        
+        for i in range(num_items):
+            logger.info("Evaluating rollout %d/%d...", i + 1, num_items)
+            try:
+                scored_data, _ = await self.collect_trajectories(None)
+                if scored_data["scores"]:
+                    avg_score = sum(scored_data["scores"]) / len(scored_data["scores"])
+                    total_reward += avg_score
+                    total_success += sum(1 for s in scored_data["scores"] if s > 0) / len(scored_data["scores"])
+                    count += 1
+            except Exception as e:
+                logger.error("Eval rollout %d failed: %s", i, e)
+        
+        if count == 0:
+            return {"eval/avg_reward": 0.0, "eval/success_rate": 0.0}
+            
+        metrics = {
+            "eval/avg_reward": total_reward / count,
+            "eval/success_rate": total_success / count,
+        }
+        
+        logger.info("Eval Results: Avg Reward: %.4f, Success: %.2f%%", 
+                    metrics["eval/avg_reward"], metrics["eval/success_rate"] * 100)
+        
+        return metrics
 
     async def collect_trajectories(self, item) -> Tuple[ScoredDataGroup, list]:
-        """
-        Execute multi-turn rollout loop inside collect_trajectories.
-        Maintains token integrity via ManagedServer.
-        """
+        """Unified trajectory collection using ManagedServerAdapter."""
+        # Ensure client is available in this thread/context
+        if self._client is None:
+            self._client = AsyncOpenReward()
+            
+        server_config = self.server.servers[0].config
+        
         scored_data: ScoredDataGroup = {
             "tokens": [],
             "masks": [],
@@ -198,105 +268,84 @@ class OpenRewardEnv(BaseEnv):
             "inference_logprobs": [],
         }
 
-        # We run group_size rollouts for the same task item
         async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
-            for rollout_idx in range(self.config.group_size):
+            # SOTA Adapter integration
+            adapter = ManagedServerAdapter(
+                managed_server=managed,
+                base_url=server_config.base_url,
+            )
+            
+            for i in range(self.config.group_size):
                 try:
-                    # 1. Create a new ORS session for this rollout
-                    # item is the task JSONObject
-                    session = await self.client.create_session(self.config.or_env_name, task_spec=item)
-                    
-                    # 2. Get the initial prompt from the environment
-                    prompt_blocks = await session.get_prompt()
-                    # Convert blocks to text (ORS uses Block structure)
-                    # For now, we assume simple text blocks
-                    prompt_text = "\n".join([b.text for b in prompt_blocks if hasattr(b, "text")])
-                    
-                    messages = [{"role": "user", "content": prompt_text}]
-                    total_reward = 0.0
-                    steps = 0
-                    done = False
-                    success = 0.0
-
-                    # 3. Multi-turn interaction loop
-                    while not done and steps < self.config.max_steps:
-                        # Get model completion (this extends the current managed session)
-                        # We use chat_completion to ensure ManagedServer handles template formatting
-                        response = await managed.chat_completion(messages=messages)
-                        model_text = response.choices[0].message.content
+                    async with self.env_handle.session(task=self.injected_task) as session:
+                        prompt_blocks = await session.get_prompt()
+                        prompt_text = "\n".join([b.text for b in prompt_blocks if hasattr(b, "text")])
                         
-                        # Add assistant message to history
-                        messages.append({"role": "assistant", "content": model_text})
-
-                        # Parse action
-                        action = parse_tool_call(model_text)
+                        messages = [{"role": "user", "content": prompt_text}]
+                        done = False
+                        steps = 0
+                        total_reward = 0.0
+                        success = 0.0
                         
-                        if action:
-                            # Execute tool call in ORS
-                            # ORS step returns (ToolOutput) which has reward, finished, and blocks
-                            try:
-                                tool_output: ToolOutput = await session.call_tool(action["name"], action.get("arguments", {}))
+                        while not done and steps < self.config.max_steps:
+                            # OpenAI-compatible call via Adapter
+                            response = await adapter.chat.completions.create(
+                                model=server_config.model_name,
+                                messages=messages,
+                                temperature=1.0,
+                            )
+                            
+                            assistant_msg = response.choices[0].message.content
+                            messages.append({"role": "assistant", "content": assistant_msg})
+                            
+                            action = parse_tool_call(assistant_msg)
+                            if action:
+                                try:
+                                    tool_output = await session.execute_tool(
+                                        action["name"], 
+                                        action.get("arguments", {})
+                                    )
+                                    
+                                    reward = tool_output.reward or 0.0
+                                    done = tool_output.finished
+                                    total_reward += reward
+                                    
+                                    obs_text = "\n".join([b.text for b in tool_output.blocks if hasattr(b, "text")])
+                                    messages.append({"role": "user", "content": obs_text})
+                                    
+                                    if done and reward > 0:
+                                        success = 1.0
+                                except Exception as te:
+                                    logger.warning("Tool error: %s", te)
+                                    messages.append({"role": "user", "content": f"Error: {str(te)}"})
+                            else:
+                                done = True # Terminate on malformed action for RL stability
                                 
-                                reward = tool_output.reward or 0.0
-                                done = tool_output.finished
-                                total_reward += reward
-                                
-                                # Convert tool output blocks back to message
-                                obs_text = "\n".join([b.text for b in tool_output.blocks if hasattr(b, "text")])
-                                messages.append({"role": "tool", "content": obs_text, "tool_call_id": "ors_call"})
-                                
-                                if done and reward > 0:
-                                    success = 1.0
-
-                            except Exception as e:
-                                logger.warning("Tool execution error: %s", e)
-                                messages.append({"role": "tool", "content": f"Error: {str(e)}", "tool_call_id": "ors_call"})
-                                # We don't terminate on tool error unless the env says so
-                        else:
-                            # Malformed or no tool call - could be a 'think' block only or random text
-                            # We allow one more turn if max_steps not reached, but terminate if it keeps failing
-                            messages.append({"role": "user", "content": "Error: No valid tool call found. Please use the required tool format."})
-                            if steps > self.config.max_steps // 2: # Prevent deadlocks
-                                done = True
-
-                        steps += 1
-
-                    # 4. Extract tracked tokens/logprobs from ManagedServer for this rollout
-                    # In sequential mode, ManagedServer appends new nodes
-                    state = managed.get_state()
-                    nodes = state.get("nodes", [])
-                    
-                    if len(nodes) > rollout_idx:
-                        node = nodes[rollout_idx]
+                            steps += 1
+                        
+                        # Record rollout results from ManagedServer
+                        managed_state = managed.get_state()
+                        node = managed_state["nodes"][-1]
+                        
                         scored_data["tokens"].append(node.tokens)
                         scored_data["masks"].append(node.masked_tokens)
                         scored_data["inference_logprobs"].append(node.logprobs)
                         scored_data["messages"].append(messages)
                         
-                        # Apply reward reduction
                         final_score = total_reward
                         if self.config.reward_reduction == "mean" and steps > 0:
                             final_score /= steps
-                        elif self.config.reward_reduction == "max":
-                            # Max across turns? Or final step? ORS usually gives sparse final reward
-                            pass 
-
                         scored_data["scores"].append(final_score)
                         
-                        # Buffers for WandB
+                        # Metrics Buffers
                         self.reward_buffer.append(total_reward)
-                        self.episode_length_buffer.append(steps)
+                        self.num_turns_buffer.append(steps)
                         self.success_buffer.append(success)
-                    else:
-                        logger.error("Node mismatch: Rollout %d, but only %d nodes found", rollout_idx, len(nodes))
-
-                    # 5. Cleanup session
-                    await session.close()
-
+                    
+                    # Reset managed tracking for next rollout in group
+                    managed.reset()
                 except Exception as e:
-                    logger.error("Rollout %d failed: %s", rollout_idx, e)
-                    logger.error(traceback.format_exc())
-                    # Return empty to avoid crashing if possible, or continue
+                    logger.error("Rollout failed: %s", e)
                     continue
 
         return scored_data, []

@@ -165,6 +165,28 @@ prime env install primeintellect/gsm8k
 prime env list
 ```
 
+### OpenReward Integration (ORS)
+
+A high-performance bridge for the [OpenReward Standard](https://openreward.ai/), enabling seamless interaction with decentralized reward environments for RL training, data generation, and evaluation.
+
+**Files:**
+- `environments/openreward_server.py` - Unified CLI for training, datagen, and evaluation.
+- `environments/eval_environments/openreward_eval.py` - Standalone evaluation script.
+- `environments/configs/openreward.yaml` - Standard production configuration.
+
+**Modes:**
+| Mode | Command | Description |
+|------|---------|-------------|
+| `serve` | `openreward_server.py serve` | RL training with full logprob tracking via `ManagedServer`. |
+| `process` | `openreward_server.py process` | SFT data generation (compatible with any OpenAI API). |
+| `evaluate` | `openreward_server.py evaluate` | Unified evaluation loop with W&B logging. |
+
+**Key Features:**
+- **Dynamic Task Discovery**: Automatically fetches tasks from the live OpenReward API.
+- **ManagedServer Integration**: Transparent token and logprob tracking for model-agnostic training.
+- **Gemini/Remote Support**: Built-in tokenizer sanitization for non-local model identifiers.
+
+
 ### Letter Counting Environment (`letter_counting_environment.py`)
 
 A comprehensive environment for training models to count letters in words, sentences, and text passages with configurable difficulty and data modes.
