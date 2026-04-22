@@ -72,6 +72,9 @@ examples = [
 verifiers = [
     "verifiers==0.1.9.post2"
 ]
+openreward = [
+    "openreward"
+]
 
 [build-system]
 requires = ["hatchling"]
