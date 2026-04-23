@@ -1,4 +1,5 @@
 import gzip
+import logging
 import time
 import uuid
 from typing import Any, Dict, List, Optional
@@ -25,6 +26,7 @@ MIN_ENV_WEIGHT = (
 # Message import removed - using Dict[str, Any] for more flexible validation
 
 app = FastAPI(title="AtroposLib API")
+logger = logging.getLogger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
@@ -145,6 +147,10 @@ class ScoredData(BaseModel):
     group_overrides: Optional[dict] = None
     images: Optional[Any] = None
     env_id: Optional[int] = None  # ID of the environment that generated this data
+    # On-policy distillation (new format): parallel token ids + logprobs.
+    # Shape for both: [sequence][position][top_k]
+    distill_token_ids: Optional[List[List[List[int]]]] = None
+    distill_logprobs: Optional[List[List[List[float]]]] = None
 
     @field_validator("messages", mode="before")
     @classmethod
@@ -182,6 +188,8 @@ def _scored_data_to_dict(scored_data: ScoredData) -> Dict[str, Any]:
         "group_overrides": scored_data.group_overrides,
         "images": scored_data.images,
         "env_id": scored_data.env_id,
+        "distill_token_ids": scored_data.distill_token_ids,
+        "distill_logprobs": scored_data.distill_logprobs,
     }
 
 
@@ -344,6 +352,14 @@ async def info():
 
 @app.get("/batch")
 async def get_batch():
+    # Check if trainer has registered first
+    if not hasattr(app.state, "started"):
+        return {
+            "status": "error",
+            "message": "Trainer not registered. Call /register first.",
+            "batch": [],
+        }
+
     if not app.state.started:
         app.state.started = True
 
@@ -385,7 +401,10 @@ async def get_batch():
             app.state.curr_batch.append(batch)
         curr_batch = app.state.curr_batch.pop()
         # check length before sending
-        print(f"Sending batch of {sum(len(x['tokens']) for x in curr_batch)} sequences")
+        logger.info(
+            "Sending batch of %s sequences",
+            sum(len(x["tokens"]) for x in curr_batch),
+        )
         return {"batch": curr_batch}
 
 

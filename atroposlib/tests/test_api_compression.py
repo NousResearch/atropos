@@ -5,6 +5,7 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import time
 
 import pytest
@@ -27,7 +28,7 @@ def wait_for_api_server(max_wait=10):
 def api_server():
     proc = subprocess.Popen(
         [
-            "python",
+            sys.executable,
             "-m",
             "atroposlib.cli.run_api",
             "--host",

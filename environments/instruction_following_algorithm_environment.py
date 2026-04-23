@@ -139,7 +139,7 @@ class InstructionFollowingEnv(BaseEnv):
             eval_limit_ratio=0.1,
             dataset_name="allenai/RLVR-IFeval",  # Default dataset
             dataset_config_name=None,  # RLVR-IFeval doesn't have a specific config name, uses 'default'
-            test_set_ratio=0.05,  # The ratio of the selelcted dataset in %
+            test_set_ratio=0.05,  # The ratio of the selected dataset in %
             dump_rollouts=False,  # Enable data dumping if needed
             dump_failed_rollouts=False,  # Enable failed rollout dumping for debugging
             rollout_save_score_threshold=0.7,  # Save rollouts with score >= 0.7

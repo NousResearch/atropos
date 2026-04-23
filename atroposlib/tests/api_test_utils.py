@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import time
 
 import requests
@@ -16,7 +17,7 @@ def launch_api_for_testing(max_wait_for_api: int = 10) -> subprocess.Popen:
     # Use subprocess instead of multiprocessing to avoid inheriting pytest args
     api_proc = subprocess.Popen(
         [
-            "python",
+            sys.executable,
             "-m",
             "atroposlib.cli.run_api",
             "--host",

@@ -36,9 +36,6 @@ def select_best_index(
         raise ValueError("Primary and secondary score lists must have the same length.")
 
     num_items = len(primary_scores)
-    if num_items == 0:  # Should be caught by the first check, but as a safeguard.
-        raise ValueError("Input score lists cannot be empty.")
-
     best_index = 0
 
     for i in range(1, num_items):

@@ -35,7 +35,7 @@ def test_openai_api_n_kwarg_ignore_discovery():
             n=n,
         )
     )
-    assert server.config.n_kwarg_is_ignored, "n kwarg is should be set after discovery"
+    assert server.config.n_kwarg_is_ignored, "n kwarg should be set after discovery"
     print(len(response.choices), n)
     assert (
         len(response.choices) == n

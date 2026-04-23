@@ -54,7 +54,7 @@ def predict():
             "In the red corner, we have:(YOUR FIRST IMAGE):\n"
             "And in the blue corner: (YOUR SECOND IMAGE):\n\n"
             "Now, as your favorite fight commentator, I want you to:\n"
-            "create a fight commentary of whats happening in the fight live\n"
+            "create a fight commentary of what's happening in the fight live\n"
             "Give us your best fight commentary! Make it exciting, make it dramatic, "
             "make it sound like you're calling the fight live! "
             "Throw in some classic commentator phrases, maybe a 'OH MY GOODNESS!' or two, "

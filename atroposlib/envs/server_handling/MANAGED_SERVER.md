@@ -2,9 +2,11 @@
 
 ## Overview
 
-`ManagedServer` is a wrapper around `APIServer` that automatically tracks text sequences with aligned tokens and logprobs. It eliminates the need for manual token extraction, alignment, and masking in your environment code, making it **the recommended approach** for handling inference in Atropos environments.
+`ManagedServer` is a wrapper around `APIServer` that automatically tracks text sequences with aligned tokens and logprobs. It also exposes a normalized `get_logprobs(...)` API for backend-agnostic logprob access. This eliminates the need for manual token extraction, alignment, and masking in your environment code, making it **the recommended approach** for handling inference in Atropos environments.
 
-**Server Compatibility:** ManagedServer works with all Atropos server types - `OpenAIServer`, `VLLMServer`, `SGLangServer`, and `TrlVllmServer`. Simply set the `server_type` field in your `APIServerConfig` to `"openai"` (default), `"vllm"`, `"sglang"`, or `"trl"` to use the appropriate backend with automatic server class selection.
+**Server Compatibility:** ManagedServer works with `VLLMServer`, `SGLangServer`, and `TrlVllmServer`. Simply set the `server_type` field in your `APIServerConfig` to `"vllm"`, `"sglang"`, or `"trl"` to use the appropriate backend with automatic server class selection.
+
+> **⚠️ OpenAI Endpoints:** OpenAI's API does not expose token IDs or detailed logprobs required for full ManagedServer functionality. See [OpenAI Endpoint Limitations](#openai-endpoint-limitations) for details and workarounds.
 
 ### Why Use ManagedServer?
 
@@ -34,7 +36,8 @@ async with self.server.managed_server(tokenizer=self.tokenizer) as managed:
 
 - ✅ **Automatic Tokenization**: No need to manually tokenize prompts and completions
 - ✅ **Automatic Masking**: Prompt tokens automatically masked with -100, logprobs with 1.0
-- ✅ **Perfect Alignment**: Tokens and logprobs are guaranteed to align correctly
+- ✅ **Perfect Alignment**: Tokens and logprobs align positionally for tracked sequences
+- ✅ **Normalized Alignment Contract**: Tokens/logprobs are shape-normalized for downstream consumers
 - ✅ **Multi-turn Support**: Automatically handles conversation extensions
 - ✅ **Branching Support**: Handles n>1 completions naturally
 - ✅ **Clean API**: Simple context manager pattern
@@ -607,6 +610,28 @@ Intercept completion call and track sequences.
 **Side Effects:**
 - Tracks sequences in internal storage
 
+#### `async def get_logprobs(**kwargs) -> Dict[str, Any]`
+Fetch logprobs with a normalized schema that is backend-agnostic.
+
+**Args (common):**
+- `messages` or `prompt` or `input_ids`
+- `n`: Number of sampled sequences
+- `max_tokens`
+- Optional backend kwargs such as `top_k` / `top_logprobs`, `temperature`, `stop`
+
+**Returns (normalized):**
+```python
+{
+  "prompt_tokens": List[int],
+  "prompt_topk_token_ids": List[List[int]],       # [pos][k]
+  "prompt_topk_logprobs": List[List[float]],      # [pos][k]
+}
+```
+
+**Notes:**
+- Strict mode: backend must provide real prompt top-k arrays.
+- Missing keys should be treated as backend contract violations.
+
 #### `def get_state() -> Dict[str, Any]`
 Get the current state of tracked sequences.
 
@@ -683,6 +708,75 @@ The context manager:
 # Turn 1 produces: "Hello World"
 # Turn 2 prompt must be: "Hello World..." (exact prefix match)
 ```
+
+## OpenAI Endpoint Limitations
+
+OpenAI's API does not expose token IDs or detailed logprobs in the same way that vLLM, SGLang, and other self-hosted inference servers do. This means **ManagedServer cannot provide accurate token-level training data** when using OpenAI endpoints.
+
+### Default Behavior
+
+By default, attempting to use `managed_server()` with an `OpenAIServer` will raise a `NotImplementedError`:
+
+```python
+async with self.server.managed_server() as managed:
+    # Raises NotImplementedError if server is OpenAIServer
+    ...
+```
+
+The error message will explain the limitation and how to opt-in if you don't need real token data.
+
+### DummyManagedServer (Opt-in)
+
+If you're using OpenAI endpoints for **evaluation or testing** (not training) and don't need actual token IDs or logprobs, you can opt-in to use `DummyManagedServer` by setting an environment variable:
+
+```bash
+export ATROPOS_ALLOW_DUMMY_MANAGED_SERVER=1
+```
+
+With this flag set, `managed_server()` will return a `DummyManagedServer` that:
+- Provides the same interface as `ManagedServer`
+- Returns **fixed placeholder values** for tokens and logprobs (constant synthetic arrays)
+- Uses simple text formatting for `full_text`: `role:content` joined by `\n\n`
+- Raises for `get_logprobs(...)` in strict mode (no fake prompt-logprob payload)
+
+### When to Use DummyManagedServer
+
+✅ **Appropriate uses:**
+- Testing environment logic without needing real token data
+- Evaluation workflows where you only need completion text
+- Prototyping before switching to a self-hosted inference server
+
+❌ **Not appropriate for:**
+- Training (tokens and logprobs are meaningless placeholders)
+- Any workflow that depends on accurate token-level information
+
+### Example
+
+```python
+import os
+
+# Opt-in to dummy managed server for OpenAI
+os.environ["ATROPOS_ALLOW_DUMMY_MANAGED_SERVER"] = "1"
+
+# Now this works with OpenAI endpoints
+async with self.server.managed_server() as managed:
+    response = await managed.chat_completion(messages=messages, n=4)
+    state = managed.get_state()
+    nodes = state["nodes"]
+
+    # nodes contain placeholder token data - DO NOT use for training
+    for node in nodes:
+        print(node.full_text)  # Real completion text
+        print(node.tokens[:5])     # placeholder values
+        print(node.logprobs[:5])   # placeholder values
+
+    # Strict mode: get_logprobs is not available on DummyManagedServer
+    # and will raise NotImplementedError.
+```
+
+### Recommendation
+
+For training workloads, use a self-hosted inference server (`VLLMServer`, `SGLangServer`, or `TrlVllmServer`) that provides full token and logprob access. OpenAI endpoints are best suited for evaluation, testing, or workflows that only need completion text.
 
 ## Additional Resources
 

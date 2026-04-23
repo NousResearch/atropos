@@ -223,7 +223,7 @@ async def dpo_data_grabber(
                 count += 1
         return count
 
-    await register_to_api(group_size, max_token_len, api_url)
+    await register_to_api(group_size, max_token_len, api_url, num_seqs_to_save)
     if os.path.exists(filepath) and not append_to_previous:
         raise ValueError("File already exists and append_to_previous is False.")
     with open(filepath, "w" if not append_to_previous else "a") as f:

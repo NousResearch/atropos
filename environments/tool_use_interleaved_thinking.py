@@ -252,8 +252,6 @@ class InterleavedInlineEnv(BaseEnv):
             print(f"[DEBUG setup] kept {len(subset)} rows from Dataset")
 
         split = full.train_test_split(test_size=0.02, seed=42)
-
-        split = full.train_test_split(test_size=0.02, seed=42)
         self.train, self.test = split["train"], split["test"]
         self.train = self.train.shuffle(seed=int.from_bytes(os.urandom(2), "big"))
 

@@ -90,7 +90,7 @@ To start, you'd typically select an environment that suits your interest from th
 
 **Q: I see the Atropos example trainer (`example_trainer/grpo.py`) uses an algorithm called GRPO. What is that, and why might it be used with Atropos?**
 
-**A:** GRPO stands for Group Relative Policy Optimization. It's a Reinforcement Learning (RL) algorithm that can be effective for training Large Language Models (LLMs) on complex tasks, like those found in many Atropos environments (e.g., mathematical reasoning or code generation). It can be used for RLHF or RLAIF (there's examples in the repo), but it's handy for RLVR (Reinforcement Learning from Verifiable Rewards) as well.
+**A:** GRPO stands for Group Relative Policy Optimization. It's a Reinforcement Learning (RL) algorithm that can be effective for training Large Language Models (LLMs) on complex tasks, like those found in many Atropos environments (e.g., mathematical reasoning or code generation). It can be used for RLHF or RLAIF (there are examples in the repo), but it's handy for RLVR (Reinforcement Learning from Verifiable Rewards) as well.
 
 Why it's for use with LLMs:
 -   **Memory Efficiency:** One of GRPO's main advantages is that it's designed to be more memory-efficient than some other RL algorithms like PPO. It achieves this by not needing a separate, often large, "value model" to estimate potential future rewards. This can be very helpful when training already large LLMs. The tradeoff is more inference for doing rollouts - but, generally that's less of an issue than VRAM is. There's nothing wrong with PPO, but with compute always being tight with LLMs, GRPO and similar more memory-efficient algorithms have gained a lot of ground.

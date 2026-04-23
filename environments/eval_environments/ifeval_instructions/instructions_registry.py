@@ -89,7 +89,6 @@ INSTRUCTION_CONFLICTS = {
         _LENGTH + "number_paragraphs",
         _LENGTH + "nth_paragraph_first_word",
         _LENGTH + "number_sentences",
-        _LENGTH + "nth_paragraph_first_word",
     },
     _LENGTH + "number_words": {_LENGTH + "number_words"},
     _LENGTH
