@@ -27,6 +27,8 @@ We follow the [GitHub Flow](https://docs.github.com) development workflow. All c
     ```
 3.  **Set up the development environment:** This project uses standard Python `venv` for environment creation and `pip` for dependency management.
     ```bash
+   # Check your Python version first: python --version or python3 --version
+    # You need Python 3.10 or higher. If you see Python 2.x, use python3 instead.
     # Ensure you have Python 3.10+ installed
     # Create and activate a virtual environment
     python -m venv .venv
