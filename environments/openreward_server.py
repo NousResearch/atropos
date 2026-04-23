@@ -121,7 +121,14 @@ class OpenRewardEnv(BaseEnv):
             or self.tokenizer.chat_template is None
         ):
             logger.info("Injecting default chat template into tokenizer")
-            self.tokenizer.chat_template = "{% for message in messages %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
+            self.tokenizer.chat_template = (
+                "{% for message in messages %}"
+                "{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>\n'}}"
+                "{% endfor %}"
+                "{% if add_generation_prompt %}"
+                "{{ '<|im_start|>assistant\n' }}"
+                "{% endif %}"
+            )
 
         if not ORWD_AVAILABLE:
             raise ImportError("openreward library not found.")
