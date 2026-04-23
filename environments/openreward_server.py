@@ -143,10 +143,22 @@ class OpenRewardEnv(BaseEnv):
         """Lazy initialization of the OpenReward client."""
         if self._client is None:
             import socket
+
             original_getaddrinfo = socket.getaddrinfo
+
             def patched_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-                if host and "openreward.ai" in host: return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("34.160.223.52", port))]
+                if host and "openreward.ai" in host:
+                    return [
+                        (
+                            socket.AF_INET,
+                            socket.SOCK_STREAM,
+                            6,
+                            "",
+                            ("34.160.223.52", port),
+                        )
+                    ]
                 return original_getaddrinfo(host, port, family, type, proto, flags)
+
             socket.getaddrinfo = patched_getaddrinfo
             self._client = AsyncOpenReward()
         return self._client
@@ -350,8 +362,7 @@ class OpenRewardEnv(BaseEnv):
                             if action:
                                 try:
                                     tool_output = await session.call_tool(
-                                        action["name"], 
-                                        action.get("arguments", {})
+                                        action["name"], action.get("arguments", {})
                                     )
 
                                     reward = tool_output.reward or 0.0
