@@ -1015,7 +1015,7 @@ class BaseEnv(ABC):
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 f"{self.config.rollout_server_url}/status-env",
-                json={"env_id": self.env_id},
+                params={"env_id": self.env_id},
             ) as resp:
                 self.status_dict = await parse_http_response(resp, logger)
                 new_weight = self.status_dict["env_weight"]

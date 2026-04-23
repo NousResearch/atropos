@@ -40,7 +40,7 @@ sequenceDiagram
 
         %% --- Periodic Queue Size Check (Pause/Resume Logic) ---
         Note over RH: Checking API queue status to decide pause/resume state.
-        RH->>API: GET /status-env (using stored env_id)
+        RH->>API: GET /status-env?env_id=... (using stored env_id)
         activate API
         API-->>RH: Response {"current_step": T_current, "queue_size": Q, "env_weight": W}
         deactivate API
