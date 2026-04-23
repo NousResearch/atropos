@@ -17,16 +17,12 @@ Usage:
       --env.data_path_to_save_groups or_sft.jsonl
 """
 
-import asyncio
 import json
 import logging
 import re
-import traceback
-from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
-import wandb
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 # OpenReward is an optional dependency
 try:
@@ -227,7 +223,7 @@ class OpenRewardEnv(BaseEnv):
         logger.info("Initializing OpenReward session for: %s", self.config.or_env_name)
 
         # Dynamic discovery of task specifications
-        specs = await self.client.environments.get(self.config.or_env_name).list_tasks(
+        await self.client.environments.get(self.config.or_env_name).list_tasks(
             split=self.config.split
         )
 

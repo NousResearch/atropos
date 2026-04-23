@@ -5,10 +5,10 @@ Uses ManagedServerAdapter for automatic token tracking and OpenAI compatibility.
 
 import argparse
 import asyncio
-import json
+# json removed
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from openreward import AsyncOpenReward
 from openreward.api.environments.types import Task
@@ -123,7 +123,7 @@ class OpenRewardEval(EvalBase):
 
                         action = parse_tool_call(assistant_msg)
                         if action:
-                            tool_output = await session.execute_tool(
+                            tool_output = await session.call_tool(
                                 action["name"], action.get("arguments", {})
                             )
 
