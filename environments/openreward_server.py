@@ -46,8 +46,8 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
 )
 from atroposlib.envs.server_handling.managed_server import ManagedServerAdapter
-
 from environments.openreward_utils import get_openreward_system_prompt
+
 logger = logging.getLogger(__name__)
 
 
@@ -89,7 +89,10 @@ def parse_tool_call(response_text: str) -> Optional[Dict[str, Any]]:
     # 3. Fallback for [X] pattern (Specific to GuessTheNumber)
     bracket_match = re.search(r"\[(\d+)\]", response_text)
     if bracket_match:
-        return {"name": "guess_number", "arguments": {"number": int(bracket_match.group(1))}}
+        return {
+            "name": "guess_number",
+            "arguments": {"number": int(bracket_match.group(1))},
+        }
 
     return None
 
@@ -155,7 +158,8 @@ class OpenRewardEnv(BaseEnv):
         if self.config.use_wandb and wandb is not None:
             wandb.init(
                 project=os.getenv("WANDB_PROJECT", "atropos-environments"),
-                name=self.config.wandb_name or f"openreward-{time.strftime('%Y-%m-%d-%H%M%S')}",
+                name=self.config.wandb_name
+                or f"openreward-{time.strftime('%Y-%m-%d-%H%M%S')}",
                 config=self.config.dict(),
             )
 
@@ -265,10 +269,10 @@ class OpenRewardEnv(BaseEnv):
 
             self.tasks = real_tasks
             self.injected_task = real_tasks[0]
-            
-            ts_final = getattr(self.tasks[0], 'task_spec', None)
+
+            ts_final = getattr(self.tasks[0], "task_spec", None)
             if ts_final is None:
-                ts_final = self.tasks[0].get('task_spec', 'unknown')
+                ts_final = self.tasks[0].get("task_spec", "unknown")
             logger.info("Initialized with Task ID: %s", ts_final)
 
             # Fetch Tools
@@ -372,9 +376,9 @@ class OpenRewardEnv(BaseEnv):
                         system_instr = get_openreward_system_prompt(self.env_tools)
                         messages = [
                             {"role": "system", "content": system_instr},
-                            {"role": "user", "content": prompt_text}
+                            {"role": "user", "content": prompt_text},
                         ]
-                        
+
                         done = False
                         steps = 0
                         total_reward = 0.0
@@ -430,14 +434,20 @@ class OpenRewardEnv(BaseEnv):
 
                         # Record rollout results from ManagedServer
                         # Spoof tokens for W&B visibility (Fixes ASCII Gibberish)
-                        full_conv_text = self.tokenizer.apply_chat_template(messages, tokenize=False)
+                        full_conv_text = self.tokenizer.apply_chat_template(
+                            messages, tokenize=False
+                        )
                         spoofed_tokens = self.tokenizer.encode(full_conv_text)
                         scored_data["tokens"].append(spoofed_tokens)
                         scored_data["masks"].append([1] * len(spoofed_tokens))
-                        scored_data["inference_logprobs"].append([0.0] * len(spoofed_tokens))
+                        scored_data["inference_logprobs"].append(
+                            [0.0] * len(spoofed_tokens)
+                        )
                         scored_data["messages"].append(messages)
                         # Add raw text for W&B visibility to bypass DummyManagedServer gibberish
-                        scored_data.setdefault("messages_raw", []).append(json.dumps(messages, indent=2))
+                        scored_data.setdefault("messages_raw", []).append(
+                            json.dumps(messages, indent=2)
+                        )
 
                         final_score = total_reward
                         if self.config.reward_reduction == "mean" and steps > 0:

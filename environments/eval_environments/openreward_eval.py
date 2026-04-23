@@ -1,10 +1,10 @@
-import asyncio
-import logging
 import argparse
-import time
+import asyncio
+import json
+import logging
 import os
 import re
-import json
+import time
 from typing import Any, Dict, Optional
 
 # OpenReward SDK
@@ -12,6 +12,7 @@ try:
     import wandb
     from openreward import AsyncOpenReward
     from openreward.environments import ToolOutput
+
     ORWD_AVAILABLE = True
 except ImportError:
     ORWD_AVAILABLE = False
@@ -19,13 +20,14 @@ except ImportError:
     ToolOutput = None
     wandb = None
 
-from atroposlib.envs.eval import EvalBase, evaluate_log
 from atroposlib.envs.base import APIServerConfig
-from atroposlib.envs.server_handling.server_manager import ServerManager
+from atroposlib.envs.eval import EvalBase, evaluate_log
 from atroposlib.envs.server_handling.managed_server import ManagedServerAdapter
-
+from atroposlib.envs.server_handling.server_manager import ServerManager
 from environments.openreward_utils import get_openreward_system_prompt
+
 logger = logging.getLogger(__name__)
+
 
 def parse_tool_call(response_text: str) -> Optional[Dict[str, Any]]:
     """Parses tool calls from model response with leniency."""
@@ -53,9 +55,13 @@ def parse_tool_call(response_text: str) -> Optional[Dict[str, Any]]:
     # 3. Fallback for [X] pattern (Specific to GuessTheNumber)
     bracket_match = re.search(r"\[(\d+)\]", response_text)
     if bracket_match:
-        return {"name": "guess_number", "arguments": {"number": int(bracket_match.group(1))}}
+        return {
+            "name": "guess_number",
+            "arguments": {"number": int(bracket_match.group(1))},
+        }
 
     return None
+
 
 class OpenRewardEval(EvalBase):
     """
@@ -88,11 +94,22 @@ class OpenRewardEval(EvalBase):
         if self._client is None:
             # Monkeypatch for DNS issue if needed
             import socket
+
             original_getaddrinfo = socket.getaddrinfo
+
             def patched_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
                 if host and "openreward.ai" in host:
-                    return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("34.160.223.52", port))]
+                    return [
+                        (
+                            socket.AF_INET,
+                            socket.SOCK_STREAM,
+                            6,
+                            "",
+                            ("34.160.223.52", port),
+                        )
+                    ]
                 return original_getaddrinfo(host, port, family, type, proto, flags)
+
             socket.getaddrinfo = patched_getaddrinfo
             self._client = AsyncOpenReward()
         return self._client
@@ -114,12 +131,12 @@ class OpenRewardEval(EvalBase):
             raise ValueError(f"No tasks found in {self.or_env_name}")
 
         self.injected_task = real_tasks[0]
-        ts_final = getattr(real_tasks[0], 'task_spec', None)
+        ts_final = getattr(real_tasks[0], "task_spec", None)
         if ts_final is None:
-            ts_final = real_tasks[0].get('task_spec', 'unknown')
-            
+            ts_final = real_tasks[0].get("task_spec", "unknown")
+
         logger.info(f"Initialized Evaluation with Task ID: {ts_final}")
-        
+
         # Fetch Tools
         try:
             self.env_tools = await self.env_handle.list_tools(format="openai")
@@ -154,7 +171,7 @@ class OpenRewardEval(EvalBase):
                 system_instr = get_openreward_system_prompt(self.env_tools)
                 messages = [
                     {"role": "system", "content": system_instr},
-                    {"role": "user", "content": prompt_text}
+                    {"role": "user", "content": prompt_text},
                 ]
                 total_reward = 0.0
                 steps = 0
@@ -176,9 +193,7 @@ class OpenRewardEval(EvalBase):
                         action = parse_tool_call(assistant_msg)
                         if action:
                             args = action.get("arguments", {})
-                            tool_output = await session.call_tool(
-                                action["name"], args
-                            )
+                            tool_output = await session.call_tool(action["name"], args)
 
                             reward = tool_output.reward or 0.0
                             done = tool_output.finished
@@ -300,7 +315,7 @@ async def main():
         wandb.init(
             project=os.environ.get("WANDB_PROJECT"),
             name=os.environ.get("WANDB_NAME", f"openreward_eval_{args.or_env_name}"),
-            config=vars(args)
+            config=vars(args),
         )
 
     try:
@@ -310,6 +325,7 @@ async def main():
     finally:
         if wandb and wandb.run:
             wandb.finish()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
