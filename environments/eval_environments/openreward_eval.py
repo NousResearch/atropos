@@ -1,34 +1,65 @@
-"""
-OpenReward Evaluation Environment for Atropos
-Uses ManagedServerAdapter for automatic token tracking and OpenAI compatibility.
-"""
-
-import argparse
 import asyncio
-
-# json removed
 import logging
+import argparse
 import time
-from typing import Any, Dict
+import os
+import re
+import json
+from typing import Any, Dict, Optional
 
-from openreward import AsyncOpenReward
-from openreward.api.environments.types import Task
+# OpenReward SDK
+try:
+    import wandb
+    from openreward import AsyncOpenReward
+    from openreward.environments import ToolOutput
+    ORWD_AVAILABLE = True
+except ImportError:
+    ORWD_AVAILABLE = False
+    AsyncOpenReward = None
+    ToolOutput = None
+    wandb = None
 
 from atroposlib.envs.eval import EvalBase, evaluate_log
-from atroposlib.envs.server_handling.managed_server import ManagedServerAdapter
-from atroposlib.envs.server_handling.server_baseline import APIServerConfig
+from atroposlib.envs.base import APIServerConfig
 from atroposlib.envs.server_handling.server_manager import ServerManager
+from atroposlib.envs.server_handling.managed_server import ManagedServerAdapter
 
-# Reuse the tool parser from the server script
-from environments.openreward_server import parse_tool_call
-
+from environments.openreward_utils import get_openreward_system_prompt
 logger = logging.getLogger(__name__)
 
+def parse_tool_call(response_text: str) -> Optional[Dict[str, Any]]:
+    """Parses tool calls from model response with leniency."""
+    if not response_text:
+        return None
+
+    # 1. Try XML-style extraction (Lenient regex)
+    xml_match = re.search(
+        r"<tool_call>\s*(.*?)(\s*</tool_call>|$)", response_text, re.DOTALL
+    )
+    if xml_match:
+        try:
+            return json.loads(xml_match.group(1).strip())
+        except json.JSONDecodeError:
+            pass
+
+    # 2. Try raw JSON extraction
+    json_match = re.search(r"(\{.*\})", response_text, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group(1).strip())
+        except json.JSONDecodeError:
+            pass
+
+    # 3. Fallback for [X] pattern (Specific to GuessTheNumber)
+    bracket_match = re.search(r"\[(\d+)\]", response_text)
+    if bracket_match:
+        return {"name": "guess_number", "arguments": {"number": int(bracket_match.group(1))}}
+
+    return None
 
 class OpenRewardEval(EvalBase):
     """
-    OpenReward Evaluation using EvalBase pattern.
-    Matches Verifiers SOTA architecture.
+    Evaluation implementation for OpenReward Standard (ORS) environments.
     """
 
     def __init__(
@@ -38,32 +69,41 @@ class OpenRewardEval(EvalBase):
         split: str = "train",
         max_steps: int = 16,
         temperature: float = 0.0,
-        max_eval_items: int = -1,
-        max_concurrent: int = 10,
-        **kwargs,
+        max_eval_items: int = 50,
+        eval_dir: str = None,
     ):
+        super().__init__(model_name=model_name, max_eval_items=max_eval_items)
         self.or_env_name = or_env_name
-        self.model_name = model_name
         self.split = split
         self.max_steps = max_steps
         self.temperature = temperature
-        self.max_eval_items = max_eval_items
-        self.max_concurrent = max_concurrent
-        super().__init__(**kwargs)
+        self.eval_dir = eval_dir
+        self._client = None
+        self.env_handle = None
+        self.injected_task = None
+        self.env_tools = []
 
-        self.client = AsyncOpenReward()
+    @property
+    def client(self) -> AsyncOpenReward:
+        if self._client is None:
+            # Monkeypatch for DNS issue if needed
+            import socket
+            original_getaddrinfo = socket.getaddrinfo
+            def patched_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+                if host and "openreward.ai" in host:
+                    return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("34.160.223.52", port))]
+                return original_getaddrinfo(host, port, family, type, proto, flags)
+            socket.getaddrinfo = patched_getaddrinfo
+            self._client = AsyncOpenReward()
+        return self._client
 
     def setup_data(self) -> list:
-        """Dummy sync method to satisfy EvalBase __init__."""
+        """Dummy implementation to satisfy EvalBase abstract class."""
         return []
 
     async def async_setup_data(self) -> list:
         """Fetch tasks and setup environment handles asynchronously."""
         self.env_handle = self.client.environments.get(name=self.or_env_name)
-
-        parts = self.or_env_name.split("/")
-        ns = parts[0] if len(parts) > 1 else "matrix"
-        sn = parts[1] if len(parts) > 1 else parts[0]
 
         # Dynamic Task Discovery
         real_tasks = await self.env_handle.get_task_range(
@@ -73,14 +113,20 @@ class OpenRewardEval(EvalBase):
         if not real_tasks:
             raise ValueError(f"No tasks found in {self.or_env_name}")
 
-        self.injected_task = Task(
-            server_name=sn,
-            environment_name=real_tasks[0].environment_name,
-            task_spec=real_tasks[0].task_spec,
-            namespace=ns,
-        )
-
-        logger.info(f"Initialized Evaluation with Task ID: {real_tasks[0].task_spec}")
+        self.injected_task = real_tasks[0]
+        ts_final = getattr(real_tasks[0], 'task_spec', None)
+        if ts_final is None:
+            ts_final = real_tasks[0].get('task_spec', 'unknown')
+            
+        logger.info(f"Initialized Evaluation with Task ID: {ts_final}")
+        
+        # Fetch Tools
+        try:
+            self.env_tools = await self.env_handle.list_tools(format="openai")
+            print(f"DEBUG EVAL: Fetched {len(self.env_tools)} tools from environment")
+        except Exception as et:
+            print(f"DEBUG EVAL: Failed to fetch tools: {et}")
+            self.env_tools = []
 
         num_items = self.max_eval_items if self.max_eval_items > 0 else 50
         return list(range(num_items))
@@ -104,7 +150,12 @@ class OpenRewardEval(EvalBase):
                     [b.text for b in prompt_blocks if hasattr(b, "text")]
                 )
 
-                messages = [{"role": "user", "content": prompt_text}]
+                # Force Dynamic System Prompt for Tool Use
+                system_instr = get_openreward_system_prompt(self.env_tools)
+                messages = [
+                    {"role": "system", "content": system_instr},
+                    {"role": "user", "content": prompt_text}
+                ]
                 total_reward = 0.0
                 steps = 0
                 done = False
@@ -124,8 +175,9 @@ class OpenRewardEval(EvalBase):
 
                         action = parse_tool_call(assistant_msg)
                         if action:
+                            args = action.get("arguments", {})
                             tool_output = await session.call_tool(
-                                action["name"], action.get("arguments", {})
+                                action["name"], args
                             )
 
                             reward = tool_output.reward or 0.0
@@ -202,6 +254,9 @@ class OpenRewardEval(EvalBase):
             samples=samples,
         )
 
+        if wandb and wandb.run:
+            wandb.log(metrics)
+
         return metrics
 
 
@@ -240,8 +295,21 @@ async def main():
         eval_dir=args.eval_dir,
     )
 
-    await eval_env(server_manager)
+    # W&B Support
+    if os.environ.get("WANDB_PROJECT") and wandb:
+        wandb.init(
+            project=os.environ.get("WANDB_PROJECT"),
+            name=os.environ.get("WANDB_NAME", f"openreward_eval_{args.or_env_name}"),
+            config=vars(args)
+        )
 
+    try:
+        # Run evaluation
+        metrics = await eval_env(server_manager)
+        print(f"Final Metrics: {metrics}")
+    finally:
+        if wandb and wandb.run:
+            wandb.finish()
 
 if __name__ == "__main__":
     asyncio.run(main())

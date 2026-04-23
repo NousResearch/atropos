@@ -19,15 +19,17 @@ Usage:
 
 import json
 import logging
+import os
 import re
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import Field
 
 # OpenReward is an optional dependency
 try:
+    import wandb
     from openreward import AsyncOpenReward
-    from openreward.api.environments.types import Task
     from openreward.environments import ToolOutput
 
     ORWD_AVAILABLE = True
@@ -35,6 +37,7 @@ except ImportError:
     ORWD_AVAILABLE = False
     AsyncOpenReward = None
     ToolOutput = None
+    wandb = None
 
 from atroposlib.envs.base import (
     APIServerConfig,
@@ -44,6 +47,7 @@ from atroposlib.envs.base import (
 )
 from atroposlib.envs.server_handling.managed_server import ManagedServerAdapter
 
+from environments.openreward_utils import get_openreward_system_prompt
 logger = logging.getLogger(__name__)
 
 
@@ -59,17 +63,18 @@ class OrwEnvConfig(BaseEnvConfig):
 
 
 def parse_tool_call(response_text: str) -> Optional[Dict[str, Any]]:
-    """Parses tool calls from model response."""
+    """Parses tool calls from model response with leniency."""
     if not response_text:
         return None
 
-    # 1. Try XML-style extraction
+    # 1. Try XML-style extraction (Lenient regex for unclosed tags)
     xml_match = re.search(
-        r"<tool_call>\s*(.*?)\s*</tool_call>", response_text, re.DOTALL
+        r"<tool_call>\s*(.*?)(\s*</tool_call>|$)", response_text, re.DOTALL
     )
     if xml_match:
         try:
-            return json.loads(xml_match.group(1).strip())
+            content = xml_match.group(1).strip()
+            return json.loads(content)
         except json.JSONDecodeError:
             pass
 
@@ -80,6 +85,11 @@ def parse_tool_call(response_text: str) -> Optional[Dict[str, Any]]:
             return json.loads(json_match.group(1).strip())
         except json.JSONDecodeError:
             pass
+
+    # 3. Fallback for [X] pattern (Specific to GuessTheNumber)
+    bracket_match = re.search(r"\[(\d+)\]", response_text)
+    if bracket_match:
+        return {"name": "guess_number", "arguments": {"number": int(bracket_match.group(1))}}
 
     return None
 
@@ -139,7 +149,15 @@ class OpenRewardEnv(BaseEnv):
 
         self._client: Optional[AsyncOpenReward] = None
         self.tasks: List[Dict[str, Any]] = []
+        self.env_tools: List[Dict[str, Any]] = []
         self.iter = 0
+
+        if self.config.use_wandb and wandb is not None:
+            wandb.init(
+                project=os.getenv("WANDB_PROJECT", "atropos-environments"),
+                name=self.config.wandb_name or f"openreward-{time.strftime('%Y-%m-%d-%H%M%S')}",
+                config=self.config.dict(),
+            )
 
     @property
     def client(self) -> AsyncOpenReward:
@@ -237,10 +255,6 @@ class OpenRewardEnv(BaseEnv):
         try:
             self.env_handle = self.client.environments.get(name=self.config.or_env_name)
 
-            parts = self.config.or_env_name.split("/")
-            ns = parts[0] if len(parts) > 1 else "matrix"
-            sn = parts[1] if len(parts) > 1 else parts[0]
-
             # Dynamic Task Discovery
             real_tasks = await self.env_handle.get_task_range(
                 split=self.config.split, start=0, stop=1
@@ -249,14 +263,23 @@ class OpenRewardEnv(BaseEnv):
             if not real_tasks:
                 raise ValueError(f"No tasks found in {self.config.or_env_name}")
 
-            self.injected_task = Task(
-                server_name=sn,
-                environment_name=real_tasks[0].environment_name,
-                task_spec=real_tasks[0].task_spec,
-                namespace=ns,
-            )
-            self.tasks = [self.injected_task]
-            logger.info(f"Initialized with Task ID: {real_tasks[0].task_spec}")
+            self.tasks = real_tasks
+            self.injected_task = real_tasks[0]
+            
+            ts_final = getattr(self.tasks[0], 'task_spec', None)
+            if ts_final is None:
+                ts_final = self.tasks[0].get('task_spec', 'unknown')
+            logger.info("Initialized with Task ID: %s", ts_final)
+
+            # Fetch Tools
+            try:
+                self.env_tools = await self.env_handle.list_tools(format="openai")
+                print(f"DEBUG: Fetched {len(self.env_tools)} tools from environment")
+                if self.env_tools:
+                    print(f"DEBUG: Tools: {self.env_tools}")
+            except Exception as et:
+                print(f"DEBUG: Failed to fetch tools: {et}")
+                self.env_tools = []
         except Exception as e:
             logger.error("Failed to initialize OpenReward: %s", e)
             raise
@@ -301,6 +324,9 @@ class OpenRewardEnv(BaseEnv):
             "eval/success_rate": total_success / count,
         }
 
+        if self.config.use_wandb:
+            wandb.log(metrics)
+
         logger.info(
             "Eval Results: Avg Reward: %.4f, Success: %.2f%%",
             metrics["eval/avg_reward"],
@@ -342,7 +368,13 @@ class OpenRewardEnv(BaseEnv):
                             [b.text for b in prompt_blocks if hasattr(b, "text")]
                         )
 
-                        messages = [{"role": "user", "content": prompt_text}]
+                        # Force Dynamic System Prompt for Tool Use
+                        system_instr = get_openreward_system_prompt(self.env_tools)
+                        messages = [
+                            {"role": "system", "content": system_instr},
+                            {"role": "user", "content": prompt_text}
+                        ]
+                        
                         done = False
                         steps = 0
                         total_reward = 0.0
@@ -364,8 +396,9 @@ class OpenRewardEnv(BaseEnv):
                             action = parse_tool_call(assistant_msg)
                             if action:
                                 try:
+                                    args = action.get("arguments", {})
                                     tool_output = await session.call_tool(
-                                        action["name"], action.get("arguments", {})
+                                        action["name"], args
                                     )
 
                                     reward = tool_output.reward or 0.0
@@ -396,13 +429,15 @@ class OpenRewardEnv(BaseEnv):
                             steps += 1
 
                         # Record rollout results from ManagedServer
-                        managed_state = managed.get_state()
-                        node = managed_state["nodes"][-1]
-
-                        scored_data["tokens"].append(node.tokens)
-                        scored_data["masks"].append(node.masked_tokens)
-                        scored_data["inference_logprobs"].append(node.logprobs)
+                        # Spoof tokens for W&B visibility (Fixes ASCII Gibberish)
+                        full_conv_text = self.tokenizer.apply_chat_template(messages, tokenize=False)
+                        spoofed_tokens = self.tokenizer.encode(full_conv_text)
+                        scored_data["tokens"].append(spoofed_tokens)
+                        scored_data["masks"].append([1] * len(spoofed_tokens))
+                        scored_data["inference_logprobs"].append([0.0] * len(spoofed_tokens))
                         scored_data["messages"].append(messages)
+                        # Add raw text for W&B visibility to bypass DummyManagedServer gibberish
+                        scored_data.setdefault("messages_raw", []).append(json.dumps(messages, indent=2))
 
                         final_score = total_reward
                         if self.config.reward_reduction == "mean" and steps > 0:
@@ -424,4 +459,8 @@ class OpenRewardEnv(BaseEnv):
 
 
 if __name__ == "__main__":
-    OpenRewardEnv.cli()
+    try:
+        OpenRewardEnv.cli()
+    finally:
+        if wandb is not None and wandb.run is not None:
+            wandb.finish()
