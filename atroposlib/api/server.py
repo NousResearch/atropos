@@ -469,7 +469,7 @@ async def get_status():
 
 
 @app.get("/status-env")
-async def get_status_env(env: EnvIdentifier):
+async def get_status_env(env_id: int):
     total = sum(
         [
             x["max_context_len"] * max(0.0, x["weight"])
@@ -477,10 +477,10 @@ async def get_status_env(env: EnvIdentifier):
             if x["connected"]
         ]
     )
-    env_group_size = app.state.envs[env.env_id]["group_size"]
+    env_group_size = app.state.envs[env_id]["group_size"]
     env_weight = (
-        app.state.envs[env.env_id]["max_context_len"]
-        * app.state.envs[env.env_id]["weight"]
+        app.state.envs[env_id]["max_context_len"]
+        * app.state.envs[env_id]["weight"]
         / total
     )
     env_weight = max(
@@ -507,13 +507,13 @@ async def get_status_env(env: EnvIdentifier):
         group_size = len(item.get("tokens", []))
         if group_size > max_group_size:
             max_group_size = group_size
-        if item.get("env_id") == env.env_id:
+        if item.get("env_id") == env_id:
             # update the group size for the requesting env, handle cases where the group size may be dynamic with max
             env_group_size = max(env_group_size, group_size)
             num_self_sequences_in_queue += group_size
 
     # update the group size for the requesting env
-    app.state.envs[env.env_id]["group_size"] = env_group_size
+    app.state.envs[env_id]["group_size"] = env_group_size
 
     # Calculate minimum sequences allocated to each environment
     batch_size = getattr(app.state, "batchsize", 0)
@@ -523,9 +523,9 @@ async def get_status_env(env: EnvIdentifier):
             env_config.get("connected", False)
             and env_config.get("min_batch_allocation") is not None
         ):
-            env_id = env_config["registered_id"]
+            registered_id = env_config["registered_id"]
             min_sequences = int(batch_size * env_config["min_batch_allocation"])
-            min_sequences_by_env[env_id] = min_sequences
+            min_sequences_by_env[registered_id] = min_sequences
 
     # Count sequences and calculate packed groups for each environment
     import math
@@ -535,16 +535,16 @@ async def get_status_env(env: EnvIdentifier):
     curr_env_total_sequences = 0
 
     for item in queue:
-        env_id = item.get("env_id")
+        item_env_id = item.get("env_id")
         seq_count = len(item.get("tokens", []))
 
         # Special handling for the requesting environment
-        if env_id == env.env_id:
+        if item_env_id == env_id:
             curr_env_total_sequences += seq_count
         else:
-            if env_id not in sequences_by_env:
-                sequences_by_env[env_id] = 0
-            sequences_by_env[env_id] += seq_count
+            if item_env_id not in sequences_by_env:
+                sequences_by_env[item_env_id] = 0
+            sequences_by_env[item_env_id] += seq_count
 
     # Calculate packed groups for each environment (excluding the requesting env)
     if max_group_size > 1:

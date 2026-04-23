@@ -119,7 +119,7 @@ The API documentation (Swagger UI) will be available at `http://<your-server-ip>
     * **Response:** `{"status": "success"}` or `{"status": "failure", "error": ...}`
 * `GET /status-env`
     * **Description:** Called by a Rollout Handler to get general status plus its calculated sampling weight relative to other connected environments.
-    * **Query Parameter:** Requires `env: EnvIdentifier` model (e.g., `?env_id=0` - actual implementation might differ slightly, check FastAPI docs for query parameter models). **Note:** The code shows `env: EnvIdentifier` as a body parameter for a GET request, which is non-standard. This might need adjustment or testing. Assuming it works via query or a POST instead.
+    * **Query Parameter:** `env_id` (integer), e.g. `GET /status-env?env_id=0`.
     * **Response:** `{"current_step": <step>, "queue_size": <size>, "env_weight": <calculated_weight_float>}`
 
 ### Data Handling
