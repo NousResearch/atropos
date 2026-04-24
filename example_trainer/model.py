@@ -607,7 +607,10 @@ def _initialize_meta_tensors(
         parts = full_name.split(".")
         parent = model
         for part in parts[:-1]:
-            parent = getattr(parent, part)
+            if part.isdigit():
+                parent = parent[int(part)]
+            else:
+                parent = getattr(parent, part)
         return parent, parts[-1]
 
     meta_count = 0
@@ -637,13 +640,33 @@ def _initialize_meta_tensors(
         try:
             if "inv_freq" in name:
                 dim = buffer.shape[0] * 2
-                # Get rope_theta from model config (default 10000.0 for LLaMA, but Qwen3 uses 5000000!)
-                rope_theta = getattr(model.config, "rope_theta", 10000.0)
+                # Comprehensive rope_theta detection (Llama 3 uses rope_theta, others use base/theta)
+                rope_theta = getattr(model.config, "rope_theta", None)
+                if rope_theta is None:
+                    rope_theta = getattr(model.config, "rope_base", None)
+                if rope_theta is None:
+                    rope_theta = getattr(model.config, "theta", None)
+
+                # Check rope_scaling for factor-based scaling models
+                rope_scaling = getattr(model.config, "rope_scaling", None)
+                if isinstance(rope_scaling, dict) and "rope_theta" in rope_scaling:
+                    rope_theta = rope_scaling["rope_theta"]
+                elif isinstance(rope_scaling, dict) and "base" in rope_scaling:
+                    rope_theta = rope_scaling["base"]
+
+                if rope_theta is None:
+                    print(
+                        f"[Setup] WARNING: Could not find rope_theta in config for {name}. Falling back to 10000.0 (Reasoning models may fail!)"
+                    )
+                    rope_theta = 10000.0
+
                 inv_freq = 1.0 / (
                     rope_theta ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim)
                 )
                 new_buffer = inv_freq.to(dtype=buffer.dtype, device=device)
-                print(f"[Setup] Initialized {name} with rope_theta={rope_theta}")
+                print(
+                    f"[Setup] Initialized {name} with detected rope_theta={rope_theta}"
+                )
             else:
                 new_buffer = torch.zeros(
                     buffer.shape, dtype=buffer.dtype, device=device
