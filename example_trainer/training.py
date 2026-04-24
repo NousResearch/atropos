@@ -197,26 +197,35 @@ def compute_grpo_loss(
         if distill_token_ids is not None and distill_logprobs is not None:
             # Move to device/dtype
             d_token_ids = distill_token_ids.to(logp_per_token.device)
-            d_logprobs = distill_logprobs.to(logp_per_token.device, logp_per_token.dtype)
-            
+            d_logprobs = distill_logprobs.to(
+                logp_per_token.device, logp_per_token.dtype
+            )
+
             # Check if we actually have top-K data (not just placeholders)
             if d_token_ids.shape[-1] > 1 or d_token_ids.max() > 0:
                 # Student logprobs for the teacher's top-K tokens
                 # Shape: [batch, seq_len, K]
-                student_logp_at_k = F.log_softmax(scaled_logits, dim=-1).gather(dim=-1, index=d_token_ids)
-                
+                student_logp_at_k = F.log_softmax(scaled_logits, dim=-1).gather(
+                    dim=-1, index=d_token_ids
+                )
+
                 # Re-normalize both distributions over the top-K subset
                 teacher_logp_renorm = F.log_softmax(d_logprobs, dim=-1)
                 student_logp_renorm = F.log_softmax(student_logp_at_k, dim=-1)
-                
+
                 # KL(Teacher || Student) = \sum P_teacher * (log P_teacher - log P_student)
-                kl_per_token = (teacher_logp_renorm.exp() * (teacher_logp_renorm - student_logp_renorm)).sum(dim=-1)
-                
+                kl_per_token = (
+                    teacher_logp_renorm.exp()
+                    * (teacher_logp_renorm - student_logp_renorm)
+                ).sum(dim=-1)
+
                 # Masked average distillation loss
                 distill_loss = (kl_per_token * mask).sum() / mask_sum.sum()
                 distill_loss_val = distill_loss.item()
-                
-                total_loss += (distill_alpha * distill_loss) / gradient_accumulation_steps
+
+                total_loss += (
+                    distill_alpha * distill_loss
+                ) / gradient_accumulation_steps
 
         # Compute metrics for logging
         with torch.no_grad():
@@ -371,11 +380,15 @@ def run_training_step(
 
         # Get distillation batches if available
         d_tokens = None
-        if distill_token_id_batches is not None and batch_idx < len(distill_token_id_batches):
+        if distill_token_id_batches is not None and batch_idx < len(
+            distill_token_id_batches
+        ):
             d_tokens = distill_token_id_batches[batch_idx]
-            
+
         d_logprobs = None
-        if distill_logprob_batches is not None and batch_idx < len(distill_logprob_batches):
+        if distill_logprob_batches is not None and batch_idx < len(
+            distill_logprob_batches
+        ):
             d_logprobs = distill_logprob_batches[batch_idx]
 
         loss, metrics = compute_grpo_loss(
@@ -513,7 +526,7 @@ def log_metrics(
         else f"{metrics['loss']:.4f}"
     )
     print(f"  Loss: {loss_str}, Grad norm: {metrics['grad_norm']:.4f}{timing_str}")
-    
+
     if "distill_loss" in metrics and metrics["distill_loss"] > 0:
         print(f"    Distill KL: {metrics['distill_loss']:.6f}")
 

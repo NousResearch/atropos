@@ -137,9 +137,13 @@ def pad_data_to_good_offset(
                     padded_logprobs[:n_to_copy] = raw_logprobs[:n_to_copy]
                     inference_logprobs_padded.append(padded_logprobs[1:])
                 else:
-                    inference_logprobs_padded.append(np.full(token_setup_len - 1, 1.0, dtype=np.float32))
+                    inference_logprobs_padded.append(
+                        np.full(token_setup_len - 1, 1.0, dtype=np.float32)
+                    )
             elif extract_inference_logprobs:
-                inference_logprobs_padded.append(np.full(token_setup_len - 1, 1.0, dtype=np.float32))
+                inference_logprobs_padded.append(
+                    np.full(token_setup_len - 1, 1.0, dtype=np.float32)
+                )
 
             # Extract and pad distillation data (Teacher Distillation)
             if "distill_token_ids" in item and item["distill_token_ids"] is not None:
@@ -148,25 +152,33 @@ def pad_data_to_good_offset(
                     d_tokens = np.array(item["distill_token_ids"][i], dtype=np.int32)
                     d_logprobs = np.array(item["distill_logprobs"][i], dtype=np.float32)
                     K = d_tokens.shape[1]
-                    
+
                     # Pad seq_len to match token_setup_len
                     padded_d_tokens = np.zeros((token_setup_len, K), dtype=np.int32)
                     padded_d_logprobs = np.zeros((token_setup_len, K), dtype=np.float32)
-                    
+
                     n_copy = min(len(d_tokens), token_setup_len)
                     padded_d_tokens[:n_copy] = d_tokens[:n_copy]
                     padded_d_logprobs[:n_copy] = d_logprobs[:n_copy]
-                    
+
                     # Shift by 1 for causal
                     distill_token_ids.append(padded_d_tokens[1:])
                     distill_logprobs.append(padded_d_logprobs[1:])
                 else:
-                    distill_token_ids.append(np.zeros((token_setup_len - 1, 1), dtype=np.int32))
-                    distill_logprobs.append(np.zeros((token_setup_len - 1, 1), dtype=np.float32))
+                    distill_token_ids.append(
+                        np.zeros((token_setup_len - 1, 1), dtype=np.int32)
+                    )
+                    distill_logprobs.append(
+                        np.zeros((token_setup_len - 1, 1), dtype=np.float32)
+                    )
             else:
                 # Use small size placeholder
-                distill_token_ids.append(np.zeros((token_setup_len - 1, 1), dtype=np.int32))
-                distill_logprobs.append(np.zeros((token_setup_len - 1, 1), dtype=np.float32))
+                distill_token_ids.append(
+                    np.zeros((token_setup_len - 1, 1), dtype=np.int32)
+                )
+                distill_logprobs.append(
+                    np.zeros((token_setup_len - 1, 1), dtype=np.float32)
+                )
 
             # Extract temperature (priority: override > generation_params > group_overrides > 1.0)
             t = 1.0
