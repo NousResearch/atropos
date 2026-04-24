@@ -80,12 +80,12 @@ def pad_data_to_good_offset(
         if len(scores) > 1:
             mean = scores.mean()
             std = scores.std()
-            
+
             # Use a robust epsilon that scales with the magnitude of the scores
             # This prevents "explosion" when std is tiny due to floating point noise
             # but still allows signal when there's actual variance.
             eps = max(1e-8, 1e-4 * np.abs(mean))
-            
+
             if std > eps:
                 scores = (scores - mean) / std
             else:
@@ -95,7 +95,7 @@ def pad_data_to_good_offset(
         else:
             # For group size 1, advantage is always 0 relative to self
             scores = np.zeros_like(scores)
-            
+
         item["scores"] = scores.astype(np.float32)
 
         # Handle score overrides
