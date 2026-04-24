@@ -70,6 +70,9 @@ def compute_grpo_loss(
     gradient_accumulation_steps: int,
     inference_logprobs: Optional[torch.Tensor] = None,
     clip_eps: float = 0.2,
+    distill_token_ids: Optional[torch.Tensor] = None,
+    distill_logprobs: Optional[torch.Tensor] = None,
+    distill_alpha: float = 0.1,
 ) -> Tuple[torch.Tensor, dict]:
     """
     Compute GRPO (Group Relative Policy Optimization) loss for a single micro-batch.
@@ -189,6 +192,32 @@ def compute_grpo_loss(
 
         total_loss = policy_loss / gradient_accumulation_steps
 
+        # === Teacher Distillation Loss (KL) ===
+        distill_loss_val = 0.0
+        if distill_token_ids is not None and distill_logprobs is not None:
+            # Move to device/dtype
+            d_token_ids = distill_token_ids.to(logp_per_token.device)
+            d_logprobs = distill_logprobs.to(logp_per_token.device, logp_per_token.dtype)
+            
+            # Check if we actually have top-K data (not just placeholders)
+            if d_token_ids.shape[-1] > 1 or d_token_ids.max() > 0:
+                # Student logprobs for the teacher's top-K tokens
+                # Shape: [batch, seq_len, K]
+                student_logp_at_k = F.log_softmax(scaled_logits, dim=-1).gather(dim=-1, index=d_token_ids)
+                
+                # Re-normalize both distributions over the top-K subset
+                teacher_logp_renorm = F.log_softmax(d_logprobs, dim=-1)
+                student_logp_renorm = F.log_softmax(student_logp_at_k, dim=-1)
+                
+                # KL(Teacher || Student) = \sum P_teacher * (log P_teacher - log P_student)
+                kl_per_token = (teacher_logp_renorm.exp() * (teacher_logp_renorm - student_logp_renorm)).sum(dim=-1)
+                
+                # Masked average distillation loss
+                distill_loss = (kl_per_token * mask).sum() / mask_sum.sum()
+                distill_loss_val = distill_loss.item()
+                
+                total_loss += (distill_alpha * distill_loss) / gradient_accumulation_steps
+
         # Compute metrics for logging
         with torch.no_grad():
             # Fraction of tokens where ratio was clipped
@@ -253,6 +282,7 @@ def compute_grpo_loss(
         "logprob_diff_mean": logprob_diff_mean,
         "logprob_diff_abs_mean": logprob_diff_abs_mean,
         "logprob_diff_max": logprob_diff_max,
+        "distill_loss": distill_loss_val,
     }
 
     return total_loss, metrics
@@ -268,6 +298,8 @@ def run_training_step(
     config: TrainingConfig,
     step_idx: int,
     inference_logprob_batches: Optional[List[torch.Tensor]] = None,
+    distill_token_id_batches: Optional[List[torch.Tensor]] = None,
+    distill_logprob_batches: Optional[List[torch.Tensor]] = None,
 ) -> dict:
     """
     Run a single training step with gradient accumulation.
@@ -305,6 +337,7 @@ def run_training_step(
     grad_norm = 0.0
     all_training_logprobs: List[torch.Tensor] = []
     all_inference_logprobs: List[torch.Tensor] = []
+    total_distill_loss = 0.0
 
     # Get GRPO hyperparameters from config
     clip_eps = getattr(config, "clip_eps", 0.2)
@@ -336,6 +369,15 @@ def run_training_step(
         ):
             inf_logprobs = inference_logprob_batches[batch_idx]
 
+        # Get distillation batches if available
+        d_tokens = None
+        if distill_token_id_batches is not None and batch_idx < len(distill_token_id_batches):
+            d_tokens = distill_token_id_batches[batch_idx]
+            
+        d_logprobs = None
+        if distill_logprob_batches is not None and batch_idx < len(distill_logprob_batches):
+            d_logprobs = distill_logprob_batches[batch_idx]
+
         loss, metrics = compute_grpo_loss(
             model,
             tokens,
@@ -345,6 +387,9 @@ def run_training_step(
             config.gradient_accumulation_steps,
             inference_logprobs=inf_logprobs,
             clip_eps=clip_eps,
+            distill_token_ids=d_tokens,
+            distill_logprobs=d_logprobs,
+            distill_alpha=getattr(config, "distill_alpha", 0.1),
         )
 
         loss.backward()
@@ -353,6 +398,7 @@ def run_training_step(
         total_neg_logp += metrics["neg_logp"]
         total_pos += metrics["pos_count"]
         total_neg += metrics["neg_count"]
+        total_distill_loss += metrics.get("distill_loss", 0.0)
 
         # Accumulate GRPO-specific metrics
         total_mean_ratio += metrics.get("mean_ratio", 1.0)
@@ -399,6 +445,7 @@ def run_training_step(
         # GRPO-specific metrics (averaged over batches)
         "mean_ratio": total_mean_ratio / num_batches,
         "clipped_fraction": total_clipped_fraction / num_batches,
+        "distill_loss": total_distill_loss / num_batches,
     }
 
     # Compute logprob alignment stats for monitoring
@@ -466,6 +513,9 @@ def log_metrics(
         else f"{metrics['loss']:.4f}"
     )
     print(f"  Loss: {loss_str}, Grad norm: {metrics['grad_norm']:.4f}{timing_str}")
+    
+    if "distill_loss" in metrics and metrics["distill_loss"] > 0:
+        print(f"    Distill KL: {metrics['distill_loss']:.6f}")
 
     # GRPO metrics line: ratio and clipping
     mean_ratio = metrics.get("mean_ratio", 1.0)
@@ -494,6 +544,7 @@ def log_metrics(
             # GRPO-specific metrics
             "grpo/mean_ratio": mean_ratio,
             "grpo/clipped_fraction": clipped_frac,
+            "train/distill_loss": metrics.get("distill_loss", 0.0),
         }
         # Add timing metrics if present
         for key in [
