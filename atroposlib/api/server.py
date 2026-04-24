@@ -1,11 +1,11 @@
 import gzip
 import logging
+import os
 import time
 import uuid
-import os
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, status, HTTPException
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import PlainTextResponse
@@ -210,7 +210,7 @@ def _process_scored_data(scored_data: ScoredData) -> Dict[str, Any]:
     if len(app.state.queue) >= MAX_QUEUE_SIZE:
         raise HTTPException(
             status_code=503,
-            detail=f"Rollout queue is full ({MAX_QUEUE_SIZE} items). Trainer is lagging."
+            detail=f"Rollout queue is full ({MAX_QUEUE_SIZE} items). Trainer is lagging.",
         )
 
     data_dict = _scored_data_to_dict(scored_data)
