@@ -45,22 +45,28 @@ def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
         )
         if result.stdout.strip():
             pids = result.stdout.strip().split("\n")
-            print(f"  Found {len(pids)} processes on port {port}, verifying before killing...")
-            
+            print(
+                f"  Found {len(pids)} processes on port {port}, verifying before killing..."
+            )
+
             for pid_str in pids:
                 try:
                     pid = int(pid_str)
                     # Safety check: verify this is likely our process (vllm, python, etc)
                     with open(f"/proc/{pid}/cmdline", "rb") as f:
-                        cmdline = f.read().decode().replace('\0', ' ')
-                    
-                    is_ours = any(x in cmdline.lower() for x in ["vllm", "python", "atropos"])
-                    
+                        cmdline = f.read().decode().replace("\0", " ")
+
+                    is_ours = any(
+                        x in cmdline.lower() for x in ["vllm", "python", "atropos"]
+                    )
+
                     if is_ours:
                         print(f"    Killing process {pid}: {cmdline[:50]}...")
                         os.kill(pid, signal.SIGTERM)
                     else:
-                        print(f"    WARNING: Process {pid} on port {port} does not look like vLLM! Skipping.")
+                        print(
+                            f"    WARNING: Process {pid} on port {port} does not look like vLLM! Skipping."
+                        )
                 except (ProcessLookupError, ValueError, FileNotFoundError):
                     pass
 
@@ -77,7 +83,7 @@ def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
                 try:
                     pid = int(pid_str)
                     with open(f"/proc/{pid}/cmdline", "rb") as f:
-                        cmdline = f.read().decode().replace('\0', ' ')
+                        cmdline = f.read().decode().replace("\0", " ")
                     if any(x in cmdline.lower() for x in ["vllm", "python", "atropos"]):
                         os.kill(pid, signal.SIGKILL)
                 except (ProcessLookupError, ValueError, FileNotFoundError):
