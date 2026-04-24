@@ -55,7 +55,9 @@ class GSM8kTeacherDistillEnv(GSM8kEnv, TeacherDistillationEnv):
         teacher_tokenizer = os.environ.get("TEACHER_TOKENIZER", teacher_model)
         if teacher_model == "mock-teacher" and "TEACHER_TOKENIZER" not in os.environ:
             # Fallback for mock teacher to use student tokenizer
-            teacher_tokenizer = os.environ.get("STUDENT_TOKENIZER", "NousResearch/DeepHermes-3-Llama-3-3B-Preview")
+            teacher_tokenizer = os.environ.get(
+                "STUDENT_TOKENIZER", "NousResearch/DeepHermes-3-Llama-3-3B-Preview"
+            )
 
         return APIServerConfig(
             base_url="http://localhost:9003/v1",
