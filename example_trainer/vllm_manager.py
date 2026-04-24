@@ -19,6 +19,7 @@ from .config import TrainingConfig
 
 # Global variable to keep track of the vLLM process
 _vllm_process: Optional[subprocess.Popen] = None
+_vllm_config_path: Optional[str] = None
 
 
 def is_port_in_use(port: int) -> bool:
@@ -103,6 +104,16 @@ def cleanup_vllm():
             _vllm_process.wait()
             print("vLLM process killed.")
         _vllm_process = None
+    
+    # Also cleanup the bridge config if we know where it is
+    global _vllm_config_path
+    if _vllm_config_path and os.path.exists(_vllm_config_path):
+        try:
+            print(f"Cleaning up bridge config: {_vllm_config_path}")
+            os.remove(_vllm_config_path)
+        except Exception as e:
+            print(f"  WARNING: Could not delete bridge config: {e}")
+        _vllm_config_path = None
 
 
 # Register cleanup on module load
@@ -156,6 +167,21 @@ def launch_vllm_server(
         "--gpu-memory-utilization",
         str(config.vllm_gpu_memory_utilization),
     ]
+
+    # Track the config path for cleanup
+    global _vllm_config_path
+    if config.vllm_config_path:
+        _vllm_config_path = config.vllm_config_path
+    else:
+        log_dir = os.environ.get("LOGDIR", ".")
+        _vllm_config_path = os.path.join(log_dir, "vllm_bridge_config.json")
+    
+    # Remove stale config if it exists before launching
+    if os.path.exists(_vllm_config_path):
+        try:
+            os.remove(_vllm_config_path)
+        except Exception:
+            pass
 
     # Add served-model-name if using checkpoint path
     if model_path != config.model_name:
