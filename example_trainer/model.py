@@ -471,82 +471,86 @@ def _reconstruct_shared_tensors(
         if "ipc_handle_b64" not in ipc_info:
             return None
 
-        try:
-            device_index = ipc_info["device_index"]
-            ipc_handle = base64.b64decode(ipc_info["ipc_handle_b64"])
-            storage_size = ipc_info["storage_size"]
-            storage_offset_orig = ipc_info["storage_offset_orig"]
-            ref_counter_handle = base64.b64decode(ipc_info["ref_counter_handle_b64"])
-            ref_counter_offset = ipc_info["ref_counter_offset"]
-            event_handle = base64.b64decode(ipc_info["event_handle_b64"])
-            event_sync_required = ipc_info["event_sync_required"]
+        device_index = ipc_info["device_index"]
+        ipc_handle = base64.b64decode(ipc_info["ipc_handle_b64"])
+        storage_size = ipc_info["storage_size"]
+        storage_offset_orig = ipc_info["storage_offset_orig"]
+        ref_counter_handle = base64.b64decode(ipc_info["ref_counter_handle_b64"])
+        ref_counter_offset = ipc_info["ref_counter_offset"]
+        event_handle = base64.b64decode(ipc_info["event_handle_b64"])
+        event_sync_required = ipc_info["event_sync_required"]
 
-            share_tuple = (
-                device_index,
-                ipc_handle,
-                storage_size,
-                storage_offset_orig,
-                ref_counter_handle,
-                ref_counter_offset,
-                event_handle,
-                event_sync_required,
+        share_tuple = (
+            device_index,
+            ipc_handle,
+            storage_size,
+            storage_offset_orig,
+            ref_counter_handle,
+            ref_counter_offset,
+            event_handle,
+            event_sync_required,
+        )
+
+        storage = torch.UntypedStorage._new_shared_cuda(*share_tuple)
+        dtype = getattr(torch, ipc_info["dtype"].replace("torch.", ""))
+
+        # CRITICAL: Validate dtype against trainer config to prevent silent corruption
+        expected_dtype = (
+            getattr(torch, config.dtype)
+            if isinstance(config.dtype, str)
+            else config.dtype
+        )
+        if dtype != expected_dtype:
+            raise RuntimeError(
+                f"[Setup] Dtype mismatch for {vllm_name}: vLLM has {dtype}, "
+                f"but Trainer expects {expected_dtype}. This would cause silent corruption."
             )
 
-            storage = torch.UntypedStorage._new_shared_cuda(*share_tuple)
-            dtype = getattr(torch, ipc_info["dtype"].replace("torch.", ""))
-            tensor = torch.tensor([], dtype=dtype, device=f"cuda:{device_index}")
-            tensor.set_(
-                storage,
-                storage_offset=ipc_info["tensor_storage_offset"],
-                size=ipc_info["shape"],
-                stride=ipc_info["stride"],
-            )
+        tensor = torch.tensor([], dtype=dtype, device=f"cuda:{device_index}")
+        tensor.set_(
+            storage,
+            storage_offset=ipc_info["tensor_storage_offset"],
+            size=ipc_info["shape"],
+            stride=ipc_info["stride"],
+        )
 
-            vllm_tensor_cache[vllm_name] = tensor
-            return tensor
-
-        except Exception as e:
-            print(f"[Setup] Failed to reconstruct {vllm_name}: {e}", flush=True)
-            return None
+        vllm_tensor_cache[vllm_name] = tensor
+        return tensor
 
     for hf_name, mapping_info in vllm_to_hf_mapping.items():
-        try:
-            if isinstance(mapping_info, dict):
-                # Fused mapping - slice the source tensor
-                vllm_name = mapping_info["source"]
-                slice_start, slice_end = mapping_info["slice"]
-                slice_dim = mapping_info["dim"]
+        if isinstance(mapping_info, dict):
+            # Fused mapping - slice the source tensor
+            vllm_name = mapping_info["source"]
+            slice_start, slice_end = mapping_info["slice"]
+            slice_dim = mapping_info["dim"]
 
-                full_tensor = reconstruct_vllm_tensor(vllm_name)
-                if full_tensor is None:
-                    continue
+            full_tensor = reconstruct_vllm_tensor(vllm_name)
+            if full_tensor is None:
+                continue
 
-                # Create VIEW (not copy) into the fused tensor
-                if slice_dim == 0:
-                    tensor = full_tensor[slice_start:slice_end]
-                else:
-                    tensor = full_tensor.narrow(
-                        slice_dim, slice_start, slice_end - slice_start
-                    )
-
-                tensor.requires_grad_(True)
-                hf_state_dict[hf_name] = tensor
-                fused_count += 1
-                attached_count += 1
-
+            # Create VIEW (not copy) into the fused tensor
+            if slice_dim == 0:
+                tensor = full_tensor[slice_start:slice_end]
             else:
-                # Direct mapping
-                vllm_name = mapping_info
-                tensor = reconstruct_vllm_tensor(vllm_name)
-                if tensor is None:
-                    continue
+                tensor = full_tensor.narrow(
+                    slice_dim, slice_start, slice_end - slice_start
+                )
 
-                tensor.requires_grad_(True)
-                hf_state_dict[hf_name] = tensor
-                attached_count += 1
+            tensor.requires_grad_(True)
+            hf_state_dict[hf_name] = tensor
+            fused_count += 1
+            attached_count += 1
 
-        except Exception as e:
-            print(f"[Setup] Failed to attach {hf_name}: {e}", flush=True)
+        else:
+            # Direct mapping
+            vllm_name = mapping_info
+            tensor = reconstruct_vllm_tensor(vllm_name)
+            if tensor is None:
+                continue
+
+            tensor.requires_grad_(True)
+            hf_state_dict[hf_name] = tensor
+            attached_count += 1
 
     return hf_state_dict, attached_count, fused_count
 
