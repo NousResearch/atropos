@@ -39,17 +39,29 @@ def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
     print(f"  Port {port} is in use, attempting to kill existing process...")
 
     try:
-        # Try to find and kill the process using lsof (Linux/Mac)
+        # Try to find the process using lsof
         result = subprocess.run(
             ["lsof", "-t", "-i", f":{port}"], capture_output=True, text=True, timeout=5
         )
         if result.stdout.strip():
             pids = result.stdout.strip().split("\n")
-            print(f"  Killing {len(pids)} processes on port {port}...")
-            for pid in pids:
+            print(f"  Found {len(pids)} processes on port {port}, verifying before killing...")
+            
+            for pid_str in pids:
                 try:
-                    os.kill(int(pid), signal.SIGTERM)
-                except (ProcessLookupError, ValueError):
+                    pid = int(pid_str)
+                    # Safety check: verify this is likely our process (vllm, python, etc)
+                    with open(f"/proc/{pid}/cmdline", "rb") as f:
+                        cmdline = f.read().decode().replace('\0', ' ')
+                    
+                    is_ours = any(x in cmdline.lower() for x in ["vllm", "python", "atropos"])
+                    
+                    if is_ours:
+                        print(f"    Killing process {pid}: {cmdline[:50]}...")
+                        os.kill(pid, signal.SIGTERM)
+                    else:
+                        print(f"    WARNING: Process {pid} on port {port} does not look like vLLM! Skipping.")
+                except (ProcessLookupError, ValueError, FileNotFoundError):
                     pass
 
             # Wait for port to be free
@@ -61,18 +73,15 @@ def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
                 time.sleep(0.5)
 
             # Force kill if still running
-            killed_count = 0
-            for pid in pids:
+            for pid_str in pids:
                 try:
-                    os.kill(int(pid), signal.SIGKILL)
-                    killed_count += 1
-                except (ProcessLookupError, ValueError):
+                    pid = int(pid_str)
+                    with open(f"/proc/{pid}/cmdline", "rb") as f:
+                        cmdline = f.read().decode().replace('\0', ' ')
+                    if any(x in cmdline.lower() for x in ["vllm", "python", "atropos"]):
+                        os.kill(pid, signal.SIGKILL)
+                except (ProcessLookupError, ValueError, FileNotFoundError):
                     pass
-            if killed_count > 0:
-                print(f"  Force killed {killed_count} stubborn processes")
-
-            time.sleep(1)
-            return not is_port_in_use(port)
     except FileNotFoundError:
         # lsof not available, try fuser (Linux)
         try:
