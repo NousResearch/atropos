@@ -2,9 +2,10 @@ import gzip
 import logging
 import time
 import uuid
+import os
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, status
+from fastapi import FastAPI, status, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import PlainTextResponse
@@ -193,6 +194,10 @@ def _scored_data_to_dict(scored_data: ScoredData) -> Dict[str, Any]:
     }
 
 
+# Maximum number of trajectories to buffer before applying backpressure
+MAX_QUEUE_SIZE = int(os.environ.get("ATROPOS_MAX_QUEUE_SIZE", "1000"))
+
+
 def _process_scored_data(scored_data: ScoredData) -> Dict[str, Any]:
     """Normalize buffering/queueing logic for scored data submissions."""
 
@@ -200,6 +205,13 @@ def _process_scored_data(scored_data: ScoredData) -> Dict[str, Any]:
         app.state.queue = []
     if not hasattr(app.state, "buffer"):
         app.state.buffer = {}
+
+    # Check for queue limit to prevent OOM (Backpressure)
+    if len(app.state.queue) >= MAX_QUEUE_SIZE:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Rollout queue is full ({MAX_QUEUE_SIZE} items). Trainer is lagging."
+        )
 
     data_dict = _scored_data_to_dict(scored_data)
     env_id = data_dict.get("env_id")
