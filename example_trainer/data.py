@@ -125,32 +125,59 @@ def pad_data_to_good_offset(
             # - 1.0 for prompt tokens (masked positions)
             # - actual negative logprobs for generated tokens
             # We just need to pad to match the sequence length
+            # Extract and pad inference logprobs to match labels shape
             if extract_inference_logprobs and "inference_logprobs" in item:
                 if i < len(item["inference_logprobs"]):
                     raw_logprobs = np.array(
                         item["inference_logprobs"][i], dtype=np.float32
                     )
                     has_any_logprobs = True
-
-                    # Create padded logprobs array matching token_setup_len
-                    # Fill with 1.0 (the masked token placeholder value) for padding
                     padded_logprobs = np.full(token_setup_len, 1.0, dtype=np.float32)
-
-                    # Copy raw_logprobs directly - they're already aligned with tokens
                     n_to_copy = min(len(raw_logprobs), token_setup_len)
                     padded_logprobs[:n_to_copy] = raw_logprobs[:n_to_copy]
-
-                    # Shift by 1 to match causal label shift
                     inference_logprobs_padded.append(padded_logprobs[1:])
                 else:
-                    # No logprobs for this sample, use 1.0
                     inference_logprobs_padded.append(
                         np.full(token_setup_len - 1, 1.0, dtype=np.float32)
                     )
             elif extract_inference_logprobs:
-                # No inference_logprobs in item, use 1.0
                 inference_logprobs_padded.append(
                     np.full(token_setup_len - 1, 1.0, dtype=np.float32)
+                )
+
+            # Extract and pad distillation data (Teacher Distillation)
+            if "distill_token_ids" in item and item["distill_token_ids"] is not None:
+                if i < len(item["distill_token_ids"]):
+                    # Shape: [seq_len, K]
+                    d_tokens = np.array(item["distill_token_ids"][i], dtype=np.int32)
+                    d_logprobs = np.array(item["distill_logprobs"][i], dtype=np.float32)
+                    K = d_tokens.shape[1]
+
+                    # Pad seq_len to match token_setup_len
+                    padded_d_tokens = np.zeros((token_setup_len, K), dtype=np.int32)
+                    padded_d_logprobs = np.zeros((token_setup_len, K), dtype=np.float32)
+
+                    n_copy = min(len(d_tokens), token_setup_len)
+                    padded_d_tokens[:n_copy] = d_tokens[:n_copy]
+                    padded_d_logprobs[:n_copy] = d_logprobs[:n_copy]
+
+                    # Shift by 1 for causal
+                    distill_token_ids.append(padded_d_tokens[1:])
+                    distill_logprobs.append(padded_d_logprobs[1:])
+                else:
+                    distill_token_ids.append(
+                        np.zeros((token_setup_len - 1, 1), dtype=np.int32)
+                    )
+                    distill_logprobs.append(
+                        np.zeros((token_setup_len - 1, 1), dtype=np.float32)
+                    )
+            else:
+                # Use small size placeholder
+                distill_token_ids.append(
+                    np.zeros((token_setup_len - 1, 1), dtype=np.int32)
+                )
+                distill_logprobs.append(
+                    np.zeros((token_setup_len - 1, 1), dtype=np.float32)
                 )
 
             # Extract temperature (priority: override > generation_params > group_overrides > 1.0)
