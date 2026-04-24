@@ -493,9 +493,13 @@ def _reconstruct_shared_tensors(
 
         storage = torch.UntypedStorage._new_shared_cuda(*share_tuple)
         dtype = getattr(torch, ipc_info["dtype"].replace("torch.", ""))
-        
+
         # CRITICAL: Validate dtype against trainer config to prevent silent corruption
-        expected_dtype = getattr(torch, config.dtype) if isinstance(config.dtype, str) else config.dtype
+        expected_dtype = (
+            getattr(torch, config.dtype)
+            if isinstance(config.dtype, str)
+            else config.dtype
+        )
         if dtype != expected_dtype:
             raise RuntimeError(
                 f"[Setup] Dtype mismatch for {vllm_name}: vLLM has {dtype}, "
