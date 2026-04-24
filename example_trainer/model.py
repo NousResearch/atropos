@@ -646,23 +646,27 @@ def _initialize_meta_tensors(
                     rope_theta = getattr(model.config, "rope_base", None)
                 if rope_theta is None:
                     rope_theta = getattr(model.config, "theta", None)
-                
+
                 # Check rope_scaling for factor-based scaling models
                 rope_scaling = getattr(model.config, "rope_scaling", None)
                 if isinstance(rope_scaling, dict) and "rope_theta" in rope_scaling:
                     rope_theta = rope_scaling["rope_theta"]
                 elif isinstance(rope_scaling, dict) and "base" in rope_scaling:
                     rope_theta = rope_scaling["base"]
-                
+
                 if rope_theta is None:
-                    print(f"[Setup] WARNING: Could not find rope_theta in config for {name}. Falling back to 10000.0 (Reasoning models may fail!)")
+                    print(
+                        f"[Setup] WARNING: Could not find rope_theta in config for {name}. Falling back to 10000.0 (Reasoning models may fail!)"
+                    )
                     rope_theta = 10000.0
 
                 inv_freq = 1.0 / (
                     rope_theta ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim)
                 )
                 new_buffer = inv_freq.to(dtype=buffer.dtype, device=device)
-                print(f"[Setup] Initialized {name} with detected rope_theta={rope_theta}")
+                print(
+                    f"[Setup] Initialized {name} with detected rope_theta={rope_theta}"
+                )
             else:
                 new_buffer = torch.zeros(
                     buffer.shape, dtype=buffer.dtype, device=device
