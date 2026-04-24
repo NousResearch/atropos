@@ -75,12 +75,28 @@ def pad_data_to_good_offset(
     has_any_logprobs = False
 
     for item in data["batch"]:
-        # Normalize advantage scores
-        scores = np.array(item["scores"])
+        # Normalize advantage scores per group (GRPO style)
+        scores = np.array(item["scores"], dtype=np.float64)
         if len(scores) > 1:
-            scores = scores - scores.mean()
-            scores = scores / max(scores.std(), 1e-8)
-        item["scores"] = scores
+            mean = scores.mean()
+            std = scores.std()
+
+            # Use a robust epsilon that scales with the magnitude of the scores
+            # This prevents "explosion" when std is tiny due to floating point noise
+            # but still allows signal when there's actual variance.
+            eps = max(1e-8, 1e-4 * np.abs(mean))
+
+            if std > eps:
+                scores = (scores - mean) / std
+            else:
+                # If std is too small, all items in the group are essentially equal
+                # We set advantages to 0 to avoid training on noise
+                scores = scores - mean
+        else:
+            # For group size 1, advantage is always 0 relative to self
+            scores = np.zeros_like(scores)
+
+        item["scores"] = scores.astype(np.float32)
 
         # Handle score overrides
         if item["overrides"] is not None:
