@@ -35,6 +35,11 @@ We follow the [GitHub Flow](https://docs.github.com) development workflow. All c
     # Install dependencies, including development dependencies
     pip install -e ".[dev]"
     ```
+Just a quick addition:
+> **Note for Linux / WSL users:** If `python -m venv .venv` fails, try using `python3 -m venv .venv`. If you receive an `ensurepip is not available` error, you will need to install the virtual environment package manually by running `sudo apt install python3.12-venv` (adjusting the version number to match your Python installation) before recreating the environment.
+
+> **Note on Memory/Cache Errors:** If the `pip install` crashes with a "Bus error (core dumped)" or temporary storage errors (e.g., `Input/output error`), your WSL environment might be running out of memory while unpacking large AI libraries. To fix this, completely restart WSL (run `wsl --shutdown` in Windows PowerShell), clear your pip cache (`pip cache purge`), and retry the installation using the no-cache flag: `pip install --no-cache-dir -e ".[dev]"`.
+
 4.  **Install pre-commit hooks:** This project uses `pre-commit` for code quality checks. The hooks will run automatically when you commit changes.
     ```bash
     pre-commit install
