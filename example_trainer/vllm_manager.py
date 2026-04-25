@@ -118,7 +118,9 @@ def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
                 # Nothing we own; do not touch foreign processes.
                 return False
 
-            print(f"  Killing {len(owned_pids)} Atropos-owned processes on port {port}...")
+            print(
+                f"  Killing {len(owned_pids)} Atropos-owned processes on port {port}..."
+            )
             for pid in owned_pids:
                 try:
                     os.kill(int(pid), signal.SIGTERM)
