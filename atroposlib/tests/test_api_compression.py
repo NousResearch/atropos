@@ -256,7 +256,7 @@ class TestAPICompression:
         assert post_response.status_code == 200
 
         status_response = requests.get(
-            "http://localhost:8000/status-env", json={"env_id": env_id}
+            "http://localhost:8000/status-env", params={"env_id": env_id}
         )
         assert status_response.status_code == 200
         status_data = status_response.json()
