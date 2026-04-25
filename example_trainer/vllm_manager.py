@@ -27,11 +27,54 @@ def is_port_in_use(port: int) -> bool:
         return s.connect_ex(("localhost", port)) == 0
 
 
+# Substrings we expect to see in /proc/<pid>/cmdline for a process Atropos
+# is allowed to terminate. Anything else listening on the requested port is
+# treated as a foreign process — Atropos refuses to kill it. Keeps the
+# manager safe on shared multi-tenant clusters where another tenant might
+# happen to bind the same port. See issue #460.
+_OWNED_PROCESS_KEYWORDS = ("vllm", "atropos", "torchrun", "python")
+
+
+def _read_proc_cmdline(pid: int) -> str:
+    """Return /proc/<pid>/cmdline joined on spaces, or '' on any failure.
+
+    Returns '' for non-Linux platforms, processes that disappeared between
+    discovery and inspection, or permission errors.
+    """
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            raw = f.read()
+    except (FileNotFoundError, PermissionError, IsADirectoryError, OSError):
+        return ""
+    return raw.replace(b"\x00", b" ").decode(errors="replace").strip()
+
+
+def _is_atropos_owned(pid: int) -> bool:
+    """Return True iff `pid`'s cmdline contains one of the owned keywords.
+
+    On non-Linux (no /proc) returns False — better to fail safe and skip the
+    kill than to terminate a process Atropos cannot identify.
+    """
+    cmdline = _read_proc_cmdline(pid).lower()
+    if not cmdline:
+        return False
+    return any(kw in cmdline for kw in _OWNED_PROCESS_KEYWORDS)
+
+
 def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
     """
-    Kill any process using the specified port.
+    Kill any **Atropos-owned** process using the specified port.
 
-    Returns True if no process was running or if it was successfully killed.
+    A process is considered Atropos-owned only if its `/proc/<pid>/cmdline`
+    contains one of the keywords in `_OWNED_PROCESS_KEYWORDS`. If a
+    different process (e.g. a database, an SSH session, a monitoring agent)
+    happens to be on the port, this function refuses to kill it and
+    surfaces a port-collision warning instead.
+
+    Returns True if no process was running, if all owned processes were
+    successfully killed, or if the port was freed by other means. Returns
+    False if the port is still bound by either a stubborn owned process or
+    a foreign process.
     """
     if not is_port_in_use(port):
         return True
@@ -44,9 +87,39 @@ def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
             ["lsof", "-t", "-i", f":{port}"], capture_output=True, text=True, timeout=5
         )
         if result.stdout.strip():
-            pids = result.stdout.strip().split("\n")
-            print(f"  Killing {len(pids)} processes on port {port}...")
-            for pid in pids:
+            raw_pids = result.stdout.strip().split("\n")
+            owned_pids: list[str] = []
+            foreign_pids: list[str] = []
+            for raw in raw_pids:
+                try:
+                    pid_int = int(raw)
+                except ValueError:
+                    continue
+                if _is_atropos_owned(pid_int):
+                    owned_pids.append(raw)
+                else:
+                    foreign_pids.append(raw)
+
+            if foreign_pids:
+                cmds = ", ".join(
+                    f"pid={p} cmdline='{_read_proc_cmdline(int(p))[:80]}'"
+                    for p in foreign_pids
+                )
+                print(
+                    f"  REFUSING to kill {len(foreign_pids)} foreign process(es) on "
+                    f"port {port}: {cmds}"
+                )
+                print(
+                    f"  Atropos only kills processes whose cmdline contains one of "
+                    f"{_OWNED_PROCESS_KEYWORDS}. Free the port manually and retry."
+                )
+
+            if not owned_pids:
+                # Nothing we own; do not touch foreign processes.
+                return False
+
+            print(f"  Killing {len(owned_pids)} Atropos-owned processes on port {port}...")
+            for pid in owned_pids:
                 try:
                     os.kill(int(pid), signal.SIGTERM)
                 except (ProcessLookupError, ValueError):
@@ -60,9 +133,9 @@ def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
                     return True
                 time.sleep(0.5)
 
-            # Force kill if still running
+            # Force kill if still running — owned PIDs only
             killed_count = 0
-            for pid in pids:
+            for pid in owned_pids:
                 try:
                     os.kill(int(pid), signal.SIGKILL)
                     killed_count += 1
@@ -74,13 +147,16 @@ def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
             time.sleep(1)
             return not is_port_in_use(port)
     except FileNotFoundError:
-        # lsof not available, try fuser (Linux)
-        try:
-            subprocess.run(["fuser", "-k", f"{port}/tcp"], timeout=5)
-            time.sleep(1)
-            return not is_port_in_use(port)
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
+        # lsof not available — `fuser -k` is even more dangerous (it kills
+        # ANY process on the port) so skip it. The user can free the port
+        # manually; we do not silently terminate processes we cannot
+        # identify.
+        print(
+            f"  WARNING: lsof not available; cannot identify processes on port {port}. "
+            f"Refusing to fall back to `fuser -k` because it would kill foreign "
+            f"processes too. Free the port manually and retry."
+        )
+        return False
     except subprocess.TimeoutExpired:
         pass
 
