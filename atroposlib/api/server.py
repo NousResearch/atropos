@@ -469,7 +469,18 @@ async def get_status():
 
 
 @app.get("/status-env")
-async def get_status_env(env: EnvIdentifier):
+async def get_status_env(env_id: int):
+    """Return per-environment status keyed by `env_id`.
+
+    `env_id` is taken from the query string (e.g. `?env_id=0`). The endpoint
+    previously declared a Pydantic model parameter, which FastAPI bound to the
+    request body — non-standard for GET per RFC 9110 §9.3.1 and stripped by
+    most proxies / CDNs. See issue #449.
+    """
+    # Loops below shadow `env_id` with per-item values; pin the requester's id
+    # under a stable name so later comparisons stay correct.
+    requesting_env_id = env_id
+
     total = sum(
         [
             x["max_context_len"] * max(0.0, x["weight"])
@@ -477,10 +488,10 @@ async def get_status_env(env: EnvIdentifier):
             if x["connected"]
         ]
     )
-    env_group_size = app.state.envs[env.env_id]["group_size"]
+    env_group_size = app.state.envs[env_id]["group_size"]
     env_weight = (
-        app.state.envs[env.env_id]["max_context_len"]
-        * app.state.envs[env.env_id]["weight"]
+        app.state.envs[env_id]["max_context_len"]
+        * app.state.envs[env_id]["weight"]
         / total
     )
     env_weight = max(
@@ -507,13 +518,13 @@ async def get_status_env(env: EnvIdentifier):
         group_size = len(item.get("tokens", []))
         if group_size > max_group_size:
             max_group_size = group_size
-        if item.get("env_id") == env.env_id:
+        if item.get("env_id") == env_id:
             # update the group size for the requesting env, handle cases where the group size may be dynamic with max
             env_group_size = max(env_group_size, group_size)
             num_self_sequences_in_queue += group_size
 
     # update the group size for the requesting env
-    app.state.envs[env.env_id]["group_size"] = env_group_size
+    app.state.envs[env_id]["group_size"] = env_group_size
 
     # Calculate minimum sequences allocated to each environment
     batch_size = getattr(app.state, "batchsize", 0)
@@ -539,7 +550,7 @@ async def get_status_env(env: EnvIdentifier):
         seq_count = len(item.get("tokens", []))
 
         # Special handling for the requesting environment
-        if env_id == env.env_id:
+        if env_id == requesting_env_id:
             curr_env_total_sequences += seq_count
         else:
             if env_id not in sequences_by_env:
