@@ -9,12 +9,12 @@ repos:
     -   id: check-merge-conflict
 
 -   repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 26.3.0
+    rev: 26.3.1
     hooks:
     -   id: black
 
 -   repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.5
+    rev: v0.15.12
     hooks:
     -   id: ruff
         args: ["--select=I", "--fix"]  # Only run import-related rules
