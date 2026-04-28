@@ -272,6 +272,7 @@ class GSM8kEnv(BaseEnv):
         scores["masks"] = list()
         scores["scores"] = list()
         scores["inference_logprobs"] = list()
+        scores["messages"] = list()
         gold_parsed = parse(
             rollout_group_data[0]["gold_answer"],
             extraction_mode="first_match",
@@ -315,6 +316,7 @@ class GSM8kEnv(BaseEnv):
                 scores["masks"].append(masks)
                 scores["inference_logprobs"].append(logprobs)
                 scores["scores"].append(1.0 if reward else -1.0)
+                scores["messages"].append(item["messages"])
 
                 if len(scores["tokens"]) >= self.config.group_size:
                     break

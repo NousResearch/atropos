@@ -51,30 +51,45 @@ class ActionParserInterceptor:
     Returns ONLY the parsed <action>...</action> payload.
     """
     
+    @classmethod
+    def intercept_response(cls, raw_output: str) -> str:
+        """
+        Surgically extracts the action.
+        1. Find the <action> block (handling [SYSTEM: ] prefixes and missing closing tags).
+        2. If found, return only that.
+        3. If not found, return the text with reasoning tags stripped.
+        """
+        if not raw_output:
+            return ""
+
+        # 1. Try to find an action block (case-insensitive, handles [SYSTEM: <action>])
+        # We look for <action> and take everything until </action> OR the end of the string
+        # This is the most reliable way to get the tool call while ignoring reasoning noise.
+        action_pattern = r"(?:\[SYSTEM:\s*)?<action>(.*?)(?:</action>|$)"
+        action_match = re.search(action_pattern, raw_output, re.DOTALL | re.IGNORECASE)
+        
+        if action_match:
+            # We found the action! Return it (re-wrapped for environment consistency)
+            action_content = action_match.group(1).strip()
+            # If the model left a trailing ] from the [SYSTEM: prefix, clean it
+            if action_content.endswith("]"):
+                action_content = action_content[:-1].strip()
+            return f"<action>{action_content}</action>"
+
+        # 2. Fallback: No action block found, so just strip the noise
+        clean_text = cls.strip_ssot_tags(raw_output)
+        return clean_text
+
     @staticmethod
     def strip_ssot_tags(text: str) -> str:
         """
-        Regex-strips <random_string> and <thinking> blocks from text.
-        Case-insensitive and handles multi-line blocks.
+        Basic stripping of known tags.
         """
         if not text:
             return ""
         # Remove SSoT-specific blocks
-        clean_text = re.sub(r'<random_string>.*?</random_string>', '', text, flags=re.DOTALL | re.IGNORECASE)
-        clean_text = re.sub(r'<random_seed>.*?</random_seed>', '', clean_text, flags=re.DOTALL | re.IGNORECASE)
-        clean_text = re.sub(r'<thinking>.*?</thinking>', '', clean_text, flags=re.DOTALL | re.IGNORECASE)
-        return clean_text.strip()
-
-    @classmethod
-    def intercept_response(cls, raw_output: str) -> str:
-        # Remove SSoT-specific blocks to prevent noise from entering the reward model/environment
-        clean_text = cls.strip_ssot_tags(raw_output)
-        
-        # Extract strictly the action payload
-        action_match = re.search(r'<action>(.*?)</action>', clean_text, re.DOTALL | re.IGNORECASE)
-        if action_match:
-            # Re-wrap in action tags for environment consistency
-            return f"<action>{action_match.group(1).strip()}</action>"
-        
-        # Fallback if the model hallucinated the tag structure, though FSM usually prevents this
+        clean_text = re.sub(r"(?:\[SYSTEM:\s*)?<random_string>.*?(?:</random_string>|$)", "", text, flags=re.DOTALL | re.IGNORECASE)
+        clean_text = re.sub(r"(?:\[SYSTEM:\s*)?<thinking>.*?(?:</thinking>|$)", "", clean_text, flags=re.DOTALL | re.IGNORECASE)
+        # Clean up any lingering brackets
+        clean_text = clean_text.replace("]", "").strip()
         return clean_text

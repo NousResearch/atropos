@@ -211,6 +211,17 @@ class BaseEnvConfig(BaseModel):
         "no thinking prompt is injected. Use HERMES_REASONING_PROMPT from "
         "eval_helpers for the standard Hermes reasoning prompt.",
     )
+    ssot_exploration: bool = Field(
+        default=False,
+        description="Enable Reasoning-Guided Exploration (SSoT) protocol. "
+        "Forces the model to generate a random seed and use a rolling hash "
+        "to select a strategy in a <thinking> block.",
+    )
+    ssot_epsilon: float = Field(
+        default=0.15,
+        description="Probability of triggering SSoT exploration (epsilon-reasoning). "
+        "Default 0.15 (15% of turns).",
+    )
 
 
 class BaseEnv(ABC):
@@ -237,12 +248,8 @@ class BaseEnv(ABC):
         self.last_completed_item = None
         self.config = config
 
-        # Build reasoning config from env config fields
-        reasoning_config = ReasoningConfig(
-            enabled=config.thinking_mode,
-            effort=config.reasoning_effort,
-            max_tokens=config.max_reasoning_tokens,
-        )
+        # Build reasoning config from env config fields using the factory method
+        reasoning_config = ReasoningConfig.from_env_config(config)
 
         self.server = ServerManager(
             server_configs,

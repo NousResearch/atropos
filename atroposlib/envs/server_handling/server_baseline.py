@@ -12,6 +12,11 @@ from openai.types.completion import Completion
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 
+from atroposlib.sampling.ssot_wrapper import (
+    ActionParserInterceptor,
+    SSoTExplorationWrapper,
+)
+
 # Valid reasoning effort levels
 VALID_REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh"}
 
@@ -37,6 +42,8 @@ class ReasoningConfig:
     enabled: bool = False
     effort: Optional[str] = None
     max_tokens: Optional[int] = None
+    ssot_exploration: bool = False
+    ssot_epsilon: float = 0.15
 
     def __post_init__(self):
         """Validate and auto-enable if effort or max_tokens are set."""
@@ -148,6 +155,8 @@ class ReasoningConfig:
             enabled=enabled,
             effort=reasoning_effort,
             max_tokens=max_reasoning_tokens,
+            ssot_exploration=getattr(env_config, "ssot_exploration", False),
+            ssot_epsilon=getattr(env_config, "ssot_epsilon", 0.15),
         )
 
 
@@ -294,15 +303,18 @@ class APIServer(ABC):
         self.check_task = None
         self.initialized = False
 
+        # Initialize SSoT components if enabled
+        self.ssot_wrapper = None
+        self.ssot_interceptor = None
+        if self.reasoning_config and self.reasoning_config.ssot_exploration:
+            self.ssot_wrapper = SSoTExplorationWrapper(
+                epsilon=self.reasoning_config.ssot_epsilon
+            )
+            self.ssot_interceptor = ActionParserInterceptor()
+
     def _inject_reasoning_kwargs(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Inject reasoning configuration into kwargs if reasoning is enabled.
-
-        This method can be overridden by subclasses to handle implementation-specific
-        quirks for different server types (vLLM, SGLang, OpenAI, etc.).
-
-        The caller can pass `skip_reasoning=True` in kwargs to bypass injection.
-
         Args:
             kwargs: The kwargs dict to potentially modify
 
@@ -488,6 +500,16 @@ class APIServer(ABC):
         kwargs["model"] = self.config.model_name
         split = kwargs.pop("split", "train")
 
+        # Apply SSoT prompt wrapping if enabled
+        if self.ssot_wrapper:
+            messages = kwargs.get("messages", [])
+            if messages:
+                # Approximate turn index for epsilon-reasoning
+                turn_idx = len(messages) // 2
+                messages[-1]["content"] = self.ssot_wrapper.wrap_prompt(
+                    messages[-1]["content"], turn_idx
+                )
+
         kwargs = self._inject_reasoning_kwargs(kwargs)
 
         stat_dict = {}
@@ -501,6 +523,15 @@ class APIServer(ABC):
             ret_data = await self._chat_eval(stat_dict, **kwargs)
             self.eval_request_timings.append(stat_dict["end"] - stat_dict["start"])
             self.eval_attempts_list.append(stat_dict["attempts"])
+
+        # Apply SSoT response cleaning if enabled
+        if self.ssot_interceptor and ret_data:
+            for choice in ret_data.choices:
+                if choice.message.content:
+                    choice.message.content = self.ssot_interceptor.intercept_response(
+                        choice.message.content
+                    )
+
         return ret_data
 
     @retry(
