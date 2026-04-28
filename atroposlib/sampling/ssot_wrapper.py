@@ -1,6 +1,7 @@
-import re
 import random
-from typing import List, Dict, Any
+import re
+from typing import Any, Dict, List
+
 
 class SSoTExplorationWrapper:
     """
@@ -33,16 +34,16 @@ class SSoTExplorationWrapper:
             return prompt + self.ssot_instruction
         return prompt
 
-    def flush_context(self, history: List[Dict[str, Any]], raw_output: str, parsed_action: str) -> List[Dict[str, Any]]:
+    def flush_context(
+        self, history: List[Dict[str, Any]], raw_output: str, parsed_action: str
+    ) -> List[Dict[str, Any]]:
         """
         Prevents SSoT entropy and CoT math from being appended to the multi-turn history.
         Appends only the deterministic parsed_action to the context.
         """
-        history.append({
-            "role": "assistant",
-            "content": parsed_action
-        })
+        history.append({"role": "assistant", "content": parsed_action})
         return history
+
 
 class ActionParserInterceptor:
     """
@@ -50,7 +51,7 @@ class ActionParserInterceptor:
     Regex-strips <random_string> and <thinking> blocks from the policy's raw output.
     Returns ONLY the parsed <action>...</action> payload.
     """
-    
+
     @classmethod
     def intercept_response(cls, raw_output: str) -> str:
         """
@@ -67,7 +68,7 @@ class ActionParserInterceptor:
         # This is the most reliable way to get the tool call while ignoring reasoning noise.
         action_pattern = r"(?:\[SYSTEM:\s*)?<action>(.*?)(?:</action>|$)"
         action_match = re.search(action_pattern, raw_output, re.DOTALL | re.IGNORECASE)
-        
+
         if action_match:
             # We found the action! Return it (re-wrapped for environment consistency)
             action_content = action_match.group(1).strip()
@@ -88,8 +89,18 @@ class ActionParserInterceptor:
         if not text:
             return ""
         # Remove SSoT-specific blocks
-        clean_text = re.sub(r"(?:\[SYSTEM:\s*)?<random_string>.*?(?:</random_string>|$)", "", text, flags=re.DOTALL | re.IGNORECASE)
-        clean_text = re.sub(r"(?:\[SYSTEM:\s*)?<thinking>.*?(?:</thinking>|$)", "", clean_text, flags=re.DOTALL | re.IGNORECASE)
+        clean_text = re.sub(
+            r"(?:\[SYSTEM:\s*)?<random_string>.*?(?:</random_string>|$)",
+            "",
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        clean_text = re.sub(
+            r"(?:\[SYSTEM:\s*)?<thinking>.*?(?:</thinking>|$)",
+            "",
+            clean_text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
         # Clean up any lingering brackets
         clean_text = clean_text.replace("]", "").strip()
         return clean_text

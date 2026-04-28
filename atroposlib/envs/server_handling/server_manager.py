@@ -105,7 +105,10 @@ class ServerManager:
         if not isinstance(configs, list):
             # If a single config is passed, we check if it already has a base_url.
             # If it does, we use it directly instead of auto-generating local ports.
-            if getattr(configs, "base_url", None) and configs.base_url != "http://localhost:9004/v1":
+            if (
+                getattr(configs, "base_url", None)
+                and configs.base_url != "http://localhost:9004/v1"
+            ):
                 self.servers = [
                     server_class(configs, reasoning_config=reasoning_config)
                 ]
