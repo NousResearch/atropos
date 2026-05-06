@@ -1,7 +1,6 @@
 import base64
 import io
 import random
-import re
 import traceback
 from typing import List, Optional, Tuple
 
@@ -16,6 +15,7 @@ from atroposlib.envs.base import (
     ScoredDataGroup,
 )
 from atroposlib.type_definitions import GameHistory, Item
+from atroposlib.utils.structured_output import extract_tagged_or_raw
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
 
@@ -128,12 +128,10 @@ class PixmoCountEnv(BaseEnv):
 
             try:
                 reply = item[0][-1]["content"]
-                m = re.search(r"<answer>\s*(.*?)\s*</answer>", reply, re.IGNORECASE)
-                model_answer = m.group(1).strip() if m else reply.strip()
+                model_answer = extract_tagged_or_raw(reply, tag="answer")
 
                 gold = item[1]
-                g = re.search(r"<answer>\s*(.*?)\s*</answer>", gold, re.IGNORECASE)
-                gold_answer = g.group(1).strip() if g else gold.strip()
+                gold_answer = extract_tagged_or_raw(gold, tag="answer")
 
                 reward = model_answer.lower() == gold_answer.lower()
             except Exception:
