@@ -176,7 +176,7 @@ def test_extract_json(text, expected):
 @pytest.mark.parametrize(
     ("text", "language", "expected"),
     [
-        ("```json\n{\"a\":1}\n```", "json", '{"a":1}'),
+        ('```json\n{"a":1}\n```', "json", '{"a":1}'),
         ("```python\nprint(1)\n```", None, "print(1)"),
         ("```txt\nhello\n```", "json", None),
         ("```python\nunterminated", "python", None),

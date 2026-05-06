@@ -6,7 +6,6 @@ import json
 import re
 from typing import Any
 
-
 THINK_BLOCK_PATTERN = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 BOXED_PATTERN = re.compile(r"\\boxed\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}")
 
@@ -121,7 +120,9 @@ def extract_tagged_or_raw(text: str, tag: str = "answer") -> str:
     with leading/trailing whitespace removed.
     """
 
-    extracted = extract_tagged(text, tag=tag, strict_single=False, after_think_only=False)
+    extracted = extract_tagged(
+        text, tag=tag, strict_single=False, after_think_only=False
+    )
     if extracted is not None:
         return extracted
     return text.strip() if isinstance(text, str) else str(text).strip()
@@ -202,9 +203,7 @@ def extract_json(text: str) -> dict | list | None:
     if not isinstance(text, str):
         return None
 
-    start_positions = [
-        (idx, char) for idx, char in enumerate(text) if char in "{["
-    ]
+    start_positions = [(idx, char) for idx, char in enumerate(text) if char in "{["]
     for start_idx, start_char in start_positions:
         end_char = "}" if start_char == "{" else "]"
         depth = 0
