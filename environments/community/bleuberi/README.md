@@ -12,11 +12,28 @@ BLEUBERI uses BLEU scores (a simple n-gram matching metric) directly as rewards 
 
 ## Installation
 
-Before using the BLEUBERI environment, you need to install its dependencies:
+The BLEUBERI environment depends on a git submodule (`bleuberi-repo`, mirroring [lilakk/BLEUBERI](https://github.com/lilakk/BLEUBERI)) and a few Python packages.
+
+### 1. Initialize the submodule (opt-in)
+
+The submodule is configured with `update = none` so that the top-level `git submodule update --init --recursive` (and `uv pip install` from git) does **not** auto-clone it. This keeps the rest of Atropos installable for users who don't need BLEUBERI.
+
+To use this environment, fetch the submodule explicitly:
 
 ```bash
-# Install the required dependencies
-pip install -r environments/bleuberi/requirements.txt
+git submodule update --init environments/community/bleuberi/bleuberi-repo
+```
+
+> **Note on LFS:** the upstream BLEUBERI repository tracks evaluation data under `arena_analysis/` with Git LFS. If you hit `batch response: This repository exceeded its LFS budget` (see [#448](https://github.com/NousResearch/atropos/issues/448)) and do not need those evaluation files for training, skip the LFS smudge:
+>
+> ```bash
+> GIT_LFS_SKIP_SMUDGE=1 git submodule update --init environments/community/bleuberi/bleuberi-repo
+> ```
+
+### 2. Install Python dependencies
+
+```bash
+pip install -r environments/community/bleuberi/requirements.txt
 ```
 
 The key dependencies include:

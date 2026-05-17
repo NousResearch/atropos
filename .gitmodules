@@ -10,3 +10,4 @@
 [submodule "environments/community/bleuberi/bleuberi-repo"]
 	path = environments/community/bleuberi/bleuberi-repo
 	url = https://github.com/lilakk/BLEUBERI.git
+	update = none

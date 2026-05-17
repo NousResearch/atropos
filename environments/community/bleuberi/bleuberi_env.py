@@ -43,10 +43,22 @@ class BLEUBERIItem(TypedDict):
     metadata: Dict[str, Any]
 
 
-# Add the BLEUBERI repository to the Python path
+# Add the BLEUBERI repository to the Python path. The submodule is configured
+# `update = none` in .gitmodules so it isn't auto-fetched by recursive submodule
+# init — see this directory's README for the explicit init command.
 _SUBMODULE_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "bleuberi-repo")
 )
+if not os.path.isdir(os.path.join(_SUBMODULE_DIR, "training")):
+    raise RuntimeError(
+        "BLEUBERI submodule not initialized at "
+        f"{_SUBMODULE_DIR}. Run:\n\n"
+        "    git submodule update --init "
+        "environments/community/bleuberi/bleuberi-repo\n\n"
+        "If the upstream repo's LFS budget is exhausted and you don't need "
+        "the eval data, prefix with GIT_LFS_SKIP_SMUDGE=1. See "
+        "environments/community/bleuberi/README.md for details."
+    )
 if _SUBMODULE_DIR not in sys.path:
     sys.path.insert(0, _SUBMODULE_DIR)
 
