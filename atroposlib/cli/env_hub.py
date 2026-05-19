@@ -141,7 +141,11 @@ def install(
         shutil.rmtree(dest_dir)
     dest_dir.mkdir(parents=True)
 
-    safe_files = [f for f in files if ".." not in f and not f.startswith("/")]
+    safe_files = [
+        f
+        for f in files
+        if ".." not in f and not f.startswith("/") and not Path(f).is_absolute()
+    ]
 
     with Progress(
         TextColumn("{task.description}"),
@@ -151,7 +155,9 @@ def install(
     ) as progress:
         task = progress.add_task(f"Installing {env_id}", total=len(safe_files))
         for rel_path in safe_files:
-            dest_path = dest_dir / rel_path
+            dest_path = (dest_dir / rel_path).resolve()
+            if not dest_path.is_relative_to(dest_dir.resolve()):
+                continue
             try:
                 _download_file(base_url, env_id, rel_path, dest_path, static=use_static)
             except requests.RequestException as e:
