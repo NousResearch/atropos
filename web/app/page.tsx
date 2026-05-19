@@ -1,9 +1,5 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   ArrowUpRight,
   ChevronRight,
@@ -17,13 +13,24 @@ import {
   Sparkles,
   Star,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getContributingUrl, getEnvironmentRoute, getManifestUrl, getRepositoryUrl } from "@/lib/site";
+import {
+  getContributingUrl,
+  getEnvironmentRoute,
+  getManifestUrl,
+  getRepositoryUrl,
+} from "@/lib/site";
 import { cn } from "@/lib/utils";
+
 import type { Environment } from "@/types/env";
 
 const CATEGORIES = [
@@ -61,13 +68,13 @@ function EnvironmentCard({
       <Card
         className={cn(
           "group h-full transition-all duration-200 hover:border-primary/60 hover:bg-[hsl(var(--panel-elevated))]",
-          view === "list" && "flex h-auto flex-col sm:flex-row"
+          view === "list" && "flex h-auto flex-col sm:flex-row",
         )}
       >
         <CardHeader
           className={cn(
             "flex h-full flex-col justify-between gap-6 border-b border-white/8 pb-4",
-            view === "list" && "w-full border-b sm:w-[19rem] sm:border-b-0 sm:border-r"
+            view === "list" && "w-full border-b sm:w-[19rem] sm:border-b-0 sm:border-r",
           )}
         >
           <div className="space-y-4">
@@ -97,7 +104,9 @@ function EnvironmentCard({
             <div className="grid gap-2 text-xs uppercase tracking-[0.22em] text-muted-foreground sm:grid-cols-2">
               <div className="screen-frame-alt p-3">
                 <div className="data-label">Files</div>
-                <div className="mt-2 text-sm font-semibold text-foreground">{env.fileCount ?? "--"}</div>
+                <div className="mt-2 text-sm font-semibold text-foreground">
+                  {env.fileCount ?? "--"}
+                </div>
               </div>
               <div className="screen-frame-alt p-3">
                 <div className="data-label">Mass</div>
@@ -147,15 +156,7 @@ function EmptyPanel({ message }: { message: string }) {
   );
 }
 
-function SectionHeader({
-  label,
-  title,
-  count,
-}: {
-  label: string;
-  title: string;
-  count: number;
-}) {
+function SectionHeader({ label, title, count }: { label: string; title: string; count: number }) {
   return (
     <div className="mb-5 flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
@@ -280,7 +281,11 @@ export default function ExplorePage() {
 
               <div className="grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-3">
                 <SignalTile icon={Database} label="Registry Size" value={`${envs.length}`} />
-                <SignalTile icon={Sparkles} label="Filtered Set" value={loading ? "..." : `${filtered.length}`} />
+                <SignalTile
+                  icon={Sparkles}
+                  label="Filtered Set"
+                  value={loading ? "..." : `${filtered.length}`}
+                />
                 <SignalTile icon={Folder} label="Visible Mass" value={formatBytes(archiveMass)} />
               </div>
             </div>
@@ -290,8 +295,14 @@ export default function ExplorePage() {
             <div className="screen-frame-alt p-5">
               <div className="data-label">Poster Notes</div>
               <div className="mt-4 space-y-4 text-sm leading-6 text-muted-foreground">
-                <p>Warm monochrome framing, caution accents, and dense metadata blocks mirror the supplied label/poster references.</p>
-                <p>The hosted build reads generated JSON plus GitHub raw content, so the UI can be published as a static mirror.</p>
+                <p>
+                  Warm monochrome framing, caution accents, and dense metadata blocks mirror the
+                  supplied label/poster references.
+                </p>
+                <p>
+                  The hosted build reads generated JSON plus GitHub raw content, so the UI can be
+                  published as a static mirror.
+                </p>
               </div>
             </div>
 
@@ -407,7 +418,7 @@ export default function ExplorePage() {
                   <div
                     className={cn(
                       "grid gap-4",
-                      view === "grid" ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" : "grid-cols-1"
+                      view === "grid" ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" : "grid-cols-1",
                     )}
                   >
                     {featured.map((env, index) => (
@@ -426,7 +437,9 @@ export default function ExplorePage() {
                     <div
                       className={cn(
                         "grid gap-4",
-                        view === "grid" ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" : "grid-cols-1"
+                        view === "grid"
+                          ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+                          : "grid-cols-1",
                       )}
                     >
                       {filtered.slice(featured.length).map((env, index) => (

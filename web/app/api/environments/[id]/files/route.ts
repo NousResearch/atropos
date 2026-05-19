@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+
 import { getEnvById, listEnvFiles, listEnvFilesWithSizes } from "@/lib/env-api";
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!getEnvById(id))
     return NextResponse.json({ error: "Environment not found" }, { status: 404 });

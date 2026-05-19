@@ -2,9 +2,10 @@
 
 import React from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import remarkGfm from "remark-gfm";
+
 import { cn } from "@/lib/utils";
 
 const CODE_EXT_TO_LANG: Record<string, string> = {
@@ -48,7 +49,7 @@ export function FileViewer({
       <div
         className={cn(
           "prose prose-invert prose-sm max-w-none dark:prose-invert prose-headings:uppercase prose-headings:tracking-[0.12em] prose-headings:text-foreground prose-p:text-muted-foreground prose-a:text-primary prose-strong:text-foreground prose-code:text-primary prose-pre:border prose-pre:border-white/10 prose-pre:bg-black/55 prose-blockquote:border-primary/40 prose-blockquote:text-muted-foreground",
-          className
+          className,
         )}
       >
         <ReactMarkdown

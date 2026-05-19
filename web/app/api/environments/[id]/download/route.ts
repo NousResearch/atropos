@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { PassThrough } from "stream";
+
 import archiver from "archiver";
+import { NextRequest, NextResponse } from "next/server";
+
 import { getEnvById, getEnvDirPath, listEnvFiles } from "@/lib/env-api";
 
 function nodeStreamToWeb(readable: NodeJS.ReadableStream): ReadableStream<Uint8Array> {
@@ -15,14 +17,10 @@ function nodeStreamToWeb(readable: NodeJS.ReadableStream): ReadableStream<Uint8A
   });
 }
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const env = getEnvById(id);
-  if (!env)
-    return NextResponse.json({ error: "Environment not found" }, { status: 404 });
+  if (!env) return NextResponse.json({ error: "Environment not found" }, { status: 404 });
   const dirPath = getEnvDirPath(id);
   if (!dirPath)
     return NextResponse.json({ error: "Environment directory not found" }, { status: 404 });

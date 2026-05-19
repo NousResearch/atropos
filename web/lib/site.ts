@@ -46,7 +46,7 @@ export function getGithubTreeUrl(envId: string) {
 
 export function getGithubRawUrl(envId: string, filePath: string) {
   return `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/environments/${encodePath(
-    envId
+    envId,
   )}/${encodePath(filePath)}`;
 }
 

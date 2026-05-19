@@ -1,17 +1,19 @@
 "use client";
 
-import { useState } from "react";
 import { Check, Copy, ExternalLink, FolderGit2, TerminalSquare, X } from "lucide-react";
+import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog";
-import { GITHUB_REF, GITHUB_REPO, getSiteUrl } from "@/lib/site";
+import { getSiteUrl, GITHUB_REF, GITHUB_REPO } from "@/lib/site";
+
 import type { Environment } from "@/types/env";
 
 const STEPS = [
@@ -23,8 +25,7 @@ const STEPS = [
   {
     title: "Install Environment",
     note: "Install a specific environment from your base URL.",
-    code: (id: string) =>
-      `atropos install ${id} --base-url ${getSiteUrl()}`,
+    code: (id: string) => `atropos install ${id} --base-url ${getSiteUrl()}`,
   },
   {
     title: "List Installed Environments",
@@ -33,13 +34,7 @@ const STEPS = [
   },
 ];
 
-function CodeBlock({
-  code,
-  onCopy,
-}: {
-  code: string;
-  onCopy?: () => void;
-}) {
+function CodeBlock({ code, onCopy }: { code: string; onCopy?: () => void }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
@@ -158,11 +153,7 @@ export function InstallModal({ open, onOpenChange, env, sourceUrl, readmeUrl }: 
                     )}
                   </div>
                   <CodeBlock
-                    code={
-                      typeof step.code === "function"
-                        ? step.code(env.id)
-                        : step.code
-                    }
+                    code={typeof step.code === "function" ? step.code(env.id) : step.code}
                   />
                 </div>
               ))}

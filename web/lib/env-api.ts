@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+
 import type { Environment, EnvironmentDetail, EnvironmentFile } from "@/types/env";
 
 function slugifyEnvId(envId: string) {
@@ -8,7 +9,8 @@ function slugifyEnvId(envId: string) {
 
 function getManifestPath() {
   return (
-    process.env.ENVIRONMENTS_MANIFEST_PATH ?? path.join(process.cwd(), "public", "environments.json")
+    process.env.ENVIRONMENTS_MANIFEST_PATH ??
+    path.join(process.cwd(), "public", "environments.json")
   );
 }
 
@@ -23,6 +25,17 @@ function getEnvironmentsRoot() {
 function isWithinRoot(root: string, candidate: string) {
   const relative = path.relative(root, candidate);
   return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+function isSafeRealPath(filePath: string, root: string): boolean {
+  try {
+    const realFilePath = fs.realpathSync(filePath);
+    const realRoot = fs.realpathSync(root);
+    const relative = path.relative(realRoot, realFilePath);
+    return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+  } catch {
+    return false;
+  }
 }
 
 export function loadManifest(): Environment[] {
@@ -45,7 +58,15 @@ export function getEnvDirPath(id: string) {
   if (!isWithinRoot(root, fullPath)) {
     return null;
   }
-  if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isDirectory()) {
+  try {
+    const stat = fs.lstatSync(fullPath);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  if (!isSafeRealPath(fullPath, root)) {
     return null;
   }
   return fullPath;
@@ -60,7 +81,16 @@ export function getEnvFilePath(id: string, relativeFilePath: string) {
   if (!isWithinRoot(dirPath, fullPath)) {
     return null;
   }
-  if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) {
+  try {
+    const stat = fs.lstatSync(fullPath);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  const root = getEnvironmentsRoot();
+  if (!isSafeRealPath(fullPath, root)) {
     return null;
   }
   return fullPath;
@@ -83,15 +113,21 @@ function walkFiles(dirPath: string, current = ""): EnvironmentFile[] {
     if (entry.name.startsWith(".")) {
       continue;
     }
+    if (entry.isSymbolicLink()) {
+      continue;
+    }
     const relativePath = current ? `${current}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
       files.push(...walkFiles(dirPath, relativePath));
       continue;
     }
     const fullPath = path.join(dirPath, relativePath);
+    if (!isSafeRealPath(fullPath, dirPath)) {
+      continue;
+    }
     files.push({
       path: relativePath.replace(/\\/g, "/"),
-      size: fs.statSync(fullPath).size,
+      size: fs.lstatSync(fullPath).size,
       previewable: true,
     });
   }

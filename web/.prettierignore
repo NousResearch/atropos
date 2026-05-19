@@ -1,0 +1,5 @@
+node_modules
+.next
+public/environments.json
+public/env-data
+public/env-files

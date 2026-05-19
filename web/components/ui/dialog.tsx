@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+
 import { cn } from "@/lib/utils";
 
 interface DialogContextValue {
@@ -23,11 +24,7 @@ const Dialog = ({
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
   const onOpenChange = controlledOnOpenChange ?? setInternalOpen;
-  return (
-    <DialogContext.Provider value={{ open, onOpenChange }}>
-      {children}
-    </DialogContext.Provider>
-  );
+  return <DialogContext.Provider value={{ open, onOpenChange }}>{children}</DialogContext.Provider>;
 };
 
 const DialogTrigger = React.forwardRef<
@@ -70,7 +67,7 @@ const DialogContent = React.forwardRef<
         role="dialog"
         className={cn(
           "screen-frame-elevated scanlines relative z-50 grid w-full max-w-lg gap-4 overflow-hidden p-6 shadow-brutal",
-          className
+          className,
         )}
         {...props}
       >
@@ -85,16 +82,15 @@ const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   <div className={cn("flex flex-col space-y-2 text-center sm:text-left", className)} {...props} />
 );
 
-const DialogTitle = React.forwardRef<
-  HTMLHeadingElement,
-  React.HTMLAttributes<HTMLHeadingElement>
->(({ className, ...props }, ref) => (
-  <h2
-    ref={ref}
-    className={cn("text-lg font-semibold uppercase tracking-[0.16em]", className)}
-    {...props}
-  />
-));
+const DialogTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
+  ({ className, ...props }, ref) => (
+    <h2
+      ref={ref}
+      className={cn("text-lg font-semibold uppercase tracking-[0.16em]", className)}
+      {...props}
+    />
+  ),
+);
 DialogTitle.displayName = "DialogTitle";
 
 const DialogDescription = React.forwardRef<
@@ -116,7 +112,7 @@ const DialogClose = React.forwardRef<
       type="button"
       className={cn(
         "absolute right-4 top-4 border border-white/10 bg-black/40 p-2 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground",
-        className
+        className,
       )}
       onClick={(e) => {
         ctx?.onOpenChange(false);
@@ -128,4 +124,12 @@ const DialogClose = React.forwardRef<
 });
 DialogClose.displayName = "DialogClose";
 
-export { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose };
+export {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+};

@@ -1,9 +1,5 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   ArrowLeft,
   ChevronRight,
@@ -13,11 +9,15 @@ import {
   Orbit,
   ScanSearch,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
-import { InstallModal } from "@/components/InstallModal";
 import { FileViewer } from "@/components/FileViewer";
+import { InstallModal } from "@/components/InstallModal";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   getEnvironmentDataUrl,
   getGithubRawUrl,
@@ -25,6 +25,7 @@ import {
   getRepositoryUrl,
 } from "@/lib/site";
 import { cn } from "@/lib/utils";
+
 import type { EnvironmentDetail } from "@/types/env";
 
 function formatSize(bytes: number): string {
@@ -33,13 +34,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function DetailPanel({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function DetailPanel({ label, value }: { label: string; value: string }) {
   return (
     <div className="screen-frame-alt p-4">
       <div className="data-label">{label}</div>
@@ -50,13 +45,7 @@ function DetailPanel({
   );
 }
 
-function PlaceholderPanel({
-  label,
-  message,
-}: {
-  label: string;
-  message: string;
-}) {
+function PlaceholderPanel({ label, message }: { label: string; message: string }) {
   return (
     <div className="screen-frame scanlines p-8">
       <div className="section-kicker">{label}</div>
@@ -108,7 +97,7 @@ export function EnvironmentDetailClient({ slug }: { slug: string }) {
 
   const selectedFileMeta = useMemo(
     () => files.find((file) => file.path === selectedFile) ?? null,
-    [files, selectedFile]
+    [files, selectedFile],
   );
 
   useEffect(() => {
@@ -224,19 +213,21 @@ export function EnvironmentDetailClient({ slug }: { slug: string }) {
               <div className="screen-frame-alt p-5">
                 <div className="data-label">Action Cluster</div>
                 <div className="mt-4 flex flex-col gap-3">
-                  <Button className="justify-between" size="sm" onClick={() => setInstallOpen(true)}>
+                  <Button
+                    className="justify-between"
+                    size="sm"
+                    onClick={() => setInstallOpen(true)}
+                  >
                     <span className="flex items-center gap-2">
                       <Folder className="h-4 w-4" />
                       Acquire Source
                     </span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
-
                 </div>
               </div>
             </div>
           </div>
-
         </header>
 
         <div className="mt-0 space-y-8">
@@ -265,14 +256,17 @@ export function EnvironmentDetailClient({ slug }: { slug: string }) {
                       onClick={() => setSelectedFile(file.path)}
                       className={cn(
                         "flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-white/5",
-                        selectedFile === file.path && "bg-primary/10"
+                        selectedFile === file.path && "bg-primary/10",
                       )}
                     >
                       <FileText className="h-4 w-4 shrink-0 text-primary" />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-foreground">{file.path}</div>
+                        <div className="truncate text-sm font-medium text-foreground">
+                          {file.path}
+                        </div>
                         <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                          {formatSize(file.size)} {file.previewable ? " // previewable" : " // binary or large"}
+                          {formatSize(file.size)}{" "}
+                          {file.previewable ? " // previewable" : " // binary or large"}
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -297,14 +291,19 @@ export function EnvironmentDetailClient({ slug }: { slug: string }) {
                 <div className="space-y-0">
                   <div className="border-b border-white/8 bg-black/30 px-5 py-4">
                     <div className="data-label">Selected Path</div>
-                    <div className="mt-2 truncate font-mono text-sm text-foreground">{selectedFile}</div>
+                    <div className="mt-2 truncate font-mono text-sm text-foreground">
+                      {selectedFile}
+                    </div>
                   </div>
                   <div className="max-h-[42rem] overflow-auto p-5">
                     {fileLoading ? (
                       <div className="text-sm text-muted-foreground">Loading file contents…</div>
                     ) : selectedFileMeta && !selectedFileMeta.previewable ? (
                       <div className="space-y-4 text-sm text-muted-foreground">
-                        <p>This file is not previewable in the static mirror. Open the source tree to inspect it directly.</p>
+                        <p>
+                          This file is not previewable in the static mirror. Open the source tree to
+                          inspect it directly.
+                        </p>
                         <a href={githubTreeUrl} target="_blank" rel="noopener noreferrer">
                           <Button variant="outline" size="sm">
                             Open Source Folder
@@ -340,7 +339,8 @@ export function EnvironmentDetailClient({ slug }: { slug: string }) {
                     </h2>
                     <ul className="mt-4 space-y-3 text-sm leading-7 text-muted-foreground">
                       <li>
-                        <span className="text-foreground">Environment ID:</span> <code>{env.id}</code>
+                        <span className="text-foreground">Environment ID:</span>{" "}
+                        <code>{env.id}</code>
                       </li>
                       <li>
                         <span className="text-foreground">Description:</span>{" "}
@@ -358,7 +358,8 @@ export function EnvironmentDetailClient({ slug }: { slug: string }) {
                         {(env.tags || []).join(", ") || "—"}
                       </li>
                       <li>
-                        <span className="text-foreground">Tracked Size:</span> {formatSize(detail.totalSize)}
+                        <span className="text-foreground">Tracked Size:</span>{" "}
+                        {formatSize(detail.totalSize)}
                       </li>
                     </ul>
                   </div>

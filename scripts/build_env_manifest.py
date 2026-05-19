@@ -139,6 +139,17 @@ def find_environment_dirs(environments_root: Path) -> list[Path]:
     return sorted(minimal_readme, key=lambda path: str(path))
 
 
+def is_safe_path(file_path: Path, root: Path) -> bool:
+    """Verify that the real (symlink-resolved) path stays within root."""
+    try:
+        real = file_path.resolve(strict=True)
+        real_root = root.resolve(strict=True)
+        real.relative_to(real_root)
+        return True
+    except (ValueError, OSError):
+        return False
+
+
 def list_env_files(env_dir: Path) -> tuple[list[dict], int, str]:
     """Collect relative file paths and metadata for an environment directory."""
     files = []
@@ -146,13 +157,17 @@ def list_env_files(env_dir: Path) -> tuple[list[dict], int, str]:
     readme_path = ""
 
     for file_path in sorted(env_dir.rglob("*")):
+        if file_path.is_symlink():
+            continue
         if not file_path.is_file():
             continue
         if any(part.startswith(".") for part in file_path.relative_to(env_dir).parts):
             continue
+        if not is_safe_path(file_path, env_dir):
+            continue
 
         relative_path = str(file_path.relative_to(env_dir)).replace("\\", "/")
-        stat = file_path.stat()
+        stat = file_path.lstat()
         total_size += stat.st_size
 
         if not readme_path and relative_path.lower().endswith("readme.md"):
@@ -226,6 +241,8 @@ def build_manifest(environments_path: Path, output_path: Path) -> None:
         env_files_dir.mkdir(parents=True, exist_ok=True)
         for file_info in files:
             src = env_dir / file_info["path"]
+            if not is_safe_path(src, env_dir):
+                continue
             dst = env_files_dir / file_info["path"]
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)

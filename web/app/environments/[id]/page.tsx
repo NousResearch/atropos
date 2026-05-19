@@ -9,10 +9,6 @@ export function generateStaticParams() {
   }));
 }
 
-export default function EnvironmentDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default function EnvironmentDetailPage({ params }: { params: { id: string } }) {
   return <EnvironmentDetailClient slug={decodeURIComponent(params.id)} />;
 }

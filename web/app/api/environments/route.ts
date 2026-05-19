@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+
 import { loadManifest } from "@/lib/env-api";
 
 export async function GET(request: NextRequest) {
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
       (e) =>
         e.name.toLowerCase().includes(q) ||
         (e.description || "").toLowerCase().includes(q) ||
-        (e.tags || []).some((t) => t.toLowerCase().includes(q))
+        (e.tags || []).some((t) => t.toLowerCase().includes(q)),
     );
   }
   if (category) {

@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const isStaticExport = process.env.STATIC_EXPORT === "true";
-const basePath = isStaticExport ? process.env.PAGES_BASE_PATH ?? "" : "";
+const basePath = isStaticExport ? (process.env.PAGES_BASE_PATH ?? "") : "";
 
 const nextConfig = {
   reactStrictMode: true,

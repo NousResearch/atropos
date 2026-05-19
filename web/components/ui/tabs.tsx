@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+
 import { cn } from "@/lib/utils";
 
 const TabsContext = React.createContext<{
@@ -10,7 +11,11 @@ const TabsContext = React.createContext<{
 
 const Tabs = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & { value?: string; onValueChange?: (v: string) => void; defaultValue?: string }
+  React.HTMLAttributes<HTMLDivElement> & {
+    value?: string;
+    onValueChange?: (v: string) => void;
+    defaultValue?: string;
+  }
 >(({ className, value, onValueChange, defaultValue, children, ...props }, ref) => {
   const [internal, setInternal] = React.useState(defaultValue ?? "");
   const current = value ?? internal;
@@ -25,19 +30,18 @@ const Tabs = React.forwardRef<
 });
 Tabs.displayName = "Tabs";
 
-const TabsList = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
+const TabsList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn(
         "inline-flex min-h-12 items-center justify-center gap-1 border border-white/10 bg-black/35 p-1 text-muted-foreground shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]",
-      className
-    )}
-    {...props}
-  />
-));
+        className,
+      )}
+      {...props}
+    />
+  ),
+);
 TabsList.displayName = "TabsList";
 
 const TabsTrigger = React.forwardRef<
@@ -57,7 +61,7 @@ const TabsTrigger = React.forwardRef<
         active
           ? "border-primary/50 bg-primary/12 text-foreground shadow-[inset_0_0_0_1px_rgba(255,219,180,0.22)]"
           : "hover:border-white/10 hover:bg-white/5 hover:text-foreground",
-        className
+        className,
       )}
       onClick={() => ctx?.onValueChange(value)}
       {...props}
@@ -76,4 +80,4 @@ const TabsContent = React.forwardRef<
 });
 TabsContent.displayName = "TabsContent";
 
-export { Tabs, TabsList, TabsTrigger, TabsContent };
+export { Tabs, TabsContent, TabsList, TabsTrigger };

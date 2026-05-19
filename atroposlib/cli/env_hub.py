@@ -12,14 +12,7 @@ from urllib.parse import quote as urlquote
 import requests
 import typer
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    DownloadColumn,
-    Progress,
-    TaskProgressColumn,
-    TextColumn,
-    TimeRemainingColumn,
-)
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn
 
 console = Console()
 
@@ -91,7 +84,7 @@ def _try_static_file_list(base_url: str, env_id: str) -> list[str] | None:
         return None
 
 
-def download_with_progress(
+def _download_file(
     base_url: str,
     env_id: str,
     rel_path: str,
@@ -105,26 +98,10 @@ def download_with_progress(
     else:
         safe_id = urlquote(env_id, safe="")
         url = f"{base_url.rstrip('/')}/api/environments/{safe_id}/files/{safe_path}"
-    resp = requests.get(
-        url, stream=True, timeout=60, headers={"Accept-Encoding": "identity"}
-    )
+    resp = requests.get(url, timeout=60)
     resp.raise_for_status()
-    total = int(resp.headers.get("Content-Length", 0)) or None
     dest_path.parent.mkdir(parents=True, exist_ok=True)
-    with Progress(
-        TextColumn("[bold blue]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        DownloadColumn(),
-        TimeRemainingColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task(rel_path, total=total)
-        with open(dest_path, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=64 * 1024):
-                if chunk:
-                    f.write(chunk)
-                    progress.update(task, advance=len(chunk))
+    dest_path.write_bytes(resp.content)
 
 
 @app.command()
@@ -164,19 +141,25 @@ def install(
         shutil.rmtree(dest_dir)
     dest_dir.mkdir(parents=True)
 
-    for rel_path in files:
-        if ".." in rel_path or rel_path.startswith("/"):
-            continue
-        dest_path = dest_dir / rel_path
-        try:
-            download_with_progress(
-                base_url, env_id, rel_path, dest_path, static=use_static
-            )
-        except requests.RequestException as e:
-            console.print(f"[red]Failed to download {rel_path}: {e}[/red]")
-            raise typer.Exit(1)
+    safe_files = [f for f in files if ".." not in f and not f.startswith("/")]
 
-    console.print(f"[green]Installed to {dest_dir}[/green]")
+    with Progress(
+        TextColumn("{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task(f"Installing {env_id}", total=len(safe_files))
+        for rel_path in safe_files:
+            dest_path = dest_dir / rel_path
+            try:
+                _download_file(base_url, env_id, rel_path, dest_path, static=use_static)
+            except requests.RequestException as e:
+                console.print(f"\n[red]Failed to download {rel_path}: {e}[/red]")
+                raise typer.Exit(1)
+            progress.update(task, advance=1)
+
+    console.print(f"Installed to {dest_dir}")
 
 
 @app.command("list")
