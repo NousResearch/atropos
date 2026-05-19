@@ -1,0 +1,15 @@
+{
+  "extends": ["next/core-web-vitals", "prettier"],
+  "plugins": ["perfectionist"],
+  "rules": {
+    "perfectionist/sort-imports": [
+      "error",
+      {
+        "type": "natural",
+        "groups": ["builtin", "external", "internal", "parent", "sibling", "index", "type"]
+      }
+    ],
+    "perfectionist/sort-named-exports": ["error", { "type": "natural" }],
+    "perfectionist/sort-named-imports": ["error", { "type": "natural" }]
+  }
+}

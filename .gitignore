@@ -179,6 +179,8 @@ cython_debug/
 !web/package.json
 !web/package-lock.json
 !web/tsconfig.json
+!web/.eslintrc.json
+!web/.prettierrc.json
 
 # wandb
 wandb
