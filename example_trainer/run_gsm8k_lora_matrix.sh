@@ -248,8 +248,7 @@ run_shared_vllm() {
       --port "$vllm_port" \
       --gpu-memory-utilization "$SHARED_GPU_MEMORY_UTILIZATION" \
       --max-model-len "$MAX_MODEL_LEN" \
-      --dtype "$DTYPE" \
-      --enforce-eager
+      --dtype "$DTYPE"
   if [[ "$DRY_RUN" == "1" ]]; then
     log "[DRY RUN] wait for http://localhost:${vllm_port}/health"
   else

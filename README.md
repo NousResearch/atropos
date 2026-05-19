@@ -298,6 +298,82 @@ curl -s http://localhost:8002/latest_example | jq '{has_ids:(.distill_token_ids!
 - Trainers should validate alignment assumptions they require (sequence length, per-position top-k, etc.).
 - Teacher-side architecture and prompt/rendering strategy are intentionally out of scope for this PR.
 
+### TeacherDistillationEnv follow-up
+
+The follow-up teacher environment uses a dedicated teacher server config and
+attaches teacher prompt logprobs before the group is sent to the API.
+
+Teacher config shape:
+
+```python
+TeacherDistillationConfig(
+    teacher_enabled=True,
+    teacher_top_k=8,
+)
+```
+
+Teacher server configs are passed separately at init, just like the primary
+`server_configs`:
+
+```python
+env = MyTeacherEnv(
+    config=env_config,
+    server_configs=student_server_configs,
+    teacher_server_configs=[
+        APIServerConfig(
+            base_url="http://localhost:9003/v1",
+            model_name="Qwen/Qwen3-30B-A3B-Instruct-2507",
+            api_key="",
+            server_type="vllm",
+            tokenizer_name="Qwen/Qwen3-30B-A3B-Instruct-2507",
+        )
+    ],
+)
+```
+
+You can either:
+
+- build a teacher-enabled env by mixing `TeacherDistillationEnv` into an existing
+  `BaseEnv`-derived env such as `GSM8kEnv`, or
+- subclass `TeacherDistillationEnv` directly and implement the usual environment
+  methods yourself.
+
+In both cases, `TeacherDistillationEnv` still assumes the normal `BaseEnv`
+runtime contract: tokenized rollouts, `ScoredDataGroup` payloads, and the
+standard `handle_send_to_api(...)` transport path.
+
+CLI shape:
+
+```bash
+--env.teacher_enabled true \
+--teacher.base_url "http://localhost:9003/v1" \
+--teacher.model_name "Qwen/Qwen3-30B-A3B-Instruct-2507" \
+--teacher.server_type vllm \
+--env.teacher_top_k 8
+```
+
+If `--teacher.model_name` is a deployment alias rather than a tokenizer
+identifier, also set `--teacher.tokenizer_name ...` so the env can validate
+tokenizer compatibility.
+
+Scope note:
+
+- The teacher-aware CLI wiring currently exists for `serve`.
+- If `teacher_enabled=True`, the generic `process` and `evaluate` commands will
+  fail loudly at env construction time unless you instantiate the env yourself
+  and pass `teacher_server_configs=...`.
+
+Tokenizer requirement:
+
+- Teacher distillation currently requires the teacher and student to use the same tokenizer vocabulary.
+- If the tokenizers do not match, `TeacherDistillationEnv` raises an error instead of attempting token conversion.
+
+Why same-tokenizer is required:
+
+- `distill_token_ids` are consumed as student-vocabulary IDs by the trainer.
+- If the teacher uses a different vocabulary, the same integer token ID refers to different text on the teacher and student sides.
+- A decode/re-tokenize/remap pipeline is not a safe drop-in fix because it changes both token positions and token identities, which breaks the exact per-position token supervision that the current distillation loss assumes.
+
 ---
 
 ## Testing and Debugging Tools
