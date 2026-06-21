@@ -2,6 +2,7 @@
 Tool call parser helper for extracting and validating tool calls from LLM responses.
 """
 
+import ast
 import json
 import logging
 import re
@@ -56,10 +57,14 @@ def parse_tool_call(
 
     # Parse JSON
     try:
-        # Handle potential single quotes
-        tool_call_content = tool_call_content.replace("'", '"')
-
-        tool_call = json.loads(tool_call_content, strict=False)
+        try:
+            tool_call = json.loads(tool_call_content, strict=False)
+        except json.JSONDecodeError:
+            # Fall back to a Python-literal parse for single-quoted dicts
+            # (e.g. {'name': ...}). Unlike a blanket "'" -> '"' replacement,
+            # this does not corrupt apostrophes inside string values such as
+            # {"query": "what's the weather"}.
+            tool_call = ast.literal_eval(tool_call_content)
 
         # Extract tool name and arguments
         tool_name = tool_call.get("name", "")
