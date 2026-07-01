@@ -1372,7 +1372,7 @@ class InstructionFollowingEnv(BaseEnv):
 
 # Helper function for verify_keyword_frequency, moved import re to top level
 def _extract_words(text: str) -> List[str]:
-    return re.findall(r"\\b\\w+\\b", text.lower())
+    return re.findall(r"\b\w+\b", text.lower())
 
 
 # include keywords: Include keywords {keyword1}, {keyword2} in your response
@@ -1526,7 +1526,7 @@ def verify_postscript(text: str, postscript_marker: str) -> bool:
 
 # Number Placeholder: The response must contain at least {N} placeholders ... [address].
 def validate_placeholders(text: str, N: int) -> Tuple[bool, List[str]]:
-    placeholders_found = re.findall(r"\\[(.*?)\\]", text)  # Matches [content]
+    placeholders_found = re.findall(r"\[(.*?)\]", text)  # Matches [content]
     return len(placeholders_found) >= N, placeholders_found
 
 
@@ -1537,9 +1537,7 @@ def verify_bullet_points(
     lines = text.splitlines()
     # Markdown bullets usually start with '*', '-', or '+' followed by a space.
     bullet_points = [
-        line.strip()
-        for line in lines
-        if re.match(r"^(\\s*)[\\*\\-\\+]\\s+", line.strip())
+        line.strip() for line in lines if re.match(r"^(\s*)[\*\-\+]\s+", line.strip())
     ]
     return len(bullet_points) == N
 
@@ -1594,9 +1592,7 @@ def validate_sections(text: str, N: int, section_splitter: str) -> bool:
     # This might need to be adjusted based on IFEval's exact expectation for "X".
     # For "SECTION 1.", "SECTION 2.", if splitter is "SECTION ":
     actual_sections = len(
-        re.findall(
-            re.escape(section_splitter) + r"\\s*\\d*[:\\.\\s]", text, re.IGNORECASE
-        )
+        re.findall(re.escape(section_splitter) + r"\s*\d*[:\.\s]", text, re.IGNORECASE)
     )
 
     # If N=0 and no splitters, it's true. If N>0 and no splitters, false.
@@ -1654,7 +1650,7 @@ def validate_lowercase(text: str) -> bool:
 # Frequency of All-capital Words
 def validate_frequency_capital_words(text: str, N: int, quantifier: str) -> bool:
     # Words with all capital letters, e.g., "NASA", "AI". Min 2 chars to be a "word".
-    capital_words = re.findall(r"\\b[A-Z]{2,}\\b", text)
+    capital_words = re.findall(r"\b[A-Z]{2,}\b", text)
     actual_count = len(capital_words)
     tolerance = max(round(N * 0.1), 1)  # For 'around'
 
