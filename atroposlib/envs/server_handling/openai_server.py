@@ -76,8 +76,6 @@ class OpenAIServer(APIServer):
             if n > 1:
                 for c in completion_list[1:]:
                     completions.choices.extend(c.choices)
-            else:
-                completions = await self.openai.chat.completions.create(**kwargs)
         else:
             if "n" in kwargs:
                 n = kwargs["n"]
