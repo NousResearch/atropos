@@ -99,7 +99,12 @@ def compute_stats(data: Sequence[number | Sequence]) -> dict[str, float]:
         raise ValueError("No numerical elements found in the input data.")
 
     mean = total / count
-    variance = total_sq / count - mean * mean
+    # The one-pass formula (E[x^2] - E[x]^2) is prone to catastrophic
+    # cancellation: for constant float rewards it can return a tiny negative
+    # value instead of exactly 0.0. Clamp to 0 so downstream `var ** 0.5`
+    # stays real (a negative variance yields a complex std, which then breaks
+    # the `std < std_tol` comparison in the GRPO collapse case).
+    variance = max(total_sq / count - mean * mean, 0.0)
     return {"mean": mean, "var": variance}
 
 

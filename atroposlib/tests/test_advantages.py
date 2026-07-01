@@ -167,3 +167,26 @@ def test_compute_grpo_process_supervision_advantages_std_tol():
     rewards = [[1, 1, 1]]
     with pytest.raises(ValueError):
         compute_grpo_process_supervision_advantages(rewards)
+
+
+def test_compute_stats_constant_float_variance_non_negative():
+    """Constant float rewards must not yield a negative variance.
+
+    The one-pass variance formula can return a tiny negative value from
+    floating-point cancellation (e.g. [0.1, 0.1, 0.1]); left unclamped this
+    makes ``var ** 0.5`` complex downstream.
+    """
+    stats = compute_stats([0.1, 0.1, 0.1])
+    assert stats["var"] >= 0.0
+    assert isinstance(stats["var"] ** 0.5, float)
+
+
+def test_compute_grpo_process_supervision_advantages_std_tol_float():
+    """Constant *float* rewards hit the collapse path and must raise cleanly.
+
+    Regression test: previously the negative variance produced a complex std,
+    so the ``std < std_tol`` guard raised TypeError instead of ValueError.
+    """
+    rewards = [[0.1, 0.1, 0.1]]
+    with pytest.raises(ValueError):
+        compute_grpo_process_supervision_advantages(rewards)
