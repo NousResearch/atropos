@@ -66,9 +66,14 @@ class CombinedReward(RewardFunction):
                 rewards = reward_fn.compute(completions, **kwargs)
                 all_rewards.append(rewards)
 
-                # Add to combined total (pre-normalization)
+                # Add to combined total (pre-normalization), applying each
+                # sub-reward's weight. compute() returns the *unweighted*
+                # scores (weighting lives in RewardFunction.__call__), so
+                # without this the configured per-reward weights had no effect
+                # in "none"/"minmax" mode and were only (incorrectly) applied to
+                # the denominator in "sum" mode.
                 for i, r in enumerate(rewards):
-                    combined_rewards[i] += r
+                    combined_rewards[i] += r * reward_fn.weight
             except Exception as e:
                 logger.error(f"Error computing reward for {reward_fn.name}: {e}")
                 logger.exception(e)
