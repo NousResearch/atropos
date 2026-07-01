@@ -30,10 +30,19 @@ async def parse_http_response(
         return await resp.json()
     except Exception as e:
         # Handle HTTP errors (raised by raise_for_status)
-        error_text = await resp.text()  # Read the response text for logging
+        try:
+            # Reading the body for logging can itself fail: raise_for_status()
+            # releases the connection before raising, so on a large/streamed or
+            # interrupted error response resp.text() raises (e.g.
+            # ClientPayloadError/ClientConnectionError). Left unguarded it runs
+            # before logger.error and replaces the original error, dropping the
+            # log line and hiding the HTTP status from status-based retries.
+            error_text = await resp.text()
+        except Exception:
+            error_text = "<response body unavailable>"
         logger.error(
             f"Error fetching from server. Status: {getattr(e, 'status', 'unknown')}, "
             f"Message: {getattr(e, 'message', str(e))}. Response: {error_text}"
         )
-        # Re-raise the exception to allow retry decorators to handle it
+        # Re-raise the original exception to allow retry decorators to handle it
         raise
