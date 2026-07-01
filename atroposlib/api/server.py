@@ -546,10 +546,12 @@ async def get_status_env(env: EnvIdentifier):
                 sequences_by_env[env_id] = 0
             sequences_by_env[env_id] += seq_count
 
-    # Calculate packed groups for each environment (excluding the requesting env)
-    if max_group_size > 1:
-        for env_id, seq_count in sequences_by_env.items():
-            packed_groups_by_env[env_id] = math.ceil(seq_count / max_group_size)
+    # Calculate packed groups for each environment (excluding the requesting
+    # env). ceil(n / 1) == n, so this holds at max_group_size == 1 too; gating
+    # it on > 1 dropped every other environment's availability from the count
+    # whenever the largest queued group had size 1 (a valid group_size==1 run).
+    for env_id, seq_count in sequences_by_env.items():
+        packed_groups_by_env[env_id] = math.ceil(seq_count / max_group_size)
 
     # Calculate adjusted queue size
     # (curr_env_total_sequences + sum of available sequences from other envs after their minimums)
