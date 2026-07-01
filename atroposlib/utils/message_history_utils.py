@@ -275,7 +275,20 @@ def ensure_trajectory_token_limit(
             max_tokens_after_this_trunc = 0
 
             for alt_idx in range(num_alternatives):
-                for _ in range(min_pop_this_round):
+                # Cap each alternative's pops by its own budget. Alternatives
+                # already at the preserve-minimum report a target of 0 and must
+                # not be popped; popping them anyway destroys the
+                # environment/agent turns this function promises to keep (and
+                # can shrink a short alternative down to just [system], which
+                # then either corrupts its loss mask or, on a later round,
+                # triggers the "list too short" error that discards the whole
+                # step). Any alternative that can be truncated still pops the
+                # full min_pop_this_round, since that is the minimum positive
+                # target.
+                pops_this_alt = min(
+                    min_pop_this_round, target_pop_counts_per_alt[alt_idx]
+                )
+                for _ in range(pops_this_alt):
                     if len(working_messages[alt_idx]) > 1:
                         working_messages[alt_idx].pop(1)
                     else:
