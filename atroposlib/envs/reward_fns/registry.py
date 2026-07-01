@@ -1,4 +1,4 @@
-import importlib
+import importlib.util
 import inspect
 import logging
 from pathlib import Path
@@ -174,17 +174,38 @@ class RewardRegistry:
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
 
-            # First try to find a class that inherits from RewardFunction
-            for obj_name, obj in inspect.getmembers(module):
-                if (
-                    inspect.isclass(obj)
-                    and issubclass(obj, RewardFunction)
-                    and obj is not RewardFunction
-                ):
-                    # Register the class with the requested name
-                    # This ensures it's accessible by the name the test expects
+            # Importing the module runs its ``@registry.register`` decorators,
+            # which register each class under its own (normalized) name. If that
+            # already registered the requested name, use it directly. Scanning
+            # module members instead would pick the alphabetically-first
+            # RewardFunction subclass, silently shadowing the correct class in
+            # modules that define several rewards (e.g. r1_reward.py defines
+            # AccuracyXReward, FormatReasoningReward and R1Reward).
+            if name in self._registry:
+                return
+
+            # Fallback for legacy modules that don't self-register: find a class
+            # defined in this module. Prefer one whose name matches the request;
+            # otherwise take the first module-defined subclass.
+            fallback = None
+            for obj_name, obj in inspect.getmembers(module, inspect.isclass):
+                if not issubclass(obj, RewardFunction) or obj is RewardFunction:
+                    continue
+                # Skip classes merely imported into the module (e.g. the base
+                # class or rewards pulled in from elsewhere).
+                if obj.__module__ != module.__name__:
+                    continue
+                normalized = obj_name.lower()
+                if normalized.endswith("reward"):
+                    normalized = normalized[:-6]
+                if name in (normalized, obj_name.lower()) or normalized == base_name:
                     self.register_function(name, obj)
                     return
+                if fallback is None:
+                    fallback = obj
+            if fallback is not None:
+                self.register_function(name, fallback)
+                return
 
             # If no class found, look for functions with matching name patterns
             func_patterns = [f"{base_name}", f"{base_name}_reward", "format_reward"]
