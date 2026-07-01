@@ -464,9 +464,6 @@ class APIServer(ABC):
             stat_dict["end"] = time.time()
             return completions
 
-    @retry(
-        stop=stop_after_attempt(3), wait=wait_random_exponential(multiplier=1, max=10)
-    )
     async def chat_completion(self, **kwargs) -> ChatCompletion:
         """
         Chat completion handler, waits for the server to be healthy and then calls the chat completion wrapper.
