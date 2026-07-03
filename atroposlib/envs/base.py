@@ -958,10 +958,11 @@ class BaseEnv(ABC):
         """
         Handle the rollout of an item
         """
-        item = self.running_items.get(item_uuid)["item"]
-        if item is None:
+        entry = self.running_items.get(item_uuid)
+        if entry is None:
             logger.warning("item %s not found... returning", item_uuid)
             return None
+        item = entry["item"]
         start_time = time.time()
         logger.debug(f"handle_env: Starting with item: {item}")
         # do a rollout with item
