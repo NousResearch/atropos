@@ -256,6 +256,17 @@ class TestAPICompression:
         assert post_response.status_code == 200
 
         status_response = requests.get(
+            "http://localhost:8000/status-env", params={"env_id": env_id}
+        )
+        assert status_response.status_code == 200
+        status_data = status_response.json()
+        assert "queue_size" in status_data
+
+    def test_status_env_legacy_json_body_still_works(self, api_server):
+        """GET /status-env still accepts env_id in JSON body (deprecated path, Closes #449)."""
+        env_id = api_server
+        # Legacy call: JSON body instead of query param — should still return 200
+        status_response = requests.get(
             "http://localhost:8000/status-env", json={"env_id": env_id}
         )
         assert status_response.status_code == 200
