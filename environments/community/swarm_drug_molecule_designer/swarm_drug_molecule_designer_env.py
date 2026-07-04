@@ -1,27 +1,47 @@
 from typing import List, Optional
+
 from pydantic import Field
+
 from atroposlib.envs.base import BaseEnv, BaseEnvConfig, ScoredDataGroup
 from atroposlib.utils.tokenize_for_trainer import tokenize_for_trainer
 
+
 class SwarmMoleculeConfig(BaseEnvConfig):
-    system_prompt: Optional[str] = Field("You are a swarm molecular designer. Return optimized atom index.", description="System prompt")
+    system_prompt: Optional[str] = Field(
+        "You are a swarm molecular designer. Return optimized atom index.",
+        description="System prompt",
+    )
+
 
 class SwarmMoleculeEnv(BaseEnv):
     env_config_cls = SwarmMoleculeConfig
 
     async def get_next_item(self):
         prompt = "Seek optimized bond atomic position slot (0 to 4) under ant colony pheromones."
-        return (tuple([frozenset({"role": "user", "content": prompt}.items())]), None, None)
+        return (
+            tuple([frozenset({"role": "user", "content": prompt}.items())]),
+            None,
+            None,
+        )
 
     async def collect_trajectories(self, item):
         user_content = dict(item[0][0])["content"]
         messages = [{"role": "user", "content": user_content}]
         prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
-        completions = await self.server.completion(prompt=prompt, n=self.config.group_size)
+        completions = await self.server.completion(
+            prompt=prompt, n=self.config.group_size
+        )
         trajectories = []
         for completion in completions.choices:
-            text = completion.text if hasattr(completion, "text") else completion.message.content
-            msg_seq = [{"role": "user", "content": user_content}, {"role": "assistant", "content": text}]
+            text = (
+                completion.text
+                if hasattr(completion, "text")
+                else completion.message.content
+            )
+            msg_seq = [
+                {"role": "user", "content": user_content},
+                {"role": "assistant", "content": text},
+            ]
             trajectories.append(msg_seq)
         return trajectories, []
 
