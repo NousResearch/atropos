@@ -56,10 +56,14 @@ def parse_tool_call(
 
     # Parse JSON
     try:
-        # Handle potential single quotes
-        tool_call_content = tool_call_content.replace("'", '"')
-
-        tool_call = json.loads(tool_call_content, strict=False)
+        try:
+            # Preferred path: valid JSON, apostrophes untouched.
+            tool_call = json.loads(tool_call_content, strict=False)
+        except json.JSONDecodeError:
+            # Fallback: Python-literal dict (e.g. single-quoted), without
+            # mangling apostrophes inside string values.
+            import ast
+            tool_call = ast.literal_eval(tool_call_content)
 
         # Extract tool name and arguments
         tool_name = tool_call.get("name", "")
@@ -81,6 +85,6 @@ def parse_tool_call(
         logger.warning(f"Parsed tool call: {tool_name}, {arguments}")
         return tool_name, arguments, False
 
-    except (json.JSONDecodeError, Exception) as json_error:
-        logger.error(f"Failed to parse tool call: {json_error}", exc_info=True)
+    except (json.JSONDecodeError, ValueError, SyntaxError, Exception) as parse_error:
+        logger.error(f"Failed to parse tool call: {parse_error}", exc_info=True)
         return "-ERROR-", {}, True
