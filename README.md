@@ -1,3 +1,7 @@
+> ⚠️ **This repository has been archived and is no longer maintained.**
+>
+> No further updates, bug fixes, or security patches will be made.
+
 # Atropos - Nous Research's LLM RL Gym
 
 ![newatr-02](banner-image.jpg)
