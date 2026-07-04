@@ -1,5 +1,6 @@
 from atroposlib.utils.tool_call_parser import parse_tool_call
 
+
 def test_parse_tool_call_with_apostrophe_in_argument():
     tools = [{"name": "web_search"}]
     resp = '<tool_call>{"name": "web_search", "arguments": {"query": "what\'s the weather"}}</tool_call>'
@@ -7,6 +8,7 @@ def test_parse_tool_call_with_apostrophe_in_argument():
     assert is_error is False
     assert name == "web_search"
     assert args["query"] == "what's the weather"
+
 
 def test_parse_tool_call_single_quoted_dict_still_works():
     tools = [{"name": "web_search"}]

@@ -63,6 +63,7 @@ def parse_tool_call(
             # Fallback: Python-literal dict (e.g. single-quoted), without
             # mangling apostrophes inside string values.
             import ast
+
             tool_call = ast.literal_eval(tool_call_content)
 
         # Extract tool name and arguments
